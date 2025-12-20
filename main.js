@@ -7,6 +7,7 @@
 // The adapter-core module gives you access to the core ioBroker functions
 // you need to create an adapter
 const utils = require('@iobroker/adapter-core');
+const { msgHubStore } = require(__dirname + '/lib/msgHubStore');
 
 // Load your modules here, e.g.:
 // const fs = require('fs');
@@ -38,12 +39,20 @@ class Msghub extends utils.Adapter {
 		this.log.debug('config option1: ${this.config.option1}');
 		this.log.debug('config option2: ${this.config.option2}');
 
+
+		// init file storage
+    	this.store = new msgHubStore(this, {fileName: "messages.json"});
+    	await this.store.init();
+
+		// get data from file
+    	this.messages = await this.store.readJson({});
+
 		/*
 		For every state in the system there has to be also an object of type state
 		Here a simple template for a boolean variable named "testVariable"
 		Because every adapter instance uses its own unique namespace variable names can't collide with other adapters variables
 
-		IMPORTANT: State roles should be chosen carefully based on the state's purpose.
+		IMPORTANT: State roles should be chosen carefully based on the state's purpose. 
 		           Please refer to the state roles documentation for guidance:
 		           https://www.iobroker.net/#en/documentation/dev/stateroles.md
 		*/
@@ -101,7 +110,8 @@ class Msghub extends utils.Adapter {
 			// ...
 			// clearInterval(interval1);
 
-			callback();
+			this.store.flushPending();
+
 		} catch (error) {
 			this.log.error(`Error during unloading: ${error.message}`);
 			callback();
@@ -136,12 +146,17 @@ class Msghub extends utils.Adapter {
 			// The state was changed
 			this.log.info(`state ${id} changed: ${state.val} (ack = ${state.ack})`);
 
+			// testdaten in messages schreiben
+			this.messages[state.ts] = state;
+			this.store.writeJson(this.messages); // nicht awaiten, wenn nicht nötig
+  
+
 			if (state.ack === false) {
 				// This is a command from the user (e.g., from the UI or other adapter)
 				// and should be processed by the adapter
 				this.log.info(`User command received for ${id}: ${state.val}`);
 
-				// TODO: Add your control logic here
+				// TODO: Add your control logic here 
 			}
 		} else {
 			// The object was deleted or the state value has expired
