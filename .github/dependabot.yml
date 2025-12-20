@@ -4,9 +4,6 @@ updates:
     directory: "/"
     schedule:
       interval: monthly
-      day: 23
-      time: "00:05"
-      timezone: Europe/Berlin
     open-pull-requests-limit: 5
     assignees:
       - stacknerd
@@ -16,9 +13,6 @@ updates:
     directory: "/"
     schedule:
       interval: monthly
-      day: 23
-      time: "00:05"
-      timezone: Europe/Berlin
     open-pull-requests-limit: 5
     assignees:
       - stacknerd

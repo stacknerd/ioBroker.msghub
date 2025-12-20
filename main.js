@@ -172,7 +172,7 @@ if (require.main !== module) {
 	/**
 	 * @param {Partial<utils.AdapterOptions>} [options] - Adapter options
 	 */
-	module.exports = (options) => new Msghub(options);
+	module.exports = options => new Msghub(options);
 } else {
 	// otherwise start the instance directly
 	new Msghub();
