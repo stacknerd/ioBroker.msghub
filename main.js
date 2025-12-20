@@ -7,7 +7,7 @@
 // The adapter-core module gives you access to the core ioBroker functions
 // you need to create an adapter
 const utils = require('@iobroker/adapter-core');
-const { msgHubStore } = require(__dirname + '/lib/msgHubStore');
+const { MsghubStore } = require(__dirname + '/lib/MsghubStore');
 
 // Load your modules here, e.g.:
 // const fs = require('fs');
@@ -41,7 +41,7 @@ class Msghub extends utils.Adapter {
 
 
 		// init file storage
-    	this.store = new msgHubStore(this, {fileName: "messages.json"});
+    	this.store = new MsghubStore(this, {fileName: "messages.json"});
     	await this.store.init();
 
 		// get data from file
