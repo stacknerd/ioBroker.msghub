@@ -7,12 +7,15 @@
 // The adapter-core module gives you access to the core ioBroker functions
 // you need to create an adapter
 const utils = require('@iobroker/adapter-core');
-const { MsghubStorage } = require(__dirname + '/lib/MsghubStorage');
+const { MsghubStorage } = require(`${__dirname}/lib/MsghubStorage`);
+const { MsgFactory } = require(`${__dirname}/lib/MsgFactory`);
+const { MsgConstants } = require(`${__dirname}/lib/MsgConstants`);
 
 // Load your modules here, e.g.:
 // const fs = require('fs');
 
 class Msghub extends utils.Adapter {
+	static eLevel = Object.freeze({ none: 0, notice: 1, warning: 2, error: 3 });
 	/**
 	 * @param {Partial<utils.AdapterOptions>} [options] - Adapter options
 	 */
@@ -34,18 +37,50 @@ class Msghub extends utils.Adapter {
 	async onReady() {
 		// Initialize your adapter here
 
+		this.msgconst = MsgConstants;
+
 		// The adapters config (in the instance object everything under the attribute "native") is accessible via
 		// this.config:
 		this.log.debug('config option1: ${this.config.option1}');
 		this.log.debug('config option2: ${this.config.option2}');
 
-
 		// init file storage
-    	this.store = new MsghubStorage(this, {fileName: "messages.json"});
-    	await this.store.init();
+		this.store = new MsghubStorage(this, { fileName: 'messages.json' });
+
+		await this.store.init();
 
 		// get data from file
-    	this.messages = await this.store.readJson({});
+		this.messages = await this.store.readJson({});
+
+		this.msgFactory = new MsgFactory(this);
+
+		const msg1 = this.msgFactory.createMessage({
+			ref: '2438',
+			title: 'ein titel-text',
+			text: 'lorem ipsum...',
+			level: this.msgconst.level.error,
+			kind: this.msgconst.kind.appointment,
+			origin: { type: this.msgconst.origin.type.import, system: 'alexa', id: 'alexa.0.test' },
+			timing: { startAt: 2134928374923, endAt: 2134928374950 },
+			details: { location: 'zimmer', tools: ["1","2"], consumables: "batterien" },
+		});
+
+		this.log.debug('msg1: ' + JSON.stringify(msg1, null, 2));
+
+		const msg2 = this.msgFactory.createMessage({
+			ref: '2438',
+			title: 'ein titel-text',
+			text: 'lorem ipsum...',
+			level: this.msgconst.level.warning,
+			kind: this.msgconst.kind.task,
+			origin: { type: this.msgconst.origin.type.import, system: 'web', id: '383' },
+			timing: { expiresAt: 2134928374923, dueAt: 2134928374924, notifyAt: 2134928374910 },
+			details: { consumables: "Eimer,Lappen,Staubsauger" },
+		});
+		this.log.debug('msg2: ' + JSON.stringify(msg2, null, 2));
+
+		//var testfactory = this.msgFactory.createMessage({title: "der titel", text: "ein text", level: 10, kind: "test"})
+		//this.log.warn(JSON.stringify(testfactory,null,2));
 
 		/*
 		For every state in the system there has to be also an object of type state
@@ -111,7 +146,6 @@ class Msghub extends utils.Adapter {
 			// clearInterval(interval1);
 
 			this.store.flushPending();
-
 		} catch (error) {
 			this.log.error(`Error during unloading: ${error.message}`);
 			callback();
@@ -149,14 +183,13 @@ class Msghub extends utils.Adapter {
 			// testdaten in messages schreiben
 			this.messages[state.ts] = state;
 			this.store.writeJson(this.messages); // nicht awaiten, wenn nicht nötig
-  
 
 			if (state.ack === false) {
 				// This is a command from the user (e.g., from the UI or other adapter)
 				// and should be processed by the adapter
 				this.log.info(`User command received for ${id}: ${state.val}`);
 
-				// TODO: Add your control logic here 
+				// TODO: Add your control logic here
 			}
 		} else {
 			// The object was deleted or the state value has expired
