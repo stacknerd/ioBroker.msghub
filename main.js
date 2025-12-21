@@ -29,6 +29,7 @@ class Msghub extends utils.Adapter {
 		// this.on('objectChange', this.onObjectChange.bind(this));
 		// this.on('message', this.onMessage.bind(this));
 		this.on('unload', this.onUnload.bind(this));
+		this.msgconst = MsgConstants;
 	}
 
 	/**
@@ -36,8 +37,6 @@ class Msghub extends utils.Adapter {
 	 */
 	async onReady() {
 		// Initialize your adapter here
-
-		this.msgconst = MsgConstants;
 
 		// The adapters config (in the instance object everything under the attribute "native") is accessible via
 		// this.config:
@@ -62,10 +61,9 @@ class Msghub extends utils.Adapter {
 			kind: this.msgconst.kind.appointment,
 			origin: { type: this.msgconst.origin.type.import, system: 'alexa', id: 'alexa.0.test' },
 			timing: { startAt: 2134928374923, endAt: 2134928374950 },
-			details: { location: 'zimmer', tools: ["1","2"], consumables: "batterien" },
+			details: { location: 'zimmer', tools: ['1', '2'], consumables: 'batterien' },
 		});
-
-		this.log.debug('msg1: ' + JSON.stringify(msg1, null, 2));
+		this.log.debug(`msg1: ${JSON.stringify(msg1, null, 2)}`);
 
 		const msg2 = this.msgFactory.createMessage({
 			ref: '2438',
@@ -75,9 +73,10 @@ class Msghub extends utils.Adapter {
 			kind: this.msgconst.kind.task,
 			origin: { type: this.msgconst.origin.type.import, system: 'web', id: '383' },
 			timing: { expiresAt: 2134928374923, dueAt: 2134928374924, notifyAt: 2134928374910 },
-			details: { consumables: "Eimer,Lappen,Staubsauger" },
+			details: { consumables: 'Eimer,Lappen,Staubsauger' },
+			progress: { percentage: 20, startedAt: Date.now() },
 		});
-		this.log.debug('msg2: ' + JSON.stringify(msg2, null, 2));
+		this.log.debug(`msg2: ${JSON.stringify(msg2, null, 2)}`);
 
 		//var testfactory = this.msgFactory.createMessage({title: "der titel", text: "ein text", level: 10, kind: "test"})
 		//this.log.warn(JSON.stringify(testfactory,null,2));
