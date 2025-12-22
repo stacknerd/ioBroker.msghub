@@ -7,11 +7,11 @@
 // The adapter-core module gives you access to the core ioBroker functions
 // you need to create an adapter
 const utils = require('@iobroker/adapter-core');
-const { MsgArchive } = require(`${__dirname}/lib/MsgArchive`);
-const { MsgStorage } = require(`${__dirname}/lib/MsgStorage`);
-const { MsgFactory } = require(`${__dirname}/lib/MsgFactory`);
-const { MsgConstants } = require(`${__dirname}/lib/MsgConstants`);
-const { MsgStore } = require(`${__dirname}/lib/MsgStore`);
+const { MsgArchive } = require(`${__dirname}/src/MsgArchive`);
+const { MsgStorage } = require(`${__dirname}/src/MsgStorage`);
+const { MsgFactory } = require(`${__dirname}/src/MsgFactory`);
+const { MsgConstants } = require(`${__dirname}/src/MsgConstants`);
+const { MsgStore } = require(`${__dirname}/src/MsgStore`);
 
 // Load your modules here, e.g.:
 // const fs = require('fs');
