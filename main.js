@@ -46,12 +46,12 @@ class Msghub extends utils.Adapter {
 		this.log.debug('config option2: ${this.config.option2}');
 
 		// init file storage
-		this.msgStorage = new MsgStorage(this, { fileName: 'messages.json' });
+		this.msgStorage = new MsgStorage(this, { baseDir: 'data', fileName: 'messages.json' });
 		await this.msgStorage.init();
 
 		// init archive
 		//this.msgArchive = null;
-		this.msgArchive = new MsgArchive(this); // auch null möglich, wenn kein Archiv erwünscht
+		this.msgArchive = new MsgArchive(this, { baseDir: 'data/archive' }); // auch null möglich, wenn kein Archiv erwünscht
 		await this.msgArchive?.init();
 
 		// init fatory

@@ -26,7 +26,7 @@ class MsgStorage {
 
 		this.adapter = adapter;
 		this.metaId = options.metaId || adapter.namespace;
-		this.baseDir = typeof options.baseDir === 'string' ? options.baseDir.replace(/^\/+|\/+$/g, '') : 'data';
+		this.baseDir = typeof options.baseDir === 'string' ? options.baseDir.replace(/^\/+|\/+$/g, '') : '';
 		this.fileName = options.fileName || 'messages.json';
 		this.writeIntervalMs =
 			typeof options.writeIntervalMs === 'number' && Number.isFinite(options.writeIntervalMs)
@@ -54,9 +54,7 @@ class MsgStorage {
 		await this._ensureBaseDir();
 		if (this.adapter?.log?.info) {
 			const filePath = this._filePathFor(this.fileName);
-			this.adapter.log.info(
-				`MsgStorage initialized: file=${filePath}, interval=${this.writeIntervalMs}ms`,
-			);
+			this.adapter.log.info(`MsgStorage initialized: file=${filePath}, interval=${this.writeIntervalMs}ms`);
 		}
 	}
 

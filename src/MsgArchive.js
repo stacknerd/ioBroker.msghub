@@ -19,7 +19,7 @@ class MsgArchive {
 
 		this.adapter = adapter;
 		this.metaId = options.metaId || adapter.namespace;
-		this.baseDir = typeof options.baseDir === 'string' ? options.baseDir.replace(/^\/+|\/+$/g, '') : 'data/archive';
+		this.baseDir = typeof options.baseDir === 'string' ? options.baseDir.replace(/^\/+|\/+$/g, '') : '';
 		this.fileExtension =
 			typeof options.fileExtension === 'string' && options.fileExtension.trim()
 				? options.fileExtension.trim().replace(/^\./, '')
