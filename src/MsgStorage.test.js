@@ -134,6 +134,17 @@ describe('MsgStorage', () => {
 		expect(files.has(`${adapter.namespace}/messages.json.tmp`)).to.equal(false);
 	});
 
+	it('stores files under baseDir when configured', async () => {
+		const { adapter, files } = createAdapter({ withRename: true });
+		const storage = new MsgStorage(adapter, { baseDir: 'data', writeIntervalMs: 0 });
+		await storage.init();
+
+		await storage.writeJson({ a: 1 });
+		const key = `${adapter.namespace}/data/messages.json`;
+		expect(files.has(key)).to.equal(true);
+		expect(JSON.parse(files.get(key))).to.deep.equal({ a: 1 });
+	});
+
 	it('writes JSON directly when rename is not supported', async () => {
 		const { adapter, files } = createAdapter({ withRename: false });
 		const storage = new MsgStorage(adapter, { writeIntervalMs: 0 });

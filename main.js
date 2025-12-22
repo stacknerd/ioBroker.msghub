@@ -51,7 +51,7 @@ class Msghub extends utils.Adapter {
 
 		// init archive
 		//this.msgArchive = null;
-		this.msgArchive = new MsgArchive(this, { baseDir: 'archive' }); // auch null möglich, wenn kein Archiv erwünscht
+		this.msgArchive = new MsgArchive(this); // auch null möglich, wenn kein Archiv erwünscht
 		await this.msgArchive?.init();
 
 		// init fatory
@@ -78,8 +78,10 @@ class Msghub extends utils.Adapter {
 		});
 		this.store.addMessage(msg1);
 
+		const msg2ref = 'pathingthings-3';
+
 		const msg2 = this.msgFactory.createMessage({
-			ref: '24wef38-1',
+			ref: msg2ref,
 			title: 'ewefin titel-text',
 			text: 'lowefrem ipsum...',
 			level: this.msgConstants.level.warning,
@@ -102,11 +104,28 @@ class Msghub extends utils.Adapter {
 				['lastSeen', { val: null, unit: 'timestamp', ts: Date.now() }],
 			]),
 		};
+		this.store.updateMessage(msg2ref, patch4msg2);
 
-		this.store.updateMessage('24wef38-1', patch4msg2);
+		this.store.updateMessage(msg2ref, {
+			metrics: {
+				set: { temperature: { val: 22.3, unit: 'C+', ts: Date.now() } },
+				delete: ['humidity'],
+			},
+		});
 
+		this.store.updateMessage(msg2ref, {
+			actions: { set: { 'ack-1': { type: 'ack' } } },
+		});
 
 		this.log.debug(JSON.stringify(this.store.getMessages(), null, 2));
+
+		this.store.updateMessage(msg2ref, {
+			listItems: {
+				set: { milk: { name: 'Milk', checked: false } },
+				delete: ['oldItemId'],
+			},
+		});
+		this.log.debug(this.msgStorage._serialize(this.store.getMessages(), null, 2));
 
 		/*
 		For every state in the system there has to be also an object of type state

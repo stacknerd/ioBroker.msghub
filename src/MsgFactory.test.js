@@ -282,6 +282,13 @@ describe('MsgFactory.createMessage', () => {
 			]);
 		});
 
+		it('drops actions without id', () => {
+			const { factory } = makeFactory();
+			const actions = [{ type: MsgConstants.actions.type.ack }];
+			const msg = factory.createMessage(buildBase({ actions }));
+			expect(msg).to.not.have.property('actions');
+		});
+
 		it('drops invalid actions entries', () => {
 			const { factory } = makeFactory();
 			const actions = [{ type: 'invalid', id: '1' }];
@@ -436,6 +443,86 @@ describe('MsgFactory.applyPatch', () => {
 
 		const updated = factory.applyPatch(msg, { attachments: null });
 		expect(updated).to.not.have.property('attachments');
+	});
+
+	it('patches metrics with set/delete', () => {
+		const { factory } = makeFactory();
+		const metrics = new Map([
+			['temperature', { val: 21, unit: 'C', ts: Date.UTC(2025, 0, 1) }],
+			['humidity', { val: 50, unit: '%', ts: Date.UTC(2025, 0, 1) }],
+		]);
+		const msg = factory.createMessage(buildBase({ metrics }));
+
+		const updated = factory.applyPatch(msg, {
+			metrics: { set: { temperature: { val: 22, unit: 'C', ts: Date.UTC(2025, 0, 2) } }, delete: ['humidity'] },
+		});
+
+		expect(updated.metrics).to.be.instanceOf(Map);
+		expect(updated.metrics.get('temperature')).to.deep.equal({ val: 22, unit: 'C', ts: Date.UTC(2025, 0, 2) });
+		expect(updated.metrics.has('humidity')).to.equal(false);
+	});
+
+	it('patches attachments by index', () => {
+		const { factory } = makeFactory();
+		const attachments = [
+			{ type: MsgConstants.attachments.type.image, value: 'a' },
+			{ type: MsgConstants.attachments.type.image, value: 'b' },
+			{ type: MsgConstants.attachments.type.image, value: 'c' },
+		];
+		const msg = factory.createMessage(buildBase({ attachments }));
+
+		const updated = factory.applyPatch(msg, { attachments: { delete: [1] } });
+		expect(updated.attachments).to.deep.equal([
+			{ type: MsgConstants.attachments.type.image, value: 'a' },
+			{ type: MsgConstants.attachments.type.image, value: 'c' },
+		]);
+	});
+
+	it('patches listItems by id', () => {
+		const { factory } = makeFactory();
+		const listItems = [
+			{ id: 'milk', name: 'Milk', checked: false },
+			{ id: 'bread', name: 'Bread', checked: false },
+		];
+		const msg = factory.createMessage(buildBase({ kind: MsgConstants.kind.shoppinglist, listItems }));
+
+		const updated = factory.applyPatch(msg, {
+			listItems: { set: { milk: { name: 'Milk', checked: true } }, delete: ['bread'] },
+		});
+
+		expect(updated.listItems).to.deep.equal([{ id: 'milk', name: 'Milk', checked: true }]);
+	});
+
+	it('patches actions by id', () => {
+		const { factory } = makeFactory();
+		const actions = [
+			{ id: 'a1', type: MsgConstants.actions.type.ack },
+			{ id: 'a2', type: MsgConstants.actions.type.close },
+		];
+		const msg = factory.createMessage(buildBase({ actions }));
+
+		const updated = factory.applyPatch(msg, {
+			actions: { set: { a1: { type: MsgConstants.actions.type.open } }, delete: ['a2'] },
+		});
+
+		expect(updated.actions).to.deep.equal([{ id: 'a1', type: MsgConstants.actions.type.open }]);
+	});
+
+	it('patches dependencies with set/delete', () => {
+		const { factory } = makeFactory();
+		const msg = factory.createMessage(buildBase({ dependencies: ['a', 'b', 'c'] }));
+
+		const updated = factory.applyPatch(msg, { dependencies: { set: ['a', 'b', 'c'], delete: ['b'] } });
+		expect(updated.dependencies).to.deep.equal(['a', 'c']);
+	});
+
+	it('patches progress with set/delete', () => {
+		const { factory } = makeFactory();
+		const msg = factory.createMessage(buildBase({ progress: { percentage: 10, finishedAt: Date.UTC(2025, 0, 1) } }));
+
+		const updated = factory.applyPatch(msg, { progress: { set: { percentage: 50 }, delete: ['finishedAt'] } });
+		expect(updated.progress.percentage).to.equal(50);
+		expect(updated.progress).to.not.have.property('finishedAt');
 	});
 
 	it('rejects non-object patch input', () => {

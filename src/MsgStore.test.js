@@ -27,17 +27,33 @@ function createFactory({ applyPatch } = {}) {
 	};
 }
 
-function createStore({ messages = [], factory, storage, adapter } = {}) {
+function createStore({ messages = [], factory, storage, adapter, msgArchive } = {}) {
 	const { adapter: defaultAdapter, logs } = createAdapter();
 	const { storage: defaultStorage, writes } = createStorage();
 	const msgFactory = factory || createFactory();
 
 	return {
-		store: new MsgStore(adapter || defaultAdapter, messages, msgFactory, storage || defaultStorage),
+		store: new MsgStore(
+			adapter || defaultAdapter,
+			messages,
+			msgFactory,
+			storage || defaultStorage,
+			msgArchive,
+		),
 		logs,
 		writes,
 		msgFactory,
 	};
+}
+
+function withFixedNow(now, fn) {
+	const original = Date.now;
+	Date.now = () => now;
+	try {
+		return fn();
+	} finally {
+		Date.now = original;
+	}
 }
 
 describe('MsgStore', () => {
@@ -214,12 +230,40 @@ describe('MsgStore', () => {
 		});
 	});
 
-	describe('deleteOldMessages guard', () => {
-		it('does not modify the list (currently disabled)', () => {
-			const messages = [{ ref: 'r1', level: 10 }];
+	describe('pruneOldMessages', () => {
+		it('removes expired messages and archives the delete event', () => {
+			const now = 10_000;
+			const messages = [
+				{ ref: 'r1', level: 10, timing: { expiresAt: now - 1 } },
+				{ ref: 'r2', level: 10, timing: { expiresAt: now + 1_000 } },
+			];
+			const deletes = [];
+			const msgArchive = {
+				appendDelete: (message, options) => deletes.push({ message, options }),
+			};
+			const { store } = createStore({ messages, msgArchive });
+			store.lastPruneAt = now - store.pruneIntervalMs - 1;
+
+			withFixedNow(now, () => {
+				store.pruneOldMessages();
+				expect(store.getMessages().map(msg => msg.ref)).to.deep.equal(['r2']);
+			});
+
+			expect(deletes).to.have.length(1);
+			expect(deletes[0].message.ref).to.equal('r1');
+			expect(deletes[0].options).to.deep.equal({ event: 'expired' });
+		});
+
+		it('throttles pruning within the interval', () => {
+			const now = 20_000;
+			const messages = [{ ref: 'r1', level: 10, timing: { expiresAt: now - 1 } }];
 			const { store } = createStore({ messages });
-			store.deleteOldMessages();
-			expect(store.getMessages()).to.have.length(1);
+			store.lastPruneAt = now;
+
+			withFixedNow(now, () => {
+				store.pruneOldMessages();
+				expect(store.getMessages()).to.have.length(1);
+			});
 		});
 	});
 });

@@ -91,7 +91,7 @@
  *     // - link: navigation only (no side effects)
  *     // - custom: anything else (device action / automation / plugin-specific)
  *
- *     id?: string | null
+ *     id: string
  *     payload?: Record<string, unknown> | null
  *     ts?: number
  *   }>
@@ -152,7 +152,7 @@ class MsgFactory {
 	 * @param {Map<string, {val: number|string|boolean|null, unit: string, ts: number}>} [options.metrics] Structured metrics.
 	 * @param {Array<{type: "ssml"|"image"|"video"|"file", value: string}>} [options.attachments] Attachment list.
 	 * @param {Array<{id: string, name: string, category?: string, quantity?: { val: number; unit: string }, checked: boolean}>} [options.listItems] List items for shopping or inventory lists.
-	 * @param {Array<{type: "ack"|"delete"|"close"|"open"|"link"|"custom", id?: string|null, payload?: Record<string, unknown>|null, ts?: number}>} [options.actions] Action descriptors.
+	 * @param {Array<{type: "ack"|"delete"|"close"|"open"|"link"|"custom", id: string, payload?: Record<string, unknown>|null, ts?: number}>} [options.actions] Action descriptors.
 	 * @param {object} [options.progress] Progress metadata such as percentage and timestamps.
 	 * @param {string[]|string} [options.dependencies] Related message refs as array or CSV string.
 	 * @returns {object|null} Normalized message object, or null when validation fails.
@@ -208,6 +208,77 @@ class MsgFactory {
 	 * Updates an existing message with a partial patch.
 	 * Only fields present in the patch are processed; other fields are preserved.
 	 * Optional fields can be cleared by passing `null`.
+	 *
+	 * Patch semantics (examples show effects):
+	 * - Scalars (title/text/level): replace the value.
+	 *   - applyPatch(existing, { title: 'New title' })
+	 *     => sets title to 'New title', keeps all other fields.
+	 *
+	 * - timing/details/progress: partial object, only provided keys are touched.
+	 *   - applyPatch(existing, { timing: { dueAt: 123 } })
+	 *     => sets/updates timing.dueAt; other timing fields stay as-is.
+	 *   - applyPatch(existing, { timing: { notifyAt: null } })
+	 *     => removes timing.notifyAt from the message.
+	 *
+	 *   - applyPatch(existing, { progress: { percentage: 60 } })
+	 *     => updates progress.percentage to 60, keeps startedAt/finishedAt unchanged.
+	 *   - applyPatch(existing, { progress: { delete: ['finishedAt'] } })
+	 *     => removes progress.finishedAt (percentage is preserved).
+	 *
+	 * - metrics (Map):
+	 *   - Replace all metrics:
+	 *     applyPatch(existing, { metrics: new Map([['temperature', { val: 21, unit: 'C', ts: 1 }]]) })
+	 *     => replaces the entire metrics map with the provided one (after normalization).
+	 *   - Patch metrics with set/delete:
+	 *     applyPatch(existing, {
+	 *       metrics: {
+	 *         set: { temperature: { val: 22.3, unit: 'C', ts: 2 } },
+	 *         delete: ['humidity']
+	 *       }
+	 *     })
+	 *     => upserts 'temperature' (adds if missing, replaces if existing),
+	 *        and removes the 'humidity' metric entry.
+	 *
+	 * - attachments (array, index-based):
+	 *   - Replace the array:
+	 *     applyPatch(existing, { attachments: [{ type: 'image', value: 'file.png' }] })
+	 *     => replaces the entire attachments array.
+	 *   - Patch by index:
+	 *     applyPatch(existing, { attachments: { delete: [0, 2] } })
+	 *     => deletes elements at indices 0 and 2 (highest index first).
+	 *
+	 * - actions (array of objects, id-based):
+	 *   - Replace all actions:
+	 *     applyPatch(existing, { actions: [{ id: 'ack-1', type: 'ack' }] })
+	 *     => replaces the entire actions array.
+	 *   - Patch actions by id:
+	 *     applyPatch(existing, {
+	 *       actions: { set: { 'ack-1': { type: 'ack' } }, delete: ['oldActionId'] }
+	 *     })
+	 *     => upserts action with id 'ack-1' and removes action 'oldActionId'.
+	 *
+	 * - listItems (array of objects, id-based):
+	 *   - Replace all listItems:
+	 *     applyPatch(existing, { listItems: [{ id: 'milk', name: 'Milk', checked: false }] })
+	 *     => replaces the entire listItems array.
+	 *   - Patch listItems by id:
+	 *     applyPatch(existing, {
+	 *       listItems: {
+	 *         set: { milk: { name: 'Milk', checked: false } },
+	 *         delete: ['oldItemId']
+	 *       }
+	 *     })
+	 *     => upserts item with id 'milk' (creates or replaces it),
+	 *        and removes any list item with id 'oldItemId'.
+	 *
+	 * - dependencies (string list):
+	 *   - Replace all dependencies:
+	 *     applyPatch(existing, { dependencies: ['a', 'b'] })
+	 *     => replaces the entire dependencies list.
+	 *   - Patch dependencies:
+	 *     applyPatch(existing, { dependencies: { set: ['a', 'b'], delete: ['c'] } })
+	 *     => sets dependencies to ['a','b'] and removes 'c' if present.
+	 *
 	 * The following fields are immutable after creation and may not change:
 	 * `ref`, `kind`, `origin`, `timing.createdAt`.
 	 *
@@ -221,12 +292,12 @@ class MsgFactory {
 	 * @param {object} [patch.origin] Origin object (must match existing origin).
 	 * @param {object} [patch.timing] Timing patch (only provided fields are applied).
 	 * @param {object|null} [patch.details] Updated structured details or null to clear.
-	 * @param {Map<string, {val: number|string|boolean|null, unit: string, ts: number}>|null} [patch.metrics] Metrics map or null to clear.
-	 * @param {Array<{type: "ssml"|"image"|"video"|"file", value: string}>|null} [patch.attachments] Attachments or null to clear.
-	 * @param {Array<{id: string, name: string, category?: string, quantity?: { val: number; unit: string }, checked: boolean}>|null} [patch.listItems] List items update or null to clear.
-	 * @param {Array<{type: "ack"|"delete"|"close"|"open"|"link"|"custom", id?: string|null, payload?: Record<string, unknown>|null, ts?: number}>|null} [patch.actions] Actions or null to clear.
-	 * @param {object|null} [patch.progress] Progress update or null to clear.
-	 * @param {string[]|string} [patch.dependencies] Dependencies update.
+	 * @param {Map<string, {val: number|string|boolean|null, unit: string, ts: number}>|{set?: Map<string, {val: number|string|boolean|null, unit: string, ts: number}>|Record<string, {val: number|string|boolean|null, unit: string, ts: number}>, delete?: string[]}|null} [patch.metrics] Metrics patch or null to clear.
+	 * @param {Array<{type: "ssml"|"image"|"video"|"file", value: string}>|{set?: Array<{type: "ssml"|"image"|"video"|"file", value: string}>, delete?: number[]}|null} [patch.attachments] Attachments patch or null to clear.
+	 * @param {Array<{id: string, name: string, category?: string, quantity?: { val: number; unit: string }, checked: boolean}>|{set?: Array<{id: string, name: string, category?: string, quantity?: { val: number; unit: string }, checked: boolean}>|Record<string, {name: string, category?: string, quantity?: { val: number; unit: string }, checked: boolean}>, delete?: string[]}|null} [patch.listItems] List items patch or null to clear.
+	 * @param {Array<{type: "ack"|"delete"|"close"|"open"|"link"|"custom", id: string, payload?: Record<string, unknown>|null, ts?: number}>|{set?: Array<{type: "ack"|"delete"|"close"|"open"|"link"|"custom", id: string, payload?: Record<string, unknown>|null, ts?: number}>|Record<string, {type: "ack"|"delete"|"close"|"open"|"link"|"custom", payload?: Record<string, unknown>|null, ts?: number}>, delete?: string[]}|null} [patch.actions] Actions patch or null to clear.
+	 * @param {object|{set?: object, delete?: string[]}|null} [patch.progress] Progress patch or null to clear.
+	 * @param {string[]|string|{set?: string[]|string, delete?: string[]}|null} [patch.dependencies] Dependencies patch or null to clear.
 	 * @returns {object|null} Updated message or null when validation fails.
 	 */
 	applyPatch(existing, patch = {}) {
@@ -286,29 +357,32 @@ class MsgFactory {
 				refreshUpdatedAt = true;
 			}
 			if (has('metrics')) {
-				updated.metrics = patch.metrics === null ? undefined : this._normalizeMsgMetrics(patch.metrics);
+				updated.metrics = this._applyMetricsPatch(existing.metrics, patch.metrics);
 				// refreshUpdatedAt = true; // currently it is not considered a update if only the metrics change
 			}
 			if (has('attachments')) {
-				updated.attachments =
-					patch.attachments === null ? undefined : this._normalizeMsgAttachments(patch.attachments);
+				updated.attachments = this._applyArrayPatchByIndex(
+					existing.attachments,
+					patch.attachments,
+					this._normalizeMsgAttachments.bind(this),
+					'attachments',
+				);
 				refreshUpdatedAt = true;
 			}
 			if (has('listItems')) {
-				updated.listItems =
-					patch.listItems === null ? undefined : this._normalizeMsgListItems(patch.listItems, existing.kind);
+				updated.listItems = this._applyListItemsPatch(existing.listItems, patch.listItems, existing.kind);
 				refreshUpdatedAt = true;
 			}
 			if (has('actions')) {
-				updated.actions = patch.actions === null ? undefined : this._normalizeMsgActions(patch.actions);
+				updated.actions = this._applyActionsPatch(existing.actions, patch.actions);
 				refreshUpdatedAt = true;
 			}
 			if (has('progress')) {
-				updated.progress = patch.progress === null ? undefined : this._normalineMsgProgress(patch.progress);
+				updated.progress = this._applyProgressPatch(existing.progress, patch.progress);
 				refreshUpdatedAt = true;
 			}
 			if (has('dependencies')) {
-				updated.dependencies = this._normalizeMsgArray(patch.dependencies, 'dependencies');
+				updated.dependencies = this._applyDependenciesPatch(existing.dependencies, patch.dependencies);
 				refreshUpdatedAt = true;
 			}
 			if (has('timing')) {
@@ -576,10 +650,6 @@ class MsgFactory {
 	 */
 	_normalineMsgTiming(value, kind, { existing = null, setUpdatedAt = false } = {}) {
 		const updating = this.isValidMessage(existing);
-		if (updating) {
-			this.adapter?.log?.debug?.(`createMessage: 'timing' will be updated on message '${existing.ref}'`);
-		}
-
 		if (!value || typeof value !== 'object') {
 			throw new TypeError(`createMessage: 'timing' must be an object`);
 		}
@@ -813,10 +883,340 @@ class MsgFactory {
 	}
 
 	/**
+	 * Applies set/delete patches to metrics.
+	 *
+	 * @param {Map<string, {val: number|string|boolean|null, unit: string, ts: number}>|undefined} existingMetrics Existing metrics map.
+	 * @param {Map<string, {val: number|string|boolean|null, unit: string, ts: number}>|{set?: Map<string, {val: number|string|boolean|null, unit: string, ts: number}>|Record<string, {val: number|string|boolean|null, unit: string, ts: number}>, delete?: string[]}|null|undefined} patch Metrics patch.
+	 * @returns {Map<string, {val: number|string|boolean|null, unit: string, ts: number}>|undefined} Updated metrics.
+	 */
+	_applyMetricsPatch(existingMetrics, patch) {
+		if (patch === null) {
+			return undefined;
+		}
+		if (patch instanceof Map) {
+			return this._normalizeMsgMetrics(patch);
+		}
+		if (patch === undefined) {
+			return existingMetrics instanceof Map ? existingMetrics : undefined;
+		}
+		if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
+			throw new TypeError(`applyPatch: 'metrics' must be a Map or { set, delete }`);
+		}
+
+		const base = existingMetrics instanceof Map ? new Map(existingMetrics) : new Map();
+		if ('set' in patch) {
+			const setVal = patch.set;
+			let setMap;
+			if (setVal instanceof Map) {
+				setMap = setVal;
+			} else if (setVal && typeof setVal === 'object' && !Array.isArray(setVal)) {
+				setMap = new Map(Object.entries(setVal));
+			} else if (setVal !== undefined) {
+				throw new TypeError(`applyPatch: 'metrics.set' must be a Map or object`);
+			}
+
+			if (setMap) {
+				const normalized = this._normalizeMsgMetrics(setMap);
+				if (normalized instanceof Map) {
+					for (const [key, value] of normalized.entries()) {
+						base.set(key, value);
+					}
+				}
+			}
+		}
+		if ('delete' in patch && patch.delete !== undefined) {
+			if (!Array.isArray(patch.delete)) {
+				throw new TypeError(`applyPatch: 'metrics.delete' must be an array`);
+			}
+			patch.delete.forEach((key, index) => {
+				const normKey = this._normalizeMsgString(key, `metrics.delete[${index}]`);
+				if (normKey) {
+					base.delete(normKey);
+				}
+			});
+		}
+
+		return base.size > 0 ? base : undefined;
+	}
+
+	/**
+	 * Applies set/delete patches to arrays by index.
+	 *
+	 * @param {Array<any>|undefined} existingArray Existing array.
+	 * @param {Array<any>|{set?: Array<any>, delete?: number[]}|null|undefined} patch Array patch.
+	 * @param {(value: Array<any>) => Array<any>|undefined} normalizeFn Normalization function.
+	 * @param {string} field Field name for errors.
+	 * @returns {Array<any>|undefined} Updated array.
+	 */
+	_applyArrayPatchByIndex(existingArray, patch, normalizeFn, field) {
+		if (patch === null) {
+			return undefined;
+		}
+		if (Array.isArray(patch)) {
+			return normalizeFn(patch);
+		}
+		if (patch === undefined) {
+			return Array.isArray(existingArray) ? existingArray : undefined;
+		}
+		if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
+			throw new TypeError(`applyPatch: '${field}' must be an array or { set, delete }`);
+		}
+
+		let base = Array.isArray(existingArray) ? [...existingArray] : [];
+		if ('set' in patch && patch.set !== undefined) {
+			if (!Array.isArray(patch.set)) {
+				throw new TypeError(`applyPatch: '${field}.set' must be an array`);
+			}
+			const normalized = normalizeFn(patch.set);
+			base = normalized ? [...normalized] : [];
+		}
+		if ('delete' in patch && patch.delete !== undefined) {
+			if (!Array.isArray(patch.delete)) {
+				throw new TypeError(`applyPatch: '${field}.delete' must be an array`);
+			}
+			const indices = patch.delete.filter(index => Number.isInteger(index)).sort((a, b) => b - a);
+			indices.forEach(index => {
+				if (index >= 0 && index < base.length) {
+					base.splice(index, 1);
+				}
+			});
+		}
+
+		return base.length > 0 ? base : undefined;
+	}
+
+	/**
+	 * Applies set/delete patches to list items (by id).
+	 *
+	 * @param {Array<{id: string, name: string, category?: string, quantity?: { val: number, unit: string }, checked: boolean}>|undefined} existingItems Existing list items.
+	 * @param {Array<{id: string, name: string, category?: string, quantity?: { val: number; unit: string }, checked: boolean}>|{set?: Array<{id: string, name: string, category?: string, quantity?: { val: number; unit: string }, checked: boolean}>|Record<string, {name: string, category?: string, quantity?: { val: number; unit: string }, checked: boolean}>, delete?: string[]}|null|undefined} patch List items patch.
+	 * @param {string} kind Message kind.
+	 * @returns {Array<{id: string, name: string, category?: string, quantity?: { val: number, unit: string }, checked: boolean}>|undefined} Updated list items.
+	 */
+	_applyListItemsPatch(existingItems, patch, kind) {
+		if (patch === null) {
+			return undefined;
+		}
+		if (Array.isArray(patch)) {
+			return this._normalizeMsgListItems(patch, kind);
+		}
+		if (patch === undefined) {
+			return Array.isArray(existingItems) ? existingItems : undefined;
+		}
+		if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
+			throw new TypeError(`applyPatch: 'listItems' must be an array or { set, delete }`);
+		}
+
+		let base = Array.isArray(existingItems) ? [...existingItems] : [];
+		if ('set' in patch && patch.set !== undefined) {
+			const setVal = patch.set;
+			if (Array.isArray(setVal)) {
+				const normalized = this._normalizeMsgListItems(setVal, kind);
+				base = normalized ? [...normalized] : [];
+			} else if (setVal && typeof setVal === 'object' && !Array.isArray(setVal)) {
+				const entries = [];
+				Object.entries(setVal).forEach(([id, entry]) => {
+					if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+						this.adapter?.log?.warn?.(`applyPatch: 'listItems.set.${id}' must be an object`);
+						return;
+					}
+					entries.push({ ...entry, id });
+				});
+				const normalized = this._normalizeMsgListItems(entries, kind) || [];
+				const byId = new Map(base.map(item => [item.id, item]));
+				normalized.forEach(item => byId.set(item.id, item));
+				base = Array.from(byId.values());
+			} else {
+				throw new TypeError(`applyPatch: 'listItems.set' must be an array or object`);
+			}
+		}
+		if ('delete' in patch && patch.delete !== undefined) {
+			if (!Array.isArray(patch.delete)) {
+				throw new TypeError(`applyPatch: 'listItems.delete' must be an array`);
+			}
+			const deleteSet = new Set();
+			patch.delete.forEach((id, index) => {
+				const normId = this._normalizeMsgString(id, `listItems.delete[${index}]`);
+				if (normId) {
+					deleteSet.add(normId);
+				}
+			});
+			if (deleteSet.size > 0) {
+				base = base.filter(item => !deleteSet.has(item.id));
+			}
+		}
+
+		return base.length > 0 ? base : undefined;
+	}
+
+	/**
+	 * Applies set/delete patches to dependencies.
+	 *
+	 * @param {string[]|undefined} existingDeps Existing dependencies.
+	 * @param {string[]|string|{set?: string[]|string, delete?: string[]}|null|undefined} patch Dependencies patch.
+	 * @returns {string[]|undefined} Updated dependencies.
+	 */
+	_applyDependenciesPatch(existingDeps, patch) {
+		if (patch === null) {
+			return undefined;
+		}
+		if (Array.isArray(patch) || typeof patch === 'string') {
+			return this._normalizeMsgArray(patch, 'dependencies');
+		}
+		if (patch === undefined) {
+			return Array.isArray(existingDeps) ? existingDeps : undefined;
+		}
+		if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
+			throw new TypeError(`applyPatch: 'dependencies' must be string[]|string or { set, delete }`);
+		}
+
+		let base = Array.isArray(existingDeps) ? [...existingDeps] : [];
+		if ('set' in patch && patch.set !== undefined) {
+			base = this._normalizeMsgArray(patch.set, 'dependencies') || [];
+		}
+		if ('delete' in patch && patch.delete !== undefined) {
+			if (!Array.isArray(patch.delete)) {
+				throw new TypeError(`applyPatch: 'dependencies.delete' must be an array`);
+			}
+			const deleteSet = new Set();
+			patch.delete.forEach((dep, index) => {
+				const normDep = this._normalizeMsgString(dep, `dependencies.delete[${index}]`);
+				if (normDep) {
+					deleteSet.add(normDep);
+				}
+			});
+			if (deleteSet.size > 0) {
+				base = base.filter(dep => !deleteSet.has(dep));
+			}
+		}
+
+		return base.length > 0 ? base : undefined;
+	}
+
+	/**
+	 * Applies set/delete patches to progress (partial updates supported).
+	 *
+	 * @param {object|undefined} existingProgress Existing progress.
+	 * @param {object|{set?: object, delete?: string[]}|null|undefined} patch Progress patch.
+	 * @returns {object|undefined} Updated progress.
+	 */
+	_applyProgressPatch(existingProgress, patch) {
+		if (patch === null) {
+			return undefined;
+		}
+		if (patch === undefined) {
+			return this._normalineMsgProgress(existingProgress || {});
+		}
+		if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
+			throw new TypeError(`applyPatch: 'progress' must be an object or { set, delete }`);
+		}
+
+		let partial = patch;
+		if ('set' in patch || 'delete' in patch) {
+			const setVal = patch.set;
+			if (setVal !== undefined && (!setVal || typeof setVal !== 'object' || Array.isArray(setVal))) {
+				throw new TypeError(`applyPatch: 'progress.set' must be an object`);
+			}
+			partial = setVal || {};
+		}
+
+		const merged = { ...(existingProgress || {}) };
+		Object.entries(partial).forEach(([key, val]) => {
+			if (val === null) {
+				delete merged[key];
+			} else {
+				merged[key] = val;
+			}
+		});
+
+		if ('delete' in patch && patch.delete !== undefined) {
+			if (!Array.isArray(patch.delete)) {
+				throw new TypeError(`applyPatch: 'progress.delete' must be an array`);
+			}
+			patch.delete.forEach((key, index) => {
+				const normKey = this._normalizeMsgString(key, `progress.delete[${index}]`);
+				if (!normKey) {
+					return;
+				}
+				if (normKey === 'percentage') {
+					this.adapter?.log?.warn?.(`applyPatch: progress.percentage cannot be deleted`);
+					return;
+				}
+				delete merged[normKey];
+			});
+		}
+
+		return this._normalineMsgProgress(merged);
+	}
+
+	/**
+	 * Applies set/delete patches to actions (by id).
+	 *
+	 * @param {Array<{type: "ack"|"delete"|"close"|"open"|"link"|"custom", id: string, payload?: Record<string, unknown>|null, ts?: number}>|undefined} existingActions Existing actions.
+	 * @param {Array<{type: "ack"|"delete"|"close"|"open"|"link"|"custom", id: string, payload?: Record<string, unknown>|null, ts?: number}>|{set?: Array<{type: "ack"|"delete"|"close"|"open"|"link"|"custom", id: string, payload?: Record<string, unknown>|null, ts?: number}>|Record<string, {type: "ack"|"delete"|"close"|"open"|"link"|"custom", payload?: Record<string, unknown>|null, ts?: number}>, delete?: string[]}|null|undefined} patch Actions patch.
+	 * @returns {Array<{type: "ack"|"delete"|"close"|"open"|"link"|"custom", id: string, payload?: Record<string, unknown>|null, ts?: number}>|undefined} Updated actions.
+	 */
+	_applyActionsPatch(existingActions, patch) {
+		if (patch === null) {
+			return undefined;
+		}
+		if (Array.isArray(patch)) {
+			return this._normalizeMsgActions(patch);
+		}
+		if (patch === undefined) {
+			return Array.isArray(existingActions) ? existingActions : undefined;
+		}
+		if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
+			throw new TypeError(`applyPatch: 'actions' must be an array or { set, delete }`);
+		}
+
+		let base = Array.isArray(existingActions) ? [...existingActions] : [];
+		if ('set' in patch && patch.set !== undefined) {
+			const setVal = patch.set;
+			if (Array.isArray(setVal)) {
+				const normalized = this._normalizeMsgActions(setVal);
+				base = normalized ? [...normalized] : [];
+			} else if (setVal && typeof setVal === 'object' && !Array.isArray(setVal)) {
+				const entries = [];
+				Object.entries(setVal).forEach(([id, entry]) => {
+					if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+						this.adapter?.log?.warn?.(`applyPatch: 'actions.set.${id}' must be an object`);
+						return;
+					}
+					entries.push({ ...entry, id });
+				});
+				const normalized = this._normalizeMsgActions(entries) || [];
+				const byId = new Map(base.map(item => [item.id, item]));
+				normalized.forEach(item => byId.set(item.id, item));
+				base = Array.from(byId.values());
+			} else {
+				throw new TypeError(`applyPatch: 'actions.set' must be an array or object`);
+			}
+		}
+		if ('delete' in patch && patch.delete !== undefined) {
+			if (!Array.isArray(patch.delete)) {
+				throw new TypeError(`applyPatch: 'actions.delete' must be an array`);
+			}
+			const deleteSet = new Set();
+			patch.delete.forEach((id, index) => {
+				const normId = this._normalizeMsgString(id, `actions.delete[${index}]`);
+				if (normId) {
+					deleteSet.add(normId);
+				}
+			});
+			if (deleteSet.size > 0) {
+				base = base.filter(item => !deleteSet.has(item.id));
+			}
+		}
+
+		return base.length > 0 ? base : undefined;
+	}
+
+	/**
 	 * Normalizes actions and validates type and optional fields.
 	 *
-	 * @param {Array<{type: "ack"|"delete"|"close"|"open"|"link"|"custom", id?: string|null, payload?: Record<string, unknown>|null, ts?: number}>|undefined|null} value Actions input.
-	 * @returns {Array<{type: "ack"|"delete"|"close"|"open"|"link"|"custom", id?: string|null, payload?: Record<string, unknown>|null, ts?: number}>|undefined} Normalized actions.
+	 * @param {Array<{type: "ack"|"delete"|"close"|"open"|"link"|"custom", id: string, payload?: Record<string, unknown>|null, ts?: number}>|undefined|null} value Actions input.
+	 * @returns {Array<{type: "ack"|"delete"|"close"|"open"|"link"|"custom", id: string, payload?: Record<string, unknown>|null, ts?: number}>|undefined} Normalized actions.
 	 */
 	_normalizeMsgActions(value) {
 		if (value === undefined || value === null) {
@@ -842,17 +1242,12 @@ class MsgFactory {
 				return;
 			}
 
-			const action = { type };
-
-			if ('id' in entry) {
-				if (entry.id === null) {
-					action.id = null;
-				} else if (typeof entry.id === 'string' && entry.id.trim()) {
-					action.id = entry.id.trim();
-				} else if (entry.id !== undefined) {
-					this.adapter?.log?.warn?.(`createMessage: 'actions[${index}].id' must be a string or null`);
-				}
+			const actionId = this._normalizeMsgString(entry.id, `actions[${index}].id`);
+			if (actionId === undefined) {
+				this.adapter?.log?.warn?.(`createMessage: 'actions[${index}].id' is required`);
+				return;
 			}
+			const action = { type, id: actionId };
 
 			if ('payload' in entry) {
 				if (entry.payload === null) {

@@ -25,12 +25,14 @@ class MsgStore {
 		this.msgFactory = msgFactory;
 		this.msgStorage = msgStorage;
 		this.msgArchive = msgArchive;
+		this.lastPruneAt = 0;
+		this.pruneIntervalMs = 30000;
 
 		this.fullList = messages;
 
 		if (this.adapter?.log?.info) {
 			this.adapter.log.info(
-				`MsgStore initialized: ${!msgArchive ? 'msgArchive not available' : 'msgArchive connected'}`,
+				`MsgStore initialized: pruneInterval=${this.pruneIntervalMs}ms, ${!msgArchive ? 'msgArchive not available' : 'msgArchive connected'}`,
 			);
 		}
 	}
@@ -43,7 +45,8 @@ class MsgStore {
 	 * @returns {boolean} True when added.
 	 */
 	addMessage(msg) {
-		this.deleteOldMessages();
+		this.pruneOldMessages();
+
 		if (msg.level !== parseInt(msg.level, 10)) {
 			return false;
 		}
@@ -53,7 +56,10 @@ class MsgStore {
 
 		this.fullList.push(msg);
 		this.msgStorage.writeJson(this.fullList);
+
 		this.msgArchive?.appendSnapshot?.(msg);
+		this.adapter?.log?.debug?.(`added Message '${msg.ref}'`);
+
 		//if (!silent) setState(this.msgStorage + '.Latest', JSON.stringify(msg), true);
 		//if (!silent) setState(this.getStorageSubId(msg.level), JSON.stringify(msg), true);
 		return true;
@@ -68,7 +74,7 @@ class MsgStore {
 	 * @returns {boolean} True when updated.
 	 */
 	updateMessage(msgOrRef, patch = undefined) {
-		this.deleteOldMessages();
+		this.pruneOldMessages();
 
 		const msg = typeof msgOrRef === 'string' ? { ...(patch || {}), ref: msgOrRef } : msgOrRef;
 
@@ -84,6 +90,7 @@ class MsgStore {
 			return false;
 		}
 
+		const existing = this.fullList[index];
 		const factory = this.msgFactory;
 		if (!factory || typeof factory.applyPatch !== 'function') {
 			this.adapter?.log?.warn?.('MsgStore.updateMessage: msgFactory not available');
@@ -91,14 +98,17 @@ class MsgStore {
 		}
 
 		// Delegate validation + normalization to the factory.
-		const updated = factory.applyPatch(this.fullList[index], msg);
+		const updated = factory.applyPatch(existing, msg);
 		if (!updated) {
 			return false;
 		}
+
 		this.fullList[index] = updated;
 		this.msgStorage.writeJson(this.fullList);
-		this.msgArchive?.appendPatch?.(msg.ref, msg);
-		//setState(this.msgStorage, JSON.stringify(this.fullList), true);
+
+		this.msgArchive?.appendPatch?.(msg.ref, msg, existing, updated);
+		this.adapter?.log?.debug?.(`updated Message '${msg.ref}'`);
+
 		//if (!silent) setState(this.msgStorage + '.Latest', JSON.stringify(msg), true);
 		//if (!silent) setState(this.getStorageSubId(msg.level), JSON.stringify(msg), true);
 		return true;
@@ -111,7 +121,7 @@ class MsgStore {
 	 * @returns {boolean} True when added or updated.
 	 */
 	addOrUpdateMessage(msg) {
-		this.deleteOldMessages();
+		this.pruneOldMessages();
 		if (this.getMessageByRef(msg.ref) != null) {
 			return this.updateMessage(msg);
 		}
@@ -125,7 +135,7 @@ class MsgStore {
 	 * @returns {object|undefined} Matching message, if found.
 	 */
 	getMessageByRef(reference) {
-		this.deleteOldMessages();
+		this.pruneOldMessages();
 		return this.fullList.filter(obj => {
 			return obj.ref === reference;
 		})[0];
@@ -138,7 +148,7 @@ class MsgStore {
 	 * @returns {Array<object>} Matching messages.
 	 */
 	getMessagesByLevel(level) {
-		this.deleteOldMessages();
+		this.pruneOldMessages();
 		return this.fullList.filter(obj => {
 			return obj.level == level;
 		});
@@ -150,7 +160,7 @@ class MsgStore {
 	 * @returns {Array<object>} All messages.
 	 */
 	getMessages() {
-		this.deleteOldMessages();
+		this.pruneOldMessages();
 		return this.fullList;
 	}
 
@@ -161,33 +171,49 @@ class MsgStore {
 	 * @returns {void}
 	 */
 	removeMessage(reference) {
-		this.deleteOldMessages();
+		this.pruneOldMessages();
+
 		var remove = this.getMessageByRef(reference);
 		if (remove == null) {
 			return;
 		}
+
 		this.fullList = this.fullList.filter(item => item.ref !== reference);
 		this.msgArchive?.appendDelete?.(remove);
+
+		this.msgStorage.writeJson(this.fullList);
+		this.adapter?.log?.debug?.(`removed Message '${reference}'`);
+
 		//setState(this.msgStorage + '.Removed', JSON.stringify(remove), true);
 		//setState(this.msgStorage, JSON.stringify(this.fullList), true);
 	}
 
 	/**
-	 * Removes expired messages based on their end time.
-	 * Currently disabled because the old filter does not fit the new model.
+	 * Removes expired messages based on their expires time.
 	 *
 	 * @returns {void}
 	 */
-	deleteOldMessages() {
-		// Disabled for the new message model; keep hook for future pruning.
-		// tbd: add throttling on new implementation!
-		return; // old filter does not work on new model
-
-		if (this.fullList.filter(item => item.end < new Date().getTime()).length === 0) {
+	pruneOldMessages() {
+		const now = Date.now();
+		if (now - this.lastPruneAt < this.pruneIntervalMs) {
 			return;
 		}
-		this.fullList = this.fullList.filter(item => item.end >= new Date().getTime());
-		//setState(this.msgStorage, JSON.stringify(this.fullList), true);
+		this.lastPruneAt = now;
+
+		const isExpired = item => typeof item?.timing?.expiresAt === 'number' && item.timing.expiresAt < now;
+		const removals = this.fullList.filter(isExpired);
+
+		if (removals.length === 0) {
+			return;
+		}
+
+		this.fullList = this.fullList.filter(item => !isExpired(item));
+		this.msgStorage.writeJson(this.fullList);
+
+		for (const msg of removals) {
+			this.msgArchive?.appendDelete?.(msg, { event: 'expired' });
+			this.adapter?.log?.debug?.(`remoed expired Message '${msg.ref}'`);
+		}
 	}
 }
 

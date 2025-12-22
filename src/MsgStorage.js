@@ -15,6 +15,7 @@ class MsgStorage {
 	 * @param {import('@iobroker/adapter-core').AdapterInstance} adapter instance of Msghub
 	 * @param {object} [options] Options Array
 	 * @param {string} [options.metaId] Object ID of the "meta" root. Defaults to adapter.namespace.
+	 * @param {string} [options.baseDir] Base folder for storage file (e.g. "data").
 	 * @param {string} [options.fileName] File name (e.g. "messages.json").
 	 * @param {number} [options.writeIntervalMs] Throttle window in ms (0 = write immediately).
 	 */
@@ -25,6 +26,7 @@ class MsgStorage {
 
 		this.adapter = adapter;
 		this.metaId = options.metaId || adapter.namespace;
+		this.baseDir = typeof options.baseDir === 'string' ? options.baseDir.replace(/^\/+|\/+$/g, '') : 'data';
 		this.fileName = options.fileName || 'messages.json';
 		this.writeIntervalMs =
 			typeof options.writeIntervalMs === 'number' && Number.isFinite(options.writeIntervalMs)
@@ -49,9 +51,11 @@ class MsgStorage {
 	 */
 	async init() {
 		await this._ensureMetaObject();
+		await this._ensureBaseDir();
 		if (this.adapter?.log?.info) {
+			const filePath = this._filePathFor(this.fileName);
 			this.adapter.log.info(
-				`MsgStorage initialized: fileName=${this.fileName}, interval=${this.writeIntervalMs}ms`,
+				`MsgStorage initialized: file=${filePath}, interval=${this.writeIntervalMs}ms`,
 			);
 		}
 	}
@@ -85,6 +89,25 @@ class MsgStorage {
 	}
 
 	/**
+	 * Ensures the base directory exists in file storage.
+	 */
+	async _ensureBaseDir() {
+		if (!this.baseDir || typeof this.adapter.mkdirAsync !== 'function') {
+			return;
+		}
+		const parts = this.baseDir.split('/').filter(Boolean);
+		let current = '';
+		for (const part of parts) {
+			current = current ? `${current}/${part}` : part;
+			try {
+				await this.adapter.mkdirAsync(this.metaId, current);
+			} catch {
+				// ignore; some backends auto-create folders on write
+			}
+		}
+	}
+
+	/**
 	 * Serializes async operations to avoid concurrent writes.
 	 *
 	 * @param {() => Promise<any>} fn Operation to run in the serialized queue.
@@ -102,48 +125,50 @@ class MsgStorage {
 	 */
 	async _writeNow(value) {
 		const tmpName = `${this.fileName}.tmp`;
+		const filePath = this._filePathFor(this.fileName);
+		const tmpPath = this._filePathFor(tmpName);
 		const json = this._serialize(value);
 		const sizeBytes = Buffer.byteLength(json, 'utf8');
 
 		// If rename is unavailable, fall back to a direct write.
 		// @ts-expect-error renameFileAsync may not be avialable
 		if (typeof this.adapter.renameFileAsync !== 'function') {
-			await this.adapter.writeFileAsync(this.metaId, this.fileName, json);
+			await this.adapter.writeFileAsync(this.metaId, filePath, json);
 			if (this.adapter?.log?.debug) {
-				this.adapter.log.debug(`${this.fileName} written, mode=override, ${sizeBytes} bytes`);
+				this.adapter.log.debug(`${filePath} written, mode=override, ${sizeBytes} bytes`);
 			}
 			return;
 		}
 
 		// Atomic write: write tmp file, then replace the target via rename.
 		try {
-			await this.adapter.writeFileAsync(this.metaId, tmpName, json);
+			await this.adapter.writeFileAsync(this.metaId, tmpPath, json);
 
 			if (typeof this.adapter.delFileAsync === 'function') {
 				try {
-					await this.adapter.delFileAsync(this.metaId, this.fileName);
+					await this.adapter.delFileAsync(this.metaId, filePath);
 				} catch {
 					// Ignore if the target does not exist or deletion is unsupported.
 				}
 			}
 
 			// @ts-expect-error renameFileAsync may not be avialable
-			await this.adapter.renameFileAsync(this.metaId, tmpName, this.fileName);
+			await this.adapter.renameFileAsync(this.metaId, tmpPath, filePath);
 			if (this.adapter?.log?.debug) {
-				this.adapter.log.debug(`${this.fileName} written, mode=rename, ${sizeBytes} bytes`);
+				this.adapter.log.debug(`${filePath} written, mode=rename, ${sizeBytes} bytes`);
 			}
 		} catch (e) {
 			// If rename fails, log and fall back to direct write.
-			this.adapter.log.warn(`Atomic write failed (${e?.message || e}), writing directly to ${this.fileName}`);
-			await this.adapter.writeFileAsync(this.metaId, this.fileName, json);
+			this.adapter.log.warn(`Atomic write failed (${e?.message || e}), writing directly to ${filePath}`);
+			await this.adapter.writeFileAsync(this.metaId, filePath, json);
 			if (this.adapter?.log?.debug) {
-				this.adapter.log.debug(`${this.fileName} written, mode=fallback, ${sizeBytes} bytes`);
+				this.adapter.log.debug(`${filePath} written, mode=fallback, ${sizeBytes} bytes`);
 			}
 		} finally {
 			// Best-effort cleanup of the tmp file.
 			if (typeof this.adapter.delFileAsync === 'function') {
 				try {
-					await this.adapter.delFileAsync(this.metaId, tmpName);
+					await this.adapter.delFileAsync(this.metaId, tmpPath);
 				} catch {
 					// ignore
 				}
@@ -157,9 +182,10 @@ class MsgStorage {
 	 * @param {any} [fallback] Returned if the file is missing, empty, or invalid.
 	 */
 	async readJson(fallback = null) {
+		const filePath = this._filePathFor(this.fileName);
 		return this._queue(async () => {
 			try {
-				const res = await this.adapter.readFileAsync(this.metaId, this.fileName);
+				const res = await this.adapter.readFileAsync(this.metaId, filePath);
 
 				// Controller/adapter-core may return { file: Buffer|string } or a raw Buffer/string.
 				const raw = res && typeof res === 'object' && 'file' in res ? res.file : res;
@@ -176,7 +202,7 @@ class MsgStorage {
 				return this._deserialize(text);
 			} catch (e) {
 				// Treat missing/invalid data as fallback; exact error varies by backend.
-				this.adapter.log.debug(`readJson(${this.fileName}) failed, using fallback: ${e?.message || e}`);
+				this.adapter.log.debug(`readJson(${filePath}) failed, using fallback: ${e?.message || e}`);
 				return fallback;
 			}
 		});
@@ -248,6 +274,16 @@ class MsgStorage {
 		const writePromise = this._queue(() => this._writeNow(pending));
 		writePromise.then(resolve, reject);
 		return writePromise;
+	}
+
+	/**
+	 * Builds a file path under the optional base directory.
+	 *
+	 * @param {string} fileName File name.
+	 * @returns {string} File path.
+	 */
+	_filePathFor(fileName) {
+		return this.baseDir ? `${this.baseDir}/${fileName}` : fileName;
 	}
 
 	/**

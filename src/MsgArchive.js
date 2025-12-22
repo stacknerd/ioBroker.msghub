@@ -19,7 +19,7 @@ class MsgArchive {
 
 		this.adapter = adapter;
 		this.metaId = options.metaId || adapter.namespace;
-		this.baseDir = typeof options.baseDir === 'string' ? options.baseDir.replace(/^\/+|\/+$/g, '') : 'archive';
+		this.baseDir = typeof options.baseDir === 'string' ? options.baseDir.replace(/^\/+|\/+$/g, '') : 'data/archive';
 		this.fileExtension =
 			typeof options.fileExtension === 'string' && options.fileExtension.trim()
 				? options.fileExtension.trim().replace(/^\./, '')
@@ -86,14 +86,214 @@ class MsgArchive {
 	 *
 	 * @param {string} ref Message ref.
 	 * @param {object} patch Patch payload.
+	 * @param {object} [existing] Message before the patch.
+	 * @param {object} [updated] Message after the patch.
 	 * @param {object} [options] Options.
 	 * @param {boolean} [options.flushNow] Flush immediately.
 	 * @param {boolean} [options.throwOnError] Reject promise on failure.
 	 */
-	appendPatch(ref, patch, options = {}) {
-		return this._appendEvent(ref, 'patch', { patch }, options).catch(err =>
-			this._handleAppendError('patch', ref, err, options),
+	appendPatch(ref, patch, existing = undefined, updated = undefined, options = {}) {
+		const { resolvedExisting, resolvedUpdated, resolvedOptions } = this._normalizeAppendPatchArgs(
+			existing,
+			updated,
+			options,
 		);
+		const payload = this._buildPatchPayload(ref, patch, resolvedExisting, resolvedUpdated);
+		return this._appendEvent(ref, 'patch', payload, resolvedOptions).catch(err =>
+			this._handleAppendError('patch', ref, err, resolvedOptions),
+		);
+	}
+
+	/**
+	 * Normalize appendPatch args to support legacy (ref, patch, options) calls.
+	 *
+	 * @param {object|undefined} existing Existing message or options.
+	 * @param {object|undefined} updated Updated message.
+	 * @param {object} options Options.
+	 * @returns {{resolvedExisting: object|undefined, resolvedUpdated: object|undefined, resolvedOptions: object}}
+	 */
+	_normalizeAppendPatchArgs(existing, updated, options) {
+		const isOptions =
+			existing &&
+			typeof existing === 'object' &&
+			!Array.isArray(existing) &&
+			(Object.prototype.hasOwnProperty.call(existing, 'flushNow') ||
+				Object.prototype.hasOwnProperty.call(existing, 'throwOnError'));
+
+		if (updated === undefined && isOptions) {
+			return { resolvedExisting: undefined, resolvedUpdated: undefined, resolvedOptions: existing };
+		}
+
+		return { resolvedExisting: existing, resolvedUpdated: updated, resolvedOptions: options || {} };
+	}
+
+	/**
+	 * Builds a patch payload that includes requested + added/removed diffs.
+	 *
+	 * @param {string} ref Message ref.
+	 * @param {object} patch Patch payload.
+	 * @param {object|undefined} existing Message before patch.
+	 * @param {object|undefined} updated Message after patch.
+	 * @returns {object} Patch payload for the archive.
+	 */
+	_buildPatchPayload(ref, patch, existing, updated) {
+		const requested = this._stripRefFromPatch(patch, ref);
+		if (existing === undefined && updated === undefined) {
+			return { ok: true, requested };
+		}
+
+		const diff = this._diffValue(existing, updated);
+		const payload = { ok: true, requested };
+		if (diff?.added !== undefined) {
+			payload.added = diff.added;
+		}
+		if (diff?.removed !== undefined) {
+			payload.removed = diff.removed;
+		}
+		return payload;
+	}
+
+	_stripRefFromPatch(patch, ref) {
+		if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
+			return patch;
+		}
+		if (!Object.prototype.hasOwnProperty.call(patch, 'ref')) {
+			return patch;
+		}
+		if (typeof patch.ref === 'string' && patch.ref.trim() === String(ref).trim()) {
+			const { ref: _ref, ...rest } = patch;
+			return rest;
+		}
+		return patch;
+	}
+
+	_diffValue(existing, updated) {
+		if (this._isEqual(existing, updated)) {
+			return null;
+		}
+		if (existing instanceof Map && updated instanceof Map) {
+			return this._diffMap(existing, updated);
+		}
+		if (Array.isArray(existing) && Array.isArray(updated)) {
+			return { added: updated, removed: existing };
+		}
+		if (this._isPlainObject(existing) && this._isPlainObject(updated)) {
+			const added = {};
+			const removed = {};
+			const keys = new Set([...Object.keys(existing), ...Object.keys(updated)]);
+			keys.forEach(key => {
+				if (!Object.prototype.hasOwnProperty.call(updated, key)) {
+					removed[key] = existing[key];
+					return;
+				}
+				if (!Object.prototype.hasOwnProperty.call(existing, key)) {
+					added[key] = updated[key];
+					return;
+				}
+				const child = this._diffValue(existing[key], updated[key]);
+				if (child) {
+					if (child.added !== undefined) {
+						added[key] = child.added;
+					}
+					if (child.removed !== undefined) {
+						removed[key] = child.removed;
+					}
+				}
+			});
+			const hasAdded = Object.keys(added).length > 0;
+			const hasRemoved = Object.keys(removed).length > 0;
+			if (!hasAdded && !hasRemoved) {
+				return null;
+			}
+			return {
+				added: hasAdded ? added : undefined,
+				removed: hasRemoved ? removed : undefined,
+			};
+		}
+		return { added: updated, removed: existing };
+	}
+
+	_diffMap(existing, updated) {
+		const added = {};
+		const removed = {};
+		const keys = new Set([...existing.keys(), ...updated.keys()]);
+		keys.forEach(key => {
+			const hasBefore = existing.has(key);
+			const hasAfter = updated.has(key);
+			if (!hasAfter && hasBefore) {
+				removed[key] = existing.get(key);
+				return;
+			}
+			if (!hasBefore && hasAfter) {
+				added[key] = updated.get(key);
+				return;
+			}
+			const before = existing.get(key);
+			const after = updated.get(key);
+			if (!this._isEqual(before, after)) {
+				added[key] = after;
+				removed[key] = before;
+			}
+		});
+		const hasAdded = Object.keys(added).length > 0;
+		const hasRemoved = Object.keys(removed).length > 0;
+		if (!hasAdded && !hasRemoved) {
+			return null;
+		}
+		return {
+			added: hasAdded ? added : undefined,
+			removed: hasRemoved ? removed : undefined,
+		};
+	}
+
+	_isPlainObject(v) {
+		return (
+			v !== null &&
+			typeof v === 'object' &&
+			(Object.getPrototypeOf(v) === Object.prototype || Object.getPrototypeOf(v) === null)
+		);
+	}
+
+	_isEqual(a, b) {
+		if (a === b) {
+			return true;
+		}
+		if (a instanceof Map && b instanceof Map) {
+			if (a.size !== b.size) {
+				return false;
+			}
+			for (const [key, val] of a.entries()) {
+				if (!b.has(key) || !this._isEqual(val, b.get(key))) {
+					return false;
+				}
+			}
+			return true;
+		}
+		if (Array.isArray(a) && Array.isArray(b)) {
+			if (a.length !== b.length) {
+				return false;
+			}
+			for (let i = 0; i < a.length; i += 1) {
+				if (!this._isEqual(a[i], b[i])) {
+					return false;
+				}
+			}
+			return true;
+		}
+		if (this._isPlainObject(a) && this._isPlainObject(b)) {
+			const aKeys = Object.keys(a);
+			const bKeys = Object.keys(b);
+			if (aKeys.length !== bKeys.length) {
+				return false;
+			}
+			for (const key of aKeys) {
+				if (!Object.prototype.hasOwnProperty.call(b, key) || !this._isEqual(a[key], b[key])) {
+					return false;
+				}
+			}
+			return true;
+		}
+		return false;
 	}
 
 	/**
@@ -101,6 +301,7 @@ class MsgArchive {
 	 *
 	 * @param {string|object} refOrMessage Message ref or full message object.
 	 * @param {object} [options] Options.
+	 * @param {string} [options.event] Override event name.
 	 * @param {boolean} [options.flushNow] Flush immediately.
 	 * @param {boolean} [options.throwOnError] Reject promise on failure.
 	 */
@@ -110,8 +311,9 @@ class MsgArchive {
 			refOrMessage && typeof refOrMessage === 'object' && !Array.isArray(refOrMessage)
 				? { snapshot: refOrMessage }
 				: {};
-		return this._appendEvent(ref, 'delete', payload, options).catch(err =>
-			this._handleAppendError('delete', ref, err, options),
+		const eventName = typeof options.event === 'string' && options.event.trim() ? options.event.trim() : 'delete';
+		return this._appendEvent(ref, eventName, payload, options).catch(err =>
+			this._handleAppendError(eventName, ref, err, options),
 		);
 	}
 
@@ -222,10 +424,15 @@ class MsgArchive {
 		if (!this.baseDir || typeof this.adapter.mkdirAsync !== 'function') {
 			return;
 		}
-		try {
-			await this.adapter.mkdirAsync(this.metaId, this.baseDir);
-		} catch {
-			// ignore; some backends auto-create folders on write
+		const parts = this.baseDir.split('/').filter(Boolean);
+		let current = '';
+		for (const part of parts) {
+			current = current ? `${current}/${part}` : part;
+			try {
+				await this.adapter.mkdirAsync(this.metaId, current);
+			} catch {
+				// ignore; some backends auto-create folders on write
+			}
 		}
 	}
 

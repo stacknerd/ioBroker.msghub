@@ -118,6 +118,8 @@ describe('MsgArchive', () => {
 		const lines = readJsonl(files, key);
 		expect(lines).to.have.length(2);
 		expect(lines[0].event).to.equal('patch');
+		expect(lines[0].ok).to.equal(true);
+		expect(lines[0].requested.text).to.equal('patch-1');
 		expect(lines[1].event).to.equal('delete');
 		expect(lines[1].snapshot.title).to.equal('bye');
 	});
@@ -198,7 +200,30 @@ describe('MsgArchive', () => {
 		const key = `${adapter.namespace}/archive/a3.jsonl`;
 		const lines = readJsonl(files, key);
 		expect(lines).to.have.length(2);
-		expect(lines[0].patch.text).to.equal('one');
-		expect(lines[1].patch.text).to.equal('two');
+		expect(lines[0].requested.text).to.equal('one');
+		expect(lines[1].requested.text).to.equal('two');
+	});
+
+	it('records added/removed diff for patch payloads', async () => {
+		const { adapter, files } = createAdapter();
+		const archive = new MsgArchive(adapter, { baseDir: 'archive', flushIntervalMs: 0 });
+		await archive.init();
+
+		const ref = 'diff-1';
+		const existing = { ref, title: 'old', metrics: new Map([['temp', { val: 1 }]]) };
+		const updated = { ref, title: 'new', metrics: new Map([['temp', { val: 2 }], ['hum', { val: 3 }]]) };
+		const patch = { title: 'new', metrics: { set: { temp: { val: 2 }, hum: { val: 3 } } } };
+
+		await archive.appendPatch(ref, patch, existing, updated);
+
+		const key = `${adapter.namespace}/archive/diff-1.jsonl`;
+		const lines = readJsonl(files, key);
+		expect(lines).to.have.length(1);
+		expect(lines[0].requested.title).to.equal('new');
+		expect(lines[0].added.title).to.equal('new');
+		expect(lines[0].removed.title).to.equal('old');
+		expect(lines[0].added.metrics.temp).to.deep.equal({ val: 2 });
+		expect(lines[0].removed.metrics.temp).to.deep.equal({ val: 1 });
+		expect(lines[0].added.metrics.hum).to.deep.equal({ val: 3 });
 	});
 });
