@@ -7,6 +7,7 @@
 // The adapter-core module gives you access to the core ioBroker functions
 // you need to create an adapter
 const utils = require('@iobroker/adapter-core');
+const { MsgArchive } = require(`${__dirname}/lib/MsgArchive`);
 const { MsgStorage } = require(`${__dirname}/lib/MsgStorage`);
 const { MsgFactory } = require(`${__dirname}/lib/MsgFactory`);
 const { MsgConstants } = require(`${__dirname}/lib/MsgConstants`);
@@ -30,7 +31,7 @@ class Msghub extends utils.Adapter {
 		// this.on('objectChange', this.onObjectChange.bind(this));
 		// this.on('message', this.onMessage.bind(this));
 		this.on('unload', this.onUnload.bind(this));
-		this.msgConstantsants = MsgConstants;
+		this.msgConstants = MsgConstants;
 	}
 
 	/**
@@ -45,14 +46,25 @@ class Msghub extends utils.Adapter {
 		this.log.debug('config option2: ${this.config.option2}');
 
 		// init file storage
-		this.storage = new MsgStorage(this, { fileName: 'messages.json' });
-		await this.storage.init();
+		this.msgStorage = new MsgStorage(this, { fileName: 'messages.json' });
+		await this.msgStorage.init();
+
+		// init archive
+		//this.msgArchive = null;
+		this.msgArchive = new MsgArchive(this, { baseDir: 'archive' }); // auch null möglich, wenn kein Archiv erwünscht
+		await this.msgArchive?.init();
 
 		// init fatory
 		this.msgFactory = new MsgFactory(this, this.msgConstants);
 
 		//init store
-		this.store = new MsgStore(this, await this.storage.readJson({}), this.msgFactory, this.storage);
+		this.store = new MsgStore(
+			this,
+			[], //await this.msgStorage.readJson({}),
+			this.msgFactory,
+			this.msgStorage,
+			this.msgArchive,
+		);
 
 		const msg1 = this.msgFactory.createMessage({
 			ref: '2438',
@@ -64,13 +76,11 @@ class Msghub extends utils.Adapter {
 			timing: { startAt: 2134928374923, endAt: 2134928374950 },
 			details: { location: 'zimmer', tools: ['1', '2'], consumables: 'batterien' },
 		});
-		//this.store.addMessage(msg1);
-		//this.messages.push(msg1);
-		//this.log.debug(`msg1: ${JSON.stringify(msg1, null, 2)}`);
+		this.store.addMessage(msg1);
 
 		const msg2 = this.msgFactory.createMessage({
 			ref: '24wef38-1',
-			title: 'ewefin titel-text  ???????????????????????????',
+			title: 'ewefin titel-text',
 			text: 'lowefrem ipsum...',
 			level: this.msgConstants.level.warning,
 			kind: this.msgConstants.kind.task,
@@ -78,6 +88,12 @@ class Msghub extends utils.Adapter {
 			timing: { expiresAt: 2134928374923, dueAt: 2134928374924, notifyAt: 2134928374910 },
 			details: { consumables: 'Eimer,Lappen,Staubsauger' },
 			progress: { percentage: 20, startedAt: Date.now() },
+		});
+
+		this.store.addMessage(msg2);
+
+		const patch4msg2 = {
+			title: 'ewefin titel-text (this has been updated!)',
 			metrics: new Map([
 				['temperature', { val: 21.7, unit: 'C', ts: Date.now() }],
 				['humidity', { val: 46, unit: '%', ts: Date.now() }],
@@ -85,18 +101,12 @@ class Msghub extends utils.Adapter {
 				['batteryLow', { val: false, unit: 'bool', ts: Date.now() }],
 				['lastSeen', { val: null, unit: 'timestamp', ts: Date.now() }],
 			]),
-		});
-		
-		this.store.updateMessage(msg2);
+		};
 
-		
-		//this.messages.push(msg2);
+		this.store.updateMessage('24wef38-1', patch4msg2);
 
-		//this.storage.writeJson(this.messages); // nicht awaiten, wenn nicht nötig
+
 		this.log.debug(JSON.stringify(this.store.getMessages(), null, 2));
-
-		//var testfactory = this.msgFactory.createMessage({title: "der titel", text: "ein text", level: 10, kind: "test"})
-		//this.log.warn(JSON.stringify(testfactory,null,2));
 
 		/*
 		For every state in the system there has to be also an object of type state
@@ -161,7 +171,8 @@ class Msghub extends utils.Adapter {
 			// ...
 			// clearInterval(interval1);
 
-			this.storage.flushPending();
+			this.msgStorage.flushPending();
+			this.msgArchive?.flushPending?.();
 		} catch (error) {
 			this.log.error(`Error during unloading: ${error.message}`);
 			callback();
