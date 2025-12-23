@@ -21,15 +21,27 @@ function createStorage() {
 	return { storage, writes };
 }
 
+function createRenderer() {
+	const calls = [];
+	const msgRender = {
+		renderMessage: msg => {
+			calls.push(msg);
+			return msg;
+		},
+	};
+	return { msgRender, calls };
+}
+
 function createFactory({ applyPatch } = {}) {
 	return {
 		applyPatch: applyPatch || ((existing, patch) => ({ ...existing, ...patch })),
 	};
 }
 
-function createStore({ messages = [], factory, storage, adapter, msgArchive } = {}) {
+function createStore({ messages = [], factory, storage, adapter, msgArchive, msgRender } = {}) {
 	const { adapter: defaultAdapter, logs } = createAdapter();
 	const { storage: defaultStorage, writes } = createStorage();
+	const { msgRender: defaultRender } = createRenderer();
 	const msgFactory = factory || createFactory();
 
 	return {
@@ -38,6 +50,7 @@ function createStore({ messages = [], factory, storage, adapter, msgArchive } = 
 			messages,
 			msgFactory,
 			storage || defaultStorage,
+			msgRender || defaultRender,
 			msgArchive,
 		),
 		logs,
@@ -119,8 +132,9 @@ describe('MsgStore', () => {
 		it('rejects updates when factory lacks applyPatch', () => {
 			const { adapter, logs } = createAdapter();
 			const { storage, writes } = createStorage();
+			const { msgRender } = createRenderer();
 			const msgFactory = {};
-			const store = new MsgStore(adapter, [{ ref: 'r1', level: 10 }], msgFactory, storage);
+			const store = new MsgStore(adapter, [{ ref: 'r1', level: 10 }], msgFactory, storage, msgRender);
 
 			const result = store.updateMessage({ ref: 'r1', text: 'x' });
 			expect(result).to.equal(false);
@@ -210,7 +224,7 @@ describe('MsgStore', () => {
 		it('returns the full list', () => {
 			const messages = [{ ref: 'r1', level: 10 }];
 			const { store } = createStore({ messages });
-			expect(store.getMessages()).to.equal(messages);
+			expect(store.getMessages().map(msg => msg.ref)).to.deep.equal(['r1']);
 		});
 	});
 

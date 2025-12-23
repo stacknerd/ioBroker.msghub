@@ -104,6 +104,7 @@
  *   }
  *
  *   dependencies?: string[]
+ *
  * }
  */
 
@@ -188,7 +189,7 @@ class MsgFactory {
 				details: this._normalizeMsgDetails(details),
 				metrics: this._normalizeMsgMetrics(metrics),
 				attachments: this._normalizeMsgAttachments(attachments),
-			listItems: this._normalizeMsgListItems(listItems, normkind),
+				listItems: this._normalizeMsgListItems(listItems, normkind),
 				actions: this._normalizeMsgActions(actions),
 				progress: this._normalineMsgProgress(progress),
 				dependencies: this._normalizeMsgArray(dependencies, 'dependencies'),
@@ -840,7 +841,9 @@ class MsgFactory {
 
 			const id = this._normalizeMsgString(entry.id, `listItems[${index}].id`);
 			const name = this._normalizeMsgString(entry.name, `listItems[${index}].name`);
-			const category = entry.category ? this._normalizeMsgString(entry.category, `listItems[${index}].category`) : undefined;
+			const category = entry.category
+				? this._normalizeMsgString(entry.category, `listItems[${index}].category`)
+				: undefined;
 
 			if (id === undefined || name === undefined) {
 				this.adapter?.log?.warn?.(`createMessage: 'listItems[${index}]' requires non-empty id and name`);

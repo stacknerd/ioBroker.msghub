@@ -12,6 +12,7 @@ const { MsgStorage } = require(`${__dirname}/src/MsgStorage`);
 const { MsgFactory } = require(`${__dirname}/src/MsgFactory`);
 const { MsgConstants } = require(`${__dirname}/src/MsgConstants`);
 const { MsgStore } = require(`${__dirname}/src/MsgStore`);
+const { MsgRender } = require(`${__dirname}/src/MsgRender`);
 
 // Load your modules here, e.g.:
 // const fs = require('fs');
@@ -29,9 +30,12 @@ class Msghub extends utils.Adapter {
 		this.on('ready', this.onReady.bind(this));
 		this.on('stateChange', this.onStateChange.bind(this));
 		// this.on('objectChange', this.onObjectChange.bind(this));
-		// this.on('message', this.onMessage.bind(this));
+		this.on('message', this.onMessage.bind(this));
 		this.on('unload', this.onUnload.bind(this));
 		this.msgConstants = MsgConstants;
+
+		//todo: config for these values
+		this.locale = 'de-DE';
 	}
 
 	/**
@@ -57,12 +61,16 @@ class Msghub extends utils.Adapter {
 		// init fatory
 		this.msgFactory = new MsgFactory(this, this.msgConstants);
 
+		// init render
+		this.msgRender = new MsgRender(this, { locale: this.locale });
+
 		//init store
 		this.store = new MsgStore(
 			this,
 			[], //await this.msgStorage.readJson({}),
 			this.msgFactory,
 			this.msgStorage,
+			this.msgRender,
 			this.msgArchive,
 		);
 
@@ -95,20 +103,21 @@ class Msghub extends utils.Adapter {
 		this.store.addMessage(msg2);
 
 		const patch4msg2 = {
-			title: 'ewefin titel-text (this has been updated!)',
+			title: 'current temp: {{m.temperature}} (this has been updated!)',
 			metrics: new Map([
-				['temperature', { val: 21.7, unit: 'C', ts: Date.now() }],
+				['temperature', { val: 21.7, unit: '?', ts: Date.now() }],
 				['humidity', { val: 46, unit: '%', ts: Date.now() }],
 				['state', { val: 'ok', unit: 'status', ts: Date.now() }],
 				['batteryLow', { val: false, unit: 'bool', ts: Date.now() }],
-				['lastSeen', { val: null, unit: 'timestamp', ts: Date.now() }],
+				['lastSeen', { val: Date.now(), unit: 'timestamp', ts: Date.now() }],
 			]),
 		};
 		this.store.updateMessage(msg2ref, patch4msg2);
 
 		this.store.updateMessage(msg2ref, {
+			text: '{{m.lastSeen.val|datetime}}',
 			metrics: {
-				set: { temperature: { val: 22.3, unit: 'C+', ts: Date.now() } },
+				set: { temperature: { val: 27.3, unit: '°C', ts: Date.now() } },
 				delete: ['humidity'],
 			},
 		});
@@ -125,6 +134,7 @@ class Msghub extends utils.Adapter {
 				delete: ['oldItemId'],
 			},
 		});
+
 		this.log.debug(this.msgStorage._serialize(this.store.getMessages(), null, 2));
 
 		/*
@@ -255,6 +265,39 @@ class Msghub extends utils.Adapter {
 	// 		}
 	// 	}
 	// }
+	onMessage(obj) {
+		if (!obj || !obj.command) {
+			return;
+		}
+
+		const cmd = obj.command;
+		const payload = obj.message;
+
+		this.log.debug(`onMessage: '${cmd}' ${JSON.stringify(payload, null, 2)}`);
+		let result;
+
+		try {
+			switch (cmd) {
+				case 'create': {
+					break;
+				}
+				case 'update': {
+					break;
+				}
+				case 'remove': {
+					break;
+				}
+				default:
+					this.log.debug(`onMessage: unknown command '${cmd}' ${JSON.stringify(payload, null, 2)}`);
+			}
+		} catch (e) {
+			this.log.error(`onMessage error: ${String(e)}`);
+		}
+
+		if (obj.callback) {
+			this.sendTo(obj.from, obj.command, result, obj.callback);
+		}
+	}
 }
 
 if (require.main !== module) {

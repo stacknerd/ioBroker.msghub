@@ -8,9 +8,10 @@ class MsgStore {
 	 * @param {Array<object>} messages Initial message list (use [] if no data).
 	 * @param {import('./MsgFactory').MsgFactory} msgFactory Factory used for patching/validation.
 	 * @param {import('./MsgStorage').MsgStorage} msgStorage Storage used for persistence.
+	 * @param {import('./MsgRender').MsgRender} msgRender Render used for messages upon retrieving.
 	 * @param {import('./MsgArchive').MsgArchive} [msgArchive] Archive sink for lifecycle events.
 	 */
-	constructor(adapter, messages = [], msgFactory, msgStorage, msgArchive) {
+	constructor(adapter, messages = [], msgFactory, msgStorage, msgRender, msgArchive) {
 		if (!adapter) {
 			throw new Error('MsgStore: adapter is required');
 		}
@@ -19,16 +20,23 @@ class MsgStore {
 		if (!msgFactory) {
 			throw new Error('MsgStore: msgFactory is required');
 		}
+		this.msgFactory = msgFactory;
+
 		if (!msgStorage) {
 			throw new Error('MsgStore: msgStorage is required');
 		}
-		this.msgFactory = msgFactory;
 		this.msgStorage = msgStorage;
+
+		if (!msgRender) {
+			throw new Error('MsgStore: msgRender is required');
+		}
+		this.msgRender = msgRender;
+
 		this.msgArchive = msgArchive;
+		this.fullList = messages;
+
 		this.lastPruneAt = 0;
 		this.pruneIntervalMs = 30000;
-
-		this.fullList = messages;
 
 		if (this.adapter?.log?.info) {
 			this.adapter.log.info(
@@ -136,9 +144,10 @@ class MsgStore {
 	 */
 	getMessageByRef(reference) {
 		this.pruneOldMessages();
-		return this.fullList.filter(obj => {
+		const msg = this.fullList.filter(obj => {
 			return obj.ref === reference;
 		})[0];
+		return this.msgRender?.renderMessage(msg) || msg;
 	}
 
 	/**
@@ -149,9 +158,11 @@ class MsgStore {
 	 */
 	getMessagesByLevel(level) {
 		this.pruneOldMessages();
-		return this.fullList.filter(obj => {
+		const levelList = this.fullList.filter(obj => {
 			return obj.level == level;
 		});
+
+		return levelList.map(msg => this.msgRender?.renderMessage(msg) || msg);
 	}
 
 	/**
@@ -161,7 +172,7 @@ class MsgStore {
 	 */
 	getMessages() {
 		this.pruneOldMessages();
-		return this.fullList;
+		return this.fullList.map(msg => this.msgRender?.renderMessage(msg) || msg);
 	}
 
 	/**
@@ -173,7 +184,9 @@ class MsgStore {
 	removeMessage(reference) {
 		this.pruneOldMessages();
 
-		var remove = this.getMessageByRef(reference);
+		const remove = this.fullList.filter(obj => {
+			return obj.ref === reference;
+		})[0];
 		if (remove == null) {
 			return;
 		}

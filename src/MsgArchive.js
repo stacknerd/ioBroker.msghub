@@ -1,16 +1,18 @@
 /**
  * Append-only archive for message lifecycle events.
- * Stores one file per ref under the adapter file namespace.
+ * Stores one JSONL file per ref under the adapter file namespace.
+ * Designed for auditability and later replay: events are immutable, ordered by write time,
+ * and batched to reduce storage churn while still preserving per-ref ordering.
  */
 class MsgArchive {
 	/**
-	 * @param {import('@iobroker/adapter-core').AdapterInstance} adapter Adapter instance for ioBroker file storage.
-	 * @param {object} [options] Options object.
+	 * @param {import('@iobroker/adapter-core').AdapterInstance} adapter Adapter instance used for ioBroker file storage APIs.
+	 * @param {object} [options] Optional configuration for storage layout and batching.
 	 * @param {string} [options.metaId] File storage root meta ID; defaults to adapter.namespace.
-	 * @param {string} [options.baseDir] Base folder for archive files (e.g. "archive").
+	 * @param {string} [options.baseDir] Base folder for archive files (e.g. "archive"); empty string stores files at root.
 	 * @param {string} [options.fileExtension] File extension without leading dot (default: "jsonl").
-	 * @param {number} [options.flushIntervalMs] Flush interval in ms (0 = immediate).
-	 * @param {number} [options.maxBatchSize] Max queued events per ref before forced flush.
+	 * @param {number} [options.flushIntervalMs] Flush interval in ms (0 = immediate; default 10000).
+	 * @param {number} [options.maxBatchSize] Max queued events per ref before forced flush (default 200).
 	 */
 	constructor(adapter, options = {}) {
 		if (!adapter) {
@@ -35,17 +37,19 @@ class MsgArchive {
 
 		this.schemaVersion = 1;
 
-		// Promise chain used as a simple mutex to serialize writes.
+		// Promise chain used as a simple mutex to serialize writes across refs.
 		this._op = Promise.resolve();
 
-		// Pending events per ref file key.
+		// Pending events per ref file key, along with timers and waiters.
 		this._pending = new Map();
 
 		this._mapTypeMarker = '__msghubType';
 	}
 
 	/**
-	 * Call once during startup. Ensures the file storage root exists.
+	 * Call once during startup. Ensures the file storage root and base folder exist.
+	 *
+	 * @returns {Promise<void>} Resolves when the archive is ready for writes.
 	 */
 	async init() {
 		await this._ensureMetaObject();
@@ -60,11 +64,11 @@ class MsgArchive {
 	/**
 	 * Append a full message snapshot (usually on create).
 	 *
-	 * @param {object} message Full message object.
-	 * @param {object} [options] Options.
-	 * @param {string} [options.event] Override event name.
-	 * @param {boolean} [options.flushNow] Flush immediately.
-	 * @param {boolean} [options.throwOnError] Reject promise on failure.
+	 * @param {object} message Full message object to persist as a snapshot.
+	 * @param {object} [options] Optional behavior overrides.
+	 * @param {string} [options.event] Override event name (defaults to "create").
+	 * @param {boolean} [options.flushNow] Flush immediately instead of waiting for batching.
+	 * @param {boolean} [options.throwOnError] Reject the promise on failure (otherwise log + resolve).
 	 */
 	appendSnapshot(message, options = {}) {
 		if (!message || typeof message !== 'object') {
@@ -84,13 +88,13 @@ class MsgArchive {
 	/**
 	 * Append a patch event.
 	 *
-	 * @param {string} ref Message ref.
-	 * @param {object} patch Patch payload.
-	 * @param {object} [existing] Message before the patch.
-	 * @param {object} [updated] Message after the patch.
-	 * @param {object} [options] Options.
-	 * @param {boolean} [options.flushNow] Flush immediately.
-	 * @param {boolean} [options.throwOnError] Reject promise on failure.
+	 * @param {string} ref Message ref that identifies the archive file.
+	 * @param {object} patch Patch payload requested by the caller (may include ref).
+	 * @param {object} [existing] Message before the patch (used to compute diffs).
+	 * @param {object} [updated] Message after the patch (used to compute diffs).
+	 * @param {object} [options] Optional behavior overrides.
+	 * @param {boolean} [options.flushNow] Flush immediately instead of waiting for batching.
+	 * @param {boolean} [options.throwOnError] Reject the promise on failure (otherwise log + resolve).
 	 */
 	appendPatch(ref, patch, existing = undefined, updated = undefined, options = {}) {
 		const { resolvedExisting, resolvedUpdated, resolvedOptions } = this._normalizeAppendPatchArgs(
@@ -107,10 +111,10 @@ class MsgArchive {
 	/**
 	 * Normalize appendPatch args to support legacy (ref, patch, options) calls.
 	 *
-	 * @param {object|undefined} existing Existing message or options.
-	 * @param {object|undefined} updated Updated message.
-	 * @param {object} options Options.
-	 * @returns {{resolvedExisting: object|undefined, resolvedUpdated: object|undefined, resolvedOptions: object}}
+	 * @param {object|undefined} existing Existing message or options object in legacy call shape.
+	 * @param {object|undefined} updated Updated message when provided.
+	 * @param {object} options Options passed by the caller in the modern signature.
+	 * @returns {{resolvedExisting: object|undefined, resolvedUpdated: object|undefined, resolvedOptions: object}} Normalized argument bundle.
 	 */
 	_normalizeAppendPatchArgs(existing, updated, options) {
 		const isOptions =
@@ -130,11 +134,11 @@ class MsgArchive {
 	/**
 	 * Builds a patch payload that includes requested + added/removed diffs.
 	 *
-	 * @param {string} ref Message ref.
-	 * @param {object} patch Patch payload.
-	 * @param {object|undefined} existing Message before patch.
-	 * @param {object|undefined} updated Message after patch.
-	 * @returns {object} Patch payload for the archive.
+	 * @param {string} ref Message ref used to strip redundant ref fields.
+	 * @param {object} patch Patch payload requested by the caller.
+	 * @param {object|undefined} existing Message before patch (optional).
+	 * @param {object|undefined} updated Message after patch (optional).
+	 * @returns {object} Patch payload for the archive, including diffs when possible.
 	 */
 	_buildPatchPayload(ref, patch, existing, updated) {
 		const requested = this._stripRefFromPatch(patch, ref);
@@ -153,6 +157,13 @@ class MsgArchive {
 		return payload;
 	}
 
+	/**
+	 * Removes the ref field from the patch when it matches the message ref.
+	 *
+	 * @param {object} patch Patch payload that may contain a ref field.
+	 * @param {string} ref Message ref to compare against.
+	 * @returns {object} Patch payload without redundant ref when it matches.
+	 */
 	_stripRefFromPatch(patch, ref) {
 		if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
 			return patch;
@@ -167,6 +178,13 @@ class MsgArchive {
 		return patch;
 	}
 
+	/**
+	 * Produces a shallow diff descriptor for archive storage.
+	 *
+	 * @param {any} existing Value before the change.
+	 * @param {any} updated Value after the change.
+	 * @returns {{added: any, removed: any} | null} Diff object or null when equal.
+	 */
 	_diffValue(existing, updated) {
 		if (this._isEqual(existing, updated)) {
 			return null;
@@ -213,6 +231,13 @@ class MsgArchive {
 		return { added: updated, removed: existing };
 	}
 
+	/**
+	 * Diff two Map instances by key/value changes.
+	 *
+	 * @param {Map<any, any>} existing Previous map.
+	 * @param {Map<any, any>} updated Updated map.
+	 * @returns {{added: object, removed: object} | null} Diff object or null when equal.
+	 */
 	_diffMap(existing, updated) {
 		const added = {};
 		const removed = {};
@@ -246,6 +271,12 @@ class MsgArchive {
 		};
 	}
 
+	/**
+	 * Check for plain objects (Object or null prototype).
+	 *
+	 * @param {any} v Value to test.
+	 * @returns {boolean} True when v is a plain object.
+	 */
 	_isPlainObject(v) {
 		return (
 			v !== null &&
@@ -254,6 +285,13 @@ class MsgArchive {
 		);
 	}
 
+	/**
+	 * Deep-ish equality check for Maps, arrays, and plain objects.
+	 *
+	 * @param {any} a First value.
+	 * @param {any} b Second value.
+	 * @returns {boolean} True when values are structurally equal.
+	 */
 	_isEqual(a, b) {
 		if (a === b) {
 			return true;
@@ -300,10 +338,10 @@ class MsgArchive {
 	 * Append a delete event.
 	 *
 	 * @param {string|object} refOrMessage Message ref or full message object.
-	 * @param {object} [options] Options.
-	 * @param {string} [options.event] Override event name.
-	 * @param {boolean} [options.flushNow] Flush immediately.
-	 * @param {boolean} [options.throwOnError] Reject promise on failure.
+	 * @param {object} [options] Optional behavior overrides.
+	 * @param {string} [options.event] Override event name (defaults to "delete").
+	 * @param {boolean} [options.flushNow] Flush immediately instead of waiting for batching.
+	 * @param {boolean} [options.throwOnError] Reject the promise on failure (otherwise log + resolve).
 	 */
 	appendDelete(refOrMessage, options = {}) {
 		const ref = typeof refOrMessage === 'string' ? refOrMessage : refOrMessage?.ref;
@@ -320,11 +358,11 @@ class MsgArchive {
 	/**
 	 * Append a lifecycle event for a ref. Internal helper.
 	 *
-	 * @param {string} ref Message ref.
+	 * @param {string} ref Message ref used to route to the correct archive file.
 	 * @param {string} event Event type (e.g. "create", "patch", "delete").
 	 * @param {object} [payload] Additional event payload (snapshot, patch, etc).
-	 * @param {object} [options] Options.
-	 * @param {boolean} [options.flushNow] Flush immediately.
+	 * @param {object} [options] Optional behavior overrides.
+	 * @param {boolean} [options.flushNow] Flush immediately instead of waiting for batching.
 	 * @returns {Promise<void>} Resolves when the event is persisted.
 	 */
 	_appendEvent(ref, event, payload = {}, options = {}) {
@@ -350,10 +388,10 @@ class MsgArchive {
 	/**
 	 * Logs append errors and optionally rethrows.
 	 *
-	 * @param {string} action Action label.
-	 * @param {string} ref Message ref.
+	 * @param {string} action Action label (snapshot, patch, delete, etc).
+	 * @param {string} ref Message ref for logging context.
 	 * @param {Error} err Error instance.
-	 * @param {object} options Options.
+	 * @param {object} options Options that may include throwOnError.
 	 * @returns {Promise<void>} Resolves unless throwOnError is set.
 	 */
 	_handleAppendError(action, ref, err, options = {}) {
@@ -369,6 +407,8 @@ class MsgArchive {
 
 	/**
 	 * Flushes all pending events immediately.
+	 *
+	 * @returns {Promise<void>} Resolves when all queued flushes have completed.
 	 */
 	async flushPending() {
 		const pendingEntries = Array.from(this._pending.entries());
@@ -385,6 +425,7 @@ class MsgArchive {
 	 * Serializes async operations to avoid concurrent writes.
 	 *
 	 * @param {() => Promise<any>} fn Operation to run in the serialized queue.
+	 * @returns {Promise<any>} Promise chained onto the internal queue.
 	 */
 	_queue(fn) {
 		this._op = this._op.then(fn, fn);
@@ -393,6 +434,8 @@ class MsgArchive {
 
 	/**
 	 * Ensures the meta object exists and has the correct type.
+	 *
+	 * @returns {Promise<void>} Resolves once the meta object is present.
 	 */
 	async _ensureMetaObject() {
 		const obj = await this.adapter.getObjectAsync(this.metaId);
@@ -419,6 +462,8 @@ class MsgArchive {
 
 	/**
 	 * Ensures the base directory exists in file storage.
+	 *
+	 * @returns {Promise<void>} Resolves after attempting to create each path segment.
 	 */
 	async _ensureBaseDir() {
 		if (!this.baseDir || typeof this.adapter.mkdirAsync !== 'function') {
@@ -440,7 +485,7 @@ class MsgArchive {
 	 * Adds an entry to the queue for a ref.
 	 *
 	 * @param {string} ref Message ref.
-	 * @param {object} entry Event entry.
+	 * @param {object} entry Event entry already normalized for storage.
 	 * @param {boolean} flushNow Force immediate flush.
 	 * @returns {Promise<void>} Promise resolved when the entry is written.
 	 */
@@ -461,6 +506,7 @@ class MsgArchive {
 
 		pending.events.push(entry);
 
+		// Store waiters so we can resolve/reject all pending appends after the flush.
 		const promise = new Promise((resolve, reject) => {
 			pending.waiters.push({ resolve, reject });
 		});
@@ -501,6 +547,7 @@ class MsgArchive {
 		pending.waiters = [];
 		pending.flushing = true;
 
+		// Serialize writes so each ref file is appended in order.
 		const writePromise = this._queue(() => this._appendEvents(refKey, events));
 		pending.flushPromise = writePromise;
 
@@ -522,6 +569,7 @@ class MsgArchive {
 				return;
 			}
 
+			// Drop empty pending state to keep memory footprint bounded.
 			if (pending.waiters.length === 0) {
 				this._pending.delete(refKey);
 			}
@@ -534,9 +582,11 @@ class MsgArchive {
 	 * Appends events to the ref file (JSONL).
 	 *
 	 * @param {string} refKey Normalized ref key.
-	 * @param {Array<object>} events Event entries to append.
+	 * @param {Array<object>} events Event entries to append in order.
+	 * @returns {Promise<void>} Resolves after the file has been rewritten with the new lines.
 	 */
 	async _appendEvents(refKey, events) {
+		// ioBroker file storage does not expose append, so read + re-write the full JSONL file.
 		const filePath = this._filePathForRef(refKey);
 		const existing = await this._readFileText(filePath);
 		const existingTrimmed = existing ? existing.replace(/\s+$/, '') : '';
@@ -579,7 +629,7 @@ class MsgArchive {
 	 * Returns a normalized ref key that is safe for flat file names.
 	 *
 	 * @param {string} ref Message ref.
-	 * @returns {string} Encoded ref key.
+	 * @returns {string} Encoded ref key (URL-encoded) suitable for file names.
 	 */
 	_normalizeRef(ref) {
 		return encodeURIComponent(String(ref).trim());
@@ -600,7 +650,7 @@ class MsgArchive {
 	 * Serializes data to JSON while preserving Map values.
 	 *
 	 * @param {any} value Data to serialize.
-	 * @returns {string} JSON string with Map values encoded.
+	 * @returns {string} JSON string with Map values encoded as a typed wrapper.
 	 */
 	_serialize(value) {
 		return JSON.stringify(value, (key, val) => {

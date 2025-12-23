@@ -61,6 +61,7 @@
 		"compact": true,
 		"connectionType": "local",
 		"dataSource": "push",
+		"messagebox": true,
 		"adminUI": {
 			"config": "json"
 		},
