@@ -4,7 +4,7 @@
  */
 class MsgStore {
 	/**
-	 * @param {import('@iobroker/adapter-core').AdapterInstance} adapter Adapter instance for logging.
+	 * @param {import('@iobroker/adapter-core').AdapterInstance & { serialize?: (value: any) => string }} adapter Adapter instance for logging and utilitys.
 	 * @param {Array<object>} messages Initial message list (use [] if no data).
 	 * @param {import('./MsgFactory').MsgFactory} msgFactory Factory used for patching/validation.
 	 * @param {import('./MsgStorage').MsgStorage} msgStorage Storage used for persistence.
@@ -66,7 +66,8 @@ class MsgStore {
 		this.msgStorage.writeJson(this.fullList);
 
 		this.msgArchive?.appendSnapshot?.(msg);
-		this.adapter?.log?.debug?.(`added Message '${msg.ref}'`);
+		this.adapter?.log?.debug?.(`MsgStore: added Message '${msg.ref}'`);
+		this.adapter?.log?.silly?.(`MsgStore: added Message '${this.adapter?.serialize?.(msg)}'`);
 
 		//if (!silent) setState(this.msgStorage + '.Latest', JSON.stringify(msg), true);
 		//if (!silent) setState(this.getStorageSubId(msg.level), JSON.stringify(msg), true);
@@ -115,7 +116,8 @@ class MsgStore {
 		this.msgStorage.writeJson(this.fullList);
 
 		this.msgArchive?.appendPatch?.(msg.ref, msg, existing, updated);
-		this.adapter?.log?.debug?.(`updated Message '${msg.ref}'`);
+		this.adapter?.log?.debug?.(`MsgStore: updated Message '${msg.ref}'`);
+		this.adapter?.log?.silly?.(`MsgStore: updated Message '${this.adapter?.serialize?.(msg)}'`);
 
 		//if (!silent) setState(this.msgStorage + '.Latest', JSON.stringify(msg), true);
 		//if (!silent) setState(this.getStorageSubId(msg.level), JSON.stringify(msg), true);
@@ -195,7 +197,8 @@ class MsgStore {
 		this.msgArchive?.appendDelete?.(remove);
 
 		this.msgStorage.writeJson(this.fullList);
-		this.adapter?.log?.debug?.(`removed Message '${reference}'`);
+		this.adapter?.log?.debug?.(`MsgStore: removed Message '${reference}'`);
+		this.adapter?.log?.silly?.(`MsgStore: removed Message '${this.adapter?.serialize?.(remove)}'`);
 
 		//setState(this.msgStorage + '.Removed', JSON.stringify(remove), true);
 		//setState(this.msgStorage, JSON.stringify(this.fullList), true);
@@ -225,7 +228,8 @@ class MsgStore {
 
 		for (const msg of removals) {
 			this.msgArchive?.appendDelete?.(msg, { event: 'expired' });
-			this.adapter?.log?.debug?.(`remoed expired Message '${msg.ref}'`);
+			this.adapter?.log?.debug?.(`MsgStore: remoed expired Message '${msg.ref}'`);
+			this.adapter?.log?.silly?.(`MsgStore: removed expired Message '${this.adapter?.serialize?.(msg)}'`);
 		}
 	}
 }

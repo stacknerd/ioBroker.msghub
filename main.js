@@ -36,6 +36,8 @@ class Msghub extends utils.Adapter {
 
 		//todo: config for these values
 		this.locale = 'de-DE';
+
+		this._mapTypeMarker = '__msghubType';
 	}
 
 	/**
@@ -67,12 +69,30 @@ class Msghub extends utils.Adapter {
 		//init store
 		this.store = new MsgStore(
 			this,
-			[], //await this.msgStorage.readJson({}),
+			[],//await this.msgStorage.readJson({}),
 			this.msgFactory,
 			this.msgStorage,
 			this.msgRender,
 			this.msgArchive,
 		);
+
+		const sysCfg = await this.getForeignObjectAsync('system.config');
+		if (!sysCfg) {
+			this.log.warn('system.config nicht gefunden');
+			return;
+		}
+
+		// Beispiele:
+		const language = sysCfg.common?.language;
+		const latitude = sysCfg.common?.latitude;
+		const longitude = sysCfg.common?.longitude;
+
+		this.log.info(
+			`language=${language}, lat=${latitude}, lon=${longitude}, dateFormat=${sysCfg.common?.dateFormat}`,
+		);
+
+
+
 
 		const msg1 = this.msgFactory.createMessage({
 			ref: '2438',
@@ -126,7 +146,7 @@ class Msghub extends utils.Adapter {
 			actions: { set: { 'ack-1': { type: 'ack' } } },
 		});
 
-		this.log.debug(JSON.stringify(this.store.getMessages(), null, 2));
+		//this.log.debug(JSON.stringify(this.store.getMessages(), null, 2));
 
 		this.store.updateMessage(msg2ref, {
 			listItems: {
@@ -135,7 +155,7 @@ class Msghub extends utils.Adapter {
 			},
 		});
 
-		this.log.debug(this.msgStorage._serialize(this.store.getMessages(), null, 2));
+		//this.log.debug(this.msgStorage._serialize(this.store.getMessages(), null, 2));
 
 		/*
 		For every state in the system there has to be also an object of type state
@@ -297,6 +317,36 @@ class Msghub extends utils.Adapter {
 		if (obj.callback) {
 			this.sendTo(obj.from, obj.command, result, obj.callback);
 		}
+	}
+
+	/**
+	 * Serializes data to JSON while preserving Map values.
+	 *
+	 * @param {any} value Data to serialize.
+	 * @returns {string} JSON string with Map values encoded.
+	 */
+	serialize(value) {
+		return JSON.stringify(value, (key, val) => {
+			if (val instanceof Map) {
+				return { [this._mapTypeMarker]: 'Map', value: Array.from(val.entries()) };
+			}
+			return val;
+		});
+	}
+
+	/**
+	 * Parses JSON and revives Map values created by _serialize.
+	 *
+	 * @param {string} text JSON string to parse.
+	 * @returns {any} Parsed value with Map instances restored.
+	 */
+	deserialize(text) {
+		return JSON.parse(text, (key, val) => {
+			if (val && typeof val === 'object' && val[this._mapTypeMarker] === 'Map' && Array.isArray(val.value)) {
+				return new Map(val.value);
+			}
+			return val;
+		});
 	}
 }
 
