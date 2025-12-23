@@ -54,7 +54,7 @@
 		"enabled": true,
 		"extIcon": "https://raw.githubusercontent.com/stacknerd/ioBroker.msghub/main/admin/msghub.png",
 		"readme": "https://github.com/stacknerd/ioBroker.msghub/blob/main/README.md",
-		"loglevel": "info",
+		"loglevel": "silly",
 		"tier": 3,
 		"mode": "daemon",
 		"type": "logic",
