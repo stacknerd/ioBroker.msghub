@@ -3,17 +3,19 @@
 /**
  * MsgRender
  * =========
- * Lightweight template renderer that resolves metric placeholders in message fields.
+ * Lightweight template renderer that resolves metric and timing related placeholders in message fields.
  *
  * Supported template syntax:
  * - {{m.temperature}}         -> "21.7 C" (value + unit)
  * - {{m.temperature.val}}     -> "21.7"
  * - {{m.temperature.unit}}    -> "C"
  * - {{m.temperature.ts}}      -> unix ms timestamp
+ * - {{t.createdAt}}           -> raw timing value (e.g., unix ms timestamp)
  *
  * Supported filters:
  * - {{m.temperature|num:1}}   -> number formatting with max fraction digits
  * - {{m.lastSeen|datetime}}   -> localized date/time output
+ * - {{m.temperature|raw}}     -> raw value without unit/locale formatting
  * - {{m.flag|bool:yes/no}}    -> boolean to string mapping
  * - {{m.foo|default:--}}      -> fallback when empty
  */
@@ -95,11 +97,11 @@ class MsgRender {
 	}
 
 	/**
-	 * Renders a template string by resolving {{...}} expressions against metrics.
+	 * Renders a template string by resolving {{...}} expressions against metrics/timing.
 	 *
 	 * @param {string} input Template string.
 	 * @param {object} [options] Rendering context options.
-	 * @param {object} [options.msg] Message containing the "metrics" Map.
+	 * @param {object} [options.msg] Message containing the "metrics" Map and timing block.
 	 * @param {string} [options.locale] Locale override for this render call.
 	 * @returns {string} Rendered string with placeholders replaced.
 	 */
@@ -109,6 +111,7 @@ class MsgRender {
 		}
 		const ctx = {
 			metrics: msg && msg.metrics instanceof Map ? msg.metrics : new Map(),
+			timing: msg && msg.timing && typeof msg.timing === 'object' ? msg.timing : null,
 			locale: locale || this.locale,
 		};
 
@@ -139,9 +142,13 @@ class MsgRender {
 		if (!base) {
 			return '';
 		}
-		let val = this._resolvePath(base, ctx);
 
-		for (const raw of parts) {
+		const rawIndex = parts.findIndex(part => part.split(':')[0].trim() === 'raw');
+		const wantsRaw = rawIndex !== -1;
+		const filters = wantsRaw ? parts.filter(part => part.split(':')[0].trim() !== 'raw') : parts;
+		let val = this._resolvePath(base, ctx, { raw: wantsRaw });
+
+		for (const raw of filters) {
 			const idx = raw.indexOf(':');
 			const name = idx === -1 ? raw : raw.slice(0, idx).trim();
 			const arg = idx === -1 ? undefined : raw.slice(idx + 1).trim();
@@ -152,18 +159,46 @@ class MsgRender {
 	}
 
 	/**
-	 * Resolves a template path such as "m.temperature.val".
+	 * Resolves a template path such as "m.temperature.val" or "t.createdAt".
 	 *
 	 * @param {string} path Template path.
 	 * @param {object} ctx Render context (metrics + locale).
+	 * @param {object} [options] Resolution options.
+	 * @param {boolean} [options.raw=false] When true, prefer raw values over formatted output.
 	 * @returns {any} Resolved value or undefined.
 	 */
-	_resolvePath(path, ctx) {
+	_resolvePath(path, ctx, options = {}) {
 		const bits = String(path || '').split('.');
-		if (bits[0] !== 'm') {
+		if (bits[0] === 'm') {
+			return this._resolveMetric(bits.slice(1), ctx, options);
+		}
+		if (bits[0] === 't' || bits[0] === 'timing') {
+			return this._resolveTiming(bits.slice(1), ctx);
+		}
+		return undefined;
+	}
+
+	/**
+	 * Resolves a timing path such as "t.createdAt".
+	 *
+	 * @param {string[]} parts Path parts after the "t" prefix.
+	 * @param {object} ctx Render context (metrics + locale).
+	 * @returns {any} Timing value or undefined.
+	 */
+	_resolveTiming(parts, ctx) {
+		const timing = ctx.timing;
+		if (!timing || typeof timing !== 'object') {
 			return undefined;
 		}
-		return this._resolveMetric(bits.slice(1), ctx);
+
+		let cur = timing;
+		for (const part of parts) {
+			if (!part || cur == null || typeof cur !== 'object') {
+				return undefined;
+			}
+			cur = cur[part];
+		}
+		return cur;
 	}
 
 	/**
@@ -171,9 +206,11 @@ class MsgRender {
 	 *
 	 * @param {string[]} parts Array of [key, prop] (prop is optional).
 	 * @param {object} ctx Render context (metrics + locale).
+	 * @param {object} [options] Resolution options.
+	 * @param {boolean} [options.raw=false] When true, return the raw value without unit formatting.
 	 * @returns {any} Metric value, unit, timestamp, or formatted string.
 	 */
-	_resolveMetric([key, prop], ctx) {
+	_resolveMetric([key, prop], ctx, options = {}) {
 		const metrics = ctx.metrics;
 		if (!key || !(metrics instanceof Map)) {
 			return undefined;
@@ -184,6 +221,9 @@ class MsgRender {
 		}
 
 		if (!prop) {
+			if (options.raw) {
+				return entry.val;
+			}
 			return this._formatMetric(entry, ctx);
 		}
 		if (prop === 'val') {
@@ -225,7 +265,7 @@ class MsgRender {
 	/**
 	 * Applies a single filter to a value.
 	 *
-	 * @param {string} name Filter name (default|num|datetime|bool).
+	 * @param {string} name Filter name (default|num|datetime|bool); "raw" is handled during path resolution.
 	 * @param {string|undefined} arg Optional filter argument.
 	 * @param {any} val Current value to transform.
 	 * @param {object} ctx Render context (metrics + locale).

@@ -14,8 +14,8 @@ describe('MsgRender', () => {
 		return new Map(entries);
 	}
 
-	function createMessage({ title = '', text = '', details = undefined, metrics } = {}) {
-		return { title, text, details, metrics };
+	function createMessage({ title = '', text = '', details = undefined, metrics, timing } = {}) {
+		return { title, text, details, metrics, timing };
 	}
 
 	it('renders a basic metric with unit', () => {
@@ -72,6 +72,37 @@ describe('MsgRender', () => {
 		const df = new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' });
 
 		expect(out.display.title).to.equal(df.format(new Date(ts)));
+	});
+
+	it('renders raw metric values without units', () => {
+		const renderer = createRenderer({ locale });
+		const metrics = buildMetrics([['temperature', { val: 21.75, unit: 'C', ts: Date.UTC(2025, 0, 6) }]]);
+		const msg = createMessage({ title: '{{m.temperature|raw}}', metrics });
+
+		const out = renderer.renderMessage(msg);
+
+		expect(out.display.title).to.equal('21.75');
+	});
+
+	it('renders timing fields with the t prefix', () => {
+		const renderer = createRenderer({ locale });
+		const ts = Date.UTC(2025, 0, 7, 9, 30, 0);
+		const msg = createMessage({ title: '{{t.createdAt|datetime}}', timing: { createdAt: ts } });
+
+		const out = renderer.renderMessage(msg);
+		const df = new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' });
+
+		expect(out.display.title).to.equal(df.format(new Date(ts)));
+	});
+
+	it('renders raw timing fields without formatting', () => {
+		const renderer = createRenderer({ locale });
+		const ts = Date.UTC(2025, 0, 8, 12, 0, 0);
+		const msg = createMessage({ title: '{{t.createdAt|raw}}', timing: { createdAt: ts } });
+
+		const out = renderer.renderMessage(msg);
+
+		expect(out.display.title).to.equal(String(ts));
 	});
 
 	it('applies bool filter with custom labels', () => {
