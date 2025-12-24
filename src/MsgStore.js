@@ -16,20 +16,27 @@ const { MsgNotify } = require(`${__dirname}/MsgNotify`);
  * - Normalization: delegates create/update validation to MsgFactory.
  * - Rendering: returns display-ready messages via MsgRender.
  * - Lifecycle: prunes expired messages and archives changes in MsgArchive.
- * - Notifications: triggers MsgNotify for due or instant updates.
+ * - Notifications: triggers MsgNotify for due, updated, deleted, and expired events.
  *
  * Design notes:
  * - The store keeps the canonical data model; render output is a view-only layer.
- * - Notification scheduling is external; this store only triggers based on
- *   timing.notifyAt or instant-update rules when notifyAt is missing.
+ * - Notification scheduling is external; this store triggers:
+ *   - due events from notifyAt polling (_initiateNotifications()),
+ *   - immediate due events when notifyAt is missing (add/update),
+ *   - updated events for non-silent updates (timing.updatedAt changes),
+ *   - deleted/expired events when messages are removed.
  * - "Expired" messages are removed based on timing.expiresAt.
  * - The archive is best-effort and does not block core operations.
  *
  * Notification flow (high level):
- * - notifyAt set: _initiateNotifications() picks due messages on a timer.
- * - notifyAt missing: addMessage() triggers immediate notification for new messages.
- * - notifyAt missing: updateMessage() can trigger immediate notification
+ * - notifyAt set (finite number): _initiateNotifications() picks due messages on a timer
+ *   when notifyAt <= now and the message is not expired.
+ * - notifyAt missing / not a finite number: addMessage() triggers an immediate "due" notification.
+ * - updateMessage(): dispatches an "updated" event when the update is not silent (timing.updatedAt changes).
+ * - notifyAt missing / not a finite number: updateMessage() also triggers immediate "due" notification
  *   when the update is not silent and the message is not expired.
+ * - removeMessage(): dispatches a "deleted" event.
+ * - _pruneOldMessages(): dispatches an "expired" event for removals.
  *
  * Timing:
  * - pruneIntervalMs controls expiration checks.
@@ -71,7 +78,7 @@ class MsgStore {
 		this.msgStorage = new MsgStorage(this.adapter, { baseDir: 'data', fileName: 'messages.json' });
 		this.msgStorage.init();
 
-		//init archive
+		// init archive
 		this.msgArchive = new MsgArchive(this.adapter, { baseDir: 'data/archive' });
 		this.msgArchive?.init();
 
@@ -173,13 +180,18 @@ class MsgStore {
 		this.fullList[index] = updated;
 		this.msgStorage.writeJson(this.fullList);
 
-		const now = Date.now();
 		const t = updated?.timing;
 		const hadUpdate = Number.isFinite(t?.updatedAt) && t.updatedAt !== existing?.timing?.updatedAt;
+
+		if (hadUpdate) {
+			this.msgNotify?.dispatch?.(this.msgConstants.notfication.events.update, updated);
+		}
+
+		const now = Date.now();
 		const notExpired = typeof t?.expiresAt !== 'number' || t.expiresAt > now;
 
 		if (!Number.isFinite(t?.notifyAt) && hadUpdate && notExpired) {
-			this.msgNotify?.dispatch?.(this.msgConstants.notfication.events.update, updated);
+			this.msgNotify?.dispatch?.(this.msgConstants.notfication.events.due, updated);
 		}
 
 		this.msgArchive?.appendPatch?.(msg.ref, msg, existing, updated);
@@ -265,7 +277,6 @@ class MsgStore {
 		this.msgStorage.writeJson(this.fullList);
 		this.adapter?.log?.debug?.(`MsgStore: removed Message '${reference}'`);
 		this.adapter?.log?.silly?.(`MsgStore: removed Message '${serializeWithMaps(remove)}'`);
-
 	}
 
 	/**

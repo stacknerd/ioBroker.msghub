@@ -165,7 +165,7 @@ describe('MsgStore', () => {
 			expect(received).to.have.length(0);
 		});
 
-		it('dispatches on updateMessage when notifyAt is missing and update is not silent', () => {
+		it('dispatches updated + due on updateMessage when notifyAt is missing and update is not silent', () => {
 			const received = [];
 			const msgNotify = { dispatch: (event, msg) => received.push({ event, msg }) };
 			const factory = createFactoryWithUpdatedAt();
@@ -182,9 +182,11 @@ describe('MsgStore', () => {
 				expect(result).to.equal(true);
 			});
 
-			expect(received).to.have.length(1);
+			expect(received).to.have.length(2);
 			expect(received[0].event).to.equal('updated');
 			expect(received[0].msg.ref).to.equal('r1');
+			expect(received[1].event).to.equal('due');
+			expect(received[1].msg.ref).to.equal('r1');
 		});
 
 		it('does not dispatch on silent update when notifyAt is missing', () => {
@@ -207,7 +209,7 @@ describe('MsgStore', () => {
 			expect(received).to.have.length(0);
 		});
 
-		it('does not dispatch when the message is expired', () => {
+		it('dispatches updated but not due when the message is expired', () => {
 			const received = [];
 			const msgNotify = { dispatch: (event, msg) => received.push({ event, msg }) };
 			const factory = createFactoryWithUpdatedAt();
@@ -224,10 +226,12 @@ describe('MsgStore', () => {
 				expect(result).to.equal(true);
 			});
 
-			expect(received).to.have.length(0);
+			expect(received).to.have.length(1);
+			expect(received[0].event).to.equal('updated');
+			expect(received[0].msg.ref).to.equal('r1');
 		});
 
-		it('does not dispatch on update when notifyAt is set', () => {
+		it('dispatches updated but not due when notifyAt is set', () => {
 			const received = [];
 			const msgNotify = { dispatch: (event, msg) => received.push({ event, msg }) };
 			const factory = createFactoryWithUpdatedAt();
@@ -244,7 +248,9 @@ describe('MsgStore', () => {
 				expect(result).to.equal(true);
 			});
 
-			expect(received).to.have.length(0);
+			expect(received).to.have.length(1);
+			expect(received[0].event).to.equal('updated');
+			expect(received[0].msg.ref).to.equal('r1');
 		});
 
 		it('dispatches planned notifications when notifyAt is due', () => {

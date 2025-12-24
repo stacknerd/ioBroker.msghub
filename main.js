@@ -57,12 +57,9 @@ class Msghub extends utils.Adapter {
 			this.msgFactory,
 		);
 
-		const { createNotifyIoBrokerState } = require(`${__dirname}/lib/NotifyIoBrokerState`);
+		const { NotifyIoBrokerState } = require(`${__dirname}/lib`);
 
-		const statePlugin = createNotifyIoBrokerState(this, {
-			stateId: 'notifications.latest',
-			includeContext: false,
-		});
+		const statePlugin = NotifyIoBrokerState(this);
 
 		this.msgStore.msgNotify.registerPlugin('iobroker-state', statePlugin);
 
