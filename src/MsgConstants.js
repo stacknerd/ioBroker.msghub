@@ -20,7 +20,13 @@
  */
 const MsgConstants = Object.freeze({
 	level: Object.freeze({ none: 0, notice: 10, warning: 20, error: 30 }),
-	kind: Object.freeze({ task: 'task', status: 'status', appointment: 'appointment', shoppinglist: 'shoppinglist', inventorylist: 'inventorylist' }),
+	kind: Object.freeze({
+		task: 'task',
+		status: 'status',
+		appointment: 'appointment',
+		shoppinglist: 'shoppinglist',
+		inventorylist: 'inventorylist',
+	}),
 	origin: Object.freeze({ type: { manual: 'manual', import: 'import', automation: 'automation' } }),
 	attachments: Object.freeze({ type: { ssml: 'ssml', image: 'image', video: 'video', file: 'file' } }),
 	actions: Object.freeze({
@@ -32,6 +38,9 @@ const MsgConstants = Object.freeze({
 			link: 'link',
 			custom: 'custom',
 		},
+	}),
+	notfication: Object.freeze({
+		events: Object.freeze({ due: 'due', update: 'updated', deleted: 'deleted', expired: 'expired' }),
 	}),
 });
 module.exports = { MsgConstants };

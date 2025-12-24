@@ -7,6 +7,15 @@
  * Optional: adapter.delFileAsync/renameFileAsync (for atomic writes).
  */
 
+const {
+	DEFAULT_MAP_TYPE_MARKER,
+	serializeWithMaps,
+	deserializeWithMaps,
+	ensureMetaObject,
+	ensureBaseDir,
+	createOpQueue,
+} = require(`${__dirname}/MsgUtils`);
+
 /**
  * Storage helper that serializes adapter file I/O for message data.
  */
@@ -34,7 +43,7 @@ class MsgStorage {
 				: 10000;
 
 		// Promise chain used as a simple mutex to serialize operations.
-		this._op = Promise.resolve();
+		this._queue = createOpQueue();
 
 		// Throttle state: the latest value to persist and its pending promise.
 		this._pendingValue = undefined;
@@ -43,76 +52,19 @@ class MsgStorage {
 		this._flushResolve = null;
 		this._flushReject = null;
 
-		this._mapTypeMarker = '__msghubType';
+		this._mapTypeMarker = DEFAULT_MAP_TYPE_MARKER;
 	}
 
 	/**
 	 * Call once during startup. Ensures the file storage root exists.
 	 */
 	async init() {
-		await this._ensureMetaObject();
-		await this._ensureBaseDir();
+		await ensureMetaObject(this.adapter, this.metaId);
+		await ensureBaseDir(this.adapter, this.metaId, this.baseDir);
 		if (this.adapter?.log?.info) {
 			const filePath = this._filePathFor(this.fileName);
 			this.adapter.log.info(`MsgStorage initialized: file=${filePath}, interval=${this.writeIntervalMs}ms`);
 		}
-	}
-
-	/**
-	 * Ensures the meta object exists and has the correct type.
-	 */
-	async _ensureMetaObject() {
-		const obj = await this.adapter.getObjectAsync(this.metaId);
-
-		if (obj) {
-			if (obj.type !== 'meta') {
-				// ID exists but is not a meta object; fail fast with a clear hint.
-				throw new Error(
-					`File-Storage Root "${this.metaId}" exists but is type "${obj.type}", not "meta". ` +
-						`Choose another metaId (e.g. "${this.metaId}.__files") or delete/rename the existing object "${this.metaId}".`,
-				);
-			}
-			return;
-		}
-
-		// Create the meta object for a user-visible file root.
-		await this.adapter.setObjectAsync(this.metaId, {
-			type: 'meta',
-			common: {
-				name: `${this.adapter.name} file storage`,
-				type: 'meta.user',
-			},
-			native: {},
-		});
-	}
-
-	/**
-	 * Ensures the base directory exists in file storage.
-	 */
-	async _ensureBaseDir() {
-		if (!this.baseDir || typeof this.adapter.mkdirAsync !== 'function') {
-			return;
-		}
-		const parts = this.baseDir.split('/').filter(Boolean);
-		let current = '';
-		for (const part of parts) {
-			current = current ? `${current}/${part}` : part;
-			try {
-				await this.adapter.mkdirAsync(this.metaId, current);
-			} catch {
-				// ignore; some backends auto-create folders on write
-			}
-		}
-	}
-
-	/**
-	 * Serializes async operations to avoid concurrent writes.
-	 *
-	 * @param {() => Promise<any>} fn Operation to run in the serialized queue.
-	 */
-	_queue(fn) {
-		this._op = this._op.then(fn, fn);
-		return this._op;
 	}
 
 	/**
@@ -125,7 +77,7 @@ class MsgStorage {
 		const tmpName = `${this.fileName}.tmp`;
 		const filePath = this._filePathFor(this.fileName);
 		const tmpPath = this._filePathFor(tmpName);
-		const json = this._serialize(value);
+		const json = serializeWithMaps(value, this._mapTypeMarker);
 		const sizeBytes = Buffer.byteLength(json, 'utf8');
 
 		// If rename is unavailable, fall back to a direct write.
@@ -207,7 +159,7 @@ class MsgStorage {
 					this.adapter.log.debug(`MsgStorage: read '${filePath}', ${Buffer.byteLength(text, 'utf8')} bytes`);
 				}
 
-				return this._deserialize(text);
+				return deserializeWithMaps(text, this._mapTypeMarker);
 			} catch (e) {
 				// Treat missing/invalid data as fallback; exact error varies by backend.
 				this.adapter.log.debug(
@@ -254,7 +206,7 @@ class MsgStorage {
 	 */
 	async flushPending() {
 		if (!this._flushPromise) {
-			return this._op;
+			return this._queue.current;
 		}
 
 		if (this._flushTimer) {
@@ -294,36 +246,6 @@ class MsgStorage {
 	 */
 	_filePathFor(fileName) {
 		return this.baseDir ? `${this.baseDir}/${fileName}` : fileName;
-	}
-
-	/**
-	 * Serializes data to JSON while preserving Map values.
-	 *
-	 * @param {any} value Data to serialize.
-	 * @returns {string} JSON string with Map values encoded.
-	 */
-	_serialize(value) {
-		return JSON.stringify(value, (key, val) => {
-			if (val instanceof Map) {
-				return { [this._mapTypeMarker]: 'Map', value: Array.from(val.entries()) };
-			}
-			return val;
-		});
-	}
-
-	/**
-	 * Parses JSON and revives Map values created by _serialize.
-	 *
-	 * @param {string} text JSON string to parse.
-	 * @returns {any} Parsed value with Map instances restored.
-	 */
-	_deserialize(text) {
-		return JSON.parse(text, (key, val) => {
-			if (val && typeof val === 'object' && val[this._mapTypeMarker] === 'Map' && Array.isArray(val.value)) {
-				return new Map(val.value);
-			}
-			return val;
-		});
 	}
 }
 

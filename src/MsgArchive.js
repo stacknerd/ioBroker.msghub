@@ -4,6 +4,14 @@
  * Designed for auditability and later replay: events are immutable, ordered by write time,
  * and batched to reduce storage churn while still preserving per-ref ordering.
  */
+const {
+	DEFAULT_MAP_TYPE_MARKER,
+	serializeWithMaps,
+	ensureMetaObject,
+	ensureBaseDir,
+	createOpQueue,
+} = require(`${__dirname}/MsgUtils`);
+
 class MsgArchive {
 	/**
 	 * @param {import('@iobroker/adapter-core').AdapterInstance} adapter Adapter instance used for ioBroker file storage APIs.
@@ -38,12 +46,12 @@ class MsgArchive {
 		this.schemaVersion = 1;
 
 		// Promise chain used as a simple mutex to serialize writes across refs.
-		this._op = Promise.resolve();
+		this._queue = createOpQueue();
 
 		// Pending events per ref file key, along with timers and waiters.
 		this._pending = new Map();
 
-		this._mapTypeMarker = '__msghubType';
+		this._mapTypeMarker = DEFAULT_MAP_TYPE_MARKER;
 	}
 
 	/**
@@ -52,8 +60,8 @@ class MsgArchive {
 	 * @returns {Promise<void>} Resolves when the archive is ready for writes.
 	 */
 	async init() {
-		await this._ensureMetaObject();
-		await this._ensureBaseDir();
+		await ensureMetaObject(this.adapter, this.metaId);
+		await ensureBaseDir(this.adapter, this.metaId, this.baseDir);
 		if (this.adapter?.log?.info) {
 			this.adapter.log.info(
 				`MsgArchive initialized: baseDir=${this.baseDir || '.'}, ext=${this.fileExtension}, interval=${this.flushIntervalMs}ms`,
@@ -413,72 +421,12 @@ class MsgArchive {
 	async flushPending() {
 		const pendingEntries = Array.from(this._pending.entries());
 		if (pendingEntries.length === 0) {
-			return this._op;
+			return this._queue.current;
 		}
 
 		const flushes = pendingEntries.map(([refKey, pending]) => this._flushRef(refKey, pending));
 		await Promise.allSettled(flushes);
-		return this._op;
-	}
-
-	/**
-	 * Serializes async operations to avoid concurrent writes.
-	 *
-	 * @param {() => Promise<any>} fn Operation to run in the serialized queue.
-	 * @returns {Promise<any>} Promise chained onto the internal queue.
-	 */
-	_queue(fn) {
-		this._op = this._op.then(fn, fn);
-		return this._op;
-	}
-
-	/**
-	 * Ensures the meta object exists and has the correct type.
-	 *
-	 * @returns {Promise<void>} Resolves once the meta object is present.
-	 */
-	async _ensureMetaObject() {
-		const obj = await this.adapter.getObjectAsync(this.metaId);
-
-		if (obj) {
-			if (obj.type !== 'meta') {
-				throw new Error(
-					`File-Storage Root "${this.metaId}" exists but is type "${obj.type}", not "meta". ` +
-						`Choose another metaId (e.g. "${this.metaId}.__files") or delete/rename the existing object "${this.metaId}".`,
-				);
-			}
-			return;
-		}
-
-		await this.adapter.setObjectAsync(this.metaId, {
-			type: 'meta',
-			common: {
-				name: `${this.adapter.name} file storage`,
-				type: 'meta.user',
-			},
-			native: {},
-		});
-	}
-
-	/**
-	 * Ensures the base directory exists in file storage.
-	 *
-	 * @returns {Promise<void>} Resolves after attempting to create each path segment.
-	 */
-	async _ensureBaseDir() {
-		if (!this.baseDir || typeof this.adapter.mkdirAsync !== 'function') {
-			return;
-		}
-		const parts = this.baseDir.split('/').filter(Boolean);
-		let current = '';
-		for (const part of parts) {
-			current = current ? `${current}/${part}` : part;
-			try {
-				await this.adapter.mkdirAsync(this.metaId, current);
-			} catch {
-				// ignore; some backends auto-create folders on write
-			}
-		}
+		return this._queue.current;
 	}
 
 	/**
@@ -490,7 +438,7 @@ class MsgArchive {
 	 * @returns {Promise<void>} Promise resolved when the entry is written.
 	 */
 	_enqueueEvent(ref, entry, flushNow) {
-		const refKey = this._normalizeRef(ref);
+		const refKey = encodeURIComponent(String(ref).trim());
 		let pending = this._pending.get(refKey);
 
 		if (!pending) {
@@ -529,7 +477,7 @@ class MsgArchive {
 	 */
 	_flushRef(refKey, pending) {
 		if (pending.flushing) {
-			return pending.flushPromise || this._op;
+			return pending.flushPromise || this._queue.current;
 		}
 
 		if (pending.timer) {
@@ -538,7 +486,7 @@ class MsgArchive {
 		}
 
 		if (pending.events.length === 0) {
-			return this._op;
+			return this._queue.current;
 		}
 
 		const events = pending.events;
@@ -590,7 +538,7 @@ class MsgArchive {
 		const filePath = this._filePathForRef(refKey);
 		const existing = await this._readFileText(filePath);
 		const existingTrimmed = existing ? existing.replace(/\s+$/, '') : '';
-		const newLines = events.map(entry => this._serialize(entry)).join('\n');
+		const newLines = events.map(entry => serializeWithMaps(entry, this._mapTypeMarker)).join('\n');
 		const combined = existingTrimmed ? `${existingTrimmed}\n${newLines}\n` : `${newLines}\n`;
 
 		await this.adapter.writeFileAsync(this.metaId, filePath, combined);
@@ -626,16 +574,6 @@ class MsgArchive {
 	}
 
 	/**
-	 * Returns a normalized ref key that is safe for flat file names.
-	 *
-	 * @param {string} ref Message ref.
-	 * @returns {string} Encoded ref key (URL-encoded) suitable for file names.
-	 */
-	_normalizeRef(ref) {
-		return encodeURIComponent(String(ref).trim());
-	}
-
-	/**
 	 * Builds the archive file path for a ref key.
 	 *
 	 * @param {string} refKey Normalized ref key.
@@ -644,21 +582,6 @@ class MsgArchive {
 	_filePathForRef(refKey) {
 		const fileName = `${refKey}.${this.fileExtension}`;
 		return this.baseDir ? `${this.baseDir}/${fileName}` : fileName;
-	}
-
-	/**
-	 * Serializes data to JSON while preserving Map values.
-	 *
-	 * @param {any} value Data to serialize.
-	 * @returns {string} JSON string with Map values encoded as a typed wrapper.
-	 */
-	_serialize(value) {
-		return JSON.stringify(value, (key, val) => {
-			if (val instanceof Map) {
-				return { [this._mapTypeMarker]: 'Map', value: Array.from(val.entries()) };
-			}
-			return val;
-		});
 	}
 }
 

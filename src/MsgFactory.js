@@ -9,7 +9,9 @@
  *
  * Design goals:
  * - Stable identification: `ref` is an internal, unique, persistent ID used for
- *   deduplication, updates, and cross-references.
+ *   deduplication, updates, and cross-references. When omitted, a ref can be
+ *   auto-generated; recurring events should provide origin.id so the auto-ref
+ *   stays stable across updates.
  * - Clear presentation: `title` and `text` are the primary human-readable fields for UI/TTS.
  * - Classification: `level` and `kind` describe urgency/severity and the domain type.
  * - Traceability: `origin` records where the message came from (manual, import, automation)
@@ -26,7 +28,7 @@
  * - Arrays preserve order as provided by the producer (e.g., list item order).
  *
  * Message {
- *   ref: string                   // internal unique ID (stable)
+ *   ref: string                   // internal unique ID (stable; auto-generated when omitted)
  *
  *   // Presentation
  *   title: string                 // UI headline (e.g., "Hallway")
@@ -103,10 +105,25 @@
  *     percentage: number | null
  *   }
  *
+ *   // Audience hints (optional; used by notification plugins)
+ *   audience?: {
+ *     tags?: string[]
+ *     channels?: {
+ *       include?: string[]
+ *       exclude?: string[]
+ *     }
+ *   }
+ *   // Semantics:
+ *   // - tags are free-form IDs (no user management, no validation).
+ *   // - channels.include = only these channels; exclude = never these (exclude wins).
+ *   // - when audience is missing, there is no delivery restriction.
+ *
  *   dependencies?: string[]
  *
  * }
  */
+
+const crypto = require('crypto');
 
 /**
  * Builds normalized message objects for Msghub.
@@ -122,10 +139,11 @@ class MsgFactory {
 		if (!adapter) {
 			throw new Error('MsgFactory: adapter is required');
 		}
+		this.adapter = adapter;
+		
 		if (!msgConstants) {
 			throw new Error('MsgFactory: msgConstants is required');
 		}
-		this.adapter = adapter;
 		this.msgConstants = msgConstants;
 
 		// create ValueSets only once
@@ -134,6 +152,7 @@ class MsgFactory {
 		this.originTypeValueSet = new Set(Object.values(this.msgConstants.origin.type));
 		this.attachmentsTypeValueSet = new Set(Object.values(this.msgConstants.attachments.type));
 		this.actionsTypeValueSet = new Set(Object.values(this.msgConstants.actions.type));
+		this._autoRefSeq = 0;
 	}
 
 	/**
@@ -142,7 +161,7 @@ class MsgFactory {
 	 * undefined values are stripped from the final payload.
 	 *
 	 * @param {object} [options] Raw message fields.
-	 * @param {string} [options.ref] Stable, printable identifier for the message (required).
+	 * @param {string} [options.ref] Stable, printable identifier for the message (required unless auto-ref is used).
 	 * @param {string} [options.title] Human readable title shown in the UI (required).
 	 * @param {string} [options.text] Main message body text (required).
 	 * @param {number} [options.level] Severity level from msgconst.level (required).
@@ -150,6 +169,7 @@ class MsgFactory {
 	 * @param {object} [options.origin] Origin metadata including type/system/id (required).
 	 * @param {object} [options.timing] Timing metadata including due/start/end.
 	 * @param {object} [options.details] Structured details like location or tools.
+	 * @param {object} [options.audience] Audience hints (tags/channels) for notification plugins.
 	 * @param {Map<string, {val: number|string|boolean|null, unit: string, ts: number}>} [options.metrics] Structured metrics.
 	 * @param {Array<{type: "ssml"|"image"|"video"|"file", value: string}>} [options.attachments] Attachment list.
 	 * @param {Array<{id: string, name: string, category?: string, quantity?: { val: number; unit: string }, checked: boolean}>} [options.listItems] List items for shopping or inventory lists.
@@ -167,6 +187,7 @@ class MsgFactory {
 		origin = {},
 		timing = {},
 		details = {},
+		audience = {},
 		metrics,
 		attachments,
 		listItems,
@@ -178,15 +199,22 @@ class MsgFactory {
 			// "kind" vorab normalisieren, da für zeiten (timing) benötigt
 			const normkind = this._normalizeMsgEnum(kind, this.kindValueSet, 'kind', { required: true });
 
+			const normOrigin = this._normalizeMsgOrigin(origin);
+			const normTitle = this._normalizeMsgString(title, 'title', { required: true });
+			const normText = this._normalizeMsgString(text, 'text', { required: true });
+			const normLevel = this._normalizeMsgEnum(level, this.levelValueSet, 'level', { required: true });
+			const normDetails = this._normalizeMsgDetails(details);
+
 			const msg = {
-				ref: this._normalizeMsgRef(ref),
-				title: this._normalizeMsgString(title, 'title', { required: true }),
-				text: this._normalizeMsgString(text, 'text', { required: true }),
-				level: this._normalizeMsgEnum(level, this.levelValueSet, 'level', { required: true }),
+				ref: this._resolveMsgRef(ref, { kind: normkind, origin: normOrigin, title: normTitle }),
+				title: normTitle,
+				text: normText,
+				level: normLevel,
 				kind: normkind,
-				origin: this._normalizeMsgOrigin(origin),
+				origin: normOrigin,
 				timing: this._normalineMsgTiming(timing, normkind),
-				details: this._normalizeMsgDetails(details),
+				details: normDetails,
+				audience: this._normalizeMsgAudience(audience),
 				metrics: this._normalizeMsgMetrics(metrics),
 				attachments: this._normalizeMsgAttachments(attachments),
 				listItems: this._normalizeMsgListItems(listItems, normkind),
@@ -220,11 +248,21 @@ class MsgFactory {
 	 *     => sets/updates timing.dueAt; other timing fields stay as-is.
 	 *   - applyPatch(existing, { timing: { notifyAt: null } })
 	 *     => removes timing.notifyAt from the message.
-	 *
 	 *   - applyPatch(existing, { progress: { percentage: 60 } })
 	 *     => updates progress.percentage to 60, keeps startedAt/finishedAt unchanged.
 	 *   - applyPatch(existing, { progress: { delete: ['finishedAt'] } })
 	 *     => removes progress.finishedAt (percentage is preserved).
+	 *
+	 * - audience (object):
+	 *   - Partial updates:
+	 *     applyPatch(existing, { audience: { tags: ['admin'] } })
+	 *     => updates tags, keeps existing channels.
+	 *   - Clear a field:
+	 *     applyPatch(existing, { audience: { channels: null } })
+	 *     => removes audience.channels.
+	 *   - Clear all:
+	 *     applyPatch(existing, { audience: null })
+	 *     => removes audience.
 	 *
 	 * - metrics (Map):
 	 *   - Replace all metrics:
@@ -293,6 +331,7 @@ class MsgFactory {
 	 * @param {object} [patch.origin] Origin object (must match existing origin).
 	 * @param {object} [patch.timing] Timing patch (only provided fields are applied).
 	 * @param {object|null} [patch.details] Updated structured details or null to clear.
+	 * @param {object|null} [patch.audience] Audience patch (partial allowed) or null to clear.
 	 * @param {Map<string, {val: number|string|boolean|null, unit: string, ts: number}>|{set?: Map<string, {val: number|string|boolean|null, unit: string, ts: number}>|Record<string, {val: number|string|boolean|null, unit: string, ts: number}>, delete?: string[]}|null} [patch.metrics] Metrics patch or null to clear.
 	 * @param {Array<{type: "ssml"|"image"|"video"|"file", value: string}>|{set?: Array<{type: "ssml"|"image"|"video"|"file", value: string}>, delete?: number[]}|null} [patch.attachments] Attachments patch or null to clear.
 	 * @param {Array<{id: string, name: string, category?: string, quantity?: { val: number; unit: string }, checked: boolean}>|{set?: Array<{id: string, name: string, category?: string, quantity?: { val: number; unit: string }, checked: boolean}>|Record<string, {name: string, category?: string, quantity?: { val: number; unit: string }, checked: boolean}>, delete?: string[]}|null} [patch.listItems] List items patch or null to clear.
@@ -355,6 +394,10 @@ class MsgFactory {
 			}
 			if (has('details')) {
 				updated.details = patch.details === null ? undefined : this._normalizeMsgDetails(patch.details);
+				refreshUpdatedAt = true;
+			}
+			if (has('audience')) {
+				updated.audience = this._applyAudiencePatch(existing.audience, patch.audience);
 				refreshUpdatedAt = true;
 			}
 			if (has('metrics')) {
@@ -465,17 +508,17 @@ class MsgFactory {
 	_normalizeMsgString(value, field, { required = false, trim = true, fallback = undefined } = {}) {
 		if (typeof value !== 'string') {
 			if (required) {
-				throw new TypeError(`createMessage: '${field}' must be a string, reiceived '${typeof value}' instead`);
+				throw new TypeError(`'${field}' must be a string, reiceived '${typeof value}' instead`);
 			}
 
-			this.adapter?.log?.warn?.(`createMessage: '${field}' must be string, reiceived '${typeof value}' instead`);
+			this.adapter?.log?.warn?.(`MsgFactory: '${field}' must be string, reiceived '${typeof value}' instead`);
 			return fallback;
 		}
 		const text = trim ? value.trim() : value;
 		if (required && !text) {
-			throw new TypeError(`createMessage: '${field}' is required but a empty string`);
+			throw new TypeError(`'${field}' is required but a empty string`);
 		} else if (!text) {
-			this.adapter?.log?.warn?.(`createMessage: '${field}' is a empty string`);
+			this.adapter?.log?.warn?.(`MsgFactory: '${field}' is a empty string`);
 			return fallback;
 		}
 		return text;
@@ -494,17 +537,17 @@ class MsgFactory {
 	_normalizeMsgNumber(value, field, { required = false, fallback = undefined } = {}) {
 		if (typeof value !== 'number') {
 			if (required) {
-				throw new TypeError(`createMessage: '${field}' must be a number, reiceived '${typeof value}' instead`);
+				throw new TypeError(`'${field}' must be a number, reiceived '${typeof value}' instead`);
 			}
 
-			this.adapter?.log?.warn?.(`createMessage: '${field}' must be number, reiceived '${typeof value}' instead`);
+			this.adapter?.log?.warn?.(`MsgFactory: '${field}' must be number, reiceived '${typeof value}' instead`);
 			return fallback;
 		}
 		const ts = Number.isFinite(value) ? Math.trunc(value) : NaN;
 		if (required && !(ts > 0)) {
-			throw new TypeError(`createMessage: '${field}' is required but zero`);
+			throw new TypeError(`'${field}' is required but zero`);
 		} else if (!(ts > 0)) {
-			this.adapter?.log?.warn?.(`createMessage: '${field}' is zero`);
+			this.adapter?.log?.warn?.(`MsgFactory: '${field}' is zero`);
 			return fallback;
 		}
 		return ts;
@@ -524,7 +567,7 @@ class MsgFactory {
 		const ts = this._normalizeMsgNumber(value, field, { required, fallback });
 
 		if (!this._isPlausibleUnixMs(ts)) {
-			throw new TypeError(`createMessage: '${field}' is not a plausible UnixMs timestamp (received:'${ts}')`);
+			throw new TypeError(`'${field}' is not a plausible UnixMs timestamp (received:'${ts}')`);
 		}
 
 		return ts;
@@ -544,7 +587,7 @@ class MsgFactory {
 	_normalizeMsgEnum(value, valueset, field, { required = false, fallback = undefined } = {}) {
 		if (value === undefined || value === null) {
 			if (required) {
-				throw new TypeError(`createMessage: '${field}' missing`);
+				throw new TypeError(`'${field}' missing`);
 			}
 			return fallback;
 		}
@@ -552,12 +595,10 @@ class MsgFactory {
 		if (!valueset.has(value)) {
 			const valuesetString = Array.from(valueset).join(', ');
 			if (required) {
-				throw new TypeError(
-					`createMessage: '${field}' must be one of '${valuesetString}', received '${value}' instead`,
-				);
+				throw new TypeError(`'${field}' must be one of '${valuesetString}', received '${value}' instead`);
 			}
 			this.adapter?.log?.warn?.(
-				`createMessage: '${field}' must be one of '${valuesetString}', received '${value}' instead`,
+				`MsgFactory: '${field}' must be one of '${valuesetString}', received '${value}' instead`,
 			);
 			return fallback;
 		}
@@ -569,9 +610,11 @@ class MsgFactory {
 	 *
 	 * @param {string[]|string|undefined|null} value Input array or comma-separated string.
 	 * @param {string} field Field name for warning messages.
+	 * @param {object} [options] Normalization options.
+	 * @param {boolean} [options.splitString] Whether to split string inputs on commas.
 	 * @returns {string[]|undefined} Normalized list of strings, or undefined when empty/invalid.
 	 */
-	_normalizeMsgArray(value, field) {
+	_normalizeMsgArray(value, field, { splitString = true } = {}) {
 		if (value === undefined || value === null) {
 			return undefined;
 		}
@@ -581,24 +624,128 @@ class MsgFactory {
 				.map(entry => entry.trim())
 				.filter(entry => entry.length > 0);
 			if (normalized.length !== value.length) {
-				this.adapter?.log?.warn?.(`createMessage: '${field}'-array contains non-string or empty entries`);
+				this.adapter?.log?.warn?.(`MsgFactory: '${field}'-array contains non-string or empty entries`);
 			}
 			return normalized.length > 0 ? normalized : undefined;
 		}
 		if (typeof value === 'string') {
-			const normalized = value
+			const text = value.trim();
+			if (!text) {
+				return undefined;
+			}
+			if (!splitString) {
+				return [text];
+			}
+			const normalized = text
 				.split(',')
 				.map(entry => entry.trim())
 				.filter(entry => entry.length > 0);
 			return normalized.length > 0 ? normalized : undefined;
 		}
-		this.adapter?.log?.warn?.(`createMessage: '${field}'-array must be string[] or comma-separated string`);
+		this.adapter?.log?.warn?.(`MsgFactory: '${field}'-array must be string[] or comma-separated string`);
 		return undefined;
 	}
 
 	// ======================================
 	//     normalize specific fields
 	// ======================================
+
+	/**
+	 * Resolves a message ref, optionally auto-generating for eligible manual messages.
+	 *
+	 * @param {any} value Input reference value.
+	 * @param {object} context Context for auto-ref generation.
+	 * @param {string} context.kind Normalized kind.
+	 * @param {object} context.origin Normalized origin.
+	 * @param {string} context.title Normalized title.
+	 * @returns {string} Normalized reference.
+	 */
+	_resolveMsgRef(value, { kind, origin, title } = {}) {
+		const hasString = typeof value === 'string' && value.trim();
+		if (hasString || (value !== undefined && value !== null && typeof value !== 'string')) {
+			return this._normalizeMsgRef(value);
+		}
+
+		const originType = origin?.type;
+		const originIdNote = origin?.id ? '' : ' (origin.id missing; recurring events should set origin.id)';
+		if (originType === this.msgConstants.origin.type.import) {
+			this.adapter?.log?.warn?.(`MsgFactory: auto-generated ref for import message without ref${originIdNote}`);
+		} else if (originType === this.msgConstants.origin.type.automation) {
+			this.adapter?.log?.error?.(`MsgFactory: auto-generated ref for automation message without ref${originIdNote}`);
+		} else if (!origin?.id) {
+			this.adapter?.log?.warn?.('MsgFactory: auto-generated ref without origin.id; recurring events should set origin.id');
+		}
+
+		const autoRef = this._buildAutoRef({ kind, origin, title });
+		return this._normalizeMsgRef(autoRef);
+	}
+
+	/**
+	 * Build an auto-generated ref for manual task/appointment messages.
+	 *
+	 * @param {object} context Context for auto-ref generation.
+	 * @param {string} context.kind Normalized kind.
+	 * @param {object} context.origin Normalized origin.
+	 * @param {string} context.title Normalized title.
+	 * @returns {string} Auto-generated ref.
+	 */
+	_buildAutoRef({ kind, origin = {}, title } = {}) {
+		const type = this._formatRefSegment(origin.type, { fallback: 'auto' });
+		const system = this._formatRefSegment(origin.system, { fallback: 'origin' });
+
+		if (origin.id) {
+			const idSegment = this._formatRefSegment(origin.id, { fallback: this._hashRefSeed(origin.id).slice(0, 8) });
+			return `${type}-${kind}-${system}-${idSegment}`;
+		}
+
+		const name = this._formatRefSegment(title, { fallback: 'item' });
+		const token = this._nextAutoRefToken();
+		return `${type}-${kind}-${system}-${name}-${token}`;
+	}
+
+	/**
+	 * Create a short monotonic token for auto-generated refs.
+	 *
+	 * @returns {string} Token safe for ref segments.
+	 */
+	_nextAutoRefToken() {
+		const stamp = Date.now().toString(36);
+		const seq = (this._autoRefSeq++ % 0xffff).toString(36).padStart(4, '0');
+		return `${stamp}${seq}`;
+	}
+
+	/**
+	 * Normalize a string into a ref-safe segment.
+	 *
+	 * @param {any} value Input value.
+	 * @param {object} [options] Normalization options.
+	 * @param {string} [options.fallback] Fallback when no safe segment is available.
+	 * @returns {string} Safe ref segment.
+	 */
+	_formatRefSegment(value, { fallback = '' } = {}) {
+		if (value === undefined || value === null) {
+			return fallback;
+		}
+		const raw = String(value).trim();
+		if (!raw) {
+			return fallback;
+		}
+		const slug = raw.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+		if (slug) {
+			return slug;
+		}
+		return this._hashRefSeed(raw).slice(0, 8);
+	}
+
+	/**
+	 * Hash a string to keep deterministic yet short ref segments.
+	 *
+	 * @param {any} value Input value.
+	 * @returns {string} Hex hash string.
+	 */
+	_hashRefSeed(value) {
+		return crypto.createHash('sha1').update(String(value)).digest('hex');
+	}
 
 	/**
 	 * Normalizes a message reference to printable ASCII only.
@@ -608,8 +755,15 @@ class MsgFactory {
 	 */
 	_normalizeMsgRef(value) {
 		const ref = this._normalizeMsgString(value, 'ref', { required: true });
-		// nur druckbare ASCII-Zeichen (Space..~)
-		return ref ? ref.replace(/[^\x20-\x7E]/g, '').trim() : ref;
+		if (!ref) {
+			return;
+		}
+		const saferef = encodeURIComponent(ref);
+
+		if (value != saferef) {
+			this.adapter?.log?.warn?.(`MsgFactory: received ref='${value}', normalized to  '${saferef}'`);
+		}
+		return saferef;
 	}
 
 	/**
@@ -620,12 +774,10 @@ class MsgFactory {
 	 */
 	_normalizeMsgOrigin(value) {
 		if (!value || typeof value !== 'object') {
-			throw new TypeError(`createMessage: 'origin' must be an object`);
+			throw new TypeError(`'origin' must be an object`);
 		}
 		if (!(typeof value.type === 'string' && value.type.trim() !== '')) {
-			throw new TypeError(
-				`createMessage: 'origin.type' must be a string, reiceived '${typeof value.type}' instead`,
-			);
+			throw new TypeError(`'origin.type' must be a string, reiceived '${typeof value.type}' instead`);
 		}
 		const origin = {
 			type: this._normalizeMsgEnum(value.type, this.originTypeValueSet, 'origin.type', { required: true }),
@@ -652,7 +804,7 @@ class MsgFactory {
 	_normalineMsgTiming(value, kind, { existing = null, setUpdatedAt = false } = {}) {
 		const updating = this.isValidMessage(existing);
 		if (!value || typeof value !== 'object') {
-			throw new TypeError(`createMessage: 'timing' must be an object`);
+			throw new TypeError(`'timing' must be an object`);
 		}
 
 		const baseTiming = updating && existing?.timing ? { ...existing.timing } : {};
@@ -679,7 +831,7 @@ class MsgFactory {
 			}
 			if (kindGuard && kind !== kindGuard) {
 				this.adapter?.log?.warn?.(
-					`createMessage: 'timing.${key}' not available on kind == '${kind}' (expected: '${kindGuard}')`,
+					`MsgFactory: 'timing.${key}' not available on kind == '${kind}' (expected: '${kindGuard}')`,
 				);
 				return;
 			}
@@ -703,18 +855,56 @@ class MsgFactory {
 	 */
 	_normalizeMsgDetails(value) {
 		if (!value || typeof value !== 'object') {
-			throw new TypeError(`createMessage: 'details' must be an object`);
+			throw new TypeError(`'details' must be an object`);
 		}
 		const details = this._removeUndefinedKeys({
 			location: value.location ? this._normalizeMsgString(value.location, 'details.location') : undefined,
 			task: value.task ? this._normalizeMsgString(value.task, 'details.task') : undefined,
 			reason: value.reason ? this._normalizeMsgString(value.reason, 'details.reason') : undefined,
-			tools: value.tools ? this._normalizeMsgArray(value.tools, 'details.tools') : undefined,
+			tools: value.tools ? this._normalizeMsgArray(value.tools, 'details.tools', { splitString: false }) : undefined,
 			consumables: value.consumables
-				? this._normalizeMsgArray(value.consumables, 'details.consumables')
+				? this._normalizeMsgArray(value.consumables, 'details.consumables', { splitString: false })
 				: undefined,
 		});
 		return Object.keys(details).length > 0 ? details : undefined;
+	}
+
+	/**
+	 * Normalizes audience hints into a compact object.
+	 *
+	 * @param {object|undefined|null} value Audience input.
+	 * @returns {object|undefined} Normalized audience or undefined when empty.
+	 */
+	_normalizeMsgAudience(value) {
+		if (value === undefined || value === null) {
+			return undefined;
+		}
+		if (!value || typeof value !== 'object' || Array.isArray(value)) {
+			throw new TypeError(`'audience' must be an object`);
+		}
+
+		const tags = value.tags ? this._normalizeMsgArray(value.tags, 'audience.tags') : undefined;
+
+		let channels;
+		if (value.channels !== undefined && value.channels !== null) {
+			if (!value.channels || typeof value.channels !== 'object' || Array.isArray(value.channels)) {
+				this.adapter?.log?.warn?.(`MsgFactory: 'audience.channels' must be an object`);
+			} else {
+				const include = value.channels.include
+					? this._normalizeMsgArray(value.channels.include, 'audience.channels.include')
+					: undefined;
+				const exclude = value.channels.exclude
+					? this._normalizeMsgArray(value.channels.exclude, 'audience.channels.exclude')
+					: undefined;
+				channels = this._removeUndefinedKeys({ include, exclude });
+				if (Object.keys(channels).length === 0) {
+					channels = undefined;
+				}
+			}
+		}
+
+		const audience = this._removeUndefinedKeys({ tags, channels });
+		return Object.keys(audience).length > 0 ? audience : undefined;
 	}
 
 	/**
@@ -729,7 +919,7 @@ class MsgFactory {
 			return undefined;
 		}
 		if (!(value instanceof Map)) {
-			throw new TypeError(`createMessage: 'metrics' must be a Map`);
+			throw new TypeError(`'metrics' must be a Map`);
 		}
 
 		const metrics = new Map();
@@ -737,7 +927,7 @@ class MsgFactory {
 			const key = this._normalizeMsgString(rawKey, 'metrics key', { required: true });
 
 			if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
-				this.adapter?.log?.warn?.(`createMessage: 'metrics.${key}' must be an object with { val, unit, ts }`);
+				this.adapter?.log?.warn?.(`MsgFactory: 'metrics.${key}' must be an object with { val, unit, ts }`);
 				continue;
 			}
 
@@ -749,19 +939,19 @@ class MsgFactory {
 				(typeof val === 'number' && Number.isFinite(val));
 			if (!valOk) {
 				this.adapter?.log?.warn?.(
-					`createMessage: 'metrics.${key}.val' must be number|string|boolean|null, received ${typeof val}`,
+					`MsgFactory: 'metrics.${key}.val' must be number|string|boolean|null, received ${typeof val}`,
 				);
 				continue;
 			}
 			if (typeof unit !== 'string' || !unit.trim()) {
-				this.adapter?.log?.warn?.(`createMessage: 'metrics.${key}.unit' must be a non-empty string`);
+				this.adapter?.log?.warn?.(`MsgFactory: 'metrics.${key}.unit' must be a non-empty string`);
 				continue;
 			}
 			const tsOk =
 				typeof ts === 'number' && Number.isFinite(ts) && Number.isInteger(ts) && this._isPlausibleUnixMs(ts);
 			if (!tsOk) {
 				this.adapter?.log?.warn?.(
-					`createMessage: 'metrics.${key}.ts' must be a plausible Unix ms timestamp, received '${ts}'`,
+					`MsgFactory: 'metrics.${key}.ts' must be a plausible Unix ms timestamp, received '${ts}'`,
 				);
 				continue;
 			}
@@ -783,18 +973,18 @@ class MsgFactory {
 			return undefined;
 		}
 		if (!Array.isArray(value)) {
-			throw new TypeError(`createMessage: 'attachments' must be an array`);
+			throw new TypeError(`'attachments' must be an array`);
 		}
 
 		const attachments = [];
 		value.forEach((entry, index) => {
 			if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
-				this.adapter?.log?.warn?.(`createMessage: 'attachments[${index}]' must be an object`);
+				this.adapter?.log?.warn?.(`MsgFactory: 'attachments[${index}]' must be an object`);
 				return;
 			}
 
 			if (entry.type === undefined || entry.type === null) {
-				this.adapter?.log?.warn?.(`createMessage: 'attachments[${index}].type' is required`);
+				this.adapter?.log?.warn?.(`MsgFactory: 'attachments[${index}].type' is required`);
 				return;
 			}
 			const type = this._normalizeMsgEnum(entry.type, this.attachmentsTypeValueSet, `attachments[${index}].type`);
@@ -802,7 +992,7 @@ class MsgFactory {
 
 			if (type === undefined || val === undefined) {
 				this.adapter?.log?.warn?.(
-					`createMessage: 'attachments[${index}]' has empty type('${type}') or val('${val}')`,
+					`MsgFactory: 'attachments[${index}]' has empty type('${type}') or val('${val}')`,
 				);
 				return;
 			}
@@ -825,17 +1015,17 @@ class MsgFactory {
 			return undefined;
 		}
 		if (kind !== this.msgConstants.kind.shoppinglist && kind !== this.msgConstants.kind.inventorylist) {
-			this.adapter?.log?.warn?.(`createMessage: 'listItems' not available on kind == '${kind}'`);
+			this.adapter?.log?.warn?.(`MsgFactory: 'listItems' not available on kind == '${kind}'`);
 			return undefined;
 		}
 		if (!Array.isArray(value)) {
-			throw new TypeError(`createMessage: 'listItems' must be an array`);
+			throw new TypeError(`'listItems' must be an array`);
 		}
 
 		const items = [];
 		value.forEach((entry, index) => {
 			if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
-				this.adapter?.log?.warn?.(`createMessage: 'listItems[${index}]' must be an object`);
+				this.adapter?.log?.warn?.(`MsgFactory: 'listItems[${index}]' must be an object`);
 				return;
 			}
 
@@ -846,7 +1036,7 @@ class MsgFactory {
 				: undefined;
 
 			if (id === undefined || name === undefined) {
-				this.adapter?.log?.warn?.(`createMessage: 'listItems[${index}]' requires non-empty id and name`);
+				this.adapter?.log?.warn?.(`MsgFactory: 'listItems[${index}]' requires non-empty id and name`);
 				return;
 			}
 
@@ -854,15 +1044,13 @@ class MsgFactory {
 			if (entry.quantity !== undefined && entry.quantity !== null) {
 				if (!entry.quantity || typeof entry.quantity !== 'object' || Array.isArray(entry.quantity)) {
 					this.adapter?.log?.warn?.(
-						`createMessage: 'listItems[${index}].quantity' must be an object with { val, unit }`,
+						`MsgFactory: 'listItems[${index}].quantity' must be an object with { val, unit }`,
 					);
 				} else {
 					const val = this._normalizeMsgNumber(entry.quantity.val, `listItems[${index}].quantity.val`);
 					const unit = this._normalizeMsgString(entry.quantity.unit, `listItems[${index}].quantity.unit`);
 					if (val === undefined || unit === undefined) {
-						this.adapter?.log?.warn?.(
-							`createMessage: 'listItems[${index}].quantity' requires val and unit`,
-						);
+						this.adapter?.log?.warn?.(`MsgFactory: 'listItems[${index}].quantity' requires val and unit`);
 					} else {
 						quantity = { val, unit };
 					}
@@ -875,7 +1063,7 @@ class MsgFactory {
 			} else if (typeof entry.checked === 'boolean') {
 				checked = entry.checked;
 			} else {
-				this.adapter?.log?.warn?.(`createMessage: 'listItems[${index}].checked' must be boolean`);
+				this.adapter?.log?.warn?.(`MsgFactory: 'listItems[${index}].checked' must be boolean`);
 			}
 
 			const item = this._removeUndefinedKeys({ id, name, category, quantity, checked });
@@ -903,7 +1091,7 @@ class MsgFactory {
 			return existingMetrics instanceof Map ? existingMetrics : undefined;
 		}
 		if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
-			throw new TypeError(`applyPatch: 'metrics' must be a Map or { set, delete }`);
+			throw new TypeError(`'metrics' must be a Map or { set, delete }`);
 		}
 
 		const base = existingMetrics instanceof Map ? new Map(existingMetrics) : new Map();
@@ -915,7 +1103,7 @@ class MsgFactory {
 			} else if (setVal && typeof setVal === 'object' && !Array.isArray(setVal)) {
 				setMap = new Map(Object.entries(setVal));
 			} else if (setVal !== undefined) {
-				throw new TypeError(`applyPatch: 'metrics.set' must be a Map or object`);
+				throw new TypeError(`'metrics.set' must be a Map or object`);
 			}
 
 			if (setMap) {
@@ -929,7 +1117,7 @@ class MsgFactory {
 		}
 		if ('delete' in patch && patch.delete !== undefined) {
 			if (!Array.isArray(patch.delete)) {
-				throw new TypeError(`applyPatch: 'metrics.delete' must be an array`);
+				throw new TypeError(`'metrics.delete' must be an array`);
 			}
 			patch.delete.forEach((key, index) => {
 				const normKey = this._normalizeMsgString(key, `metrics.delete[${index}]`);
@@ -962,20 +1150,20 @@ class MsgFactory {
 			return Array.isArray(existingArray) ? existingArray : undefined;
 		}
 		if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
-			throw new TypeError(`applyPatch: '${field}' must be an array or { set, delete }`);
+			throw new TypeError(`'${field}' must be an array or { set, delete }`);
 		}
 
 		let base = Array.isArray(existingArray) ? [...existingArray] : [];
 		if ('set' in patch && patch.set !== undefined) {
 			if (!Array.isArray(patch.set)) {
-				throw new TypeError(`applyPatch: '${field}.set' must be an array`);
+				throw new TypeError(`'${field}.set' must be an array`);
 			}
 			const normalized = normalizeFn(patch.set);
 			base = normalized ? [...normalized] : [];
 		}
 		if ('delete' in patch && patch.delete !== undefined) {
 			if (!Array.isArray(patch.delete)) {
-				throw new TypeError(`applyPatch: '${field}.delete' must be an array`);
+				throw new TypeError(`'${field}.delete' must be an array`);
 			}
 			const indices = patch.delete.filter(index => Number.isInteger(index)).sort((a, b) => b - a);
 			indices.forEach(index => {
@@ -1007,7 +1195,7 @@ class MsgFactory {
 			return Array.isArray(existingItems) ? existingItems : undefined;
 		}
 		if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
-			throw new TypeError(`applyPatch: 'listItems' must be an array or { set, delete }`);
+			throw new TypeError(`'listItems' must be an array or { set, delete }`);
 		}
 
 		let base = Array.isArray(existingItems) ? [...existingItems] : [];
@@ -1020,7 +1208,7 @@ class MsgFactory {
 				const entries = [];
 				Object.entries(setVal).forEach(([id, entry]) => {
 					if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
-						this.adapter?.log?.warn?.(`applyPatch: 'listItems.set.${id}' must be an object`);
+						this.adapter?.log?.warn?.(`MsgFactory: 'listItems.set.${id}' must be an object`);
 						return;
 					}
 					entries.push({ ...entry, id });
@@ -1030,12 +1218,12 @@ class MsgFactory {
 				normalized.forEach(item => byId.set(item.id, item));
 				base = Array.from(byId.values());
 			} else {
-				throw new TypeError(`applyPatch: 'listItems.set' must be an array or object`);
+				throw new TypeError(`'listItems.set' must be an array or object`);
 			}
 		}
 		if ('delete' in patch && patch.delete !== undefined) {
 			if (!Array.isArray(patch.delete)) {
-				throw new TypeError(`applyPatch: 'listItems.delete' must be an array`);
+				throw new TypeError(`'listItems.delete' must be an array`);
 			}
 			const deleteSet = new Set();
 			patch.delete.forEach((id, index) => {
@@ -1070,7 +1258,7 @@ class MsgFactory {
 			return Array.isArray(existingDeps) ? existingDeps : undefined;
 		}
 		if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
-			throw new TypeError(`applyPatch: 'dependencies' must be string[]|string or { set, delete }`);
+			throw new TypeError(`'dependencies' must be string[]|string or { set, delete }`);
 		}
 
 		let base = Array.isArray(existingDeps) ? [...existingDeps] : [];
@@ -1079,7 +1267,7 @@ class MsgFactory {
 		}
 		if ('delete' in patch && patch.delete !== undefined) {
 			if (!Array.isArray(patch.delete)) {
-				throw new TypeError(`applyPatch: 'dependencies.delete' must be an array`);
+				throw new TypeError(`'dependencies.delete' must be an array`);
 			}
 			const deleteSet = new Set();
 			patch.delete.forEach((dep, index) => {
@@ -1097,6 +1285,72 @@ class MsgFactory {
 	}
 
 	/**
+	 * Applies partial patches to audience hints.
+	 *
+	 * @param {object|undefined} existingAudience Existing audience.
+	 * @param {object|null|undefined} patch Audience patch.
+	 * @returns {object|undefined} Updated audience.
+	 */
+	_applyAudiencePatch(existingAudience, patch) {
+		if (patch === null) {
+			return undefined;
+		}
+		if (patch === undefined) {
+			return existingAudience;
+		}
+		if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
+			throw new TypeError(`'audience' must be an object`);
+		}
+
+		const merged = { ...(existingAudience || {}) };
+		const has = key => Object.prototype.hasOwnProperty.call(patch, key);
+
+		if (has('tags')) {
+			if (patch.tags === null) {
+				delete merged.tags;
+			} else if (patch.tags !== undefined) {
+				merged.tags = patch.tags;
+			}
+		}
+
+		if (has('channels')) {
+			if (patch.channels === null) {
+				delete merged.channels;
+			} else if (patch.channels !== undefined) {
+				const channelsPatch = patch.channels;
+				if (!channelsPatch || typeof channelsPatch !== 'object' || Array.isArray(channelsPatch)) {
+					throw new TypeError(`'audience.channels' must be an object`);
+				}
+				const channels = { ...(merged.channels || {}) };
+				const hasChannel = key => Object.prototype.hasOwnProperty.call(channelsPatch, key);
+
+				if (hasChannel('include')) {
+					if (channelsPatch.include === null) {
+						delete channels.include;
+					} else if (channelsPatch.include !== undefined) {
+						channels.include = channelsPatch.include;
+					}
+				}
+				if (hasChannel('exclude')) {
+					if (channelsPatch.exclude === null) {
+						delete channels.exclude;
+					} else if (channelsPatch.exclude !== undefined) {
+						channels.exclude = channelsPatch.exclude;
+					}
+				}
+
+				if (Object.keys(channels).length === 0) {
+					delete merged.channels;
+				} else {
+					merged.channels = channels;
+				}
+			}
+		}
+
+		return this._normalizeMsgAudience(merged);
+	}
+
+	/**
 	 * Applies set/delete patches to progress (partial updates supported).
 	 *
 	 * @param {object|undefined} existingProgress Existing progress.
@@ -1111,14 +1365,14 @@ class MsgFactory {
 			return this._normalineMsgProgress(existingProgress || {});
 		}
 		if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
-			throw new TypeError(`applyPatch: 'progress' must be an object or { set, delete }`);
+			throw new TypeError(`'progress' must be an object or { set, delete }`);
 		}
 
 		let partial = patch;
 		if ('set' in patch || 'delete' in patch) {
 			const setVal = patch.set;
 			if (setVal !== undefined && (!setVal || typeof setVal !== 'object' || Array.isArray(setVal))) {
-				throw new TypeError(`applyPatch: 'progress.set' must be an object`);
+				throw new TypeError(`'progress.set' must be an object`);
 			}
 			partial = setVal || {};
 		}
@@ -1134,7 +1388,7 @@ class MsgFactory {
 
 		if ('delete' in patch && patch.delete !== undefined) {
 			if (!Array.isArray(patch.delete)) {
-				throw new TypeError(`applyPatch: 'progress.delete' must be an array`);
+				throw new TypeError(`'progress.delete' must be an array`);
 			}
 			patch.delete.forEach((key, index) => {
 				const normKey = this._normalizeMsgString(key, `progress.delete[${index}]`);
@@ -1142,7 +1396,7 @@ class MsgFactory {
 					return;
 				}
 				if (normKey === 'percentage') {
-					this.adapter?.log?.warn?.(`applyPatch: progress.percentage cannot be deleted`);
+					this.adapter?.log?.warn?.(`MsgFactory: progress.percentage cannot be deleted`);
 					return;
 				}
 				delete merged[normKey];
@@ -1170,7 +1424,7 @@ class MsgFactory {
 			return Array.isArray(existingActions) ? existingActions : undefined;
 		}
 		if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
-			throw new TypeError(`applyPatch: 'actions' must be an array or { set, delete }`);
+			throw new TypeError(`'actions' must be an array or { set, delete }`);
 		}
 
 		let base = Array.isArray(existingActions) ? [...existingActions] : [];
@@ -1183,7 +1437,7 @@ class MsgFactory {
 				const entries = [];
 				Object.entries(setVal).forEach(([id, entry]) => {
 					if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
-						this.adapter?.log?.warn?.(`applyPatch: 'actions.set.${id}' must be an object`);
+						this.adapter?.log?.warn?.(`MsgFactory: 'actions.set.${id}' must be an object`);
 						return;
 					}
 					entries.push({ ...entry, id });
@@ -1193,12 +1447,12 @@ class MsgFactory {
 				normalized.forEach(item => byId.set(item.id, item));
 				base = Array.from(byId.values());
 			} else {
-				throw new TypeError(`applyPatch: 'actions.set' must be an array or object`);
+				throw new TypeError(`'actions.set' must be an array or object`);
 			}
 		}
 		if ('delete' in patch && patch.delete !== undefined) {
 			if (!Array.isArray(patch.delete)) {
-				throw new TypeError(`applyPatch: 'actions.delete' must be an array`);
+				throw new TypeError(`'actions.delete' must be an array`);
 			}
 			const deleteSet = new Set();
 			patch.delete.forEach((id, index) => {
@@ -1226,17 +1480,17 @@ class MsgFactory {
 			return undefined;
 		}
 		if (!Array.isArray(value)) {
-			throw new TypeError(`createMessage: 'actions' must be an array`);
+			throw new TypeError(`'actions' must be an array`);
 		}
 
 		const actions = [];
 		value.forEach((entry, index) => {
 			if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
-				this.adapter?.log?.warn?.(`createMessage: 'actions[${index}]' must be an object`);
+				this.adapter?.log?.warn?.(`MsgFactory: 'actions[${index}]' must be an object`);
 				return;
 			}
 			if (entry.type === undefined || entry.type === null) {
-				this.adapter?.log?.warn?.(`createMessage: 'actions[${index}].type' is required`);
+				this.adapter?.log?.warn?.(`MsgFactory: 'actions[${index}].type' is required`);
 				return;
 			}
 
@@ -1247,7 +1501,7 @@ class MsgFactory {
 
 			const actionId = this._normalizeMsgString(entry.id, `actions[${index}].id`);
 			if (actionId === undefined) {
-				this.adapter?.log?.warn?.(`createMessage: 'actions[${index}].id' is required`);
+				this.adapter?.log?.warn?.(`MsgFactory: 'actions[${index}].id' is required`);
 				return;
 			}
 			const action = { type, id: actionId };
@@ -1258,7 +1512,7 @@ class MsgFactory {
 				} else if (entry.payload && typeof entry.payload === 'object' && !Array.isArray(entry.payload)) {
 					action.payload = entry.payload;
 				} else if (entry.payload !== undefined) {
-					this.adapter?.log?.warn?.(`createMessage: 'actions[${index}].payload' must be an object or null`);
+					this.adapter?.log?.warn?.(`MsgFactory: 'actions[${index}].payload' must be an object or null`);
 				}
 			}
 
@@ -1283,7 +1537,7 @@ class MsgFactory {
 	 */
 	_normalineMsgProgress(value) {
 		if (!value || typeof value !== 'object') {
-			throw new TypeError(`createMessage: 'progress' must be an object`);
+			throw new TypeError(`'progress' must be an object`);
 		}
 		const progress = {
 			percentage: value.percentage ? this._normalizeMsgNumber(value.percentage, 'progress.percentage') : 0,

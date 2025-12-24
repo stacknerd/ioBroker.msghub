@@ -7,12 +7,9 @@
 // The adapter-core module gives you access to the core ioBroker functions
 // you need to create an adapter
 const utils = require('@iobroker/adapter-core');
-const { MsgArchive } = require(`${__dirname}/src/MsgArchive`);
-const { MsgStorage } = require(`${__dirname}/src/MsgStorage`);
 const { MsgFactory } = require(`${__dirname}/src/MsgFactory`);
 const { MsgConstants } = require(`${__dirname}/src/MsgConstants`);
 const { MsgStore } = require(`${__dirname}/src/MsgStore`);
-const { MsgRender } = require(`${__dirname}/src/MsgRender`);
 
 // Load your modules here, e.g.:
 // const fs = require('fs');
@@ -36,8 +33,6 @@ class Msghub extends utils.Adapter {
 
 		//todo: config for these values
 		this.locale = 'de-DE';
-
-		this._mapTypeMarker = '__msghubType';
 	}
 
 	/**
@@ -51,30 +46,26 @@ class Msghub extends utils.Adapter {
 		this.log.debug('config option1: ${this.config.option1}');
 		this.log.debug('config option2: ${this.config.option2}');
 
-		// init file storage
-		this.msgStorage = new MsgStorage(this, { baseDir: 'data', fileName: 'messages.json' });
-		await this.msgStorage.init();
-
-		// init archive
-		//this.msgArchive = null;
-		this.msgArchive = new MsgArchive(this, { baseDir: 'data/archive' }); // auch null möglich, wenn kein Archiv erwünscht
-		await this.msgArchive?.init();
-
 		// init fatory
 		this.msgFactory = new MsgFactory(this, this.msgConstants);
 
-		// init render
-		this.msgRender = new MsgRender(this, { locale: this.locale });
-
 		//init store
-		this.store = new MsgStore(
+		this.msgStore = new MsgStore(
 			this,
-			[],//await this.msgStorage.readJson({}),
+			[], //await this.msgStorage.readJson({}),
+			this.msgConstants,
 			this.msgFactory,
-			this.msgStorage,
-			this.msgRender,
-			this.msgArchive,
 		);
+
+		const { createNotifyIoBrokerState } = require(`${__dirname}/lib/NotifyIoBrokerState`);
+
+		const statePlugin = createNotifyIoBrokerState(this, {
+			stateId: 'notifications.latest',
+			includeContext: false,
+		});
+
+		this.msgStore.msgNotify.registerPlugin('iobroker-state', statePlugin);
+
 
 		const sysCfg = await this.getForeignObjectAsync('system.config');
 		if (!sysCfg) {
@@ -91,36 +82,33 @@ class Msghub extends utils.Adapter {
 			`language=${language}, lat=${latitude}, lon=${longitude}, dateFormat=${sysCfg.common?.dateFormat}`,
 		);
 
-
-
-
 		const msg1 = this.msgFactory.createMessage({
-			ref: '2438',
+			ref: 'ichbineintext',
 			title: 'ein titel-text',
 			text: 'lorem ipsum...',
 			level: this.msgConstants.level.error,
 			kind: this.msgConstants.kind.appointment,
 			origin: { type: this.msgConstants.origin.type.import, system: 'alexa', id: 'alexa.0.test' },
 			timing: { startAt: 2134928374923, endAt: 2134928374950 },
-			details: { location: 'zimmer', tools: ['1', '2'], consumables: 'batterien' },
+			details: { location: 'zimmer', tools: ['1', '2'], consumables: ['batterien'] },
 		});
-		this.store.addMessage(msg1);
+		this.msgStore.addMessage(msg1);
 
 		const msg2ref = 'pathingthings-3';
 
 		const msg2 = this.msgFactory.createMessage({
 			ref: msg2ref,
-			title: 'ewefin titel-text',
+			title: 'titel',
 			text: 'lowefrem ipsum...',
 			level: this.msgConstants.level.warning,
 			kind: this.msgConstants.kind.task,
 			origin: { type: this.msgConstants.origin.type.import, system: 'web', id: '383' },
 			timing: { expiresAt: 2134928374923, dueAt: 2134928374924, notifyAt: 2134928374910 },
-			details: { consumables: 'Eimer,Lappen,Staubsauger' },
+			details: { consumables: ['Eimer', 'Lappen', 'Staubsauger'] },
 			progress: { percentage: 20, startedAt: Date.now() },
 		});
 
-		this.store.addMessage(msg2);
+		this.msgStore.addMessage(msg2);
 
 		const patch4msg2 = {
 			title: 'current temp: {{m.temperature}} (this has been updated!)',
@@ -132,9 +120,9 @@ class Msghub extends utils.Adapter {
 				['lastSeen', { val: Date.now(), unit: 'timestamp', ts: Date.now() }],
 			]),
 		};
-		this.store.updateMessage(msg2ref, patch4msg2);
+		this.msgStore.updateMessage(msg2ref, patch4msg2);
 
-		this.store.updateMessage(msg2ref, {
+		this.msgStore.updateMessage(msg2ref, {
 			text: '{{m.lastSeen.val|datetime}}',
 			metrics: {
 				set: { temperature: { val: 27.3, unit: '°C', ts: Date.now() } },
@@ -142,20 +130,20 @@ class Msghub extends utils.Adapter {
 			},
 		});
 
-		this.store.updateMessage(msg2ref, {
+		this.msgStore.updateMessage(msg2ref + 'x', {
 			actions: { set: { 'ack-1': { type: 'ack' } } },
 		});
 
-		//this.log.debug(JSON.stringify(this.store.getMessages(), null, 2));
+		//this.log.debug(JSON.stringify(this.msgStore.getMessages(), null, 2));
 
-		this.store.updateMessage(msg2ref, {
+		this.msgStore.updateMessage(msg2ref, {
 			listItems: {
 				set: { milk: { name: 'Milk', checked: false } },
 				delete: ['oldItemId'],
 			},
 		});
 
-		//this.log.debug(this.msgStorage._serialize(this.store.getMessages(), null, 2));
+		//this.log.debug(this.msgStorage._serialize(this.msgStore.getMessages(), null, 2));
 
 		/*
 		For every state in the system there has to be also an object of type state
@@ -220,8 +208,7 @@ class Msghub extends utils.Adapter {
 			// ...
 			// clearInterval(interval1);
 
-			this.msgStorage.flushPending();
-			this.msgArchive?.flushPending?.();
+			this.msgStore?.onUnload();
 		} catch (error) {
 			this.log.error(`Error during unloading: ${error.message}`);
 			callback();
@@ -317,36 +304,6 @@ class Msghub extends utils.Adapter {
 		if (obj.callback) {
 			this.sendTo(obj.from, obj.command, result, obj.callback);
 		}
-	}
-
-	/**
-	 * Serializes data to JSON while preserving Map values.
-	 *
-	 * @param {any} value Data to serialize.
-	 * @returns {string} JSON string with Map values encoded.
-	 */
-	serialize(value) {
-		return JSON.stringify(value, (key, val) => {
-			if (val instanceof Map) {
-				return { [this._mapTypeMarker]: 'Map', value: Array.from(val.entries()) };
-			}
-			return val;
-		});
-	}
-
-	/**
-	 * Parses JSON and revives Map values created by _serialize.
-	 *
-	 * @param {string} text JSON string to parse.
-	 * @returns {any} Parsed value with Map instances restored.
-	 */
-	deserialize(text) {
-		return JSON.parse(text, (key, val) => {
-			if (val && typeof val === 'object' && val[this._mapTypeMarker] === 'Map' && Array.isArray(val.value)) {
-				return new Map(val.value);
-			}
-			return val;
-		});
 	}
 }
 

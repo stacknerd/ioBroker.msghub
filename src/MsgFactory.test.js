@@ -42,10 +42,10 @@ describe('MsgFactory.createMessage', () => {
 	});
 
 	describe('required fields', () => {
-		it('normalizes ref by removing non-printable characters', () => {
+		it('normalizes ref by URL-encoding unsafe characters', () => {
 			const { factory } = makeFactory();
 			const msg = factory.createMessage(buildBase({ ref: 'ref-\n-1' }));
-			expect(msg.ref).to.equal('ref--1');
+			expect(msg.ref).to.equal('ref-%0A-1');
 		});
 
 		it('rejects missing title', () => {
@@ -80,6 +80,49 @@ describe('MsgFactory.createMessage', () => {
 			const { factory, logs } = makeFactory();
 			const msg = factory.createMessage(buildBase({ origin: null }));
 			expect(msg).to.equal(null);
+			expect(logs.error.length).to.be.greaterThan(0);
+		});
+	});
+
+	describe('ref auto-generation', () => {
+		it('auto-generates a stable ref for manual tasks when origin.id is provided', () => {
+			const { factory } = makeFactory();
+			const origin = { type: MsgConstants.origin.type.manual, system: 'ui', id: 'series-1' };
+			const msg1 = factory.createMessage(buildBase({ ref: undefined, origin }));
+			const msg2 = factory.createMessage(buildBase({ ref: undefined, origin }));
+
+			expect(msg1.ref).to.equal(msg2.ref);
+			expect(msg1.ref).to.match(/^manual-task-ui-/);
+		});
+
+		it('auto-generates a ref for manual appointments when origin.id is missing', () => {
+			const { factory } = makeFactory();
+			const origin = { type: MsgConstants.origin.type.manual, system: 'ui' };
+			const msg = factory.createMessage(
+				buildBase({ ref: undefined, kind: MsgConstants.kind.appointment, origin }),
+			);
+
+			expect(msg.ref).to.be.a('string');
+			expect(msg.ref).to.match(/^manual-appointment-ui-/);
+		});
+
+		it('logs a warning when an import message is missing ref', () => {
+			const { factory, logs } = makeFactory();
+			const origin = { type: MsgConstants.origin.type.import, system: 'alexa', id: 'series-1' };
+			const msg = factory.createMessage(buildBase({ ref: undefined, origin }));
+
+			expect(msg).to.be.an('object');
+			expect(msg.ref).to.match(/^import-task-alexa-/);
+			expect(logs.warn.length).to.be.greaterThan(0);
+		});
+
+		it('logs an error when an automation message is missing ref', () => {
+			const { factory, logs } = makeFactory();
+			const origin = { type: MsgConstants.origin.type.automation, system: 'rule' };
+			const msg = factory.createMessage(buildBase({ ref: undefined, origin }));
+
+			expect(msg).to.be.an('object');
+			expect(msg.ref).to.match(/^automation-task-rule-/);
 			expect(logs.error.length).to.be.greaterThan(0);
 		});
 	});
@@ -163,7 +206,7 @@ describe('MsgFactory.createMessage', () => {
 			expect(msg.details).to.deep.equal({
 				location: 'Room',
 				task: 'Clean',
-				tools: ['mop', 'broom'],
+				tools: ['mop, broom, ,'],
 				consumables: ['soap', 'water'],
 			});
 		});
@@ -171,6 +214,31 @@ describe('MsgFactory.createMessage', () => {
 		it('rejects non-object details', () => {
 			const { factory, logs } = makeFactory();
 			const msg = factory.createMessage(buildBase({ details: 'bad' }));
+			expect(msg).to.equal(null);
+			expect(logs.error.length).to.be.greaterThan(0);
+		});
+	});
+
+	describe('audience', () => {
+		it('normalizes audience tags and channels', () => {
+			const { factory } = makeFactory();
+			const audience = {
+				tags: ' admin, , family ',
+				channels: {
+					include: ['telegram', ''],
+					exclude: 'sms, , ',
+				},
+			};
+			const msg = factory.createMessage(buildBase({ audience }));
+			expect(msg.audience).to.deep.equal({
+				tags: ['admin', 'family'],
+				channels: { include: ['telegram'], exclude: ['sms'] },
+			});
+		});
+
+		it('rejects non-object audience', () => {
+			const { factory, logs } = makeFactory();
+			const msg = factory.createMessage(buildBase({ audience: 'bad' }));
 			expect(msg).to.equal(null);
 			expect(logs.error.length).to.be.greaterThan(0);
 		});
@@ -424,6 +492,33 @@ describe('MsgFactory.applyPatch', () => {
 
 		expect(updated.timing.notifyAt).to.equal(Date.UTC(2025, 0, 1));
 		expect(updated.timing.expiresAt).to.equal(Date.UTC(2025, 0, 2));
+	});
+
+	it('patches audience partially', () => {
+		const { factory } = makeFactory();
+		const msg = factory.createMessage(
+			buildBase({
+				audience: {
+					tags: ['ops'],
+					channels: { include: ['telegram'], exclude: ['email'] },
+				},
+			}),
+		);
+
+		const updated = factory.applyPatch(msg, { audience: { tags: ['admin'] } });
+		expect(updated.audience).to.deep.equal({
+			tags: ['admin'],
+			channels: { include: ['telegram'], exclude: ['email'] },
+		});
+
+		const updatedChannels = factory.applyPatch(updated, { audience: { channels: { include: null } } });
+		expect(updatedChannels.audience).to.deep.equal({
+			tags: ['admin'],
+			channels: { exclude: ['email'] },
+		});
+
+		const cleared = factory.applyPatch(updatedChannels, { audience: null });
+		expect(cleared).to.not.have.property('audience');
 	});
 
 	it('removes timing fields when set to null', () => {

@@ -2,13 +2,25 @@
 
 const { expect } = require('chai');
 const { MsgStore } = require('./MsgStore');
+const { MsgConstants } = require('./MsgConstants');
 
 function createAdapter() {
 	const logs = { warn: [] };
 	const adapter = {
+		name: 'msghub',
+		namespace: 'msghub.0',
+		locale: 'en-US',
 		log: {
 			warn: msg => logs.warn.push(msg),
+			debug: () => {},
+			silly: () => {},
+			info: () => {},
 		},
+		getObjectAsync: async () => ({ type: 'meta' }),
+		setObjectAsync: async () => {},
+		mkdirAsync: async () => {},
+		writeFileAsync: async () => {},
+		readFileAsync: async () => ({ file: '' }),
 	};
 	return { adapter, logs };
 }
@@ -17,6 +29,7 @@ function createStorage() {
 	const writes = [];
 	const storage = {
 		writeJson: value => writes.push(value),
+		flushPending: () => {},
 	};
 	return { storage, writes };
 }
@@ -38,25 +51,52 @@ function createFactory({ applyPatch } = {}) {
 	};
 }
 
-function createStore({ messages = [], factory, storage, adapter, msgArchive, msgRender } = {}) {
+function createFactoryWithUpdatedAt() {
+	return {
+		applyPatch: (existing, patch) => {
+			const updated = { ...existing, ...patch };
+			const timing = { ...(existing?.timing || {}), ...(patch?.timing || {}) };
+			const patchKeys = Object.keys(patch || {}).filter(key => key !== 'ref' && key !== 'timing');
+			const isSilent = patchKeys.length === 1 && patchKeys[0] === 'metrics';
+
+			if (!isSilent) {
+				timing.updatedAt = Date.now();
+			}
+
+			updated.timing = timing;
+			return updated;
+		},
+	};
+}
+
+function createStore({
+	messages = [],
+	factory,
+	storage,
+	adapter,
+	msgArchive,
+	msgRender,
+	msgNotify,
+	options,
+	msgConstants,
+} = {}) {
 	const { adapter: defaultAdapter, logs } = createAdapter();
 	const { storage: defaultStorage, writes } = createStorage();
 	const { msgRender: defaultRender } = createRenderer();
 	const msgFactory = factory || createFactory();
 
-	return {
-		store: new MsgStore(
-			adapter || defaultAdapter,
-			messages,
-			msgFactory,
-			storage || defaultStorage,
-			msgRender || defaultRender,
-			msgArchive,
-		),
-		logs,
-		writes,
-		msgFactory,
-	};
+	const store = new MsgStore(adapter || defaultAdapter, messages, msgConstants || MsgConstants, msgFactory, {
+		notifierIntervalMs: 0,
+		...(options || {}),
+	});
+	store.msgStorage = storage || defaultStorage;
+	store.msgRender = msgRender || defaultRender;
+	store.msgArchive =
+		msgArchive ||
+		({ appendSnapshot: () => {}, appendPatch: () => {}, appendDelete: () => {}, flushPending: () => {} });
+	store.msgNotify = msgNotify || { dispatch: () => {} };
+
+	return { store, logs, writes, msgFactory };
 }
 
 function withFixedNow(now, fn) {
@@ -100,6 +140,135 @@ describe('MsgStore', () => {
 		});
 	});
 
+	describe('notifications', () => {
+		it('dispatches immediately on addMessage when notifyAt is missing', () => {
+			const received = [];
+			const msgNotify = { dispatch: (event, msg) => received.push({ event, msg }) };
+			const { store } = createStore({ msgNotify });
+
+			const msg = { ref: 'r1', level: 10, timing: {} };
+			store.addMessage(msg);
+
+			expect(received).to.have.length(1);
+			expect(received[0].event).to.equal('due');
+			expect(received[0].msg.ref).to.equal('r1');
+		});
+
+		it('does not dispatch on addMessage when notifyAt is set', () => {
+			const received = [];
+			const msgNotify = { dispatch: (event, msg) => received.push({ event, msg }) };
+			const { store } = createStore({ msgNotify });
+
+			const msg = { ref: 'r1', level: 10, timing: { notifyAt: Date.now() + 1000 } };
+			store.addMessage(msg);
+
+			expect(received).to.have.length(0);
+		});
+
+		it('dispatches on updateMessage when notifyAt is missing and update is not silent', () => {
+			const received = [];
+			const msgNotify = { dispatch: (event, msg) => received.push({ event, msg }) };
+			const factory = createFactoryWithUpdatedAt();
+			const now = 1000;
+			const { store } = createStore({
+				messages: [{ ref: 'r1', level: 10, timing: {} }],
+				factory,
+				msgNotify,
+			});
+			store.lastPruneAt = now;
+
+			withFixedNow(now, () => {
+				const result = store.updateMessage({ ref: 'r1', text: 'new' });
+				expect(result).to.equal(true);
+			});
+
+			expect(received).to.have.length(1);
+			expect(received[0].event).to.equal('updated');
+			expect(received[0].msg.ref).to.equal('r1');
+		});
+
+		it('does not dispatch on silent update when notifyAt is missing', () => {
+			const received = [];
+			const msgNotify = { dispatch: (event, msg) => received.push({ event, msg }) };
+			const factory = createFactoryWithUpdatedAt();
+			const now = 2000;
+			const { store } = createStore({
+				messages: [{ ref: 'r1', level: 10, timing: { updatedAt: now } }],
+				factory,
+				msgNotify,
+			});
+			store.lastPruneAt = now;
+
+			withFixedNow(now, () => {
+				const result = store.updateMessage({ ref: 'r1', metrics: new Map() });
+				expect(result).to.equal(true);
+			});
+
+			expect(received).to.have.length(0);
+		});
+
+		it('does not dispatch when the message is expired', () => {
+			const received = [];
+			const msgNotify = { dispatch: (event, msg) => received.push({ event, msg }) };
+			const factory = createFactoryWithUpdatedAt();
+			const now = 3000;
+			const { store } = createStore({
+				messages: [{ ref: 'r1', level: 10, timing: { expiresAt: now - 1 } }],
+				factory,
+				msgNotify,
+			});
+			store.lastPruneAt = now;
+
+			withFixedNow(now, () => {
+				const result = store.updateMessage({ ref: 'r1', text: 'new' });
+				expect(result).to.equal(true);
+			});
+
+			expect(received).to.have.length(0);
+		});
+
+		it('does not dispatch on update when notifyAt is set', () => {
+			const received = [];
+			const msgNotify = { dispatch: (event, msg) => received.push({ event, msg }) };
+			const factory = createFactoryWithUpdatedAt();
+			const now = 4000;
+			const { store } = createStore({
+				messages: [{ ref: 'r1', level: 10, timing: { notifyAt: now + 1000 } }],
+				factory,
+				msgNotify,
+			});
+			store.lastPruneAt = now;
+
+			withFixedNow(now, () => {
+				const result = store.updateMessage({ ref: 'r1', text: 'new' });
+				expect(result).to.equal(true);
+			});
+
+			expect(received).to.have.length(0);
+		});
+
+		it('dispatches planned notifications when notifyAt is due', () => {
+			const received = [];
+			const msgNotify = { dispatch: (event, msgs) => received.push({ event, msgs }) };
+			const now = 5000;
+			const messages = [
+				{ ref: 'due', level: 10, timing: { notifyAt: now - 1 } },
+				{ ref: 'later', level: 10, timing: { notifyAt: now + 1000 } },
+				{ ref: 'expired', level: 10, timing: { notifyAt: now - 1, expiresAt: now - 1 } },
+			];
+			const { store } = createStore({ messages, msgNotify });
+
+			withFixedNow(now, () => {
+				store._initiateNotifications();
+			});
+
+			expect(received).to.have.length(1);
+			expect(received[0].event).to.equal('due');
+			expect(received[0].msgs).to.have.length(1);
+			expect(received[0].msgs[0].ref).to.equal('due');
+		});
+	});
+
 	describe('updateMessage guards', () => {
 		it('rejects empty or non-object patches', () => {
 			const { store, writes } = createStore();
@@ -134,7 +303,13 @@ describe('MsgStore', () => {
 			const { storage, writes } = createStorage();
 			const { msgRender } = createRenderer();
 			const msgFactory = {};
-			const store = new MsgStore(adapter, [{ ref: 'r1', level: 10 }], msgFactory, storage, msgRender);
+			const store = new MsgStore(adapter, [{ ref: 'r1', level: 10 }], MsgConstants, msgFactory, {
+				notifierIntervalMs: 0,
+			});
+			store.msgStorage = storage;
+			store.msgRender = msgRender;
+			store.msgArchive = { appendSnapshot: () => {}, appendPatch: () => {}, appendDelete: () => {} };
+			store.msgNotify = { dispatch: () => {} };
 
 			const result = store.updateMessage({ ref: 'r1', text: 'x' });
 			expect(result).to.equal(false);
@@ -236,6 +411,17 @@ describe('MsgStore', () => {
 			expect(store.getMessages()).to.have.length(1);
 		});
 
+		it('dispatches delete notifications', () => {
+			const received = [];
+			const msgNotify = { dispatch: (event, msg) => received.push({ event, msg }) };
+			const messages = [{ ref: 'r1', level: 10 }];
+			const { store } = createStore({ messages, msgNotify });
+			store.removeMessage('r1');
+			expect(received).to.have.length(1);
+			expect(received[0].event).to.equal('deleted');
+			expect(received[0].msg.ref).to.equal('r1');
+		});
+
 		it('removes the matching message', () => {
 			const messages = [{ ref: 'r1', level: 10 }];
 			const { store } = createStore({ messages });
@@ -244,7 +430,7 @@ describe('MsgStore', () => {
 		});
 	});
 
-	describe('pruneOldMessages', () => {
+	describe('_pruneOldMessages', () => {
 		it('removes expired messages and archives the delete event', () => {
 			const now = 10_000;
 			const messages = [
@@ -255,17 +441,23 @@ describe('MsgStore', () => {
 			const msgArchive = {
 				appendDelete: (message, options) => deletes.push({ message, options }),
 			};
-			const { store } = createStore({ messages, msgArchive });
+			const received = [];
+			const msgNotify = { dispatch: (event, msg) => received.push({ event, msg }) };
+			const { store } = createStore({ messages, msgArchive, msgNotify });
 			store.lastPruneAt = now - store.pruneIntervalMs - 1;
 
 			withFixedNow(now, () => {
-				store.pruneOldMessages();
+				store._pruneOldMessages();
 				expect(store.getMessages().map(msg => msg.ref)).to.deep.equal(['r2']);
 			});
 
 			expect(deletes).to.have.length(1);
 			expect(deletes[0].message.ref).to.equal('r1');
 			expect(deletes[0].options).to.deep.equal({ event: 'expired' });
+			expect(received).to.have.length(1);
+			expect(received[0].event).to.equal('expired');
+			expect(received[0].msg).to.have.length(1);
+			expect(received[0].msg[0].ref).to.equal('r1');
 		});
 
 		it('throttles pruning within the interval', () => {
@@ -275,7 +467,7 @@ describe('MsgStore', () => {
 			store.lastPruneAt = now;
 
 			withFixedNow(now, () => {
-				store.pruneOldMessages();
+				store._pruneOldMessages();
 				expect(store.getMessages()).to.have.length(1);
 			});
 		});
