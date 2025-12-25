@@ -10,6 +10,7 @@ const utils = require('@iobroker/adapter-core');
 const { MsgFactory } = require(`${__dirname}/src/MsgFactory`);
 const { MsgConstants } = require(`${__dirname}/src/MsgConstants`);
 const { MsgStore } = require(`${__dirname}/src/MsgStore`);
+const { serializeWithMaps } = require(`${__dirname}/src/MsgUtils`);
 
 // Load your modules here, e.g.:
 // const fs = require('fs');
@@ -57,11 +58,8 @@ class Msghub extends utils.Adapter {
 			this.msgFactory,
 		);
 
-		const { NotifyIoBrokerState } = require(`${__dirname}/lib`);
-
-		const statePlugin = NotifyIoBrokerState(this);
-
-		this.msgStore.msgNotify.registerPlugin('iobroker-state', statePlugin);
+		/////////////////////////////////////
+		// Tests zu ystemconfig
 
 		const sysCfg = await this.getForeignObjectAsync('system.config');
 		if (!sysCfg) {
@@ -77,6 +75,41 @@ class Msghub extends utils.Adapter {
 		this.log?.info?.(
 			`language=${language}, lat=${latitude}, lon=${longitude}, dateFormat=${sysCfg.common?.dateFormat}`,
 		);
+
+		///////////////////////////////////////////////////
+		// Tests zu customConfig
+
+		this.customMap = new Map(); // id -> customConfig
+
+		const res = await this.getObjectViewAsync('system', 'custom', {});
+		this.customMap.clear();
+
+		for (const row of res.rows) {
+			const id = row.id;
+			const cfg = row.value?.[this.namespace];
+			if (cfg && cfg.enabled) {
+				this.customMap.set(id, cfg);
+			}
+		}
+
+		//this.log?.info?.(`${serializeWithMaps(this.customMap)}`);
+
+		////////////////////////////////////
+		// Notify Plugins
+
+		const { NotifyIoBrokerState } = require(`${__dirname}/lib`);
+		this.msgStore.msgNotify.registerPlugin('ioBrokerState', NotifyIoBrokerState(this));
+
+		////////////////////////////
+		// Ingest Plugins
+
+		// Plugins register on `this.msgStore.msgIngest` and receive ioBroker events via `onStateChange`.
+		// Example demo producer:
+		const { IngestRandomDemo } = require(`${__dirname}/lib`);
+		//this.msgStore.msgIngest.registerPlugin('random-demo', IngestRandomDemo(this));
+		//this.msgStore.msgIngest.start();
+
+		////////
 
 		const msg1 = this.msgFactory.createMessage({
 			ref: 'ichbineintext',
@@ -140,7 +173,7 @@ class Msghub extends utils.Adapter {
 		});
 
 		this.getObjectView('system', 'custom', {}, (err, doc) => {
-			this.log?.debug?.(JSON.stringify(doc, null, 2)); // doc.rows enthält Objekte, die common.custom haben
+			//this.log?.debug?.(JSON.stringify(doc, null, 2)); // doc.rows enthält Objekte, die common.custom haben
 		});
 
 		//this.log.debug(this.msgStorage._serialize(this.msgStore.getMessages(), null, 2));
@@ -240,6 +273,9 @@ class Msghub extends utils.Adapter {
 	 */
 	onStateChange(id, state) {
 		if (state) {
+			// Forward the raw event to producer plugins (they decide what to do with ack/val changes).
+			this.msgStore?.ingestStateChange?.(id, state, { source: 'iobroker.stateChange' });
+
 			// The state was changed
 			this.log?.info?.(`state ${id} changed: ${state.val} (ack = ${state.ack})`);
 

@@ -3,6 +3,7 @@ const { MsgStorage } = require(`${__dirname}/MsgStorage`);
 const { MsgArchive } = require(`${__dirname}/MsgArchive`);
 const { MsgRender } = require(`${__dirname}/MsgRender`);
 const { MsgNotify } = require(`${__dirname}/MsgNotify`);
+const { MsgIngest } = require(`${__dirname}/MsgIngest`);
 
 /**
  * MsgStore
@@ -47,6 +48,12 @@ const { MsgNotify } = require(`${__dirname}/MsgNotify`);
  * - The store does not mark messages as "already notified". If a message is due (`notifyAt <= now`),
  *   `_initiateNotifications()` will dispatch it again on every tick until some external actor updates/
  *   removes the message (or moves `notifyAt` into the future).
+ *
+ * Ingest (MsgIngest)
+ * - The store does not interpret incoming ioBroker events; it provides a host (`MsgIngest`) that
+ *   forwards input events to registered producer plugins.
+ * - Input events are forwarded from the adapter (e.g. `main.js`) into `MsgStore.ingestStateChange()`
+ *   / `MsgStore.ingestObjectChange()`.
  *
  * Lifecycle / pruning
  * - Messages with `timing.expiresAt < now` are considered expired and are removed by `_pruneOldMessages()`.
@@ -109,6 +116,9 @@ class MsgStore {
 
 		// Notification dispatcher (plugins register elsewhere).
 		this.msgNotify = new MsgNotify(this.adapter, this.msgConstants);
+
+		// Producer host for inbound events (plugins register elsewhere).
+		this.msgIngest = new MsgIngest(this.adapter, this.msgConstants, this.msgFactory, this);
 
 		// Canonical in-memory list (do not store rendered output here).
 		this.fullList = messages;
@@ -385,6 +395,10 @@ class MsgStore {
 	 * @returns {void}
 	 */
 	onUnload() {
+		// Stop producer plugins first so they can stop timers/subscriptions before storage flushes.
+		this.msgIngest?.stop?.({ reason: 'unload' });
+
+		// Stop dispatching due messages to msgNotify
 		if (this._notifyTimer) {
 			clearInterval(this._notifyTimer);
 			this._notifyTimer = null;

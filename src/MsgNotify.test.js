@@ -37,7 +37,11 @@ describe('MsgNotify', () => {
 			expect(count).to.equal(1);
 			expect(receivedEvent).to.equal('due');
 			expect(received).to.deep.equal([msg]);
-			expect(receivedCtx).to.deep.equal(ctx);
+			expect(receivedCtx).to.have.property('api');
+			expect(receivedCtx.api).to.have.property('constants');
+			expect(receivedCtx.api.constants).to.equal(MsgConstants);
+			expect(receivedCtx).to.have.property('meta');
+			expect(receivedCtx.meta).to.deep.equal(ctx);
 		});
 
 		it('registers an object handler with binding', () => {
@@ -61,7 +65,11 @@ describe('MsgNotify', () => {
 
 			expect(plugin.event).to.equal('due');
 			expect(plugin.calledWith).to.deep.equal([msg]);
-			expect(plugin.ctx).to.deep.equal(ctx);
+			expect(plugin.ctx).to.have.property('api');
+			expect(plugin.ctx.api).to.have.property('constants');
+			expect(plugin.ctx.api.constants).to.equal(MsgConstants);
+			expect(plugin.ctx).to.have.property('meta');
+			expect(plugin.ctx.meta).to.deep.equal(ctx);
 		});
 
 		it('rejects invalid id or handler', () => {

@@ -51,6 +51,8 @@
     "main.js"
   ],
   "scripts": {
+    "docs:generate": "node generate-doc-index.mjs",
+    "docs:check": "node generate-doc-index.mjs --check",
     "test:js": "mocha --config test/mocharc.custom.json \"{!(node_modules|test)/**/*.test.js,*.test.js,test/**/test!(PackageFiles|Startup).js}\"",
     "test:package": "mocha test/package --exit",
     "test:integration": "mocha test/integration --exit",

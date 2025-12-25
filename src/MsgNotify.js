@@ -16,6 +16,10 @@
  * - One-message dispatch: internally, messages are dispatched one-by-one. Each plugin receives an array containing
  *   a single notification to keep the plugin interface consistent with potential batch dispatchers.
  * - Fault isolation: plugin failures are caught and logged so one bad plugin cannot break other plugins.
+ *
+ * Conventions
+ * - Notifier plugins live in `/lib` and are loaded via `/lib/index.js`.
+ * - Plugin filenames follow `Notify<System>.js` (e.g. `NotifyIoBrokerStates.js`).
  */
 class MsgNotify {
 	/**
@@ -40,6 +44,11 @@ class MsgNotify {
 
 		// Precompute allowed event values once to avoid repeated Object.values allocations on every dispatch.
 		this.notificationEventsSet = new Set(Object.values(this.msgConstants.notfication.events));
+
+		// Stable plugin surface: separate API (capabilities) from meta (dispatch metadata).
+		this.api = Object.freeze({
+			constants: this.msgConstants,
+		});
 	}
 
 	/**
@@ -91,10 +100,10 @@ class MsgNotify {
 	 *
 	 * @param {string} event Event value (e.g. "due", "updated", "deleted", "expired").
 	 * @param {Array<object>|object} messages Message(s) to dispatch.
-	 * @param {object} [ctx] Dispatch context.
+	 * @param {object} [meta] Dispatch metadata (exposed to plugins via `ctx.meta`).
 	 * @returns {number} Number of dispatched messages.
 	 */
-	dispatch(event, messages, ctx = {}) {
+	dispatch(event, messages, meta = {}) {
 		const eventName = typeof event === 'string' && event.trim() ? event.trim() : '';
 		if (!this.notificationEventsSet.has(eventName)) {
 			throw new Error(`MsgNotify.dispatch: unsupported event '${eventName || String(event)}'`);
@@ -107,7 +116,7 @@ class MsgNotify {
 			}
 			dispatched += 1;
 			// Dispatch each message separately to isolate plugin failures and keep processing simple.
-			this._dispatch(eventName, message, ctx);
+			this._dispatch(eventName, message, meta);
 		}
 		return dispatched;
 	}
@@ -117,9 +126,9 @@ class MsgNotify {
 	 *
 	 * @param {string} event Event name.
 	 * @param {object} notification Notification message object.
-	 * @param {object} [ctx] Dispatch context.
+	 * @param {object} [meta] Dispatch metadata (exposed to plugins via `ctx.meta`).
 	 */
-	_dispatch(event, notification, ctx = {}) {
+	_dispatch(event, notification, meta = {}) {
 		if (!this._plugins.size) {
 			this.adapter?.log?.debug?.(
 				`MsgNotify: no plugins registered to notify about '${notification.ref}' (event='${event}')`,
@@ -127,6 +136,7 @@ class MsgNotify {
 			return;
 		}
 
+		const ctx = { api: this.api, meta: meta || {} };
 		for (const [id, plugin] of this._plugins.entries()) {
 			try {
 				// Plugins always receive an array to keep a stable interface for potential future batching.
