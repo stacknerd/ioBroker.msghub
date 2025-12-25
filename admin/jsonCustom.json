@@ -1,0 +1,521 @@
+{
+	"i18n": true,
+	"type": "tabs",
+	"items": {
+		"quickStart": {
+			"type": "panel",
+			"label": "Kurzstart",
+			"items": {
+				"_h0": {
+					"type": "header",
+					"size": 5,
+					"text": "msghub: Objekt-Überwachung (Health/Anomalien)",
+					"sm": 12
+				},
+				"_info0": {
+					"type": "staticText",
+					"text": "Hier definierst du Erwartungen an dieses Objekt (z.B. „muss sich regelmäßig aktualisieren“ oder „wenn Ventil an, muss der Zähler steigen“).\n\nTipps:\n- Für „kommt regelmäßig“ nutze Regeltyp 1.\n- Für „wenn A, dann muss B“ nutze Regeltyp 2 (Trigger-State + Zeitfenster).\n- Für „ändert sich zu lange ohne Pause“ nutze Regeltyp 3 (z.B. Leckage/Wasserrohrbruch).",
+					"sm": 12
+				},
+				"watch.mode": {
+					"newLine": true,
+					"type": "select",
+					"label": "Regeltyp",
+					"help": "Wähle den passenden Überwachungsmodus für dieses Objekt.",
+					"sm": 12,
+					"md": 6,
+					"default": "freshness",
+					"options": [
+						{ "label": "1) Update kommt regelmäßig (Freshness/Heartbeat)", "value": "freshness" },
+						{ "label": "2) Abhängigkeit: Wenn Trigger aktiv, muss dieses Objekt reagieren", "value": "triggered" },
+						{ "label": "3) Daueränderung: Wert findet keine Ruhe (Non-settling/Anomalie)", "value": "nonSettling" }
+					]
+				},
+				"watch.evaluateBy": {
+					"type": "select",
+					"label": "Auswertung",
+					"help": "„lastUpdate (ts)“ zählt jede Aktualisierung (auch gleiche Werte). „lastChange (lc)“ zählt nur echte Wertänderungen.",
+					"sm": 12,
+					"md": 6,
+					"default": "ts",
+					"options": [
+						{ "label": "lastUpdate (ts) – jede Aktualisierung", "value": "ts" },
+						{ "label": "lastChange (lc) – nur Wertänderungen", "value": "lc" }
+					]
+				},
+				"_info1": {
+					"newLine": true,
+					"type": "staticText",
+					"text": "Hinweis: Manche Geräte senden nur bei Änderung (→ lc), andere senden Keepalives (→ ts). Wenn du häufig Fehlalarme bekommst, wechsle die Auswertung oder setze eine Toleranz (Min-Delta) in den jeweiligen Tabs.",
+					"sm": 12
+				}
+			}
+		},
+			"freshness": {
+				"type": "panel",
+				"label": "Regel 1: Regelmäßig",
+				"hidden": "((data.watch && data.watch.mode) || data['watch.mode']) !== 'freshness'",
+				"items": {
+				"_h1": {
+					"type": "header",
+					"size": 5,
+					"text": "Erwartung: Dieses Objekt aktualisiert sich regelmäßig",
+					"sm": 12
+				},
+				"fresh.everyValue": {
+					"newLine": true,
+					"type": "number",
+					"label": "Soll-Intervall",
+					"help": "Wie oft spätestens eine Aktualisierung/Änderung kommen muss.",
+					"sm": 6,
+					"md": 3,
+					"min": 1,
+					"default": 60
+				},
+				"fresh.everyUnit": {
+					"type": "select",
+					"label": "Einheit",
+					"sm": 6,
+					"md": 3,
+					"default": "min",
+					"options": [
+						{ "label": "Minuten", "value": "min" },
+						{ "label": "Stunden", "value": "h" },
+						{ "label": "Tage", "value": "d" }
+					]
+				},
+				"fresh.graceValue": {
+					"type": "number",
+					"label": "Toleranz (Grace)",
+					"help": "Zusätzlicher Puffer, um Funk-/Systemverzögerungen abzufangen.",
+					"sm": 6,
+					"md": 3,
+					"min": 0,
+					"default": 10
+				},
+				"fresh.graceUnit": {
+					"type": "select",
+					"label": "Einheit",
+					"sm": 6,
+					"md": 3,
+					"default": "min",
+					"options": [
+						{ "label": "Minuten", "value": "min" },
+						{ "label": "Stunden", "value": "h" }
+					]
+				},
+				"fresh.startupGraceValue": {
+					"newLine": true,
+					"type": "number",
+					"label": "Schonzeit nach Neustart",
+					"help": "Verhindert Alarm direkt nach Adapter-/Host-Neustart, bevor Daten wieder eintreffen.",
+					"sm": 6,
+					"md": 3,
+					"min": 0,
+					"default": 5
+				},
+				"fresh.startupGraceUnit": {
+					"type": "select",
+					"label": "Einheit",
+					"sm": 6,
+					"md": 3,
+					"default": "min",
+					"options": [
+						{ "label": "Minuten", "value": "min" },
+						{ "label": "Stunden", "value": "h" }
+					]
+				},
+				"fresh.remindValue": {
+					"type": "number",
+					"label": "Erinnerung alle",
+					"help": "Optional: Wenn weiterhin verletzt, erneut melden (0 = keine Wiederholung).",
+					"sm": 6,
+					"md": 3,
+					"min": 0,
+					"default": 0
+				},
+				"fresh.remindUnit": {
+					"type": "select",
+					"label": "Einheit",
+					"sm": 6,
+					"md": 3,
+					"default": "h",
+					"options": [
+						{ "label": "Minuten", "value": "min" },
+						{ "label": "Stunden", "value": "h" },
+						{ "label": "Tage", "value": "d" }
+					]
+				},
+				"_ex1": {
+					"newLine": true,
+					"type": "staticText",
+					"text": "Beispiel: Temperatur-Sensor → Soll-Intervall 12 Stunden, Toleranz 1 Stunde. Kommt in dieser Zeit kein Update/Change, ist der Sensor wahrscheinlich offline/defekt.",
+					"sm": 12
+				}
+			}
+		},
+			"triggered": {
+				"type": "panel",
+				"label": "Regel 2: Abhängigkeit",
+				"hidden": "((data.watch && data.watch.mode) || data['watch.mode']) !== 'triggered'",
+				"items": {
+				"_h2": {
+					"type": "header",
+					"size": 5,
+					"text": "Erwartung: Wenn ein Trigger aktiv ist, muss dieses Objekt reagieren",
+					"sm": 12
+				},
+				"_info2": {
+					"type": "staticText",
+					"text": "Diese Regel startet ein Zeitfenster, sobald der Trigger erfüllt ist. Innerhalb des Zeitfensters muss dieses Objekt entweder eine Änderung zeigen oder einen Mindestwert erreichen (je nach Erwartung).",
+					"sm": 12
+				},
+				"trg.id": {
+					"newLine": true,
+					"type": "text",
+					"label": "Trigger-State (Objekt-ID)",
+					"help": "Beispiel: Bewässerungsventil-Schalter, Steckdose-Schalter, Betriebsmodus etc.",
+					"sm": 12,
+					"md": 6,
+					"placeholder": "z.B. zigbee.0.device.switch"
+				},
+				"trg.operator": {
+					"type": "select",
+					"label": "Trigger-Bedingung",
+					"help": "Wie soll der Trigger ausgewertet werden?",
+					"sm": 12,
+					"md": 6,
+					"default": "eq",
+					"options": [
+						{ "label": "gleich (=)", "value": "eq" },
+						{ "label": "ungleich (≠)", "value": "neq" },
+						{ "label": "größer als (>)", "value": "gt" },
+						{ "label": "kleiner als (<)", "value": "lt" },
+						{ "label": "wahr (truthy)", "value": "truthy" },
+						{ "label": "falsch (falsy)", "value": "falsy" }
+					]
+				},
+					"trg.valueType": {
+					"newLine": true,
+					"type": "select",
+					"label": "Trigger-Werttyp",
+					"help": "Damit ist der Vergleich für dich eindeutig (bool/zahl/text). Bei „wahr/falsch“ ist kein Wert nötig.",
+					"sm": 12,
+					"md": 4,
+					"default": "boolean",
+						"hidden": "(((data.trg && data.trg.operator) || data['trg.operator']) === 'truthy') || (((data.trg && data.trg.operator) || data['trg.operator']) === 'falsy')",
+						"options": [
+						{ "label": "Boolean (true/false)", "value": "boolean" },
+						{ "label": "Zahl", "value": "number" },
+						{ "label": "Text", "value": "string" }
+					]
+				},
+					"trg.valueBool": {
+					"type": "checkbox",
+					"label": "Trigger-Wert = true",
+					"help": "Wenn deaktiviert, gilt false.",
+					"sm": 12,
+					"md": 4,
+					"default": true,
+						"hidden": "(((data.trg && data.trg.operator) || data['trg.operator']) === 'truthy') || (((data.trg && data.trg.operator) || data['trg.operator']) === 'falsy') || (((data.trg && data.trg.valueType) || data['trg.valueType']) !== 'boolean')"
+					},
+					"trg.valueNumber": {
+					"type": "number",
+					"label": "Trigger-Wert (Zahl)",
+					"sm": 12,
+					"md": 4,
+						"hidden": "(((data.trg && data.trg.operator) || data['trg.operator']) === 'truthy') || (((data.trg && data.trg.operator) || data['trg.operator']) === 'falsy') || (((data.trg && data.trg.valueType) || data['trg.valueType']) !== 'number')"
+					},
+					"trg.valueString": {
+					"type": "text",
+					"label": "Trigger-Wert (Text)",
+					"sm": 12,
+					"md": 4,
+						"hidden": "(((data.trg && data.trg.operator) || data['trg.operator']) === 'truthy') || (((data.trg && data.trg.operator) || data['trg.operator']) === 'falsy') || (((data.trg && data.trg.valueType) || data['trg.valueType']) !== 'string')"
+					},
+				"trg.windowValue": {
+					"newLine": true,
+					"type": "number",
+					"label": "Zeitfenster",
+					"help": "Innerhalb dieses Fensters muss dieses Objekt reagieren.",
+					"sm": 6,
+					"md": 3,
+					"min": 1,
+					"default": 5
+				},
+				"trg.windowUnit": {
+					"type": "select",
+					"label": "Einheit",
+					"sm": 6,
+					"md": 3,
+					"default": "min",
+					"options": [
+						{ "label": "Sekunden", "value": "s" },
+						{ "label": "Minuten", "value": "min" },
+						{ "label": "Stunden", "value": "h" }
+					]
+				},
+				"trg.expectation": {
+					"type": "select",
+					"label": "Erwartete Reaktion dieses Objekts",
+					"help": "Was muss passieren, während das Zeitfenster läuft?",
+					"sm": 12,
+					"md": 6,
+					"default": "changed",
+					"options": [
+						{ "label": "Wert ändert sich (mind. 1 Update/Change)", "value": "changed" },
+						{ "label": "Wert steigt um mindestens (Delta)", "value": "deltaUp" },
+						{ "label": "Wert fällt um mindestens (Delta)", "value": "deltaDown" },
+						{ "label": "Wert wird mindestens (>= Schwelle)", "value": "thresholdGte" },
+						{ "label": "Wert wird höchstens (<= Schwelle)", "value": "thresholdLte" }
+					]
+				},
+					"trg.minDelta": {
+					"type": "number",
+					"label": "Mindest-Delta",
+					"help": "Nur relevant bei Delta-Optionen (z.B. Wasserzähler muss um X steigen).",
+					"sm": 12,
+					"md": 6,
+					"min": 0,
+					"default": 0,
+						"hidden": "(((data.trg && data.trg.expectation) || data['trg.expectation']) !== 'deltaUp') && (((data.trg && data.trg.expectation) || data['trg.expectation']) !== 'deltaDown')"
+					},
+					"trg.threshold": {
+					"type": "number",
+					"label": "Schwellwert",
+					"help": "Nur relevant bei Schwellen-Optionen (>= / <=).",
+					"sm": 12,
+					"md": 6,
+						"hidden": "(((data.trg && data.trg.expectation) || data['trg.expectation']) !== 'thresholdGte') && (((data.trg && data.trg.expectation) || data['trg.expectation']) !== 'thresholdLte')"
+					},
+				"_ex2": {
+					"newLine": true,
+					"type": "staticText",
+					"text": "Beispiele:\n- Ventil == true → innerhalb 10 Minuten muss Wasserzähler um mindestens 1 steigen.\n- Steckdose == true → innerhalb 30 Sekunden muss Leistung >= 5 W werden.",
+					"sm": 12
+				}
+			}
+		},
+			"nonSettling": {
+				"type": "panel",
+				"label": "Regel 3: Daueränderung",
+				"hidden": "((data.watch && data.watch.mode) || data['watch.mode']) !== 'nonSettling'",
+				"items": {
+				"_h3": {
+					"type": "header",
+					"size": 5,
+					"text": "Erwartung: Der Wert findet keine Ruhe (Daueränderung/Anomalie)",
+					"sm": 12
+				},
+				"ns.profile": {
+					"newLine": true,
+					"type": "select",
+					"label": "Profil",
+					"help": "Wähle das typische Muster, das du erkennen willst.",
+					"sm": 12,
+					"md": 6,
+					"default": "activity",
+					"options": [
+						{ "label": "Dauerbewegung (ändert sich ohne längere Pause)", "value": "activity" },
+						{ "label": "Leckage/Trend (steigt/fällt über lange Zeit)", "value": "trend" }
+					]
+				},
+				"ns.minDelta": {
+					"type": "number",
+					"label": "Min-Delta pro Änderung",
+					"help": "Ignoriert Rauschen/kleine Schwankungen (0 = jede Änderung zählt).",
+					"sm": 12,
+					"md": 6,
+					"min": 0,
+					"default": 0
+				},
+					"ns.maxContinuousValue": {
+					"newLine": true,
+					"type": "number",
+					"label": "Max. Dauer ohne Ruhe",
+					"help": "Wenn der Wert so lange „nicht zur Ruhe kommt“, wird gemeldet.",
+					"sm": 6,
+					"md": 3,
+					"min": 1,
+					"default": 180,
+						"hidden": "((data.ns && data.ns.profile) || data['ns.profile']) !== 'activity'"
+					},
+					"ns.maxContinuousUnit": {
+					"type": "select",
+					"label": "Einheit",
+					"sm": 6,
+					"md": 3,
+					"default": "min",
+						"hidden": "((data.ns && data.ns.profile) || data['ns.profile']) !== 'activity'",
+						"options": [
+						{ "label": "Minuten", "value": "min" },
+						{ "label": "Stunden", "value": "h" }
+					]
+				},
+					"ns.quietGapValue": {
+					"type": "number",
+					"label": "Ruhe-Pause (Gap)",
+					"help": "Eine Pause ohne relevante Änderungen, die als „zur Ruhe gekommen“ zählt.",
+					"sm": 6,
+					"md": 3,
+					"min": 0,
+					"default": 15,
+						"hidden": "((data.ns && data.ns.profile) || data['ns.profile']) !== 'activity'"
+					},
+					"ns.quietGapUnit": {
+					"type": "select",
+					"label": "Einheit",
+					"sm": 6,
+					"md": 3,
+					"default": "min",
+						"hidden": "((data.ns && data.ns.profile) || data['ns.profile']) !== 'activity'",
+						"options": [
+						{ "label": "Minuten", "value": "min" },
+						{ "label": "Stunden", "value": "h" }
+					]
+				},
+					"ns.direction": {
+					"newLine": true,
+					"type": "select",
+					"label": "Trend-Richtung",
+					"help": "Für Leckage ist meist „steigend“ sinnvoll (z.B. Wasserzähler).",
+					"sm": 12,
+					"md": 6,
+					"default": "up",
+						"hidden": "((data.ns && data.ns.profile) || data['ns.profile']) !== 'trend'",
+						"options": [
+						{ "label": "steigend", "value": "up" },
+						{ "label": "fallend", "value": "down" },
+						{ "label": "egal", "value": "any" }
+					]
+				},
+					"ns.trendWindowValue": {
+					"type": "number",
+					"label": "Trend-Fenster",
+					"help": "Wie lange der Trend anhalten muss, bevor gemeldet wird.",
+					"sm": 6,
+					"md": 3,
+					"min": 1,
+					"default": 6,
+						"hidden": "((data.ns && data.ns.profile) || data['ns.profile']) !== 'trend'"
+					},
+					"ns.trendWindowUnit": {
+					"type": "select",
+					"label": "Einheit",
+					"sm": 6,
+					"md": 3,
+					"default": "h",
+						"hidden": "((data.ns && data.ns.profile) || data['ns.profile']) !== 'trend'",
+						"options": [
+						{ "label": "Stunden", "value": "h" },
+						{ "label": "Tage", "value": "d" }
+					]
+				},
+					"ns.minTotalDelta": {
+					"type": "number",
+					"label": "Mindest-Gesamtänderung",
+					"help": "Optional: Nur melden, wenn sich der Wert im Trend-Fenster insgesamt um mindestens X bewegt.",
+					"sm": 12,
+					"md": 6,
+					"min": 0,
+					"default": 0,
+						"hidden": "((data.ns && data.ns.profile) || data['ns.profile']) !== 'trend'"
+					},
+				"_ex3": {
+					"newLine": true,
+					"type": "staticText",
+					"text": "Beispiele:\n- Wasserrohrbruch: Profil „Leckage/Trend“, Richtung „steigend“, Trend-Fenster 12 Stunden.\n- Ein Sensor „flattert“: Profil „Dauerbewegung“, Max. Dauer ohne Ruhe 3 Stunden, Ruhe-Pause 10 Minuten.",
+					"sm": 12
+				}
+			}
+		},
+		"message": {
+			"type": "panel",
+			"label": "Meldung",
+			"items": {
+				"_h4": {
+					"type": "header",
+					"size": 5,
+					"text": "Wie soll msghub die Meldung erstellen?",
+					"sm": 12
+				},
+				"msg.level": {
+					"newLine": true,
+					"type": "select",
+					"label": "Level",
+					"help": "Schweregrad der Meldung (Notice/Warning/Error).",
+					"sm": 12,
+					"md": 6,
+					"default": 20,
+					"options": [
+						{ "label": "notice", "value": 10 },
+						{ "label": "warning", "value": 20 },
+						{ "label": "error", "value": 30 }
+					]
+				},
+				"msg.kind": {
+					"type": "select",
+					"label": "Kind (optional)",
+					"help": "Lässt sich später auch automatisch ableiten (z.B. status vs task).",
+					"sm": 12,
+					"md": 6,
+					"default": "",
+					"options": [
+						{ "label": "automatisch", "value": "" },
+						{ "label": "status", "value": "status" },
+						{ "label": "task", "value": "task" },
+						{ "label": "appointment", "value": "appointment" }
+					]
+				},
+				"msg.title": {
+					"newLine": true,
+					"type": "text",
+					"label": "Titel (optional)",
+					"help": "Wenn leer, nutzt msghub einen Standardtitel. Optional kannst du einen eigenen Titel vergeben.",
+					"sm": 12,
+					"md": 6,
+					"placeholder": "z.B. Sensor offline: Keller-Temperatur"
+				},
+				"msg.text": {
+					"type": "text",
+					"label": "Text (optional)",
+					"help": "Freitext-Beschreibung. Wenn leer, generiert msghub einen passenden Standardtext.",
+					"sm": 12,
+					"md": 6,
+					"placeholder": "z.B. Seit 12h keine Aktualisierung – bitte Sensor prüfen."
+				},
+				"msg.cooldownValue": {
+					"newLine": true,
+					"type": "number",
+					"label": "Cooldown",
+					"help": "Unterdrückt wiederholte Meldungen (0 = kein Cooldown).",
+					"sm": 6,
+					"md": 3,
+					"min": 0,
+					"default": 60
+				},
+				"msg.cooldownUnit": {
+					"type": "select",
+					"label": "Einheit",
+					"sm": 6,
+					"md": 3,
+					"default": "min",
+					"options": [
+						{ "label": "Minuten", "value": "min" },
+						{ "label": "Stunden", "value": "h" },
+						{ "label": "Tage", "value": "d" }
+					]
+				},
+				"msg.refSuffix": {
+					"newLine": true,
+					"type": "text",
+					"label": "Ref-Suffix (optional)",
+					"help": "Für stabile Wiedererkennung/Deduplizierung (z.B. „temp-offline“). Wenn leer, generiert msghub einen Schlüssel aus Objekt + Regeltyp.",
+					"sm": 12,
+					"md": 6,
+					"placeholder": "z.B. watermeter-leak"
+				}
+			}
+		}
+	}
+}

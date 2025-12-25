@@ -62,7 +62,9 @@
 		"connectionType": "local",
 		"dataSource": "push",
 		"messagebox": true,
+    	"supportCustoms": true,
 		"adminUI": {
+			"custom": "json",
 			"config": "json"
 		},
 		"dependencies": [

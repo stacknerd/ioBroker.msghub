@@ -63,7 +63,6 @@ class Msghub extends utils.Adapter {
 
 		this.msgStore.msgNotify.registerPlugin('iobroker-state', statePlugin);
 
-
 		const sysCfg = await this.getForeignObjectAsync('system.config');
 		if (!sysCfg) {
 			this.log?.warn?.('system.config nicht gefunden');
@@ -127,7 +126,7 @@ class Msghub extends utils.Adapter {
 			},
 		});
 
-		this.msgStore.updateMessage(msg2ref + 'x', {
+		this.msgStore.updateMessage(msg2ref, {
 			actions: { set: { 'ack-1': { type: 'ack' } } },
 		});
 
@@ -138,6 +137,10 @@ class Msghub extends utils.Adapter {
 				set: { milk: { name: 'Milk', checked: false } },
 				delete: ['oldItemId'],
 			},
+		});
+
+		this.getObjectView('system', 'custom', {}, (err, doc) => {
+			this.log?.debug?.(JSON.stringify(doc, null, 2)); // doc.rows enthält Objekte, die common.custom haben
 		});
 
 		//this.log.debug(this.msgStorage._serialize(this.msgStore.getMessages(), null, 2));
