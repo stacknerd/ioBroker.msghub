@@ -1,10 +1,30 @@
 /**
- * Lightweight persistence store for ioBroker file storage.
- * Persists arbitrary JSON structures (e.g. Array<Message>) into a file under
- * the adapter's file namespace (adapter instance, e.g. "myadapter.0").
+ * MsgStorage
+ * ==========
+ * Lightweight persistence helper for ioBroker file storage.
  *
- * Requires: adapter.readFileAsync/writeFileAsync
- * Optional: adapter.delFileAsync/renameFileAsync (for atomic writes).
+ * Core responsibilities
+ * - Persist a single JSON document (commonly the full message list) under the adapter's file namespace.
+ * - Provide a read API with robust fallback behavior for missing/invalid files.
+ * - Serialize writes to avoid concurrent file operations and reduce write amplification via throttling.
+ *
+ * Design guidelines / invariants
+ * - Single file, whole-document persistence: callers typically persist the complete current state (e.g. `Array<Message>`).
+ *   This class does not implement partial updates or merging.
+ * - Best-effort durability: writes are queued and may be throttled; callers are not required to await them. For shutdown
+ *   scenarios, call `flushPending()` to force a best-effort final write.
+ * - Ordered I/O: all read/write operations are serialized through an internal promise queue (`createOpQueue()`), so the
+ *   last scheduled write deterministically “wins”.
+ * - Map-safe JSON: values that contain `Map` instances are encoded via `serializeWithMaps()` and revived on read via
+ *   `deserializeWithMaps()`. This allows the message model to contain metrics or other maps without losing structure.
+ *
+ * Required adapter APIs:
+ * - `readFileAsync(metaId, path)`
+ * - `writeFileAsync(metaId, path, data)`
+ *
+ * Optional adapter APIs:
+ * - `mkdirAsync(metaId, dir)` (used for baseDir creation)
+ * - `renameFileAsync(metaId, oldPath, newPath)` + `delFileAsync(metaId, path)` (used for atomic writes)
  */
 
 const {
@@ -21,8 +41,16 @@ const {
  */
 class MsgStorage {
 	/**
-	 * @param {import('@iobroker/adapter-core').AdapterInstance} adapter instance of Msghub
-	 * @param {object} [options] Options Array
+	 * Create a new MsgStorage instance.
+	 *
+	 * Notes:
+	 * - `metaId` is the ioBroker “file namespace root” (usually the adapter instance namespace).
+	 * - `baseDir` is a logical folder below `metaId` (slashes are trimmed).
+	 * - `writeIntervalMs` enables write coalescing: multiple `writeJson()` calls within the interval
+	 *   result in a single persisted write containing the latest value.
+	 *
+	 * @param {import('@iobroker/adapter-core').AdapterInstance} adapter Adapter instance (ioBroker file APIs).
+	 * @param {object} [options] Optional configuration.
 	 * @param {string} [options.metaId] Object ID of the "meta" root. Defaults to adapter.namespace.
 	 * @param {string} [options.baseDir] Base folder for storage file (e.g. "data").
 	 * @param {string} [options.fileName] File name (e.g. "messages.json").
@@ -56,7 +84,10 @@ class MsgStorage {
 	}
 
 	/**
-	 * Call once during startup. Ensures the file storage root exists.
+	 * Call once during startup.
+	 *
+	 * Ensures the ioBroker file storage meta object exists and (optionally) creates the base directory.
+	 * This method is async because it may create meta objects and folders.
 	 */
 	async init() {
 		await ensureMetaObject(this.adapter, this.metaId);
@@ -71,7 +102,15 @@ class MsgStorage {
 	 * Writes JSON immediately (no throttling).
 	 * Uses atomic write (tmp + rename) when supported.
 	 *
-	 * @param {any} value file content (json)
+	 * Implementation details:
+	 * - When `renameFileAsync` is available, the write is performed as:
+	 *   1) write `<fileName>.tmp`
+	 *   2) delete old target (best-effort)
+	 *   3) rename tmp -> target
+	 * - When atomic rename is unavailable or fails, falls back to a direct write of the final file.
+	 * - Temp file cleanup is best-effort.
+	 *
+	 * @param {any} value File content (will be JSON serialized).
 	 */
 	async _writeNow(value) {
 		const tmpName = `${this.fileName}.tmp`;
@@ -81,7 +120,7 @@ class MsgStorage {
 		const sizeBytes = Buffer.byteLength(json, 'utf8');
 
 		// If rename is unavailable, fall back to a direct write.
-		// @ts-expect-error renameFileAsync may not be avialable
+		// @ts-expect-error renameFileAsync may not be available
 		if (typeof this.adapter.renameFileAsync !== 'function') {
 			await this.adapter.writeFileAsync(this.metaId, filePath, json);
 			if (this.adapter?.log?.debug) {
@@ -102,7 +141,7 @@ class MsgStorage {
 				}
 			}
 
-			// @ts-expect-error renameFileAsync may not be avialable
+			// @ts-expect-error renameFileAsync may not be available
 			await this.adapter.renameFileAsync(this.metaId, tmpPath, filePath);
 			if (this.adapter?.log?.debug) {
 				this.adapter.log.debug(`MsgStorage: ${filePath} written, mode=rename, ${sizeBytes} bytes`);
@@ -128,6 +167,10 @@ class MsgStorage {
 
 	/**
 	 * Reads and parses JSON from the file store.
+	 *
+	 * Behavior:
+	 * - Returns `fallback` when the file is missing, empty/whitespace, or contains invalid JSON.
+	 * - Revives `Map` instances that were encoded via `serializeWithMaps()`.
 	 *
 	 * @param {any} [fallback] Returned if the file is missing, empty, or invalid.
 	 */
@@ -172,12 +215,22 @@ class MsgStorage {
 
 	/**
 	 * Writes JSON to the file store, optionally throttled.
-	 * When throttled, only the latest value is persisted after the interval.
 	 *
-	 * @param {any} value  file content (json)
+	 * Throttling semantics:
+	 * - If `writeIntervalMs` is `0`, the write is queued and executed immediately.
+	 * - Otherwise, multiple `writeJson()` calls within the interval are coalesced:
+	 *   only the latest value is persisted when the timer fires.
+	 *
+	 * Return value:
+	 * - Returns a promise that resolves once the scheduled write has been persisted.
+	 * - Multiple calls during a throttle window share the same promise.
+	 *
+	 * @param {any} value File content (will be JSON serialized).
+	 * @returns {Promise<any>} Resolves when the corresponding write completes.
 	 */
 	async writeJson(value) {
 		if (!this.writeIntervalMs) {
+			// Immediate mode still uses the queue to preserve ordering.
 			return this._queue(() => this._writeNow(value));
 		}
 
@@ -202,7 +255,10 @@ class MsgStorage {
 	}
 
 	/**
-	 * Forces a write of a buffered value, intended for onUnload.
+	 * Forces a write of a buffered value (intended for adapter unload/shutdown).
+	 *
+	 * If a throttled write is pending, the timer is canceled and the write is performed immediately.
+	 * If nothing is pending, this resolves to the current queue tail.
 	 */
 	async flushPending() {
 		if (!this._flushPromise) {
@@ -220,6 +276,8 @@ class MsgStorage {
 	/**
 	 * Completes the scheduled write and resolves the pending promise.
 	 *
+	 * Internal helper used by the throttle timer and `flushPending()`.
+	 *
 	 * @returns {Promise<any>} Promise that resolves when the scheduled write completes.
 	 */
 	_finalizeScheduledWrite() {
@@ -233,6 +291,7 @@ class MsgStorage {
 		this._flushResolve = null;
 		this._flushReject = null;
 
+		// Serialize the actual write behind any ongoing operation.
 		const writePromise = this._queue(() => this._writeNow(pending));
 		writePromise.then(resolve, reject);
 		return writePromise;

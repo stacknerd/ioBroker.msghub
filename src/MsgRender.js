@@ -3,7 +3,25 @@
 /**
  * MsgRender
  * =========
- * Lightweight template renderer that resolves metric and timing related placeholders in message fields.
+ * Lightweight template renderer that resolves metric- and timing-related placeholders in message fields.
+ *
+ * Core responsibilities
+ * - Provide a view-only transformation for messages (`renderMessage`) that adds a computed `display` block.
+ * - Resolve `{{ ... }}` placeholders in `title`, `text`, and selected `details` fields against:
+ *   - `msg.metrics` (a `Map<string, { val, unit?, ts? }>`), and
+ *   - `msg.timing` (a plain object containing timestamps like `createdAt`, `updatedAt`, `notifyAt`, ...).
+ * - Apply a small, deterministic filter pipeline for formatting numbers, dates, booleans, and defaults.
+ *
+ * Design guidelines / invariants
+ * - Canonical vs. view: this renderer never mutates the input message; it returns a shallow clone with a `display` section.
+ * - No magic state: templates are evaluated on-demand; there is no caching or compilation step.
+ * - Graceful degradation: missing metrics/timing paths resolve to an empty string in templates (or can be handled via `default`).
+ * - Minimal template language: this is intentionally *not* a full templating engine (no loops/conditions/functions).
+ *
+ * Template model
+ * - Metrics are referenced via `m.<key>` where `<key>` is the Map key.
+ * - Timing fields are referenced via `t.<field>` (or `timing.<field>`).
+ * - Paths may use a property suffix for metrics: `.val`, `.unit`, `.ts`.
  *
  * Supported template syntax:
  * - {{m.temperature}}         -> "21.7 C" (value + unit)
@@ -21,24 +39,29 @@
  */
 class MsgRender {
 	/**
-	 * @param {import('@iobroker/adapter-core').AdapterInstance} adapter Adapter instance with msgconst and logging.
+	 * Create a new renderer instance.
+	 *
+	 * @param {import('@iobroker/adapter-core').AdapterInstance} adapter Adapter instance (used for logging only).
 	 * @param {object} [options] Configuration options.
 	 * @param {string} [options.locale] Default locale for number/date formatting.
 	 */
 	constructor(adapter, { locale = 'en-US' } = {}) {
 		if (!adapter) {
-			throw new Error('MsgFactory: adapter is required');
+			throw new Error('MsgRender: adapter is required');
 		}
 		this.adapter = adapter;
 		this.locale = locale;
 
 		if (this.adapter?.log?.info) {
-			this.adapter.log.info(`MsgRender initialized: locale='${this.locale}'}`);
+			this.adapter.log.info(`MsgRender initialized: locale='${this.locale}'`);
 		}
 	}
 
 	/**
-	 * Renders a message and attaches a display view without mutating the input.
+	 * Render a message and attach a `display` view without mutating the input.
+	 *
+	 * The output contains the original fields plus `display.title`, `display.text` and `display.details`,
+	 * which are the rendered (template-resolved) versions of the corresponding fields.
 	 *
 	 * @param {object} msg Message object that may contain "metrics" and displayable fields.
 	 * @param {object} [options] Render options.
@@ -63,7 +86,10 @@ class MsgRender {
 	}
 
 	/**
-	 * Renders string fields inside details while preserving non-string values.
+	 * Render string fields inside `details` while preserving non-string values.
+	 *
+	 * Only a small set of fields is rendered on purpose to keep this step predictable and avoid accidentally
+	 * treating arbitrary user-provided structures as templates.
 	 *
 	 * @param {object} details Structured details object to render.
 	 * @param {object} ctx Context containing the message and locale.
@@ -97,7 +123,12 @@ class MsgRender {
 	}
 
 	/**
-	 * Renders a template string by resolving {{...}} expressions against metrics/timing.
+	 * Render a template string by resolving `{{ ... }}` expressions against metrics/timing.
+	 *
+	 * Replacement rules:
+	 * - All `{{expr}}` blocks are replaced.
+	 * - Unknown paths resolve to `''` (empty string).
+	 * - Filters are applied left-to-right: `{{m.temp|num:1|default:--}}`.
 	 *
 	 * @param {string} input Template string.
 	 * @param {object} [options] Rendering context options.
@@ -130,6 +161,7 @@ class MsgRender {
 	 * @returns {any} The evaluated value after all filters are applied.
 	 */
 	_evalExpr(expr, ctx) {
+		// Split into base expression + pipe filters: "m.temp|num:1|default:--"
 		const parts = String(expr || '')
 			.split('|')
 			.map(s => s.trim())
@@ -143,11 +175,13 @@ class MsgRender {
 			return '';
 		}
 
+		// "raw" is special: it affects base resolution (e.g. m.temp returns raw val instead of "val unit").
 		const rawIndex = parts.findIndex(part => part.split(':')[0].trim() === 'raw');
 		const wantsRaw = rawIndex !== -1;
 		const filters = wantsRaw ? parts.filter(part => part.split(':')[0].trim() !== 'raw') : parts;
 		let val = this._resolvePath(base, ctx, { raw: wantsRaw });
 
+		// Apply remaining filters left-to-right.
 		for (const raw of filters) {
 			const idx = raw.indexOf(':');
 			const name = idx === -1 ? raw : raw.slice(0, idx).trim();
@@ -164,7 +198,7 @@ class MsgRender {
 	 * @param {string} path Template path.
 	 * @param {object} ctx Render context (metrics + locale).
 	 * @param {object} [options] Resolution options.
-	 * @param {boolean} [options.raw=false] When true, prefer raw values over formatted output.
+	 * @param {boolean} [options.raw] When true, prefer raw values over formatted output.
 	 * @returns {any} Resolved value or undefined.
 	 */
 	_resolvePath(path, ctx, options = {}) {
@@ -191,6 +225,7 @@ class MsgRender {
 			return undefined;
 		}
 
+		// Walk the path on the timing object, aborting on invalid traversal.
 		let cur = timing;
 		for (const part of parts) {
 			if (!part || cur == null || typeof cur !== 'object') {
@@ -207,7 +242,7 @@ class MsgRender {
 	 * @param {string[]} parts Array of [key, prop] (prop is optional).
 	 * @param {object} ctx Render context (metrics + locale).
 	 * @param {object} [options] Resolution options.
-	 * @param {boolean} [options.raw=false] When true, return the raw value without unit formatting.
+	 * @param {boolean} [options.raw] When true, return the raw value without unit formatting.
 	 * @returns {any} Metric value, unit, timestamp, or formatted string.
 	 */
 	_resolveMetric([key, prop], ctx, options = {}) {
@@ -220,6 +255,7 @@ class MsgRender {
 			return undefined;
 		}
 
+		// Default metric rendering: formatted "val unit" (unless raw requested).
 		if (!prop) {
 			if (options.raw) {
 				return entry.val;
@@ -272,9 +308,11 @@ class MsgRender {
 	 * @returns {any} Transformed value.
 	 */
 	_applyFilter(name, arg, val, ctx) {
+		// default: replace null/undefined/empty-string values with a fallback string.
 		if (name === 'default') {
 			return val == null || val === '' ? (arg == null ? '' : arg) : val;
 		}
+		// num:<digits>: locale-aware number formatting (max fraction digits).
 		if (name === 'num') {
 			const n = typeof val === 'number' ? val : Number(val);
 			if (!Number.isFinite(n)) {
@@ -287,6 +325,7 @@ class MsgRender {
 			);
 			return nf.format(n);
 		}
+		// datetime: interpret as ms timestamp / numeric string / date string and format using the locale.
 		if (name === 'datetime') {
 			const ts = this._toTimestamp(val);
 			if (!Number.isFinite(ts)) {
@@ -295,6 +334,7 @@ class MsgRender {
 			const df = new Intl.DateTimeFormat(ctx.locale, { dateStyle: 'medium', timeStyle: 'short' });
 			return df.format(new Date(ts));
 		}
+		// bool:trueLabel/falseLabel: coerce input to boolean and map to strings.
 		if (name === 'bool') {
 			const [t = 'true', f = 'false'] = String(arg || '').split('/');
 			const b = this._toBool(val);

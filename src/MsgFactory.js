@@ -126,32 +126,52 @@
 const crypto = require('crypto');
 
 /**
- * Builds normalized message objects for Msghub.
- * Validates and sanitizes user input, enforces enum constraints, and removes
- * undefined fields so the stored payload is compact and predictable.
+ * MsgFactory
+ * ==========
+ * Central normalization and validation component for MsgHub `Message` objects.
+ *
+ * Core responsibilities
+ * - Provide a single "normalization gate" (`createMessage`) that turns producer input into the canonical schema.
+ * - Provide a single patching/validation gate (`applyPatch`) that applies updates with consistent semantics.
+ * - Enforce enum constraints (`level`, `kind`, `origin.type`, attachment/action types) via `msgConstants`.
+ * - Keep persisted payloads compact and predictable by omitting empty optional structures.
+ *
+ * Design guidelines / invariants
+ * - Strict core schema: required fields must be present and correctly typed; invalid input results in `null`.
+ * - Stable identity: `ref` is normalized to an ASCII/URL-safe identifier; when missing, an auto-ref is generated
+ *   so the message remains addressable (updates/deletes). For recurring items, producers should provide `origin.id`
+ *   so auto-generated refs stay stable across updates.
+ * - Kind-driven rules: some fields are only meaningful for specific kinds (e.g. `timing.dueAt` for tasks,
+ *   `timing.startAt/endAt` for appointments, `listItems` for list kinds).
+ * - `undefined` vs `null`: `undefined` means "not present" and is removed before persistence; `null` is used by
+ *   patch operations as an explicit signal to clear/remove a field.
  */
 class MsgFactory {
 	/**
-	 * @param {import('@iobroker/adapter-core').AdapterInstance} adapter Adapter instance with msgconst and logging.
-	 * @param {import('./MsgConstants').MsgConstants} msgConstants Centralized enum-like constants.
+	 * @param {import('@iobroker/adapter-core').AdapterInstance} adapter ioBroker adapter instance (logger + lifecycle).
+	 * @param {import('./MsgConstants').MsgConstants} msgConstants Centralized enum-like constants (kinds/levels/origin/etc.).
 	 */
 	constructor(adapter, msgConstants) {
 		if (!adapter) {
 			throw new Error('MsgFactory: adapter is required');
 		}
 		this.adapter = adapter;
-		
+
 		if (!msgConstants) {
 			throw new Error('MsgFactory: msgConstants is required');
 		}
 		this.msgConstants = msgConstants;
 
-		// create ValueSets only once
+		// Cache the allowed enum values once so we can validate quickly without repeatedly
+		// allocating arrays (Object.values(...)) on every message normalization call.
 		this.levelValueSet = new Set(Object.values(this.msgConstants.level));
 		this.kindValueSet = new Set(Object.values(this.msgConstants.kind));
 		this.originTypeValueSet = new Set(Object.values(this.msgConstants.origin.type));
 		this.attachmentsTypeValueSet = new Set(Object.values(this.msgConstants.attachments.type));
 		this.actionsTypeValueSet = new Set(Object.values(this.msgConstants.actions.type));
+
+		// Monotonic sequence that is appended to auto-generated refs to reduce the chance
+		// of collisions when multiple messages are created within the same millisecond.
 		this._autoRefSeq = 0;
 	}
 
@@ -159,6 +179,14 @@ class MsgFactory {
 	 * Creates a normalized message object from the provided data.
 	 * Required fields are validated, optional fields are sanitized, and any
 	 * undefined values are stripped from the final payload.
+	 *
+	 * Important behavioral notes:
+	 * - This method is intentionally strict: invalid required fields throw and are caught
+	 *   inside this method, resulting in `null` and a log entry.
+	 * - Normalization tries to keep the message compact. Empty optional sub-objects
+	 *   (e.g. `details`, `audience`) are returned as `undefined` and removed.
+	 * - `ref` is normalized to a URL/ASCII-safe identifier; when omitted, an auto-ref
+	 *   is generated so the message can still be stored and referenced.
 	 *
 	 * @param {object} [options] Raw message fields.
 	 * @param {string} [options.ref] Stable, printable identifier for the message (required unless auto-ref is used).
@@ -196,15 +224,19 @@ class MsgFactory {
 		dependencies = [],
 	} = {}) {
 		try {
-			// "kind" vorab normalisieren, da für zeiten (timing) benötigt
+			// Normalize `kind` first because it drives kind-specific validation rules later
+			// (e.g., timing fields like dueAt/startAt/endAt and whether listItems are allowed).
 			const normkind = this._normalizeMsgEnum(kind, this.kindValueSet, 'kind', { required: true });
 
+			// Normalize the remaining required core fields.
 			const normOrigin = this._normalizeMsgOrigin(origin);
 			const normTitle = this._normalizeMsgString(title, 'title', { required: true });
 			const normText = this._normalizeMsgString(text, 'text', { required: true });
 			const normLevel = this._normalizeMsgEnum(level, this.levelValueSet, 'level', { required: true });
 			const normDetails = this._normalizeMsgDetails(details);
 
+			// Build the canonical message structure. Each helper returns either a normalized value
+			// or `undefined` (meaning: omit the field entirely).
 			const msg = {
 				ref: this._resolveMsgRef(ref, { kind: normkind, origin: normOrigin, title: normTitle }),
 				title: normTitle,
@@ -223,6 +255,8 @@ class MsgFactory {
 				dependencies: this._normalizeMsgArray(dependencies, 'dependencies'),
 			};
 
+			// Persisted payloads should not contain `undefined` keys because they are ambiguous in JSON,
+			// waste space, and make downstream consumers more complex.
 			return this._removeUndefinedKeys(msg);
 		} catch (e) {
 			if (this.adapter?.log?.error) {
@@ -237,6 +271,16 @@ class MsgFactory {
 	 * Updates an existing message with a partial patch.
 	 * Only fields present in the patch are processed; other fields are preserved.
 	 * Optional fields can be cleared by passing `null`.
+	 *
+	 * This is the canonical "update" API used by the adapter. It follows a consistent
+	 * patch language across nested structures:
+	 * - For objects: provide a partial object (only keys present are updated).
+	 * - For arrays: either replace the array, or use `{ set, delete }` depending on the field.
+	 * - For Maps: either replace with a Map, or use `{ set, delete }`.
+	 *
+	 * Timestamp semantics:
+	 * - `timing.createdAt` is immutable.
+	 * - `timing.updatedAt` is refreshed when the patch is considered user-visible.
 	 *
 	 * Patch semantics (examples show effects):
 	 * - Scalars (title/text/level): replace the value.
@@ -343,13 +387,17 @@ class MsgFactory {
 	applyPatch(existing, patch = {}) {
 		try {
 			if (!this.isValidMessage(existing)) {
-				throw new TypeError('updateMessage: existing message must be an valid message object');
+				throw new TypeError('applyPatch: existing message must be a valid message object');
 			}
 
+			// Start with a shallow copy; nested objects are replaced/merged by the individual
+			// patch handlers below (timing/details/progress/audience/...).
 			const updated = { ...existing };
 			let refreshUpdatedAt = false;
 			const has = key => Object.prototype.hasOwnProperty.call(patch, key);
 
+			// Enforce immutability: the caller may provide these fields, but only with the
+			// exact same value as the existing message.
 			if (has('ref')) {
 				const patchRef = this._normalizeMsgRef(patch.ref);
 				if (patchRef !== existing.ref) {
@@ -380,6 +428,8 @@ class MsgFactory {
 				}
 			}
 
+			// Apply scalar field updates. When one of these changes, we consider it a user-visible
+			// update and refresh timing.updatedAt.
 			if (has('title')) {
 				updated.title = this._normalizeMsgString(patch.title, 'title', { required: true });
 				refreshUpdatedAt = true;
@@ -402,7 +452,8 @@ class MsgFactory {
 			}
 			if (has('metrics')) {
 				updated.metrics = this._applyMetricsPatch(existing.metrics, patch.metrics);
-				// refreshUpdatedAt = true; // currently it is not considered a update if only the metrics change
+				// Intentionally *not* refreshing updatedAt when only metrics change:
+				// metrics are treated as high-frequency telemetry that should not "bump" the message.
 			}
 			if (has('attachments')) {
 				updated.attachments = this._applyArrayPatchByIndex(
@@ -437,7 +488,8 @@ class MsgFactory {
 				existing,
 				setUpdatedAt: refreshUpdatedAt,
 			});
-			//tbd: update timing and merge refreshUpdatedAt-demand as well
+			// TODO: If timing-only changes should also bump updatedAt, move that decision into
+			// `_normalineMsgTiming` (so timing normalization can decide based on the specific keys).
 
 			return this._removeUndefinedKeys(updated);
 		} catch (e) {
@@ -453,7 +505,10 @@ class MsgFactory {
 	 * @returns {boolean} True when the message has the required shape and values.
 	 */
 	isValidMessage(message) {
-		// required core objects
+		// This is a lightweight structural validation used before applying patches.
+		// It intentionally only validates the stable "core" parts of the schema.
+
+		// Required core objects.
 		if (
 			!this._isPlainObject(message) ||
 			!this._isPlainObject(message.origin) ||
@@ -462,7 +517,7 @@ class MsgFactory {
 			return false;
 		}
 
-		// required core fields
+		// Required core fields (type checks only).
 		if (
 			typeof message.ref !== 'string' ||
 			typeof message.title !== 'string' ||
@@ -475,7 +530,7 @@ class MsgFactory {
 			return false;
 		}
 
-		// vaildate some contents
+		// Validate constraints/ranges and enum membership.
 		if (
 			message.ref.length === 0 ||
 			!this.levelValueSet.has(message.level) ||
@@ -495,6 +550,20 @@ class MsgFactory {
 	// ======================================
 
 	/**
+	 * @overload
+	 * @param {any} value Input value to validate.
+	 * @param {string} field Field name for error messages.
+	 * @param {{ required: true, trim?: boolean, fallback?: string }} options Normalization options.
+	 * @returns {string} Normalized string.
+	 */
+	/**
+	 * @overload
+	 * @param {any} value Input value to validate.
+	 * @param {string} field Field name for error messages.
+	 * @param {{ required?: false, trim?: boolean, fallback?: string }} [options] Normalization options.
+	 * @returns {string|undefined} Normalized string or fallback/undefined.
+	 */
+	/**
 	 * Normalizes a string field by type checking and optional trimming.
 	 *
 	 * @param {any} value Input value to validate.
@@ -508,17 +577,17 @@ class MsgFactory {
 	_normalizeMsgString(value, field, { required = false, trim = true, fallback = undefined } = {}) {
 		if (typeof value !== 'string') {
 			if (required) {
-				throw new TypeError(`'${field}' must be a string, reiceived '${typeof value}' instead`);
+				throw new TypeError(`'${field}' must be a string, received '${typeof value}' instead`);
 			}
 
-			this.adapter?.log?.warn?.(`MsgFactory: '${field}' must be string, reiceived '${typeof value}' instead`);
+			this.adapter?.log?.warn?.(`MsgFactory: '${field}' must be a string, received '${typeof value}' instead`);
 			return fallback;
 		}
 		const text = trim ? value.trim() : value;
 		if (required && !text) {
-			throw new TypeError(`'${field}' is required but a empty string`);
+			throw new TypeError(`'${field}' is required but an empty string`);
 		} else if (!text) {
-			this.adapter?.log?.warn?.(`MsgFactory: '${field}' is a empty string`);
+			this.adapter?.log?.warn?.(`MsgFactory: '${field}' is an empty string`);
 			return fallback;
 		}
 		return text;
@@ -526,6 +595,12 @@ class MsgFactory {
 
 	/**
 	 * Normalizes a numeric field by ensuring it is a finite number.
+	 *
+	 * MsgHub mostly uses numbers as *positive integers* (timestamps, indices, counts).
+	 * Therefore this helper:
+	 * - does not coerce strings to numbers
+	 * - truncates fractional inputs (e.g. 12.9 -> 12)
+	 * - treats non-positive values as invalid (<= 0)
 	 *
 	 * @param {any} value Input value to validate.
 	 * @param {string} field Field name for error messages.
@@ -537,10 +612,10 @@ class MsgFactory {
 	_normalizeMsgNumber(value, field, { required = false, fallback = undefined } = {}) {
 		if (typeof value !== 'number') {
 			if (required) {
-				throw new TypeError(`'${field}' must be a number, reiceived '${typeof value}' instead`);
+				throw new TypeError(`'${field}' must be a number, received '${typeof value}' instead`);
 			}
 
-			this.adapter?.log?.warn?.(`MsgFactory: '${field}' must be number, reiceived '${typeof value}' instead`);
+			this.adapter?.log?.warn?.(`MsgFactory: '${field}' must be a number, received '${typeof value}' instead`);
 			return fallback;
 		}
 		const ts = Number.isFinite(value) ? Math.trunc(value) : NaN;
@@ -556,6 +631,13 @@ class MsgFactory {
 	/**
 	 * Normalizes a timestamp field and validates it as a plausible Unix ms value.
 	 *
+	 * Plausibility is enforced via `_isPlausibleUnixMs()` to catch common unit errors:
+	 * - seconds vs milliseconds (e.g. 1730000000 is "seconds", which would be too small)
+	 * - human input mistakes (negative, NaN, far-future values)
+	 *
+	 * The default allowed range is intentionally conservative (2000..2100) because this is
+	 * a home-automation context and helps detect accidental unit conversions early.
+	 *
 	 * @param {any} value Input value to validate.
 	 * @param {string} field Field name for error messages.
 	 * @param {object} [options] Normalization options.
@@ -564,8 +646,11 @@ class MsgFactory {
 	 * @returns {number|undefined} Normalized timestamp or fallback/undefined.
 	 */
 	_normalizeMsgTime(value, field, { required = false, fallback = undefined } = {}) {
+		// First validate "numberness" and convert to an integer. The caller can decide whether
+		// the field is required and what fallback to use.
 		const ts = this._normalizeMsgNumber(value, field, { required, fallback });
 
+		// Then apply a plausibility check to catch unit mistakes early (seconds vs ms, etc.).
 		if (!this._isPlausibleUnixMs(ts)) {
 			throw new TypeError(`'${field}' is not a plausible UnixMs timestamp (received:'${ts}')`);
 		}
@@ -575,6 +660,9 @@ class MsgFactory {
 
 	/**
 	 * Normalizes an enum field by validating membership in a known value set.
+	 *
+	 * This helper is intentionally strict and does not attempt to coerce between types
+	 * (e.g. it will not convert `"10"` to `10`). The caller must pass the correct type.
 	 *
 	 * @param {any} value Input value to validate.
 	 * @param {Set<any>} valueset Allowed values set.
@@ -592,6 +680,7 @@ class MsgFactory {
 			return fallback;
 		}
 
+		// Strict membership test: we do not coerce types or attempt fuzzy matching.
 		if (!valueset.has(value)) {
 			const valuesetString = Array.from(valueset).join(', ');
 			if (required) {
@@ -608,6 +697,13 @@ class MsgFactory {
 	/**
 	 * Normalizes a list field to an array of trimmed strings.
 	 *
+	 * Supported inputs:
+	 * - `string[]`: trims each entry and removes empty / non-string entries
+	 * - `string`: either returns `[string]` or splits by comma (configurable)
+	 *
+	 * The output is `undefined` when the result would be an empty list. This allows callers
+	 * to omit optional arrays instead of storing empty arrays everywhere.
+	 *
 	 * @param {string[]|string|undefined|null} value Input array or comma-separated string.
 	 * @param {string} field Field name for warning messages.
 	 * @param {object} [options] Normalization options.
@@ -619,11 +715,20 @@ class MsgFactory {
 			return undefined;
 		}
 		if (Array.isArray(value)) {
-			const normalized = value
-				.filter(entry => typeof entry === 'string')
-				.map(entry => entry.trim())
-				.filter(entry => entry.length > 0);
+			// Trim entries and drop empty/non-string items.
+			const normalized = [];
+			for (const entry of value) {
+				if (typeof entry !== 'string') {
+					continue;
+				}
+				const trimmed = entry.trim();
+				if (!trimmed) {
+					continue;
+				}
+				normalized.push(trimmed);
+			}
 			if (normalized.length !== value.length) {
+				// The producer sent something unexpected. We still return a best-effort result.
 				this.adapter?.log?.warn?.(`MsgFactory: '${field}'-array contains non-string or empty entries`);
 			}
 			return normalized.length > 0 ? normalized : undefined;
@@ -634,8 +739,10 @@ class MsgFactory {
 				return undefined;
 			}
 			if (!splitString) {
+				// Treat the entire string as a single entry (no CSV split).
 				return [text];
 			}
+			// Default behavior: treat string input as a comma-separated list.
 			const normalized = text
 				.split(',')
 				.map(entry => entry.trim())
@@ -653,27 +760,37 @@ class MsgFactory {
 	/**
 	 * Resolves a message ref, optionally auto-generating for eligible manual messages.
 	 *
+	 * `ref` is treated as the stable identity of a message. If a producer does not supply
+	 * a ref, we still create one so the message can be stored and later addressed (update/delete).
+	 *
+	 * Auto-refs are designed to be:
+	 * - printable and URL/ID safe (see `_normalizeMsgRef`)
+	 * - reasonably stable for recurring items if `origin.id` is provided
+	 *
 	 * @param {any} value Input reference value.
-	 * @param {object} context Context for auto-ref generation.
-	 * @param {string} context.kind Normalized kind.
-	 * @param {object} context.origin Normalized origin.
-	 * @param {string} context.title Normalized title.
+	 * @param {{ kind?: string, origin?: any, title?: string }} [context] Context for auto-ref generation.
 	 * @returns {string} Normalized reference.
 	 */
 	_resolveMsgRef(value, { kind, origin, title } = {}) {
 		const hasString = typeof value === 'string' && value.trim();
 		if (hasString || (value !== undefined && value !== null && typeof value !== 'string')) {
+			// Caller supplied a ref (or at least attempted to). Normalize and validate.
 			return this._normalizeMsgRef(value);
 		}
 
+		// No ref provided: create an auto-ref so the message remains addressable.
 		const originType = origin?.type;
 		const originIdNote = origin?.id ? '' : ' (origin.id missing; recurring events should set origin.id)';
 		if (originType === this.msgConstants.origin.type.import) {
 			this.adapter?.log?.warn?.(`MsgFactory: auto-generated ref for import message without ref${originIdNote}`);
 		} else if (originType === this.msgConstants.origin.type.automation) {
-			this.adapter?.log?.error?.(`MsgFactory: auto-generated ref for automation message without ref${originIdNote}`);
+			this.adapter?.log?.error?.(
+				`MsgFactory: auto-generated ref for automation message without ref${originIdNote}`,
+			);
 		} else if (!origin?.id) {
-			this.adapter?.log?.warn?.('MsgFactory: auto-generated ref without origin.id; recurring events should set origin.id');
+			this.adapter?.log?.warn?.(
+				'MsgFactory: auto-generated ref without origin.id; recurring events should set origin.id',
+			);
 		}
 
 		const autoRef = this._buildAutoRef({ kind, origin, title });
@@ -683,28 +800,39 @@ class MsgFactory {
 	/**
 	 * Build an auto-generated ref for manual task/appointment messages.
 	 *
-	 * @param {object} context Context for auto-ref generation.
-	 * @param {string} context.kind Normalized kind.
-	 * @param {object} context.origin Normalized origin.
-	 * @param {string} context.title Normalized title.
+	 * Structure (conceptually):
+	 * - `{origin.type}-{kind}-{origin.system}-{origin.id|title}-{token?}`
+	 *
+	 * If `origin.id` is present it is preferred because it can provide stability across updates.
+	 * Otherwise the ref includes a human-readable `title` segment plus a time/sequence token.
+	 *
+	 * @param {{ kind?: string, origin?: any, title?: string }} [context] Context for auto-ref generation.
 	 * @returns {string} Auto-generated ref.
 	 */
 	_buildAutoRef({ kind, origin = {}, title } = {}) {
+		// Build stable-ish, readable segments first. Each segment is "slugified" and kept short.
 		const type = this._formatRefSegment(origin.type, { fallback: 'auto' });
+		const kindSegment = this._formatRefSegment(kind, { fallback: 'kind' });
 		const system = this._formatRefSegment(origin.system, { fallback: 'origin' });
 
 		if (origin.id) {
+			// Prefer upstream IDs for stability. If the id is not slug-safe, we fall back to hashing.
 			const idSegment = this._formatRefSegment(origin.id, { fallback: this._hashRefSeed(origin.id).slice(0, 8) });
-			return `${type}-${kind}-${system}-${idSegment}`;
+			return `${type}-${kindSegment}-${system}-${idSegment}`;
 		}
 
+		// Without origin.id we include the (normalized) title plus a token to reduce collisions.
 		const name = this._formatRefSegment(title, { fallback: 'item' });
 		const token = this._nextAutoRefToken();
-		return `${type}-${kind}-${system}-${name}-${token}`;
+		return `${type}-${kindSegment}-${system}-${name}-${token}`;
 	}
 
 	/**
 	 * Create a short monotonic token for auto-generated refs.
+	 *
+	 * The token combines:
+	 * - current time in base36 (compact)
+	 * - a short rolling sequence number (to disambiguate within the same millisecond)
 	 *
 	 * @returns {string} Token safe for ref segments.
 	 */
@@ -716,6 +844,14 @@ class MsgFactory {
 
 	/**
 	 * Normalize a string into a ref-safe segment.
+	 *
+	 * This is a small "slugify" implementation:
+	 * - lowercases
+	 * - replaces non `[a-z0-9]` runs with `-`
+	 * - trims leading/trailing dashes
+	 *
+	 * When slugification would produce an empty string (e.g. only emojis), we fall back
+	 * to a short hash segment to keep the ref deterministic.
 	 *
 	 * @param {any} value Input value.
 	 * @param {object} [options] Normalization options.
@@ -730,7 +866,11 @@ class MsgFactory {
 		if (!raw) {
 			return fallback;
 		}
-		const slug = raw.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+		// Small slugify step: this keeps the ref mostly human-readable.
+		const slug = raw
+			.toLowerCase()
+			.replace(/[^a-z0-9]+/g, '-')
+			.replace(/^-+|-+$/g, '');
 		if (slug) {
 			return slug;
 		}
@@ -739,6 +879,8 @@ class MsgFactory {
 
 	/**
 	 * Hash a string to keep deterministic yet short ref segments.
+	 *
+	 * A hash is only used as a last resort (when the segment cannot be expressed as a simple slug).
 	 *
 	 * @param {any} value Input value.
 	 * @returns {string} Hex hash string.
@@ -750,16 +892,19 @@ class MsgFactory {
 	/**
 	 * Normalizes a message reference to printable ASCII only.
 	 *
+	 * Why `encodeURIComponent`?
+	 * - It produces an ASCII-only representation that is safe to embed into URLs and also
+	 *   safe for common storage keys where spaces/special characters can be problematic.
+	 * - It is reversible for debugging (unlike hashing), so it keeps refs readable.
+	 *
 	 * @param {any} value Input reference value.
-	 * @returns {string|undefined} Normalized reference or undefined when invalid.
+	 * @returns {string} Normalized reference.
 	 */
 	_normalizeMsgRef(value) {
 		const ref = this._normalizeMsgString(value, 'ref', { required: true });
-		if (!ref) {
-			return;
-		}
 		const saferef = encodeURIComponent(ref);
 
+		// Log only when normalization changed something (e.g. spaces -> %20).
 		if (value != saferef) {
 			this.adapter?.log?.warn?.(`MsgFactory: received ref='${value}', normalized to  '${saferef}'`);
 		}
@@ -769,6 +914,11 @@ class MsgFactory {
 	/**
 	 * Normalizes the origin object including enum validation and optional fields.
 	 *
+	 * `origin` is important for auditability and for auto-ref generation:
+	 * - `type` indicates whether the message comes from manual input, an import, or automation.
+	 * - `system` is a free-form source identifier (e.g. "icloud", "alexa").
+	 * - `id` is an upstream identifier and should be stable for recurring items.
+	 *
 	 * @param {object} value Origin input with type/system/id.
 	 * @returns {object} Normalized origin object.
 	 */
@@ -777,7 +927,7 @@ class MsgFactory {
 			throw new TypeError(`'origin' must be an object`);
 		}
 		if (!(typeof value.type === 'string' && value.type.trim() !== '')) {
-			throw new TypeError(`'origin.type' must be a string, reiceived '${typeof value.type}' instead`);
+			throw new TypeError(`'origin.type' must be a string, received '${typeof value.type}' instead`);
 		}
 		const origin = {
 			type: this._normalizeMsgEnum(value.type, this.originTypeValueSet, 'origin.type', { required: true }),
@@ -794,6 +944,13 @@ class MsgFactory {
 	 * from the existing message and only applies fields explicitly present
 	 * in the provided timing patch.
 	 *
+	 * Kind guards:
+	 * - `dueAt` is only meaningful for tasks.
+	 * - `startAt`/`endAt` are only meaningful for appointments.
+	 *
+	 * Clearing semantics:
+	 * - Passing `null` for a timing key removes that key from the message.
+	 *
 	 * @param {object} value Timing input (full timing object or patch).
 	 * @param {string} kind Normalized message kind used for timing rules.
 	 * @param {object} [options] Normalization options.
@@ -807,20 +964,29 @@ class MsgFactory {
 			throw new TypeError(`'timing' must be an object`);
 		}
 
+		// In update scenarios we start from the existing timing object and only touch keys
+		// explicitly present in the patch. This prevents accidental loss of timing metadata.
 		const baseTiming = updating && existing?.timing ? { ...existing.timing } : {};
 		const timing = { ...baseTiming };
 		const has = key => Object.prototype.hasOwnProperty.call(value, key);
 
 		if (!updating) {
+			// On creation, createdAt is always set (even if the producer omitted timing.createdAt).
 			timing.createdAt = Date.now();
 		} else if (baseTiming.createdAt !== undefined) {
+			// On update, createdAt must remain stable.
 			timing.createdAt = baseTiming.createdAt;
 		}
 
 		if (updating && setUpdatedAt) {
+			// updatedAt is a local "this message changed" marker used by UIs and sync code.
 			timing.updatedAt = Date.now();
 		}
 
+		// Helper for each timing key:
+		// - Only touch keys that are explicitly present in the patch (own properties).
+		// - Treat `null` as "delete this key".
+		// - Enforce kind-specific fields (e.g. dueAt only for tasks).
 		const setTime = (key, kindGuard) => {
 			if (!has(key)) {
 				return;
@@ -850,6 +1016,9 @@ class MsgFactory {
 	/**
 	 * Normalizes structured details into a compact object.
 	 *
+	 * `details` is intentionally free-form-ish but still normalized so UI code can
+	 * rely on predictable types. All fields are optional; empty details are omitted.
+	 *
 	 * @param {object} value Details input.
 	 * @returns {object|undefined} Normalized details or undefined when empty.
 	 */
@@ -861,7 +1030,9 @@ class MsgFactory {
 			location: value.location ? this._normalizeMsgString(value.location, 'details.location') : undefined,
 			task: value.task ? this._normalizeMsgString(value.task, 'details.task') : undefined,
 			reason: value.reason ? this._normalizeMsgString(value.reason, 'details.reason') : undefined,
-			tools: value.tools ? this._normalizeMsgArray(value.tools, 'details.tools', { splitString: false }) : undefined,
+			tools: value.tools
+				? this._normalizeMsgArray(value.tools, 'details.tools', { splitString: false })
+				: undefined,
 			consumables: value.consumables
 				? this._normalizeMsgArray(value.consumables, 'details.consumables', { splitString: false })
 				: undefined,
@@ -871,6 +1042,14 @@ class MsgFactory {
 
 	/**
 	 * Normalizes audience hints into a compact object.
+	 *
+	 * Audience hints can be used by notification plugins to decide where a message
+	 * should be delivered:
+	 * - `tags` are free-form identifiers
+	 * - `channels.include` / `channels.exclude` are lists of channel IDs
+	 *
+	 * This factory only normalizes shape/types; interpretation (like "exclude wins")
+	 * is implemented in the delivery layer.
 	 *
 	 * @param {object|undefined|null} value Audience input.
 	 * @returns {object|undefined} Normalized audience or undefined when empty.
@@ -911,6 +1090,13 @@ class MsgFactory {
 	 * Normalizes the metrics payload for a message.
 	 * Expects a Map of metric entries shaped as { val, unit, ts }.
 	 *
+	 * Metrics are designed for machine consumption (charts, history, correlation) and are
+	 * treated separately from the human-facing `text`.
+	 *
+	 * We keep metrics as a `Map` because:
+	 * - it has explicit key semantics (no prototype keys)
+	 * - it round-trips well in-memory and is efficient for patching (`set`/`delete`)
+	 *
 	 * @param {Map<string, {val: number|string|boolean|null, unit: string, ts: number}>|undefined|null} value Metrics map payload.
 	 * @returns {Map<string, {val: number|string|boolean|null, unit: string, ts: number}>|undefined} Normalized metrics payload.
 	 */
@@ -922,6 +1108,7 @@ class MsgFactory {
 			throw new TypeError(`'metrics' must be a Map`);
 		}
 
+		// We create a new map so callers can safely pass a map they still want to mutate elsewhere.
 		const metrics = new Map();
 		for (const [rawKey, entry] of value.entries()) {
 			const key = this._normalizeMsgString(rawKey, 'metrics key', { required: true });
@@ -965,6 +1152,9 @@ class MsgFactory {
 	/**
 	 * Normalizes attachments and validates their type/value fields.
 	 *
+	 * Attachments are ordered and intentionally kept as an array because the consumer
+	 * may want to render them in the order they were produced.
+	 *
 	 * @param {Array<{type: "ssml"|"image"|"video"|"file", value: string}>|undefined|null} value Attachments input.
 	 * @returns {Array<{type: "ssml"|"image"|"video"|"file", value: string}>|undefined} Normalized attachments.
 	 */
@@ -1005,6 +1195,11 @@ class MsgFactory {
 
 	/**
 	 * Normalizes list items for shopping or inventory lists.
+	 *
+	 * List semantics:
+	 * - Each item must have a stable `id` (used for patching by id).
+	 * - `checked` is always normalized to a boolean, defaulting to `false`.
+	 * - `quantity` is optional and, when present, uses `{ val, unit }`.
 	 *
 	 * @param {Array<{id: string, name: string, category?: string, quantity?: { val: number, unit: string }, checked: boolean}>|undefined|null} value List items input.
 	 * @param {string} kind Message kind.
@@ -1076,6 +1271,11 @@ class MsgFactory {
 	/**
 	 * Applies set/delete patches to metrics.
 	 *
+	 * Supported patch formats:
+	 * - `Map`: full replacement (after normalization)
+	 * - `{ set, delete }`: partial update by key
+	 * - `null`: clear the entire metrics section
+	 *
 	 * @param {Map<string, {val: number|string|boolean|null, unit: string, ts: number}>|undefined} existingMetrics Existing metrics map.
 	 * @param {Map<string, {val: number|string|boolean|null, unit: string, ts: number}>|{set?: Map<string, {val: number|string|boolean|null, unit: string, ts: number}>|Record<string, {val: number|string|boolean|null, unit: string, ts: number}>, delete?: string[]}|null|undefined} patch Metrics patch.
 	 * @returns {Map<string, {val: number|string|boolean|null, unit: string, ts: number}>|undefined} Updated metrics.
@@ -1085,6 +1285,7 @@ class MsgFactory {
 			return undefined;
 		}
 		if (patch instanceof Map) {
+			// Full replacement.
 			return this._normalizeMsgMetrics(patch);
 		}
 		if (patch === undefined) {
@@ -1101,6 +1302,7 @@ class MsgFactory {
 			if (setVal instanceof Map) {
 				setMap = setVal;
 			} else if (setVal && typeof setVal === 'object' && !Array.isArray(setVal)) {
+				// Allow plain objects as a convenience format: { key: { val, unit, ts } }.
 				setMap = new Map(Object.entries(setVal));
 			} else if (setVal !== undefined) {
 				throw new TypeError(`'metrics.set' must be a Map or object`);
@@ -1133,6 +1335,10 @@ class MsgFactory {
 	/**
 	 * Applies set/delete patches to arrays by index.
 	 *
+	 * This patch mode is intentionally index-based and therefore only suited for arrays
+	 * where items do not have stable IDs (e.g. `attachments`). For id-based arrays use
+	 * a dedicated `{ set, delete }` handler (see listItems/actions).
+	 *
 	 * @param {Array<any>|undefined} existingArray Existing array.
 	 * @param {Array<any>|{set?: Array<any>, delete?: number[]}|null|undefined} patch Array patch.
 	 * @param {(value: Array<any>) => Array<any>|undefined} normalizeFn Normalization function.
@@ -1144,6 +1350,7 @@ class MsgFactory {
 			return undefined;
 		}
 		if (Array.isArray(patch)) {
+			// Full replacement.
 			return normalizeFn(patch);
 		}
 		if (patch === undefined) {
@@ -1165,6 +1372,7 @@ class MsgFactory {
 			if (!Array.isArray(patch.delete)) {
 				throw new TypeError(`'${field}.delete' must be an array`);
 			}
+			// Delete in descending order so indices do not shift under our feet.
 			const indices = patch.delete.filter(index => Number.isInteger(index)).sort((a, b) => b - a);
 			indices.forEach(index => {
 				if (index >= 0 && index < base.length) {
@@ -1179,6 +1387,17 @@ class MsgFactory {
 	/**
 	 * Applies set/delete patches to list items (by id).
 	 *
+	 * The id-based patch format is designed to support common UI interactions:
+	 * - toggle `checked` without sending the full list
+	 * - rename an item
+	 * - add/remove a single item
+	 *
+	 * Supported patch formats:
+	 * - `Array`: full replacement (after normalization)
+	 * - `{ set: Array }`: full replacement (after normalization)
+	 * - `{ set: Record<string,PartialItem> }`: merge/update by id
+	 * - `{ delete: string[] }`: remove by id
+	 *
 	 * @param {Array<{id: string, name: string, category?: string, quantity?: { val: number, unit: string }, checked: boolean}>|undefined} existingItems Existing list items.
 	 * @param {Array<{id: string, name: string, category?: string, quantity?: { val: number; unit: string }, checked: boolean}>|{set?: Array<{id: string, name: string, category?: string, quantity?: { val: number; unit: string }, checked: boolean}>|Record<string, {name: string, category?: string, quantity?: { val: number; unit: string }, checked: boolean}>, delete?: string[]}|null|undefined} patch List items patch.
 	 * @param {string} kind Message kind.
@@ -1189,6 +1408,7 @@ class MsgFactory {
 			return undefined;
 		}
 		if (Array.isArray(patch)) {
+			// Full replacement.
 			return this._normalizeMsgListItems(patch, kind);
 		}
 		if (patch === undefined) {
@@ -1202,9 +1422,11 @@ class MsgFactory {
 		if ('set' in patch && patch.set !== undefined) {
 			const setVal = patch.set;
 			if (Array.isArray(setVal)) {
+				// Full replacement.
 				const normalized = this._normalizeMsgListItems(setVal, kind);
 				base = normalized ? [...normalized] : [];
 			} else if (setVal && typeof setVal === 'object' && !Array.isArray(setVal)) {
+				// Id-addressed upsert: convert { [id]: partialItem } into array entries with explicit ids.
 				const entries = [];
 				Object.entries(setVal).forEach(([id, entry]) => {
 					if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
@@ -1214,6 +1436,7 @@ class MsgFactory {
 					entries.push({ ...entry, id });
 				});
 				const normalized = this._normalizeMsgListItems(entries, kind) || [];
+				// Merge by id: existing items are preserved unless overwritten by the patch.
 				const byId = new Map(base.map(item => [item.id, item]));
 				normalized.forEach(item => byId.set(item.id, item));
 				base = Array.from(byId.values());
@@ -1243,6 +1466,9 @@ class MsgFactory {
 	/**
 	 * Applies set/delete patches to dependencies.
 	 *
+	 * Dependencies are a lightweight mechanism to express relationships between messages
+	 * (e.g. "this task depends on message X").
+	 *
 	 * @param {string[]|undefined} existingDeps Existing dependencies.
 	 * @param {string[]|string|{set?: string[]|string, delete?: string[]}|null|undefined} patch Dependencies patch.
 	 * @returns {string[]|undefined} Updated dependencies.
@@ -1252,6 +1478,7 @@ class MsgFactory {
 			return undefined;
 		}
 		if (Array.isArray(patch) || typeof patch === 'string') {
+			// Full replacement (string is treated as CSV by `_normalizeMsgArray`).
 			return this._normalizeMsgArray(patch, 'dependencies');
 		}
 		if (patch === undefined) {
@@ -1269,6 +1496,7 @@ class MsgFactory {
 			if (!Array.isArray(patch.delete)) {
 				throw new TypeError(`'dependencies.delete' must be an array`);
 			}
+			// Use a Set for O(1) membership checks when filtering.
 			const deleteSet = new Set();
 			patch.delete.forEach((dep, index) => {
 				const normDep = this._normalizeMsgString(dep, `dependencies.delete[${index}]`);
@@ -1286,6 +1514,9 @@ class MsgFactory {
 
 	/**
 	 * Applies partial patches to audience hints.
+	 *
+	 * Audience supports partial updates because callers often want to manipulate a single
+	 * dimension (e.g. tags) without re-sending the whole object.
 	 *
 	 * @param {object|undefined} existingAudience Existing audience.
 	 * @param {object|null|undefined} patch Audience patch.
@@ -1353,6 +1584,10 @@ class MsgFactory {
 	/**
 	 * Applies set/delete patches to progress (partial updates supported).
 	 *
+	 * Progress is treated as a small mutable object:
+	 * - `percentage` is required and cannot be deleted
+	 * - timestamps can be set or cleared
+	 *
 	 * @param {object|undefined} existingProgress Existing progress.
 	 * @param {object|{set?: object, delete?: string[]}|null|undefined} patch Progress patch.
 	 * @returns {object|undefined} Updated progress.
@@ -1370,6 +1605,9 @@ class MsgFactory {
 
 		let partial = patch;
 		if ('set' in patch || 'delete' in patch) {
+			// "Patch language" variant: { set: { ... }, delete: [ ... ] }.
+			// - set merges into existing
+			// - delete removes keys (except percentage)
 			const setVal = patch.set;
 			if (setVal !== undefined && (!setVal || typeof setVal !== 'object' || Array.isArray(setVal))) {
 				throw new TypeError(`'progress.set' must be an object`);
@@ -1409,6 +1647,9 @@ class MsgFactory {
 	/**
 	 * Applies set/delete patches to actions (by id).
 	 *
+	 * Actions are a list of interactive commands that a UI/consumer may present to the user.
+	 * They are treated as id-addressable items to allow incremental updates.
+	 *
 	 * @param {Array<{type: "ack"|"delete"|"close"|"open"|"link"|"custom", id: string, payload?: Record<string, unknown>|null, ts?: number}>|undefined} existingActions Existing actions.
 	 * @param {Array<{type: "ack"|"delete"|"close"|"open"|"link"|"custom", id: string, payload?: Record<string, unknown>|null, ts?: number}>|{set?: Array<{type: "ack"|"delete"|"close"|"open"|"link"|"custom", id: string, payload?: Record<string, unknown>|null, ts?: number}>|Record<string, {type: "ack"|"delete"|"close"|"open"|"link"|"custom", payload?: Record<string, unknown>|null, ts?: number}>, delete?: string[]}|null|undefined} patch Actions patch.
 	 * @returns {Array<{type: "ack"|"delete"|"close"|"open"|"link"|"custom", id: string, payload?: Record<string, unknown>|null, ts?: number}>|undefined} Updated actions.
@@ -1418,6 +1659,7 @@ class MsgFactory {
 			return undefined;
 		}
 		if (Array.isArray(patch)) {
+			// Full replacement.
 			return this._normalizeMsgActions(patch);
 		}
 		if (patch === undefined) {
@@ -1431,9 +1673,11 @@ class MsgFactory {
 		if ('set' in patch && patch.set !== undefined) {
 			const setVal = patch.set;
 			if (Array.isArray(setVal)) {
+				// Full replacement.
 				const normalized = this._normalizeMsgActions(setVal);
 				base = normalized ? [...normalized] : [];
 			} else if (setVal && typeof setVal === 'object' && !Array.isArray(setVal)) {
+				// Id-addressed upsert: convert { [id]: partialAction } into array entries with explicit ids.
 				const entries = [];
 				Object.entries(setVal).forEach(([id, entry]) => {
 					if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
@@ -1443,6 +1687,7 @@ class MsgFactory {
 					entries.push({ ...entry, id });
 				});
 				const normalized = this._normalizeMsgActions(entries) || [];
+				// Merge by id: existing actions are preserved unless overwritten by the patch.
 				const byId = new Map(base.map(item => [item.id, item]));
 				normalized.forEach(item => byId.set(item.id, item));
 				base = Array.from(byId.values());
@@ -1471,6 +1716,14 @@ class MsgFactory {
 
 	/**
 	 * Normalizes actions and validates type and optional fields.
+	 *
+	 * An action always needs:
+	 * - `id`: stable identifier used for updates/deletes
+	 * - `type`: validated against msgConstants.actions.type
+	 *
+	 * Optional:
+	 * - `payload`: arbitrary object for consumers (or `null` to explicitly clear)
+	 * - `ts`: positive integer timestamp (Unix ms preferred)
 	 *
 	 * @param {Array<{type: "ack"|"delete"|"close"|"open"|"link"|"custom", id: string, payload?: Record<string, unknown>|null, ts?: number}>|undefined|null} value Actions input.
 	 * @returns {Array<{type: "ack"|"delete"|"close"|"open"|"link"|"custom", id: string, payload?: Record<string, unknown>|null, ts?: number}>|undefined} Normalized actions.
@@ -1532,6 +1785,13 @@ class MsgFactory {
 	/**
 	 * Normalizes progress fields including percentage and timestamps.
 	 *
+	 * Progress is modeled as:
+	 * - `percentage` (0..100) for a simple UI progress indicator
+	 * - `startedAt`/`finishedAt` for coarse lifecycle timestamps
+	 *
+	 * Any additional progress metadata should be added in a backward-compatible way
+	 * (optional fields) and should be normalized here as well.
+	 *
 	 * @param {object} value Progress input with percentage/startedAt/finishedAt.
 	 * @returns {object} Normalized progress object.
 	 */
@@ -1540,9 +1800,13 @@ class MsgFactory {
 			throw new TypeError(`'progress' must be an object`);
 		}
 		const progress = {
+			// `percentage` is the only mandatory progress field in MsgHub.
+			// - It defaults to 0 (not started).
+			// - We only run numeric normalization when a truthy value is provided so that an explicit `0`
+			//   does not trigger the "must be > 0" warning of `_normalizeMsgNumber`.
 			percentage: value.percentage ? this._normalizeMsgNumber(value.percentage, 'progress.percentage') : 0,
 			startedAt: value.startedAt ? this._normalizeMsgTime(value.startedAt, 'progress.startedAt') : undefined,
-			notifyAt: value.finishedAt ? this._normalizeMsgTime(value.finishedAt, 'progress.finishedAt') : undefined,
+			finishedAt: value.finishedAt ? this._normalizeMsgTime(value.finishedAt, 'progress.finishedAt') : undefined,
 		};
 
 		return this._removeUndefinedKeys(progress);
@@ -1555,6 +1819,10 @@ class MsgFactory {
 	/**
 	 * Removes keys with undefined values from an object.
 	 *
+	 * This is a shallow cleanup utility: nested objects are not traversed.
+	 * It is used as the final step of message creation/patching because `undefined`
+	 * does not serialize in JSON and should not be persisted.
+	 *
 	 * @param {object} obj Input object.
 	 * @returns {object} New object without undefined values.
 	 */
@@ -1564,6 +1832,9 @@ class MsgFactory {
 
 	/**
 	 * Checks whether a timestamp is an integer within a plausible Unix ms range.
+	 *
+	 * This is a pragmatic validation step to catch common mistakes early (seconds vs ms).
+	 * The default range can be overridden for special use-cases.
 	 *
 	 * @param {any} ts Candidate timestamp.
 	 * @param {object} [options] Range options.
@@ -1578,6 +1849,11 @@ class MsgFactory {
 	/**
 	 * Checks whether a given value is a plain object (no custom prototype).
 	 *
+	 * This intentionally excludes:
+	 * - Arrays
+	 * - Class instances
+	 * - Objects with custom prototypes
+	 *
 	 * @param {any} v Candidate value.
 	 * @returns {boolean} True when the value is a plain object.
 	 */
@@ -1591,6 +1867,8 @@ class MsgFactory {
 
 	/**
 	 * Compares two origin objects for equality by value.
+	 *
+	 * Used to enforce immutability of `origin` in `applyPatch`.
 	 *
 	 * @param {object} left Normalized origin object.
 	 * @param {object} right Normalized origin object.

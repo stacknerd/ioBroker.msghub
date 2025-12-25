@@ -10,6 +10,7 @@ export default [
 			'.dev-server/',
 			'.vscode/',
 			'*.test.js',
+			'**/*.test.js',
 			'test/**/*.js',
 			'*.config.mjs',
 			'build',

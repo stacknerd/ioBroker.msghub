@@ -43,8 +43,8 @@ class Msghub extends utils.Adapter {
 
 		// The adapters config (in the instance object everything under the attribute "native") is accessible via
 		// this.config:
-		this.log.debug('config option1: ${this.config.option1}');
-		this.log.debug('config option2: ${this.config.option2}');
+		this.log?.debug?.(`config option1: ${this.config.option1}`);
+		this.log?.debug?.(`config option2: ${this.config.option2}`);
 
 		// init fatory
 		this.msgFactory = new MsgFactory(this, this.msgConstants);
@@ -66,7 +66,7 @@ class Msghub extends utils.Adapter {
 
 		const sysCfg = await this.getForeignObjectAsync('system.config');
 		if (!sysCfg) {
-			this.log.warn('system.config nicht gefunden');
+			this.log?.warn?.('system.config nicht gefunden');
 			return;
 		}
 
@@ -75,7 +75,7 @@ class Msghub extends utils.Adapter {
 		const latitude = sysCfg.common?.latitude;
 		const longitude = sysCfg.common?.longitude;
 
-		this.log.info(
+		this.log?.info?.(
 			`language=${language}, lat=${latitude}, lon=${longitude}, dateFormat=${sysCfg.common?.dateFormat}`,
 		);
 
@@ -186,10 +186,10 @@ class Msghub extends utils.Adapter {
 
 		// examples for the checkPassword/checkGroup functions
 		const pwdResult = await this.checkPasswordAsync('admin', 'iobroker');
-		this.log.info(`check user admin pw iobroker: ${pwdResult}`);
+		this.log?.info?.(`check user admin pw iobroker: ${pwdResult}`);
 
 		const groupResult = await this.checkGroupAsync('admin', 'admin');
-		this.log.info(`check group user admin group admin: ${groupResult}`);
+		this.log?.info?.(`check group user admin group admin: ${groupResult}`);
 	}
 
 	/**
@@ -207,7 +207,7 @@ class Msghub extends utils.Adapter {
 
 			this.msgStore?.onUnload();
 		} catch (error) {
-			this.log.error(`Error during unloading: ${error.message}`);
+			this.log?.error?.(`Error during unloading: ${error.message}`);
 			callback();
 		}
 	}
@@ -238,18 +238,18 @@ class Msghub extends utils.Adapter {
 	onStateChange(id, state) {
 		if (state) {
 			// The state was changed
-			this.log.info(`state ${id} changed: ${state.val} (ack = ${state.ack})`);
+			this.log?.info?.(`state ${id} changed: ${state.val} (ack = ${state.ack})`);
 
 			if (state.ack === false) {
 				// This is a command from the user (e.g., from the UI or other adapter)
 				// and should be processed by the adapter
-				this.log.info(`User command received for ${id}: ${state.val}`);
+				this.log?.info?.(`User command received for ${id}: ${state.val}`);
 
 				// TODO: Add your control logic here
 			}
 		} else {
 			// The object was deleted or the state value has expired
-			this.log.info(`state ${id} deleted`);
+			this.log?.info?.(`state ${id} deleted`);
 		}
 	}
 	// If you need to accept messages in your adapter, uncomment the following block and the corresponding line in the constructor.
@@ -277,7 +277,7 @@ class Msghub extends utils.Adapter {
 		const cmd = obj.command;
 		const payload = obj.message;
 
-		this.log.debug(`onMessage: '${cmd}' ${JSON.stringify(payload, null, 2)}`);
+		this.log?.debug?.(`onMessage: '${cmd}' ${JSON.stringify(payload, null, 2)}`);
 		let result;
 
 		try {
@@ -292,10 +292,10 @@ class Msghub extends utils.Adapter {
 					break;
 				}
 				default:
-					this.log.debug(`onMessage: unknown command '${cmd}' ${JSON.stringify(payload, null, 2)}`);
+					this.log?.debug?.(`onMessage: unknown command '${cmd}' ${JSON.stringify(payload, null, 2)}`);
 			}
 		} catch (e) {
-			this.log.error(`onMessage error: ${String(e)}`);
+			this.log?.error?.(`onMessage error: ${String(e)}`);
 		}
 
 		if (obj.callback) {

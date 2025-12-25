@@ -1,8 +1,28 @@
 /**
+ * MsgArchive
+ * ==========
  * Append-only archive for message lifecycle events.
- * Stores one JSONL file per ref under the adapter file namespace.
- * Designed for auditability and later replay: events are immutable, ordered by write time,
- * and batched to reduce storage churn while still preserving per-ref ordering.
+ *
+ * Core responsibilities
+ * - Persist immutable lifecycle events for messages as newline-delimited JSON (JSONL).
+ * - Store one archive file per message ref to keep files small and make per-message inspection easy.
+ * - Batch and serialize writes to reduce storage churn while preserving per-ref event ordering.
+ *
+ * Design guidelines / invariants
+ * - Append-only, immutable log: archive entries are never updated or deleted; new events are appended.
+ * - Per-ref ordering: events for the same message ref are written in the same order they were enqueued.
+ * - Best-effort durability: callers typically do not await archive writes. Errors are logged and can optionally
+ *   be rethrown (`throwOnError`) for test/debug scenarios.
+ * - JSONL format: each line is a single JSON object. This is friendly for streaming, grepping, and replay tools.
+ * - Backend constraints: ioBroker file storage does not provide an "append" API, so appends are implemented as
+ *   read-the-whole-file + rewrite-with-added-lines. For large archive files this is O(fileSize) per flush.
+ *
+ * File naming and refs
+ * - Refs are URL-encoded (`encodeURIComponent`) to generate filesystem-friendly file names.
+ * - The on-disk file name is `<encodedRef>.<fileExtension>` under `baseDir`.
+ *
+ * Map-safe JSON
+ * - Entries are serialized via `serializeWithMaps()` so `Map` values (e.g. metrics) remain intact.
  */
 const {
 	DEFAULT_MAP_TYPE_MARKER,
@@ -14,10 +34,12 @@ const {
 
 class MsgArchive {
 	/**
+	 * Create a new archive instance.
+	 *
 	 * @param {import('@iobroker/adapter-core').AdapterInstance} adapter Adapter instance used for ioBroker file storage APIs.
 	 * @param {object} [options] Optional configuration for storage layout and batching.
 	 * @param {string} [options.metaId] File storage root meta ID; defaults to adapter.namespace.
-	 * @param {string} [options.baseDir] Base folder for archive files (e.g. "archive"); empty string stores files at root.
+	 * @param {string} [options.baseDir] Base folder for archive files (e.g. "data/archive"); empty string stores files at root.
 	 * @param {string} [options.fileExtension] File extension without leading dot (default: "jsonl").
 	 * @param {number} [options.flushIntervalMs] Flush interval in ms (0 = immediate; default 10000).
 	 * @param {number} [options.maxBatchSize] Max queued events per ref before forced flush (default 200).
@@ -55,7 +77,10 @@ class MsgArchive {
 	}
 
 	/**
-	 * Call once during startup. Ensures the file storage root and base folder exist.
+	 * Call once during startup.
+	 *
+	 * Ensures the ioBroker file storage meta object exists and (optionally) creates the base directory.
+	 * This method is async because it may create meta objects and folders.
 	 *
 	 * @returns {Promise<void>} Resolves when the archive is ready for writes.
 	 */
@@ -70,7 +95,12 @@ class MsgArchive {
 	}
 
 	/**
-	 * Append a full message snapshot (usually on create).
+	 * Append a full message snapshot.
+	 *
+	 * Typical usage:
+	 * - Called by `MsgStore.addMessage()` to record the initial state of a message.
+	 *
+	 * The default archive event name is `"create"`, but can be overridden (e.g. for imports).
 	 *
 	 * @param {object} message Full message object to persist as a snapshot.
 	 * @param {object} [options] Optional behavior overrides.
@@ -95,6 +125,13 @@ class MsgArchive {
 
 	/**
 	 * Append a patch event.
+	 *
+	 * Typical usage:
+	 * - Called by `MsgStore.updateMessage()` to record the requested patch plus optional diffs.
+	 *
+	 * Payload details:
+	 * - The archive stores `requested` (the patch with redundant `ref` stripped when possible).
+	 * - If `existing` and `updated` are provided, a shallow diff is computed and stored as `added`/`removed`.
 	 *
 	 * @param {string} ref Message ref that identifies the archive file.
 	 * @param {object} patch Patch payload requested by the caller (may include ref).
@@ -345,6 +382,10 @@ class MsgArchive {
 	/**
 	 * Append a delete event.
 	 *
+	 * Notes:
+	 * - The default archive event name is `"delete"`. Callers may override it (e.g. `{ event: "expired" }`).
+	 * - If a full message object is provided, the archive stores it as a snapshot payload for auditability.
+	 *
 	 * @param {string|object} refOrMessage Message ref or full message object.
 	 * @param {object} [options] Optional behavior overrides.
 	 * @param {string} [options.event] Override event name (defaults to "delete").
@@ -365,6 +406,8 @@ class MsgArchive {
 
 	/**
 	 * Append a lifecycle event for a ref. Internal helper.
+	 *
+	 * This normalizes the entry shape (schema version, timestamp, ref, event) and then enqueues it for batching.
 	 *
 	 * @param {string} ref Message ref used to route to the correct archive file.
 	 * @param {string} event Event type (e.g. "create", "patch", "delete").
@@ -416,6 +459,8 @@ class MsgArchive {
 	/**
 	 * Flushes all pending events immediately.
 	 *
+	 * This is intended for shutdown/unload flows where we want a best-effort write of all buffered events.
+	 *
 	 * @returns {Promise<void>} Resolves when all queued flushes have completed.
 	 */
 	async flushPending() {
@@ -432,12 +477,19 @@ class MsgArchive {
 	/**
 	 * Adds an entry to the queue for a ref.
 	 *
+	 * Batching semantics:
+	 * - Events are buffered per ref key.
+	 * - The returned promise resolves when the buffered events that include this entry have been flushed.
+	 * - `flushNow` or `flushIntervalMs=0` forces an immediate flush.
+	 * - `maxBatchSize` also forces a flush to bound memory usage.
+	 *
 	 * @param {string} ref Message ref.
 	 * @param {object} entry Event entry already normalized for storage.
 	 * @param {boolean} flushNow Force immediate flush.
 	 * @returns {Promise<void>} Promise resolved when the entry is written.
 	 */
 	_enqueueEvent(ref, entry, flushNow) {
+		// Encode refs to create filesystem-friendly file names.
 		const refKey = encodeURIComponent(String(ref).trim());
 		let pending = this._pending.get(refKey);
 
@@ -460,8 +512,10 @@ class MsgArchive {
 		});
 
 		if (flushNow || !this.flushIntervalMs || pending.events.length >= this.maxBatchSize) {
+			// Flush immediately when requested or when thresholds are reached.
 			this._flushRef(refKey, pending);
 		} else if (!pending.timer) {
+			// Otherwise schedule exactly one flush timer per ref.
 			pending.timer = setTimeout(() => this._flushRef(refKey, pending), this.flushIntervalMs);
 		}
 
@@ -470,6 +524,10 @@ class MsgArchive {
 
 	/**
 	 * Flushes queued events for a ref.
+	 *
+	 * Concurrency:
+	 * - At most one flush per refKey runs at a time (`pending.flushing`).
+	 * - Actual storage writes are serialized via the global `_queue` so file reads/writes do not overlap.
 	 *
 	 * @param {string} refKey Normalized ref key.
 	 * @param {object} pending Pending state object.
@@ -495,7 +553,7 @@ class MsgArchive {
 		pending.waiters = [];
 		pending.flushing = true;
 
-		// Serialize writes so each ref file is appended in order.
+		// Serialize writes so each ref file is appended in order and storage operations don't overlap.
 		const writePromise = this._queue(() => this._appendEvents(refKey, events));
 		pending.flushPromise = writePromise;
 
@@ -509,6 +567,7 @@ class MsgArchive {
 			pending.flushPromise = null;
 
 			if (pending.events.length > 0) {
+				// New events arrived while we were flushing; schedule another flush.
 				if (!this.flushIntervalMs) {
 					this._flushRef(refKey, pending);
 				} else if (!pending.timer) {
@@ -529,12 +588,15 @@ class MsgArchive {
 	/**
 	 * Appends events to the ref file (JSONL).
 	 *
+	 * Implementation detail:
+	 * - ioBroker file storage does not expose append, so this does a read + rewrite of the full file.
+	 * - We preserve a trailing newline and avoid accidental blank lines by trimming the existing tail.
+	 *
 	 * @param {string} refKey Normalized ref key.
 	 * @param {Array<object>} events Event entries to append in order.
 	 * @returns {Promise<void>} Resolves after the file has been rewritten with the new lines.
 	 */
 	async _appendEvents(refKey, events) {
-		// ioBroker file storage does not expose append, so read + re-write the full JSONL file.
 		const filePath = this._filePathForRef(refKey);
 		const existing = await this._readFileText(filePath);
 		const existingTrimmed = existing ? existing.replace(/\s+$/, '') : '';
