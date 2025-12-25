@@ -41,7 +41,7 @@ Choosing the wrong timestamp is a common source of false positives:
 
 Therefore, the UI provides:
 
-- `watch.evaluateBy = "ts" | "lc"`
+- `fresh.evaluateBy = "ts" | "lc"` (only for the “Freshness / Heartbeat” rule)
 
 ---
 
@@ -74,8 +74,8 @@ When the same issue persists, the producer should **update** the existing messag
 
 ### Cooldown / reminders
 
-- Cooldown: suppress repeated messages for the same active issue.
-- Reminders: optional periodic “still broken” pings (Rule 1 supports this explicitly).
+- Cooldown: suppress repeated messages for the same active issue (`msg.cooldownValue` + `msg.cooldownUnit`).
+- Reminders: optional periodic “still broken” pings (`msg.remindValue` + `msg.remindUnit`, `0 = off`).
 
 ### Resolution handling
 
@@ -85,14 +85,18 @@ When an issue is resolved, the producer should:
 - set `expiresAt` so it disappears automatically and/or
 - explicitly remove/close it (depending on MsgHub semantics you choose)
 
+UI hint:
+
+- `msg.resetOnNormal`: auto-close when normal again
+- `msg.resetDelayValue` + `msg.resetDelayUnit`: optional delay before auto-close
+
 ---
 
 ## 5. Rule types
 
 All rules share:
 
-- `watch.mode` (selects rule type)
-- `watch.evaluateBy` (`ts` vs `lc`)
+- `mode` (selects rule type)
 - message settings (`msg.*`)
 
 ### 5.1 Rule 1 — Freshness / Heartbeat
@@ -102,20 +106,17 @@ All rules share:
 **UI fields**
 
 - `fresh.everyValue`, `fresh.everyUnit`: maximum expected gap between updates/changes
-- `fresh.graceValue`, `fresh.graceUnit`: tolerance buffer
-- `fresh.startupGraceValue`, `fresh.startupGraceUnit`: suppression right after restart
-- `fresh.remindValue`, `fresh.remindUnit`: optional reminder interval (0 = off)
 
 **Intended behavior**
 
-- if `now - last(ts|lc) > every + grace` → violation message (level configurable)
+- if `now - last(ts|lc) > every` → violation message (level configurable)
 - when updates resume → resolve the message
 
 **Example**
 
 Temperature sensor:
 
-- every: 12 hours, grace: 1 hour
+- every: 12 hours
 - evaluateBy: `lc` (if it only sends on change) or `ts` (if it sends keepalives)
 
 ---
@@ -215,7 +216,7 @@ This rule maps directly to scripts like:
 
 Inputs:
 
-- `sess.powerId` (optional): if empty, the current object is treated as power (W)
+- (power): the configured object itself is treated as power (W)
 - `sess.onOffId` (optional): gate state
 - `sess.onOffActive`: `truthy|falsy|eq`
 - `sess.onOffValue`: value for `eq`
@@ -284,12 +285,16 @@ Typical examples:
 
 Mode:
 
-- `thr.mode`: `lt|lte|gt|gte|outside|inside`
+- `thr.mode`: `lt|gt|outside|inside|truthy|falsy`
 
 Threshold values:
 
-- `thr.value` (number): used for `lt/lte/gt/gte`
+- `thr.value` (number): used for `lt/gt`
 - `thr.min` / `thr.max` (number): used for `inside/outside`
+ 
+Note:
+
+- `thr.value` is used for `lt/gt` (there is no `lte/gte` mode in the current UI).
 
 Anti-flap controls:
 
@@ -298,7 +303,7 @@ Anti-flap controls:
 
 Resolution behavior:
 
-- `thr.resetOnNormal` (boolean): when the value returns to normal, mark the message as resolved/expired
+- `msg.resetOnNormal` (boolean): when the value returns to normal, mark the message as resolved/expired
 
 **Intended behavior**
 
@@ -310,11 +315,11 @@ This rule compares the **current value** (numeric) to the configured condition.
 2. Create/update a stable message `ref` for the violation.
 3. Recovery:
    - apply hysteresis to decide when the system is “back to normal”
-   - if `resetOnNormal` is enabled, resolve/expire the message when normal again
+   - if `msg.resetOnNormal` is enabled, resolve/expire the message when normal again
 
 **Notes**
 
-- For threshold rules, `watch.evaluateBy` (`ts` vs `lc`) is less important than for freshness rules because the comparison uses the current value. It still matters for “when do we re-evaluate?”, i.e., whether you want checks on every update or only when the value changes.
+- Threshold rules evaluate on updates of the monitored state; there is no separate `evaluateBy` option in the current UI.
 - Hysteresis is strongly recommended for noisy sensor signals.
 
 ---
@@ -339,9 +344,9 @@ To be robust across admin versions, the schema currently uses fallback expressio
 
 1. load all objects with msghub custom enabled
 2. for each rule:
-   - determine required state ids:
-     - the configured object itself (or `sess.powerId`)
-     - dependency ids (`trg.id`, `sess.onOffId`, etc.)
+	   - determine required state ids:
+	     - the configured object itself
+	     - dependency ids (`trg.id`, `sess.onOffId`, etc.)
 3. subscribe only to those ids
 
 ### 7.2 Scheduling
