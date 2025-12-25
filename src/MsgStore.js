@@ -124,11 +124,9 @@ class MsgStore {
 			this._notifyTimer = setInterval(() => this._initiateNotifications(), this.notifierIntervalMs);
 		}
 
-		if (this.adapter?.log?.info) {
-			this.adapter.log.info(
-				`MsgStore initialized: pruneIntervalMs=${this.pruneIntervalMs}ms, notifierIntervalMs=${this.notifierIntervalMs}ms`,
-			);
-		}
+		this.adapter?.log?.info?.(
+			`MsgStore initialized: pruneIntervalMs=${this.pruneIntervalMs}ms, notifierIntervalMs=${this.notifierIntervalMs}ms`,
+		);
 	}
 
 	/**

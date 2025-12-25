@@ -259,9 +259,7 @@ class MsgFactory {
 			// waste space, and make downstream consumers more complex.
 			return this._removeUndefinedKeys(msg);
 		} catch (e) {
-			if (this.adapter?.log?.error) {
-				this.adapter.log.error(e);
-			}
+			this.adapter?.log?.error?.(e);
 		}
 
 		return null;

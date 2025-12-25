@@ -52,9 +52,7 @@ class MsgRender {
 		this.adapter = adapter;
 		this.locale = locale;
 
-		if (this.adapter?.log?.info) {
-			this.adapter.log.info(`MsgRender initialized: locale='${this.locale}'`);
-		}
+		this.adapter?.log?.info?.(`MsgRender initialized: locale='${this.locale}'`);
 	}
 
 	/**

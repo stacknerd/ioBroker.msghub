@@ -36,9 +36,7 @@ class MsgNotify {
 		this.msgConstants = msgConstants;
 
 		this._plugins = new Map();
-		if (this.adapter?.log?.info) {
-			this.adapter.log.info('MsgNotify initialized');
-		}
+		this.adapter?.log?.info?.('MsgNotify initialized');
 
 		// Precompute allowed event values once to avoid repeated Object.values allocations on every dispatch.
 		this.notificationEventsSet = new Set(Object.values(this.msgConstants.notfication.events));

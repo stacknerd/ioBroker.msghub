@@ -92,10 +92,8 @@ class MsgStorage {
 	async init() {
 		await ensureMetaObject(this.adapter, this.metaId);
 		await ensureBaseDir(this.adapter, this.metaId, this.baseDir);
-		if (this.adapter?.log?.info) {
-			const filePath = this._filePathFor(this.fileName);
-			this.adapter.log.info(`MsgStorage initialized: file=${filePath}, interval=${this.writeIntervalMs}ms`);
-		}
+		const filePath = this._filePathFor(this.fileName);
+		this.adapter?.log?.info?.(`MsgStorage initialized: file=${filePath}, interval=${this.writeIntervalMs}ms`);
 	}
 
 	/**
@@ -123,9 +121,7 @@ class MsgStorage {
 		// @ts-expect-error renameFileAsync may not be available
 		if (typeof this.adapter.renameFileAsync !== 'function') {
 			await this.adapter.writeFileAsync(this.metaId, filePath, json);
-			if (this.adapter?.log?.debug) {
-				this.adapter.log.debug(`MsgStorage: ${filePath} written, mode=override, ${sizeBytes} bytes`);
-			}
+			this.adapter?.log?.debug?.(`MsgStorage: ${filePath} written, mode=override, ${sizeBytes} bytes`);
 			return;
 		}
 
@@ -143,16 +139,12 @@ class MsgStorage {
 
 			// @ts-expect-error renameFileAsync may not be available
 			await this.adapter.renameFileAsync(this.metaId, tmpPath, filePath);
-			if (this.adapter?.log?.debug) {
-				this.adapter.log.debug(`MsgStorage: ${filePath} written, mode=rename, ${sizeBytes} bytes`);
-			}
+			this.adapter?.log?.debug?.(`MsgStorage: ${filePath} written, mode=rename, ${sizeBytes} bytes`);
 		} catch (e) {
 			// If rename fails, log and fall back to direct write.
-			this.adapter.log.warn(`Atomic write failed (${e?.message || e}), writing directly to ${filePath}`);
+			this.adapter?.log?.warn?.(`Atomic write failed (${e?.message || e}), writing directly to ${filePath}`);
 			await this.adapter.writeFileAsync(this.metaId, filePath, json);
-			if (this.adapter?.log?.debug) {
-				this.adapter.log.debug(`MsgStorage: ${filePath} written, mode=fallback, ${sizeBytes} bytes`);
-			}
+			this.adapter?.log?.debug?.(`MsgStorage: ${filePath} written, mode=fallback, ${sizeBytes} bytes`);
 		} finally {
 			// Best-effort cleanup of the tmp file.
 			if (typeof this.adapter.delFileAsync === 'function') {
@@ -184,28 +176,22 @@ class MsgStorage {
 				const raw = res && typeof res === 'object' && 'file' in res ? res.file : res;
 
 				if (raw == null) {
-					if (this.adapter?.log?.warn) {
-						this.adapter.log.warn(`MsgStorage: '${filePath}' - file missing or empty`);
-					}
+					this.adapter?.log?.warn?.(`MsgStorage: '${filePath}' - file missing or empty`);
 					return fallback;
 				}
 
 				const text = Buffer.isBuffer(raw) ? raw.toString('utf8') : String(raw);
 				if (!text.trim()) {
-					if (this.adapter?.log?.warn) {
-						this.adapter.log.warn(`MsgStorage: '${filePath}' - empty or whitespace only`);
-					}
+					this.adapter?.log?.warn?.(`MsgStorage: '${filePath}' - empty or whitespace only`);
 					return fallback;
 				}
 
-				if (this.adapter?.log?.debug) {
-					this.adapter.log.debug(`MsgStorage: read '${filePath}', ${Buffer.byteLength(text, 'utf8')} bytes`);
-				}
+				this.adapter?.log?.debug?.(`MsgStorage: read '${filePath}', ${Buffer.byteLength(text, 'utf8')} bytes`);
 
 				return deserializeWithMaps(text, this._mapTypeMarker);
 			} catch (e) {
 				// Treat missing/invalid data as fallback; exact error varies by backend.
-				this.adapter.log.debug(
+				this.adapter?.log?.debug?.(
 					`MsgStorage: read/parse (${filePath}) failed, using fallback: ${e?.message || e}`,
 				);
 				return fallback;

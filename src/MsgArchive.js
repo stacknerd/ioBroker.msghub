@@ -1,3 +1,7 @@
+const { DEFAULT_MAP_TYPE_MARKER, serializeWithMaps, ensureMetaObject, ensureBaseDir, createOpQueue } = require(
+	`${__dirname}/MsgUtils`,
+);
+
 /**
  * MsgArchive
  * ==========
@@ -24,14 +28,6 @@
  * Map-safe JSON
  * - Entries are serialized via `serializeWithMaps()` so `Map` values (e.g. metrics) remain intact.
  */
-const {
-	DEFAULT_MAP_TYPE_MARKER,
-	serializeWithMaps,
-	ensureMetaObject,
-	ensureBaseDir,
-	createOpQueue,
-} = require(`${__dirname}/MsgUtils`);
-
 class MsgArchive {
 	/**
 	 * Create a new archive instance.
@@ -87,11 +83,9 @@ class MsgArchive {
 	async init() {
 		await ensureMetaObject(this.adapter, this.metaId);
 		await ensureBaseDir(this.adapter, this.metaId, this.baseDir);
-		if (this.adapter?.log?.info) {
-			this.adapter.log.info(
-				`MsgArchive initialized: baseDir=${this.baseDir || '.'}, ext=${this.fileExtension}, interval=${this.flushIntervalMs}ms`,
-			);
-		}
+		this.adapter?.log?.info?.(
+			`MsgArchive initialized: baseDir=${this.baseDir || '.'}, ext=${this.fileExtension}, interval=${this.flushIntervalMs}ms`,
+		);
 	}
 
 	/**
@@ -447,9 +441,7 @@ class MsgArchive {
 	 */
 	_handleAppendError(action, ref, err, options = {}) {
 		const safeRef = ref ? String(ref) : '<unknown>';
-		if (this.adapter?.log?.warn) {
-			this.adapter.log.warn(`MsgArchive ${action} failed for ref ${safeRef}: ${err?.message || err}`);
-		}
+		this.adapter?.log?.warn?.(`MsgArchive ${action} failed for ref ${safeRef}: ${err?.message || err}`);
 		if (options.throwOnError) {
 			return Promise.reject(err);
 		}
@@ -605,10 +597,9 @@ class MsgArchive {
 
 		await this.adapter.writeFileAsync(this.metaId, filePath, combined);
 
-		if (this.adapter?.log?.debug) {
-			const sizeBytes = Buffer.byteLength(combined, 'utf8');
-			this.adapter.log.debug(`MsgArchive append ${events.length} event(s) -> ${filePath}, ${sizeBytes} bytes`);
-		}
+		this.adapter?.log?.debug?.(
+			`MsgArchive append ${events.length} event(s) -> ${filePath}, ${Buffer.byteLength(combined, 'utf8')} bytes`,
+		);
 	}
 
 	/**
@@ -628,9 +619,7 @@ class MsgArchive {
 
 			return Buffer.isBuffer(raw) ? raw.toString('utf8') : String(raw);
 		} catch (e) {
-			if (this.adapter?.log?.debug) {
-				this.adapter.log.debug(`MsgArchive read failed (${filePath}): ${e?.message || e}`);
-			}
+			this.adapter?.log?.debug?.(`MsgArchive read failed (${filePath}): ${e?.message || e}`);
 			return '';
 		}
 	}
