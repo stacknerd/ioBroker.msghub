@@ -2,7 +2,7 @@
 
 `IngestRandomDemo` is a small **Ingest (producer)** plugin that periodically generates demo messages.
 It is meant for development and UI testing: it helps you verify that message creation, updates, notifications, and cleanup work end-to-end.
-The plugin does not subscribe to ioBroker states; it only uses a timer and writes to the MsgHub store.
+The plugin does not subscribe to ioBroker states; it only uses a timer and writes to the Message Hub store.
 Each demo message gets an `expiresAt` timestamp so it disappears automatically after a short time.
 
 ---

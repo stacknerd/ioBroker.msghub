@@ -1,6 +1,6 @@
-# MsgNotify (MsgHub): dispatch notification events to plugins
+# MsgNotify (Message Hub): dispatch notification events to plugins
 
-`MsgNotify` is the notification dispatcher of MsgHub.
+`MsgNotify` is the notification dispatcher of Message Hub.
 It takes a **notification event** (like `"due"` or `"updated"`) plus one or more messages, and then forwards that
 information to all registered notifier plugins.
 
@@ -24,7 +24,7 @@ So `MsgNotify` is the “bridge” between the **core message store** and the **
 
 ## What is a “notification” here?
 
-In MsgHub a “notification” is simply a **MsgHub `Message` object** that is being announced to the outside world.
+In Message Hub a “notification” is simply a **Message Hub `Message` object** that is being announced to the outside world.
 
 - The `notification` payload is the message itself (not a separate schema).
 - The `event` tells plugins *why* the message is sent now (due/updated/deleted/expired).

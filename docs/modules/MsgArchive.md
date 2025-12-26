@@ -1,4 +1,4 @@
-# MsgArchive (MsgHub): append-only history for message events
+# MsgArchive (Message Hub): append-only history for message events
 
 `MsgArchive` is the component that records **what happened to a message over time**.
 It is an append-only log (“write once, never change”) that stores lifecycle events such as:

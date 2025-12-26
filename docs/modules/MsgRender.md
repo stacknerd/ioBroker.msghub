@@ -1,6 +1,6 @@
-# MsgRender (MsgHub): render a “display view” from raw messages
+# MsgRender (Message Hub): render a “display view” from raw messages
 
-`MsgRender` is a lightweight template renderer for MsgHub messages.
+`MsgRender` is a lightweight template renderer for Message Hub messages.
 It resolves simple placeholders like `{{m.temperature}}` or `{{t.createdAt|datetime}}` and writes the result into a
 separate `display` block.
 

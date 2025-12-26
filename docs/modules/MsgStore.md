@@ -1,6 +1,6 @@
-# MsgStore (MsgHub): canonical list + side effects
+# MsgStore (Message Hub): canonical list + side effects
 
-`MsgStore` is the MsgHub’s central “memory”: it holds the **canonical list of all messages in RAM**.
+`MsgStore` is Message Hub’s central “memory”: it holds the **canonical list of all messages in RAM**.
 Anything that **adds, changes, or removes** a message should go through this store.
 
 At the same time, `MsgStore` coordinates the most important side effects: **persisting**, **archiving**, and

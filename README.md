@@ -10,11 +10,11 @@
 
 **Tests:** ![Test and Release](https://github.com/stacknerd/ioBroker.msghub/workflows/Test%20and%20Release/badge.svg)
 
-## msghub adapter for ioBroker
+## a Message Hub for ioBroker
 
 a hub for all your messages, tasks and notifications
 
-## Documentation
+## Software Documentation
 
 See [`docs/README.md`](./docs/README.md)
 

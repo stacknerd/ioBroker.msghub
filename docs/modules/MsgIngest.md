@@ -1,6 +1,6 @@
-# MsgIngest (MsgHub): producer host + event fan-out
+# MsgIngest (Message Hub): producer host + event fan-out
 
-`MsgIngest` is the inbound “producer host” of MsgHub. It does not interpret ioBroker events itself; it only forwards
+`MsgIngest` is the inbound “producer host” of Message Hub. It does not interpret ioBroker events itself; it only forwards
 `stateChange` / `objectChange` events to registered producer plugins and gives them a narrow, stable API to create/update
 messages via the store.
 
@@ -21,7 +21,7 @@ Typical flow:
 
 Every plugin receives a `ctx` object with two namespaces:
 
-- `ctx.api`: stable capabilities provided by MsgHub
+- `ctx.api`: stable capabilities provided by Message Hub
   - `ctx.api.store`: `addMessage`, `updateMessage`, `addOrUpdateMessage`, `removeMessage`, `getMessageByRef`, `getMessages`
   - `ctx.api.factory`: `createMessage` (normalization gate for “create” paths)
   - `ctx.api.constants`: `MsgConstants` (levels/kinds/origin types, etc.)

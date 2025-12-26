@@ -1,6 +1,6 @@
-# MsgFactory (MsgHub): normalize, validate, and patch Messages
+# MsgFactory (Message Hub): normalize, validate, and patch Messages
 
-`MsgFactory` is the central component that turns “producer input” into a **valid, consistent MsgHub `Message`**.
+`MsgFactory` is the central component that turns “producer input” into a **valid, consistent Message Hub `Message`**.
 It is the place where the message schema is enforced so everything downstream (storage, rendering, notifications, UI)
 can rely on a predictable shape.
 
@@ -24,7 +24,7 @@ Important: `MsgStore` treats `MsgFactory.applyPatch()` as the **single source of
 
 ## What is a “Message”?
 
-A `Message` is the normalized payload the MsgHub uses to represent something the system wants to show to a human:
+A `Message` is the normalized payload Message Hub uses to represent something the system wants to show to a human:
 tasks, status updates, appointments, shopping lists, etc.
 
 There is a stable **core** (required fields) and optional sections (details, metrics, attachments, actions, …).
@@ -208,4 +208,3 @@ Dependencies can be:
 - Allowed enum values: `src/MsgConstants.js`
 - Create-path integration: `src/MsgIngest.js` (exposes `factory.createMessage`)
 - Update-path integration: `src/MsgStore.js` (delegates updates to `msgFactory.applyPatch`)
-

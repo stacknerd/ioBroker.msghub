@@ -1,18 +1,16 @@
-# Producer: ioBroker States (Concept & Specification)
+# Producer: ioBroker States
 
-TODO: update to final funtionality after plugin development
+This document describes a proposed **producer** inside `ioBroker.msghub` that turns ioBroker state behavior into normalized Message Hub messages.
 
-This document describes a proposed **producer** inside `ioBroker.msghub` that turns ioBroker state behavior into normalized MsgHub messages.
+The goal is to make “health checks”, “expectations”, “correlations”, and “process/session detection” configurable **per datapoint** using ioBroker **Custom settings** (`admin/jsonCustom.json`), while keeping Message Hub itself a clean message/notification hub.
 
-The goal is to make “health checks”, “expectations”, “correlations”, and “process/session detection” configurable **per datapoint** using ioBroker **Custom settings** (`admin/jsonCustom.json`), while keeping MsgHub itself a clean message/notification hub.
-
-Status: Concept/spec + UI schema (runtime implementation is a follow-up step).
+Status: infrastructure implemented (scan + subscriptions + change logging); rule evaluation is still WIP.
 
 ---
 
-## 1. Where this fits in msghub
+## 1. Where this fits in Message Hub (`msghub`)
 
-`msghub` already provides:
+Message Hub (`msghub`) already provides:
 
 - a normalized, validated message model (`src/MsgFactory.js`)
 - constants for level/kind (`src/MsgConstants.js`)
@@ -23,7 +21,7 @@ This producer is an **input side** component:
 
 - it subscribes to a set of ioBroker states
 - evaluates rules
-- creates/updates/removes MsgHub messages
+- creates/updates/removes Message Hub messages
 
 ---
 
@@ -52,17 +50,23 @@ Rules are configured per datapoint in ioBroker’s “Objects → Custom” UI.
 - UI schema: `admin/jsonCustom.json`
 - stored on objects in `common.custom` under the adapter instance key
 
-The producer will:
+The producer currently:
 
-1. read all objects with msghub custom enabled
-2. build an internal rule set
-3. subscribe only to required states (target state + dependencies)
+1. scans `system/custom` (`getObjectViewAsync('system','custom',{})`) to find objects with msghub custom settings
+2. subscribes to those objects to log custom changes (`objectChange`)
+3. subscribes only to required states (target state + dependencies)
+4. periodically rescans to discover newly added customs (polling)
+
+Current implementation entry:
+
+- `lib/IngestIoBrokerStates/index.js`
+- `lib/IngestIoBrokerStates/Engine.js`
 
 ---
 
 ## 4. General message strategy (anti-spam)
 
-To keep MsgHub usable, the producer must avoid flooding.
+To keep Message Hub usable, the producer must avoid flooding.
 
 ### Stable `ref` and updates
 
@@ -83,7 +87,7 @@ When an issue is resolved, the producer should:
 
 - update the message to indicate recovery and/or
 - set `expiresAt` so it disappears automatically and/or
-- explicitly remove/close it (depending on MsgHub semantics you choose)
+- explicitly remove/close it (depending on Message Hub semantics you choose)
 
 UI hint:
 

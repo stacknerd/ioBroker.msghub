@@ -1,7 +1,7 @@
 # Notifier: NotifyIoBrokerState
 
-`NotifyIoBrokerState` is a MsgHub **notifier plugin** (MsgNotify plugin) that writes notification events into ioBroker states.
-This makes MsgHub notifications visible and usable for scripts, visualizations, and automations that can read states.
+`NotifyIoBrokerState` is a Message Hub **notifier plugin** (MsgNotify plugin) that writes notification events into ioBroker states.
+This makes Message Hub notifications visible and usable for scripts, visualizations, and automations that can read states.
 
 The plugin stores “latest” notifications as JSON strings and also provides optional routing states by **kind** and **level**.
 This is intentionally simple: it is not a history or log, it is only the most recent value per state.

@@ -1,6 +1,29 @@
-# MsgHub Modules (src/) – Overview
+# Message Hub Core Modules (`src/`) – Overview
 
-This document describes how the core classes in `src/` work together. Detailed documentation for each module lives in `docs/modules/` and is linked below.
+This document explains the **core engine** of Message Hub: the classes in `src/` and how they work together.
+The core is responsible for the message model and lifecycle (store, validation, persistence, rendering, dispatch).
+
+This is “the inside” of Message Hub. It is designed to be stable and integration-agnostic.
+If you are looking for the ioBroker-facing parts, jump to [`docs/plugins/README.md`](../plugins/README.md).
+
+Detailed docs for each module are linked at the bottom of this page.
+
+## What the core can do (and what it cannot)
+
+Core modules can:
+
+- Define what a valid Message Hub `Message` looks like and how updates (“patches”) work
+- Keep a canonical in-memory list of messages (single source of truth)
+- Persist/restore that list and write append-only history
+- Render messages into display-friendly output (template placeholders → `display.*`)
+- Trigger notification events (dispatch), without caring about delivery channels
+
+Core modules intentionally do not:
+
+- Listen to ioBroker events directly
+- Deliver notifications to “real” channels
+
+Those IO responsibilities live in plugins (`lib/`). The adapter wires everything together in `main.js`.
 
 ## Data Flow (Simplified)
 
@@ -13,7 +36,7 @@ This document describes how the core classes in `src/` work together. Detailed d
    - Persistence of the full list via `MsgStorage`
    - Append-only history via `MsgArchive`
    - Notification dispatch via `MsgNotify` (fan-out to notifier plugins in `lib/`)
-7. **Notifier Plugins (delivery)**: Notifier plugins (e.g. `lib/Notify*.js`) receive events from `MsgNotify` and perform the actual delivery (ioBroker states, push, TTS, ...). See [`../plugins/README.md`](../plugins/README.md).
+7. **Notifier Plugins (delivery)**: Notifier plugins (e.g. `lib/Notify*.js`) receive events from `MsgNotify` and perform the actual delivery (ioBroker states, push, TTS, ...). See [`docs/plugins/README.md`](../plugins/README.md).
 8. **Output (read view)**: On reads, `MsgStore` returns a view; `MsgRender` creates `display.*` fields (resolving template placeholders from `metrics`/`timing`).
 
 ASCII sketch - WRITE / MUTATE (create/update/delete + side effects):
@@ -35,17 +58,24 @@ ASCII sketch - READ / VIEW (rendering only; no mutation)
 Consumer/UI  --->  MsgStore.getMessages()/getMessageByRef()  --->  MsgRender  --->  rendered output (display.*)
 ```
 
+## Design ideas (why it is built like this)
+
+- **Single source of truth**: only `MsgStore` mutates the message list; everyone else works through it.
+- **Best-effort side effects**: persistence, archive, and notifications should not crash the adapter if something goes wrong.
+- **Narrow plugin API**: plugins get capabilities via `ctx.api.*`, not by poking at internals.
+- **Separation of concerns**: ingest decides what to write, the store decides how to persist/dispatch, notify decides how to deliver.
+
 ## Core Class Roles
 
-- `MsgConstants` defines the shared vocabulary (enums for `level`, `kind`, `origin.type`, `attachments/actions`, notification events).
-- `MsgFactory` is the validation/normalization gatekeeper for the `Message` schema and patch semantics.
-- `MsgStore` is the central hub: owns `fullList`, coordinates persistence/archive/notifications, and returns rendered views.
-- `MsgStorage` persists a complete JSON snapshot (typically the full message list) and revives `Map` fields (e.g. `metrics`).
+- `MsgConstants` defines the shared vocabulary (levels, kinds, origin types, notification event names).
+- `MsgFactory` validates/normalizes the `Message` schema and defines patch semantics.
+- `MsgStore` is the hub: owns `fullList`, coordinates persistence/archive/notifications, and returns rendered views.
+- `MsgStorage` persists and restores the full message list (including revival of `Map` fields such as `metrics`).
 - `MsgArchive` writes an append-only history (JSONL) per message `ref` for audit/debug/replay.
-- `MsgNotify` dispatches notification events to registered notifier plugins (it does not deliver by itself).
-- `MsgRender` resolves template placeholders (`{{m.*}}`, `{{t.*}}`) in `title/text/details` into a separate `display` block.
-- `MsgIngest` is the plugin host for inbound events (producer plugins).
-- `MsgUtils` contains shared helpers used by storage/archive.
+- `MsgNotify` dispatches notification events to registered notifier plugins (delivery happens in plugins).
+- `MsgRender` resolves template placeholders (`{{m.*}}`, `{{t.*}}`) into a separate `display` block.
+- `MsgIngest` hosts producer plugins and fans out inbound events to them.
+- `MsgUtils` contains small shared helpers used by storage/archive.
 
 ## Modules
 

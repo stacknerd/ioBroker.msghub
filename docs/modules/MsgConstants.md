@@ -1,6 +1,6 @@
-# MsgConstants (MsgHub): shared “vocabulary” for Messages
+# MsgConstants (Message Hub): shared “vocabulary” for Messages
 
-`MsgConstants` is a small, centralized set of **enum-like constants** for the MsgHub `Message` schema.
+`MsgConstants` is a small, centralized set of **enum-like constants** for the Message Hub `Message` schema.
 It defines the allowed values for things like:
 
 - **Severity** (`level`)

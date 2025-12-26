@@ -1,6 +1,6 @@
-# MsgStorage (MsgHub): persist and load the message list
+# MsgStorage (Message Hub): persist and load the message list
 
-`MsgStorage` is a small helper that saves and loads MsgHub data using ioBroker’s file storage.
+`MsgStorage` is a small helper that saves and loads Message Hub data using ioBroker’s file storage.
 In practice it usually persists **the full message list** (for example `Array<Message>`) into a single JSON file so
 messages survive adapter restarts.
 
@@ -27,7 +27,7 @@ Important: `MsgStorage` is not a database. It does not merge partial updates. It
 
 ## What exactly is stored?
 
-By default `MsgStorage` writes a file called `messages.json`. In MsgHub it is typically configured as:
+By default `MsgStorage` writes a file called `messages.json`. In Message Hub it is typically configured as:
 
 - `baseDir: "data"` → file path becomes `data/messages.json`
 - `metaId: adapter.namespace` → ioBroker storage namespace
@@ -62,7 +62,7 @@ This is important because plain JSON would otherwise turn a `Map` into something
 ## Design guidelines / invariants (the important rules)
 
 ### 1) Single file, whole-document persistence
-Callers are expected to persist the complete document (for MsgHub: the full message list).
+Callers are expected to persist the complete document (for Message Hub: the full message list).
 There is no partial update format and no automatic merging.
 
 ### 2) Best-effort durability (non-blocking by default)
@@ -147,4 +147,3 @@ This is mainly used during adapter unload/shutdown to persist the latest state.
 - Tests (behavior examples): `src/MsgStorage.test.js`
 - Integration point: `src/MsgStore.js` (calls `writeJson(fullList)` and `flushPending()` on unload)
 - Map serialization helpers: `src/MsgUtils.js` (`serializeWithMaps`, `deserializeWithMaps`, `createOpQueue`)
-
