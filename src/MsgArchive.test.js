@@ -226,4 +226,77 @@ describe('MsgArchive', () => {
 		expect(lines[0].removed.metrics.temp).to.deep.equal({ val: 1 });
 		expect(lines[0].added.metrics.hum).to.deep.equal({ val: 3 });
 	});
+
+	it('diffs id-based arrays by id (delete)', async () => {
+		const { adapter, files } = createAdapter();
+		const archive = new MsgArchive(adapter, { baseDir: 'archive', flushIntervalMs: 0 });
+		await archive.init();
+
+		const ref = 'list-1';
+		const existing = {
+			ref,
+			listItems: [
+				{ id: 'a', name: 'A', checked: false },
+				{ id: 'b', name: 'B', checked: true },
+			],
+		};
+		const updated = {
+			ref,
+			listItems: [{ id: 'a', name: 'A', checked: false }],
+		};
+		const patch = { listItems: { delete: ['b'] } };
+
+		await archive.appendPatch(ref, patch, existing, updated);
+
+		const key = `${adapter.namespace}/archive/list-1.jsonl`;
+		const lines = readJsonl(files, key);
+		expect(lines).to.have.length(1);
+		expect(lines[0].requested.listItems.delete).to.deep.equal(['b']);
+		expect(lines[0]).to.not.have.property('added');
+		expect(lines[0].removed.listItems).to.deep.equal([{ id: 'b', name: 'B', checked: true }]);
+	});
+
+	it('diffs id-based arrays by id (update)', async () => {
+		const { adapter, files } = createAdapter();
+		const archive = new MsgArchive(adapter, { baseDir: 'archive', flushIntervalMs: 0 });
+		await archive.init();
+
+		const ref = 'list-2';
+		const existing = {
+			ref,
+			listItems: [{ id: 'a', name: 'A', checked: false }],
+		};
+		const updated = {
+			ref,
+			listItems: [{ id: 'a', name: 'A', checked: true }],
+		};
+		const patch = { listItems: { set: { a: { checked: true } } } };
+
+		await archive.appendPatch(ref, patch, existing, updated);
+
+		const key = `${adapter.namespace}/archive/list-2.jsonl`;
+		const lines = readJsonl(files, key);
+		expect(lines).to.have.length(1);
+		expect(lines[0].added.listItems).to.deep.equal([{ id: 'a', name: 'A', checked: true }]);
+		expect(lines[0].removed.listItems).to.deep.equal([{ id: 'a', name: 'A', checked: false }]);
+	});
+
+	it('diffs arrays of unique primitives as sets', async () => {
+		const { adapter, files } = createAdapter();
+		const archive = new MsgArchive(adapter, { baseDir: 'archive', flushIntervalMs: 0 });
+		await archive.init();
+
+		const ref = 'prim-1';
+		const existing = { ref, details: { tools: ['a', 'b'] } };
+		const updated = { ref, details: { tools: ['a'] } };
+		const patch = { details: { tools: ['a'] } };
+
+		await archive.appendPatch(ref, patch, existing, updated);
+
+		const key = `${adapter.namespace}/archive/prim-1.jsonl`;
+		const lines = readJsonl(files, key);
+		expect(lines).to.have.length(1);
+		expect(lines[0]).to.not.have.property('added');
+		expect(lines[0].removed.details.tools).to.deep.equal(['b']);
+	});
 });

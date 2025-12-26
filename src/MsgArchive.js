@@ -238,7 +238,7 @@ class MsgArchive {
 			return this._diffMap(existing, updated);
 		}
 		if (Array.isArray(existing) && Array.isArray(updated)) {
-			return { added: updated, removed: existing };
+			return this._diffArray(existing, updated);
 		}
 		if (this._isPlainObject(existing) && this._isPlainObject(updated)) {
 			const added = {};
@@ -274,6 +274,206 @@ class MsgArchive {
 			};
 		}
 		return { added: updated, removed: existing };
+	}
+
+	/**
+	 * Diff two arrays with some heuristics to keep archive diffs compact.
+	 *
+	 * - For id-based arrays (array of plain objects with unique `id`), we diff by `id` and only record
+	 *   added/removed/changed entries.
+	 * - For primitive sets (array of unique primitives), we record only added/removed items.
+	 * - For reorders (same items, different order), we fall back to full before/after arrays to avoid
+	 *   silently dropping a meaningful change.
+	 *
+	 * @param {any[]} existing Previous array.
+	 * @param {any[]} updated Updated array.
+	 * @returns {{added: any, removed: any}} Diff object.
+	 */
+	_diffArray(existing, updated) {
+		const byId = this._diffArrayById(existing, updated);
+		if (byId) {
+			return byId;
+		}
+
+		const primitive = this._diffArrayAsPrimitiveSet(existing, updated);
+		if (primitive) {
+			return primitive;
+		}
+
+		return { added: updated, removed: existing };
+	}
+
+	/**
+	 * Attempt an id-based array diff.
+	 *
+	 * @param {any[]} existing Previous array.
+	 * @param {any[]} updated Updated array.
+	 * @returns {{added: any[]|undefined, removed: any[]|undefined}|null} Diff or null when not applicable.
+	 */
+	_diffArrayById(existing, updated) {
+		const before = this._indexArrayById(existing);
+		if (!before) {
+			return null;
+		}
+		const after = this._indexArrayById(updated);
+		if (!after) {
+			return null;
+		}
+
+		const removed = [];
+		const added = [];
+
+		const afterIds = new Set(after.order);
+		const beforeIds = new Set(before.order);
+
+		const changedIds = new Set();
+		for (const id of before.order) {
+			if (!after.map.has(id)) {
+				continue;
+			}
+			const beforeItem = before.map.get(id);
+			const afterItem = after.map.get(id);
+			if (!this._isEqual(beforeItem, afterItem)) {
+				changedIds.add(id);
+			}
+		}
+
+		for (const id of before.order) {
+			if (!afterIds.has(id) || changedIds.has(id)) {
+				removed.push(before.map.get(id));
+			}
+		}
+		for (const id of after.order) {
+			if (!beforeIds.has(id) || changedIds.has(id)) {
+				added.push(after.map.get(id));
+			}
+		}
+
+		if (removed.length === 0 && added.length === 0) {
+			// Likely a reorder only; preserve information by falling back to full arrays.
+			return { added: updated, removed: existing };
+		}
+
+		return {
+			added: added.length > 0 ? added : undefined,
+			removed: removed.length > 0 ? removed : undefined,
+		};
+	}
+
+	/**
+	 * Build an id -> item index for arrays of plain objects with a unique string `id`.
+	 *
+	 * @param {any[]} arr Array to index.
+	 * @returns {{order: string[], map: Map<string, any>}|null} Index bundle or null when not applicable.
+	 */
+	_indexArrayById(arr) {
+		const map = new Map();
+		const order = [];
+		for (const item of arr) {
+			if (!this._isPlainObject(item)) {
+				return null;
+			}
+			const id = typeof item.id === 'string' ? item.id.trim() : '';
+			if (!id) {
+				return null;
+			}
+			if (map.has(id)) {
+				return null;
+			}
+			map.set(id, item);
+			order.push(id);
+		}
+		return { order, map };
+	}
+
+	/**
+	 * Attempt a set-like diff for arrays of unique primitives.
+	 *
+	 * @param {any[]} existing Previous array.
+	 * @param {any[]} updated Updated array.
+	 * @returns {{added: any[]|undefined, removed: any[]|undefined}|null} Diff or null when not applicable.
+	 */
+	_diffArrayAsPrimitiveSet(existing, updated) {
+		const before = this._indexPrimitiveArray(existing);
+		if (!before) {
+			return null;
+		}
+		const after = this._indexPrimitiveArray(updated);
+		if (!after) {
+			return null;
+		}
+
+		const removed = [];
+		const added = [];
+
+		for (const item of existing) {
+			if (!after.set.has(this._primitiveKey(item))) {
+				removed.push(item);
+			}
+		}
+		for (const item of updated) {
+			if (!before.set.has(this._primitiveKey(item))) {
+				added.push(item);
+			}
+		}
+
+		if (removed.length === 0 && added.length === 0) {
+			// Likely a reorder only; preserve information by falling back to full arrays.
+			return { added: updated, removed: existing };
+		}
+
+		return {
+			added: added.length > 0 ? added : undefined,
+			removed: removed.length > 0 ? removed : undefined,
+		};
+	}
+
+	/**
+	 * Index an array of unique primitives.
+	 *
+	 * @param {any[]} arr Array to index.
+	 * @returns {{set: Set<string>}|null} Index or null when not applicable.
+	 */
+	_indexPrimitiveArray(arr) {
+		const set = new Set();
+		for (const item of arr) {
+			const isPrimitive =
+				item === null || typeof item === 'string' || typeof item === 'number' || typeof item === 'boolean';
+			if (!isPrimitive) {
+				return null;
+			}
+			const key = this._primitiveKey(item);
+			if (set.has(key)) {
+				return null;
+			}
+			set.add(key);
+		}
+		return { set };
+	}
+
+	/**
+	 * Build a stable key for primitives to avoid collisions between types (e.g. "1" vs 1).
+	 *
+	 * @param {string|number|boolean|null} v Primitive.
+	 * @returns {string} Stable key.
+	 */
+	_primitiveKey(v) {
+		if (v === null) {
+			return 'null';
+		}
+		if (typeof v === 'string') {
+			return `s:${v}`;
+		}
+		if (typeof v === 'number') {
+			if (Number.isNaN(v)) {
+				return 'n:NaN';
+			}
+			if (Object.is(v, -0)) {
+				return 'n:-0';
+			}
+			return `n:${String(v)}`;
+		}
+		return `b:${v ? '1' : '0'}`;
 	}
 
 	/**
