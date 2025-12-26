@@ -30,7 +30,7 @@ function normalizeNewlines(text) {
 }
 
 function makeModuleStubDoc({ title, implementationPath }) {
-  return `# ${title} (MsgHub): TODO short summary
+  return `# ${title} (Message Hub): TODO short summary
 
 \`${title}\` TODO: add a 2–4 sentence description of what this module does and why it exists.
 
@@ -75,12 +75,12 @@ TODO
 ## Related files
 
 - Implementation: \`${implementationPath}\`
-- Module overview: \`modules/plugins/README.md\`
+- Module overview: \`docs/modules/README.md\`
 `;
 }
 
 function makePluginStubDoc({ title, implementationPath }) {
-  return `# TODO <Producer || Notifier || Syncronizer>: ${title}
+  return `# TODO <Producer || Notifier || Synchronizer>: ${title}
 
 TODO: Add 2–4 sentence summary: what it does, where it hooks in (Ingest/Notify), and why it exists.
 
@@ -160,7 +160,7 @@ function replaceOrAppendModuleSection(readmeText, indexLines) {
   }
 
   const newSection = [
-    '## Module',
+    '## Modules',
     '',
     SECTION_START,
     ...indexLines,
