@@ -20,6 +20,8 @@ Plugins are called by one of the two plugin hosts:
 - `MsgIngest` for inbound events (producer/ingest plugins)
 - `MsgNotify` for outbound notification events (notifier/notify plugins)
 
+For **bidirectional integrations** (“sync with system X”), Message Hub can register a pair of plugins (one ingest + one notify) together via `MsgBridge`. See [`docs/modules/MsgBridge.md`](../modules/MsgBridge.md).
+
 Both hosts provide a small `ctx` object:
 
 - `ctx.api`: stable capabilities (store/factory/constants, depending on host)
@@ -80,6 +82,18 @@ msgStore.msgNotify.registerPlugin('my-notify', {
   },
 });
 ```
+
+## Bidirectional integrations (“bridges”)
+
+Many real integrations are two-way:
+
+- inbound: external changes → update Message Hub messages
+- outbound: Message Hub events → push changes outward
+
+In Message Hub this is modeled as **two independent plugins** (one `Ingest`, one `Notify`).
+To make wiring safer (and avoid “half registered” integrations), the adapter can use `MsgBridge` to register/unregister both sides together, with best-effort rollback.
+
+Read more: [`docs/modules/MsgBridge.md`](../modules/MsgBridge.md)
 
 ## What plugins should (and should not) do
 

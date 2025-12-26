@@ -1,18 +1,9 @@
 /**
- * Docs: ../docs/modules/MsgStore.md
- */
-
-const { serializeWithMaps } = require(`${__dirname}/MsgUtils`);
-const { MsgStorage } = require(`${__dirname}/MsgStorage`);
-const { MsgArchive } = require(`${__dirname}/MsgArchive`);
-const { MsgRender } = require(`${__dirname}/MsgRender`);
-const { MsgNotify } = require(`${__dirname}/MsgNotify`);
-const { MsgIngest } = require(`${__dirname}/MsgIngest`);
-
-/**
  * MsgStore
  * ========
- * Central in-memory repository for MsgHub messages.
+ * Central in-memory repository for MsgHub messages. *
+ *
+ * Docs: ../docs/modules/MsgStore.md
  *
  * Core responsibilities
  * - Own the canonical in-memory list (`this.fullList`) and be the single place where the list is mutated.
@@ -66,6 +57,17 @@ const { MsgIngest } = require(`${__dirname}/MsgIngest`);
  * Rendering (MsgRender)
  * - Read methods return a view of messages (`msgRender.renderMessage`) without mutating stored data.
  * - The canonical data is always `this.fullList`; rendered output is view-only.
+ */
+
+const { serializeWithMaps } = require(`${__dirname}/MsgUtils`);
+const { MsgStorage } = require(`${__dirname}/MsgStorage`);
+const { MsgArchive } = require(`${__dirname}/MsgArchive`);
+const { MsgRender } = require(`${__dirname}/MsgRender`);
+const { MsgNotify } = require(`${__dirname}/MsgNotify`);
+const { MsgIngest } = require(`${__dirname}/MsgIngest`);
+
+/**
+ * MsgStore
  */
 class MsgStore {
 	/**

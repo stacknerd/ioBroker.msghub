@@ -26,6 +26,9 @@ ioBroker events  ->  Ingest plugins (lib/)  ->  Core (src/)  ->  Notify plugins 
                        (create/patch msgs)     (store+rules)     (deliver outside)
 ```
 
+Bidirectional integrations (“sync with system X”) are typically implemented as **two plugins** (one ingest + one notify).
+To register/unregister such a pair safely, the adapter can use `MsgBridge` (a small wiring helper in `src/`).
+
 ## Modules (Core)
 
 Modules are the **stable internal building blocks** in `src/`. They implement the logic that should not depend on any specific integration.
@@ -34,6 +37,7 @@ What core modules do:
 
 - Define the shared vocabulary and message schema (for example `MsgConstants`, `MsgFactory`)
 - Keep the canonical in-memory state (`MsgStore`)
+- Help wire bidirectional integrations safely (`MsgBridge`)
 - Persist and restore messages (`MsgStorage`)
 - Write an append-only history for audit/debug (`MsgArchive`)
 - Render messages into display-friendly output (`MsgRender`)
@@ -69,7 +73,7 @@ Read more: [docs/plugins/README.md](./plugins/README.md)
 
 - `src/`: core engine (modules)
 - `lib/`: plugin implementations (ingest + notify)
-- `main.js`: adapter wiring (registering plugins, connecting to ioBroker)
+- `main.js`: adapter wiring (registering plugins, connecting to ioBroker; optionally via `MsgBridge`)
 
 ## Development
 

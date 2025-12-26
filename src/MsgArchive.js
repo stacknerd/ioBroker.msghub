@@ -1,15 +1,9 @@
 /**
- * Docs: ../docs/modules/MsgArchive.md
- */
-
-const { DEFAULT_MAP_TYPE_MARKER, serializeWithMaps, ensureMetaObject, ensureBaseDir, createOpQueue } = require(
-	`${__dirname}/MsgUtils`,
-);
-
-/**
  * MsgArchive
  * ==========
  * Append-only archive for message lifecycle events.
+ *
+ * Docs: ../docs/modules/MsgArchive.md
  *
  * Core responsibilities
  * - Persist immutable lifecycle events for messages as newline-delimited JSON (JSONL).
@@ -31,6 +25,14 @@ const { DEFAULT_MAP_TYPE_MARKER, serializeWithMaps, ensureMetaObject, ensureBase
  *
  * Map-safe JSON
  * - Entries are serialized via `serializeWithMaps()` so `Map` values (e.g. metrics) remain intact.
+ */
+
+const { DEFAULT_MAP_TYPE_MARKER, serializeWithMaps, ensureMetaObject, ensureBaseDir, createOpQueue } = require(
+	`${__dirname}/MsgUtils`,
+);
+
+/**
+ * MsgArchive
  */
 class MsgArchive {
 	/**

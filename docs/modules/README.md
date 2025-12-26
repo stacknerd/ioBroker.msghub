@@ -29,6 +29,7 @@ Those IO responsibilities live in plugins (`lib/`). The adapter wires everything
 
 1. **Input**: The adapter (e.g. `main.js`) receives ioBroker events (state/object changes) or import/automation events.
 2. **Producers**: Producer plugins (typically in `lib/`) interpret these events and build message payloads.
+   - For bidirectional integrations, the adapter often registers an ingest+notify pair together via `MsgBridge` (wiring helper).
 3. **Ingest Host**: `MsgIngest` hosts producer plugins and provides a narrow API via `ctx.api.*`, separated from dispatch metadata in `ctx.meta`.
 4. **Normalization**: `MsgFactory` validates/normalizes new messages (`createMessage`) and defines patch semantics (`applyPatch`).
 5. **Single Source of Truth**: `MsgStore` owns the canonical in-memory list (`fullList`) and is the only place where this list is mutated.
@@ -44,13 +45,13 @@ ASCII sketch - WRITE / MUTATE (create/update/delete + side effects):
 ioBroker Events / Imports
         |
         v
-Producer Plugins (lib/)
+Producer Plugins (lib/)  (+ optional bridge wiring via MsgBridge)
         |
         v
 MsgIngest  --->  MsgFactory  --->  MsgStore (canonical list)
                                |-> MsgStorage (messages.json)
                                |-> MsgArchive (JSONL per ref)
-                               |-> MsgNotify (events) ---> Notify Plugins (lib/Notify*.js)
+                               |-> MsgNotify (events) ---> Notify Plugins (lib/Notify*.js + optional bridge wiring via MsgBridge)
 ```
 
 ASCII sketch - READ / VIEW (rendering only; no mutation)
@@ -69,6 +70,7 @@ Consumer/UI  --->  MsgStore.getMessages()/getMessageByRef()  --->  MsgRender  --
 
 - `MsgConstants` defines the shared vocabulary (levels, kinds, origin types, notification event names).
 - `MsgFactory` validates/normalizes the `Message` schema and defines patch semantics.
+- `MsgBridge` is an adapter-wiring helper for bidirectional integrations (register/unregister ingest + notify plugin pairs).
 - `MsgStore` is the hub: owns `fullList`, coordinates persistence/archive/notifications, and returns rendered views.
 - `MsgStorage` persists and restores the full message list (including revival of `Map` fields such as `metrics`).
 - `MsgArchive` writes an append-only history (JSONL) per message `ref` for audit/debug/replay.
@@ -81,6 +83,7 @@ Consumer/UI  --->  MsgStore.getMessages()/getMessageByRef()  --->  MsgRender  --
 
 <!-- AUTO-GENERATED:MODULE-INDEX:START -->
 - `MsgArchive`: [`./MsgArchive.md`](./MsgArchive.md)
+- `MsgBridge`: [`./MsgBridge.md`](./MsgBridge.md)
 - `MsgConstants`: [`./MsgConstants.md`](./MsgConstants.md)
 - `MsgFactory`: [`./MsgFactory.md`](./MsgFactory.md)
 - `MsgIngest`: [`./MsgIngest.md`](./MsgIngest.md)

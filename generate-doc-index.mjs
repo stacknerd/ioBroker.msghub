@@ -80,7 +80,7 @@ TODO
 }
 
 function makePluginStubDoc({ title, implementationPath }) {
-  return `# TODO <Producer || Notifier || Synchronizer>: ${title}
+  return `# TODO <Producer || Notifier || Bridge>: ${title}
 
 TODO: Add 2–4 sentence summary: what it does, where it hooks in (Ingest/Notify), and why it exists.
 
@@ -89,7 +89,7 @@ TODO: Add 2–4 sentence summary: what it does, where it hooks in (Ingest/Notify
 ## Basics
 
 TODO:
-- Type: <Ingest || Notify || Sync>
+- Type: <Ingest || Notify || Bridge>
 - Registration ID: \`< id >\`
 
 ---
