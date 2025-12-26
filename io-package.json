@@ -43,8 +43,15 @@
 			"uk": "центр для всіх ваших повідомлень, завдань і сповіщень",
 			"zh-cn": "所有消息、任务和通知的中心"
 		},
-		"authors": ["Ben <iobroker@hiddenplaces.eu>"],
-		"keywords": ["template", "automation", "IoT", "integration"],
+		"authors": [
+			"Ben <iobroker@hiddenplaces.eu>"
+		],
+		"keywords": [
+			"template",
+			"automation",
+			"IoT",
+			"integration"
+		],
 		"licenseInformation": {
 			"type": "free",
 			"license": "MIT"
@@ -62,7 +69,7 @@
 		"connectionType": "local",
 		"dataSource": "push",
 		"messagebox": true,
-    	"supportCustoms": true,
+		"supportCustoms": true,
 		"adminUI": {
 			"custom": "json",
 			"config": "json"
