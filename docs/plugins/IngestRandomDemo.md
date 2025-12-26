@@ -22,8 +22,9 @@ Configured where the plugin is instantiated (typically in the adapter code that 
 Options (all optional):
 
 - `intervalMs` (number, default `15000`): how often a demo tick runs.
-- `ttlMs` (number, default `120000`): time-to-live per message; written as `timing.expiresAt = now + ttlMs`.
-- `refPoolSize` (number, default `15`): how many stable message `ref`s are used in a round-robin pool.
+- `ttlMs` (number, default `120000`): base time-to-live per message.
+- `ttlJitter` (number, default `0.5`): TTL randomization ratio; per tick the plugin picks `ttlNow` in the range `ttlMs * (1 ± ttlJitter)` (min. `1000ms`).
+- `refPoolSize` (number, default `15`): how many stable message `ref`s exist in the pool (picked randomly per tick).
 
 ---
 
@@ -37,17 +38,17 @@ On `start(ctx)`:
 
 On every tick:
 
-- picks the next `ref` from a fixed pool: `IngestRandomDemo.01`, `IngestRandomDemo.02`, ...
+- picks a random `ref` from a fixed pool: `msghub.0.ingestRandomDemo.01`, `msghub.0.ingestRandomDemo.02`, ...
 - if no message with that `ref` exists yet:
   - creates a new message via `ctx.api.factory.createMessage(...)`
   - writes it via `ctx.api.store.addMessage(...)`
 - if the message already exists:
   - patches it via `ctx.api.store.updateMessage(ref, patch)`
-  - refreshes `timing.expiresAt` so it stays visible for `ttlMs` after the last update
+  - refreshes `timing.expiresAt` so it stays visible for `ttlNow` after the last update
 
 Dedupe/update strategy:
 
-- the `ref` pool is the dedupe key; the plugin reuses the same refs to avoid unbounded message growth.
+- the `ref` pool is the dedupe key; the plugin reuses the same refs to avoid unbounded message growth (randomly touching entries in that pool).
 
 On `stop()`:
 
@@ -64,17 +65,17 @@ const { IngestRandomDemo } = require(`${__dirname}/lib`);
 
 this.msgStore.msgIngest.registerPlugin(
   'random-demo',
-  IngestRandomDemo(this, { intervalMs: 10_000, ttlMs: 60_000, refPoolSize: 5 })
+  IngestRandomDemo(this, { intervalMs: 10_000, ttlMs: 60_000, ttlJitter: 0.5, refPoolSize: 5 })
 );
 this.msgStore.msgIngest.start();
 ```
 
 Typical message fields created/updated by this plugin:
 
-- `ref`: `IngestRandomDemo.01` (… `.02`, `.03`, …)
+- `ref`: `${adapter.name}.${adapter.instance}.ingestRandomDemo.01` (… `.02`, `.03`, …)
 - `level` / `kind`: random values from MsgConstants
 - `origin`: `origin.type = automation`, `origin.system = IngestRandomDemo`
-- `timing.expiresAt`: `Date.now() + ttlMs`
+- `timing.expiresAt`: `Date.now() + ttlNow` (a randomized TTL derived from `ttlMs` and `ttlJitter`)
 
 Note: the built-in demo `title`/`text` strings are currently German in `lib/IngestRandomDemo.js`.
 
