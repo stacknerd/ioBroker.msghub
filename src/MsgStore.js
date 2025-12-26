@@ -52,8 +52,8 @@ const { MsgIngest } = require(`${__dirname}/MsgIngest`);
  * Ingest (MsgIngest)
  * - The store does not interpret incoming ioBroker events; it provides a host (`MsgIngest`) that
  *   forwards input events to registered producer plugins.
- * - Input events are forwarded from the adapter (e.g. `main.js`) into `MsgStore.ingestStateChange()`
- *   / `MsgStore.ingestObjectChange()`.
+ * - Input events are typically forwarded from the adapter (e.g. `main.js`) into
+ *   `msgStore.msgIngest.dispatchStateChange(...)` / `dispatchObjectChange(...)`.
  *
  * Lifecycle / pruning
  * - Messages with `timing.expiresAt < now` are considered expired and are removed by `_pruneOldMessages()`.
@@ -68,26 +68,31 @@ class MsgStore {
 	 * Create a new store instance.
 	 *
 	 * Initialization notes:
-	 * - `MsgStorage.init()` / `MsgArchive.init()` are async and called without awaiting. They prepare
-	 *   ioBroker file storage roots/folders. Until they complete, writes may still succeed depending
-	 *   on backend behavior, or be queued internally by the components.
-	 * - The notifier timer is optional; set `notifierIntervalMs` to `0` to disable.
+	 * - Construction is intentionally synchronous and side-effect-light (no I/O).
+	 * - Call `await store.init()` during adapter startup (`onReady`) to initialize storage and optionally
+	 *   load persisted messages before plugins start producing events.
+	 * - This avoids duplicate "create" events after restarts: producers can safely check existence via
+	 *   `getMessageByRef()` because the store has been hydrated from `MsgStorage`.
 	 *
 	 * @param {import('@iobroker/adapter-core').AdapterInstance & { locale?: string }} adapter Adapter instance for logging and utilities.
-	 * @param {Array<object>} messages Initial in-memory message list (use `[]` if no data).
 	 * @param {import('./MsgConstants').MsgConstants} msgConstants Centralized enum-like constants.
 	 * @param {import('./MsgFactory').MsgFactory} msgFactory Factory used for patching/validation.
 	 * @param {object} [options] Optional configuration.
+	 * @param {Array<object>} [options.initialMessages] Initial in-memory message list (primarily for tests/imports).
 	 * @param {number} [options.pruneIntervalMs] Expiration scan throttle in ms (default: 30000).
 	 * @param {number} [options.notifierIntervalMs] Due-notification polling interval in ms (default: 10000, 0 disables).
+	 * @param {object} [options.storage] Options forwarded to `MsgStorage` (e.g. `baseDir`, `fileName`, `writeIntervalMs`).
+	 * @param {object} [options.archive] Options forwarded to `MsgArchive` (e.g. `baseDir`, `fileExtension`, `flushIntervalMs`).
 	 */
-	constructor(
-		adapter,
-		messages = [],
-		msgConstants,
-		msgFactory,
-		{ pruneIntervalMs = 30000, notifierIntervalMs = 10000 } = {},
-	) {
+	constructor(adapter, msgConstants, msgFactory, options = {}) {
+		const {
+			initialMessages = [],
+			pruneIntervalMs = 30000,
+			notifierIntervalMs = 10000,
+			storage = {},
+			archive = {},
+		} = options || {};
+
 		if (!adapter) {
 			throw new Error('MsgStore: adapter is required');
 		}
@@ -103,13 +108,15 @@ class MsgStore {
 		}
 		this.msgFactory = msgFactory;
 
-		// File persistence (async init, intentionally not awaited).
-		this.msgStorage = new MsgStorage(this.adapter, { baseDir: 'data', fileName: 'messages.json' });
-		this.msgStorage.init();
+		// File persistence (initialized in `init()`).
+		this.msgStorage = new MsgStorage(this.adapter, {
+			baseDir: 'data',
+			fileName: 'messages.json',
+			...(storage || {}),
+		});
 
-		// Append-only archive (async init, intentionally not awaited).
-		this.msgArchive = new MsgArchive(this.adapter, { baseDir: 'data/archive' });
-		this.msgArchive?.init();
+		// Append-only archive (initialized in `init()`).
+		this.msgArchive = new MsgArchive(this.adapter, { baseDir: 'data/archive', ...(archive || {}) });
 
 		// View rendering (pure transformation; no I/O).
 		this.msgRender = new MsgRender(this.adapter, { locale: this.adapter?.locale });
@@ -121,22 +128,49 @@ class MsgStore {
 		this.msgIngest = new MsgIngest(this.adapter, this.msgConstants, this.msgFactory, this);
 
 		// Canonical in-memory list (do not store rendered output here).
-		this.fullList = messages;
+		this.fullList = Array.isArray(initialMessages) ? initialMessages : [];
 
-		// Pruning and notification timers.
+		// Pruning and notification timers (timer starts in `init()`).
 		this.lastPruneAt = 0;
 		this.pruneIntervalMs = pruneIntervalMs;
 		this.notifierIntervalMs = notifierIntervalMs;
 		this._notifyTimer = null;
-
-		if (this.notifierIntervalMs > 0) {
-			// Periodically dispatch due notifications for messages that have reached notifyAt.
-			this._notifyTimer = setInterval(() => this._initiateNotifications(), this.notifierIntervalMs);
-		}
+		this._initialized = false;
 
 		this.adapter?.log?.info?.(
 			`MsgStore initialized: pruneIntervalMs=${this.pruneIntervalMs}ms, notifierIntervalMs=${this.notifierIntervalMs}ms`,
 		);
+	}
+
+	/**
+	 * Initialize storage components and optionally hydrate `fullList` from persisted data.
+	 *
+	 * This must be awaited during adapter startup to avoid duplicate creates after restarts.
+	 * It is safe to call this method multiple times; subsequent calls are no-ops.
+	 *
+	 * @param {object} [options] Init options.
+	 * @param {boolean} [options.loadFromStorage] When true (default), replaces `fullList` with persisted messages.
+	 * @returns {Promise<void>} Resolves when initialization is complete.
+	 */
+	async init({ loadFromStorage = true } = {}) {
+		if (this._initialized) {
+			return;
+		}
+
+		await this.msgStorage.init();
+		await this.msgArchive.init();
+
+		if (loadFromStorage) {
+			const loaded = await this.msgStorage.readJson([]);
+			this.fullList = Array.isArray(loaded) ? loaded : [];
+			this._pruneOldMessages({ force: true });
+		}
+
+		if (this.notifierIntervalMs > 0 && !this._notifyTimer) {
+			this._notifyTimer = setInterval(() => this._initiateNotifications(), this.notifierIntervalMs);
+		}
+
+		this._initialized = true;
 	}
 
 	/**
@@ -421,12 +455,14 @@ class MsgStore {
 	 * - Dispatches a single `"expired"` notification containing the array of removed messages.
 	 * - Appends an archive delete event per removed message, using `{ event: "expired" }`.
 	 *
+	 * @param {object} [options] Prune options.
+	 * @param {boolean} [options.force] When true, bypass the prune interval throttle.
 	 * @returns {void}
 	 */
-	_pruneOldMessages() {
+	_pruneOldMessages({ force = false } = {}) {
 		const now = Date.now();
 		// Throttle scans to reduce CPU overhead on frequent reads/writes.
-		if (now - this.lastPruneAt < this.pruneIntervalMs) {
+		if (!force && now - this.lastPruneAt < this.pruneIntervalMs) {
 			return;
 		}
 		this.lastPruneAt = now;

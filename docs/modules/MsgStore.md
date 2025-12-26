@@ -64,6 +64,11 @@ Persistence/archiving/notifications must not block the core mutation.
 That’s why these steps are called “fire-and-forget” (not `await`-required). Errors are handled inside the components
 or via adapter logging.
 
+### 2.1) Initialization is explicit (`await store.init()`)
+Construction is intentionally synchronous (no I/O). To avoid duplicate `"create"` events after restarts, the adapter
+should `await msgStore.init()` during `onReady` before producer plugins start. This hydrates `fullList` from
+`MsgStorage` (default: `data/messages.json`).
+
 ### 3) Updates are defined by `MsgFactory.applyPatch()`
 The store only does minimal guards (adapter/constants/factory presence, reasonable `ref`, integer-level guard on `addMessage`).
 All schema validation, normalization, and patch semantics live in `MsgFactory`.
@@ -195,8 +200,11 @@ All read methods:
 
 When creating `MsgStore`, you can pass options:
 
+- `initialMessages` (default `[]`): initial in-memory list (primarily for tests/imports)
 - `pruneIntervalMs` (default `30000`): maximum frequency for expiration scans
 - `notifierIntervalMs` (default `10000`, `0` disables): polling interval for due notifications (`notifyAt`)
+- `storage`: options forwarded to `MsgStorage` (e.g. `baseDir`, `fileName`, `writeIntervalMs`)
+- `archive`: options forwarded to `MsgArchive` (e.g. `baseDir`, `fileExtension`, `flushIntervalMs`)
 
 ---
 
@@ -219,4 +227,3 @@ On adapter unload, call `MsgStore.onUnload()` (best-effort). It:
 - Notifications: `src/MsgNotify.js`
 - Rendering (view): `src/MsgRender.js`
 - Producer host: `src/MsgIngest.js`
-

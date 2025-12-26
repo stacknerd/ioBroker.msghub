@@ -10,7 +10,7 @@ const utils = require('@iobroker/adapter-core');
 const { MsgFactory } = require(`${__dirname}/src/MsgFactory`);
 const { MsgConstants } = require(`${__dirname}/src/MsgConstants`);
 const { MsgStore } = require(`${__dirname}/src/MsgStore`);
-const { serializeWithMaps } = require(`${__dirname}/src/MsgUtils`);
+//const { serializeWithMaps } = require(`${__dirname}/src/MsgUtils`);
 
 // Load your modules here, e.g.:
 // const fs = require('fs');
@@ -51,12 +51,8 @@ class Msghub extends utils.Adapter {
 		this.msgFactory = new MsgFactory(this, this.msgConstants);
 
 		//init store
-		this.msgStore = new MsgStore(
-			this,
-			[], //await this.msgStorage.readJson({}),
-			this.msgConstants,
-			this.msgFactory,
-		);
+		this.msgStore = new MsgStore(this, this.msgConstants, this.msgFactory);
+		await this.msgStore.init();
 
 		/////////////////////////////////////
 		// Tests zu ystemconfig
@@ -106,8 +102,8 @@ class Msghub extends utils.Adapter {
 		// Plugins register on `this.msgStore.msgIngest` and receive ioBroker events via `onStateChange`.
 		// Example demo producer:
 		const { IngestRandomDemo } = require(`${__dirname}/lib`);
-		//this.msgStore.msgIngest.registerPlugin('random-demo', IngestRandomDemo(this));
-		//this.msgStore.msgIngest.start();
+		this.msgStore.msgIngest.registerPlugin('random-demo', IngestRandomDemo(this));
+		this.msgStore.msgIngest.start();
 
 		////////
 
@@ -173,7 +169,7 @@ class Msghub extends utils.Adapter {
 		});
 
 		this.getObjectView('system', 'custom', {}, (err, doc) => {
-			//this.log?.debug?.(JSON.stringify(doc, null, 2)); // doc.rows enthält Objekte, die common.custom haben
+			this.log?.debug?.(JSON.stringify(doc, null, 2)); // doc.rows enthält Objekte, die common.custom haben
 		});
 
 		//this.log.debug(this.msgStorage._serialize(this.msgStore.getMessages(), null, 2));
@@ -274,7 +270,7 @@ class Msghub extends utils.Adapter {
 	onStateChange(id, state) {
 		if (state) {
 			// Forward the raw event to producer plugins (they decide what to do with ack/val changes).
-			this.msgStore?.ingestStateChange?.(id, state, { source: 'iobroker.stateChange' });
+			this.msgStore?.msgIngest?.dispatchStateChange?.(id, state, { source: 'iobroker.stateChange' });
 
 			// The state was changed
 			this.log?.info?.(`state ${id} changed: ${state.val} (ack = ${state.ack})`);

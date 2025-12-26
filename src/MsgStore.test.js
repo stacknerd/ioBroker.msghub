@@ -69,29 +69,30 @@ function createFactoryWithUpdatedAt() {
 	};
 }
 
-function createStore({
-	messages = [],
-	factory,
-	storage,
+	function createStore({
+		messages = [],
+		factory,
+		storage,
 	adapter,
 	msgArchive,
 	msgRender,
 	msgNotify,
 	options,
 	msgConstants,
-} = {}) {
-	const { adapter: defaultAdapter, logs } = createAdapter();
-	const { storage: defaultStorage, writes } = createStorage();
-	const { msgRender: defaultRender } = createRenderer();
-	const msgFactory = factory || createFactory();
+	} = {}) {
+		const { adapter: defaultAdapter, logs } = createAdapter();
+		const { storage: defaultStorage, writes } = createStorage();
+		const { msgRender: defaultRender } = createRenderer();
+		const msgFactory = factory || createFactory();
 
-	const store = new MsgStore(adapter || defaultAdapter, messages, msgConstants || MsgConstants, msgFactory, {
-		notifierIntervalMs: 0,
-		...(options || {}),
-	});
-	store.msgStorage = storage || defaultStorage;
-	store.msgRender = msgRender || defaultRender;
-	store.msgArchive =
+		const store = new MsgStore(adapter || defaultAdapter, msgConstants || MsgConstants, msgFactory, {
+			notifierIntervalMs: 0,
+			initialMessages: messages,
+			...(options || {}),
+		});
+		store.msgStorage = storage || defaultStorage;
+		store.msgRender = msgRender || defaultRender;
+		store.msgArchive =
 		msgArchive ||
 		({ appendSnapshot: () => {}, appendPatch: () => {}, appendDelete: () => {}, flushPending: () => {} });
 	store.msgNotify = msgNotify || { dispatch: () => {} };
@@ -304,18 +305,19 @@ describe('MsgStore', () => {
 			expect(writes).to.have.length(0);
 		});
 
-		it('rejects updates when factory lacks applyPatch', () => {
-			const { adapter, logs } = createAdapter();
-			const { storage, writes } = createStorage();
-			const { msgRender } = createRenderer();
-			const msgFactory = {};
-			const store = new MsgStore(adapter, [{ ref: 'r1', level: 10 }], MsgConstants, msgFactory, {
-				notifierIntervalMs: 0,
-			});
-			store.msgStorage = storage;
-			store.msgRender = msgRender;
-			store.msgArchive = { appendSnapshot: () => {}, appendPatch: () => {}, appendDelete: () => {} };
-			store.msgNotify = { dispatch: () => {} };
+			it('rejects updates when factory lacks applyPatch', () => {
+				const { adapter, logs } = createAdapter();
+				const { storage, writes } = createStorage();
+				const { msgRender } = createRenderer();
+				const msgFactory = {};
+				const store = new MsgStore(adapter, MsgConstants, msgFactory, {
+					notifierIntervalMs: 0,
+					initialMessages: [{ ref: 'r1', level: 10 }],
+				});
+				store.msgStorage = storage;
+				store.msgRender = msgRender;
+				store.msgArchive = { appendSnapshot: () => {}, appendPatch: () => {}, appendDelete: () => {} };
+				store.msgNotify = { dispatch: () => {} };
 
 			const result = store.updateMessage({ ref: 'r1', text: 'x' });
 			expect(result).to.equal(false);
