@@ -10,14 +10,18 @@ Each demo message gets an `expiresAt` timestamp so it disappears automatically a
 ## Basics
 
 - Type: `Ingest` (producer)
-- Registration ID: free choice (example: `random-demo`)
+- Registration ID (as used by `lib/MsgPlugins.js`): `IngestRandomDemo:0`
 - Implementation shape: lifecycle plugin (`start()`/`stop()`); no `onStateChange` handler
 
 ---
 
 ## Config
 
-Configured where the plugin is instantiated (typically in the adapter code that calls `registerPlugin(...)`).
+This plugin is configured by the adapter via `lib/MsgPlugins.js`.
+
+The runtime passes:
+
+- `options.pluginBaseObjectId` (required): full id of the plugin base object (e.g. `msghub.0.IngestRandomDemo.0`).
 
 Options (all optional):
 
@@ -38,7 +42,10 @@ On `start(ctx)`:
 
 On every tick:
 
-- picks a random `ref` from a fixed pool: `msghub.0.ingestRandomDemo.01`, `msghub.0.ingestRandomDemo.02`, ...
+- picks a random `ref` from a fixed pool:
+  - `msghub.0.IngestRandomDemo.0.ingestRandomDemo.01`
+  - `msghub.0.IngestRandomDemo.0.ingestRandomDemo.02`
+  - ...
 - if no message with that `ref` exists yet:
   - creates a new message via `ctx.api.factory.createMessage(...)`
   - writes it via `ctx.api.store.addMessage(...)`
@@ -64,15 +71,21 @@ Register and start the demo producer (e.g. in `main.js`):
 const { IngestRandomDemo } = require(`${__dirname}/lib`);
 
 this.msgStore.msgIngest.registerPlugin(
-  'random-demo',
-  IngestRandomDemo(this, { intervalMs: 10_000, ttlMs: 60_000, ttlJitter: 0.5, refPoolSize: 5 })
+  'IngestRandomDemo:0',
+  IngestRandomDemo(this, {
+    pluginBaseObjectId: `${this.namespace}.IngestRandomDemo.0`,
+    intervalMs: 10_000,
+    ttlMs: 60_000,
+    ttlJitter: 0.5,
+    refPoolSize: 5,
+  })
 );
 this.msgStore.msgIngest.start();
 ```
 
 Typical message fields created/updated by this plugin:
 
-- `ref`: `${adapter.name}.${adapter.instance}.ingestRandomDemo.01` (… `.02`, `.03`, …)
+- `ref`: `${options.pluginBaseObjectId}.ingestRandomDemo.01` (… `.02`, `.03`, …)
 - `level` / `kind`: random values from MsgConstants
 - `origin`: `origin.type = automation`, `origin.system = IngestRandomDemo`
 - `timing.expiresAt`: `Date.now() + ttlNow` (a randomized TTL derived from `ttlMs` and `ttlJitter`)

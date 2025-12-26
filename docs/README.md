@@ -26,8 +26,10 @@ ioBroker events  ->  Ingest plugins (lib/)  ->  Core (src/)  ->  Notify plugins 
                        (create/patch msgs)     (store+rules)     (deliver outside)
 ```
 
-Bidirectional integrations (“sync with system X”) are typically implemented as **two plugins** (one ingest + one notify).
-To register/unregister such a pair safely, the adapter can use `MsgBridge` (a small wiring helper in `src/`).
+Runtime note: plugins are not auto-discovered. On a running adapter instance, `MsgPlugins` (in `lib/`) is responsible for loading plugin options from ioBroker objects, maintaining enable/disable switches, and registering/unregistering plugins at runtime (including bidirectional `Bridge...` plugins via `MsgBridge`).
+
+Bidirectional integrations (“sync with system X”) can be implemented either as **two plugins** (one ingest + one notify) or as a single **bridge plugin** (`Bridge...`) that provides both handlers.
+To register/unregister the two sides safely, the adapter uses `MsgBridge` (a small wiring helper in `src/`).
 
 ## Modules (Core)
 
@@ -58,12 +60,14 @@ Plugins are the **integration layer** of Message Hub. In practice they are not �
 
 The core intentionally exposes only a *small* host API to plugins. Plugins should not mutate internal state directly; instead they work through `ctx.api.*`. This keeps the core consistent and makes plugin failures easier to isolate and log.
 
-### Two plugin families
+### Plugin families
 
 - **Ingest (producer) plugins**: turn ioBroker events into messages.
   - Example: “when state X becomes true, create/update message Y”
 - **Notify (notifier) plugins**: turn core notification events into delivery actions.
   - Example: “when a message becomes due (`notifyAt`), write it to ioBroker states / push / TTS / …”
+- **Bridge (bidirectional) plugins**: package an ingest+notify pair as one runtime-managed integration (one enable switch, one config object).
+  - Example: “sync Message Hub with system X in both directions”
 
 If you want to understand “how Message Hub talks to the outside world”, plugins are the right place to start.
 
@@ -72,8 +76,8 @@ Read more: [docs/plugins/README.md](./plugins/README.md)
 ## Where Things Live (Code Map)
 
 - `src/`: core engine (modules)
-- `lib/`: plugin implementations (ingest + notify)
-- `main.js`: adapter wiring (registering plugins, connecting to ioBroker; optionally via `MsgBridge`)
+- `lib/`: plugin implementations + plugin runtime (`MsgPlugins`)
+- `main.js`: adapter wiring (registering plugins, connecting to ioBroker; often via `MsgPlugins`, optionally via `MsgBridge`)
 
 ## Development
 

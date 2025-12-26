@@ -1,6 +1,6 @@
-# Notifier: NotifyIoBrokerState
+# Notifier: NotifyIoBrokerStates
 
-`NotifyIoBrokerState` is a Message Hub **notifier plugin** (MsgNotify plugin) that writes notification events into ioBroker states.
+`NotifyIoBrokerStates` is a Message Hub **notifier plugin** (MsgNotify plugin) that writes notification events into ioBroker states.
 This makes Message Hub notifications visible and usable for scripts, visualizations, and automations that can read states.
 
 The plugin stores “latest” notifications as JSON strings and also provides optional routing states by **kind** and **level**.
@@ -11,8 +11,8 @@ This is intentionally simple: it is not a history or log, it is only the most re
 ## Basics
 
 - Type: `Notify`
-- Registration ID (used in this repo): `ioBrokerState`
-- Implementation: `lib/NotifyIoBrokerState/index.js` (`NotifyIoBrokerState(adapter, options)`)
+- Registration ID (as used by `lib/MsgPlugins.js`): `NotifyIoBrokerStates:0`
+- Implementation: `lib/NotifyIoBrokerStates/index.js` (`NotifyIoBrokerStates(adapter, options)`)
 - Supported events: values from `MsgConstants.notfication.events` (`due`, `updated`, `deleted`, `expired`)
   - The plugin also accepts the event *keys* (e.g. `update`) and maps them to the event *values* (e.g. `updated`) for the state id.
 
@@ -20,29 +20,17 @@ This is intentionally simple: it is not a history or log, it is only the most re
 
 ## Config
 
-The plugin is configured when it is registered (currently hardcoded in `main.js`).
+This plugin is configured by the adapter via `lib/MsgPlugins.js`.
 
-Options:
+- Base object id: `msghub.0.NotifyIoBrokerStates.0`
+- The plugin writes into fixed subtrees below that base:
+  - `msghub.0.NotifyIoBrokerStates.0.Latest.<event>`
+  - `msghub.0.NotifyIoBrokerStates.0.byKind.<kindKey>.<event>`
+  - `msghub.0.NotifyIoBrokerStates.0.byLevel.<levelKey>.<event>`
 
-- `stateId` (default: `notifications.latest`)
-  - Prefix for the “latest per event” states.
-- `kindPrefix` (default: `notifications.byKind`)
-  - Prefix for the “latest per kind + event” states.
-- `levelPrefix` (default: `notifications.byLevel`)
-  - Prefix for the “latest per level + event” states.
-- `includeContext` (default: `false`)
-  - When enabled, the stored value becomes an object with `{ ts, event, notification(s), ctx }`.
-- `mapTypeMarker` (optional)
-  - Overrides the marker used by `serializeWithMaps` to encode JavaScript `Map` values (default marker: `__msghubType`).
+Only remaining option:
 
-State structure (full ids include the adapter namespace, e.g. `msghub.0.`):
-
-- `notifications.latest.<event>`
-  - Latest notification for that event.
-- `notifications.byKind.<kindKey>.<event>`
-  - Latest notification for that kind and event.
-- `notifications.byLevel.<levelKey>.<event>`
-  - Latest notification for that level and event.
+- `mapTypeMarker` (optional): overrides the marker used by `serializeWithMaps` (default: `__msghubType`).
 
 `kindKey` and `levelKey` are the **keys** from `MsgConstants.kind` / `MsgConstants.level`.
 
@@ -82,36 +70,25 @@ Note: `MsgStore` can dispatch a `due` event repeatedly while a message stays due
 Register the plugin (example from adapter startup):
 
 ```js
-const { NotifyIoBrokerState } = require(`${__dirname}/lib`);
+const { NotifyIoBrokerStates } = require(`${__dirname}/lib`);
 
 this.msgStore.msgNotify.registerPlugin(
-	'ioBrokerState',
-	NotifyIoBrokerState(this, { includeContext: true }),
+	'NotifyIoBrokerStates:0',
+	NotifyIoBrokerStates(this, { pluginBaseObjectId: `${this.namespace}.NotifyIoBrokerStates.0` }),
 );
 ```
 
 Example states you will get (instance `msghub.0`):
 
-- `msghub.0.notifications.latest.due`
-- `msghub.0.notifications.byKind.task.due`
-- `msghub.0.notifications.byLevel.notice.due`
-
-Example stored JSON when `includeContext: true` (simplified):
-
-```json
-{
-	"ts": 1730000000000,
-	"event": "due",
-	"notifications": { "ref": "my-ref", "kind": "task", "level": 10 },
-	"ctx": { "source": "MsgNotify" }
-}
-```
+- `msghub.0.NotifyIoBrokerStates.0.Latest.due`
+- `msghub.0.NotifyIoBrokerStates.0.byKind.task.due`
+- `msghub.0.NotifyIoBrokerStates.0.byLevel.notice.due`
 
 ---
 
 ## Related files
 
-- Implementation: `lib/NotifyIoBrokerState/index.js`
+- Implementation: `lib/NotifyIoBrokerStates/index.js`
 - Dispatcher: `src/MsgNotify.js`
 - Constants (events, kinds, levels): `src/MsgConstants.js`
 - JSON/Map serialization: `src/MsgUtils.js`

@@ -24,6 +24,7 @@ Core modules intentionally do not:
 - Deliver notifications to “real” channels
 
 Those IO responsibilities live in plugins (`lib/`). The adapter wires everything together in `main.js`.
+For runtime enable/disable + configuration of plugins (including bidirectional `Bridge...` plugins wired via `MsgBridge`), the adapter uses `MsgPlugins` (see [`docs/plugins/MsgPlugins.md`](../plugins/MsgPlugins.md)).
 
 ## Data Flow (Simplified)
 

@@ -1,122 +1,274 @@
-# Message Hub Plugins (IO Layer) – Overview
+# Message Hub Plugins (IO Layer) – Developer Guide
 
-Plugins are the **integration layer** of Message Hub. They connect the core engine (in `src/`) to the outside world:
+This document focuses on **how to integrate your own custom plugin** into Message Hub:
+what interfaces exist, what data you receive, and how the adapter wires plugins at runtime.
 
-- **Input**: observe ioBroker events and decide when to create/update messages
-- **Output**: deliver notification events to real channels (ioBroker states, push, TTS, ...)
+If you want the “big picture” first, see [`docs/README.md`](../README.md). For the core internals, see [`docs/modules/README.md`](../modules/README.md).
 
-The core stays intentionally “pure”: it owns the message model and lifecycle, but it does not talk to ioBroker by itself.
-So in practice, plugins are not just optional add-ons; they are what turns Message Hub into a usable ioBroker adapter.
+## Mental model: code-level plugins vs. runtime wiring
 
-If you want the big picture first, see [`docs/README.md`](../README.md). If you want the core internals, see [`docs/modules/README.md`](../modules/README.md).
+There are two related, but different things called “plugins”:
 
-## What exactly is a “plugin” here?
+1. **Code-level plugin handlers**
+   - JavaScript handlers that implement the Ingest or Notify interface.
+   - They are called by the plugin hosts `MsgIngest` and `MsgNotify`.
 
-A plugin is JavaScript code that is **registered by the adapter at runtime** (typically in `main.js` via `lib/index.js`).
-Message Hub itself does not auto-discover plugins. The adapter decides which plugins exist and how they are configured.
+2. **Runtime plugin management**
+   - On a running ioBroker adapter instance you need enable/disable switches and configuration storage.
+   - In this repo, that job is done by `MsgPlugins` (`lib/MsgPlugins.js`).
 
-Plugins are called by one of the two plugin hosts:
+`MsgPlugins` reads plugin config from ioBroker objects, creates enable toggles, and registers/unregisters the plugin handlers into the two plugin hosts.
 
-- `MsgIngest` for inbound events (producer/ingest plugins)
-- `MsgNotify` for outbound notification events (notifier/notify plugins)
+Read more: [`docs/plugins/MsgPlugins.md`](./MsgPlugins.md)
 
-For **bidirectional integrations** (“sync with system X”), Message Hub can register a pair of plugins (one ingest + one notify) together via `MsgBridge`. See [`docs/modules/MsgBridge.md`](../modules/MsgBridge.md).
+### Architecture around `MsgPlugins` + `MsgBridge` (ASCII)
 
-Both hosts provide a small `ctx` object:
-
-- `ctx.api`: stable capabilities (store/factory/constants, depending on host)
-- `ctx.meta`: metadata about “where this call came from” (plus a `running` flag)
-
-This separation is deliberate: plugins get explicit capabilities, and the core keeps control over internal invariants.
-
-## Two plugin families
-
-### Ingest (producer) plugins
-
-Ingest plugins turn **ioBroker events** into **message mutations**.
-They usually implement the “rules” of your system (“when X happens, create/update message Y”).
-
-- Host module: `MsgIngest` (see [`docs/modules/MsgIngest.md`](../modules/MsgIngest.md))
-- Registration: `msgStore.msgIngest.registerPlugin(id, handler)`
-- Typical job: ioBroker event → `ctx.api.store.addMessage(...)` / `ctx.api.store.updateMessage(...)`
-- Common handler shapes:
-  - Function: `(id, state, ctx) => void` (treated as `onStateChange`)
-  - Object: `{ start(ctx)?, stop(ctx)?, onStateChange(id, state, ctx)?, onObjectChange(id, obj, ctx)? }`
-- Examples in this repo:
-  - `lib/IngestIoBrokerStates/index.js` (real ioBroker-driven ingest)
-  - `lib/IngestRandomDemo/index.js` (timer-based demo ingest)
-
-Minimal sketch:
-
-```js
-msgStore.msgIngest.registerPlugin('my-ingest', {
-  onStateChange(id, state, ctx) {
-    if (!state?.val) return;
-    ctx.api.store.addOrUpdateMessage(/* ... */);
-  },
-});
+```
+ioBroker Objects (per plugin instance)
+  - state boolean      -> enable/disable (ack:false = user intent)
+  - object.native JSON -> plugin options
+            |
+            v
+      MsgPlugins (lib/)
+      - ensures control states exist
+      - loads options from native
+      - registers/unregisters:
+          - Ingest...  -> msgIngest.registerPlugin(...)
+          - Notify...  -> msgNotify.registerPlugin(...)
+          - Bridge...  -> MsgBridge.registerBridge(...)  (ingest + notify as a pair)
+             |                     |
+             v                     v
+       MsgIngest (src/)       MsgNotify (src/)
+       (producer host)        (notifier host)
+             |                     |
+             v                     v
+      Ingest handlers         Notify handlers
+        (lib/...)               (lib/...)
+             \                   /
+              \                 /
+               v               v
+                  MsgStore (src/)
+      (canonical list + persistence/archive/dispatch)
 ```
 
-### Notify (notifier) plugins
+## Quick start: add your own plugin (recommended path)
 
-Notify plugins turn **core notification events** into **real delivery actions**.
-The core decides *when* an event should be announced (due/updated/deleted/expired); the plugin decides *how* to deliver it.
+### 1) Choose a plugin type and name
 
-- Host module: `MsgNotify` (see [`docs/modules/MsgNotify.md`](../modules/MsgNotify.md))
-- Registration: `msgStore.msgNotify.registerPlugin(id, handler)`
-- Typical job: `(event, notifications, ctx) => delivery`
-- Common handler shapes:
-  - Function: `(event, notifications, ctx) => void`
-  - Object: `{ onNotifications(event, notifications, ctx) { ... } }`
-- Important: `notifications` is always an array (today often length 1, but do not rely on that)
-- Example in this repo: `lib/NotifyIoBrokerState/index.js`
+Message Hub supports three plugin families:
 
-Minimal sketch:
+- **Ingest plugins** (type prefix `Ingest...`): ioBroker events → message create/update/remove
+- **Notify plugins** (type prefix `Notify...`): Message Hub events → delivery actions
+- **Bridge plugins** (type prefix `Bridge...`): bidirectional integrations (one enable switch, but returns `{ ingest, notify }`)
+
+Naming is not cosmetic: `MsgPlugins` enforces the prefix by category to prevent catalog mistakes.
+
+### 2) Implement the plugin factory in `lib/`
+
+Convention in this repo:
+
+- One plugin = one folder: `lib/<TypeName>/index.js`
+- The export is a factory: `<TypeName>(adapter, options) => handler`
+
+The runtime will pass your `options` from ioBroker `native` plus an extra field:
+
+- `options.pluginBaseObjectId` (full id) so you can create states below your own subtree if needed
+
+Example: ingest plugin skeleton:
 
 ```js
-msgStore.msgNotify.registerPlugin('my-notify', {
-  onNotifications(event, notifications, ctx) {
-    for (const msg of notifications) {
-      // deliver msg somewhere (best-effort)
-    }
-  },
-});
+// lib/IngestMyPlugin/index.js
+'use strict';
+
+function IngestMyPlugin(adapter, options) {
+  return {
+    onStateChange(id, state, ctx) {
+      // decide: ignore / create / patch
+      // writes go through ctx.api.store.*
+    },
+  };
+}
+
+module.exports = { IngestMyPlugin };
 ```
+
+Example: notify plugin skeleton:
+
+```js
+// lib/NotifyMyPlugin/index.js
+'use strict';
+
+function NotifyMyPlugin(adapter, options) {
+  return {
+    onNotifications(event, notifications, ctx) {
+      // deliver best-effort (notifications is an array)
+    },
+  };
+}
+
+module.exports = { NotifyMyPlugin };
+```
+
+Example: bridge plugin skeleton (bidirectional integration):
+
+```js
+// lib/BridgeMySystem/index.js
+'use strict';
+
+function BridgeMySystem(adapter, options) {
+  const shared = { adapter, options };
+
+  return {
+    // Optional overrides for registration ids used in MsgIngest/MsgNotify:
+    // ingestId: 'BridgeMySystem:0:ingest',
+    // notifyId: 'BridgeMySystem:0:notify',
+
+    ingest: {
+      onStateChange(id, state, ctx) {
+        // inbound: external -> Message Hub mutations
+      },
+    },
+    notify: {
+      onNotifications(event, notifications, ctx) {
+        // outbound: Message Hub events -> external delivery
+      },
+    },
+  };
+}
+
+module.exports = { BridgeMySystem };
+```
+
+### 3) Add the plugin to the catalog (`lib/index.js`)
+
+To make the plugin show up as a runtime-managed plugin, add it to `MsgPluginsCatalog`:
+
+- choose `type` (stable identifier; usually the factory name)
+- put it into the correct category list (`ingest` / `notify` / `bridge`)
+- set `defaultEnabled` and `defaultOptions`
+- set `create` to your factory
+
+After that, the adapter’s `MsgPlugins` layer will create the enable/config object and can start/stop your plugin.
+
+### 4) Create documentation and keep indexes updated
+
+- Add `docs/plugins/<TypeName>.md` (or run `npm run docs:generate` to create a stub)
+- Fill the stub and keep the README index clean (CI checks via `npm run docs:check`)
+
+## Runtime model: enable/disable + configuration
+
+With `MsgPlugins`, each plugin instance is represented by one ioBroker object id that has **two roles**:
+
+- the **state value** (`boolean`) is the enable switch
+- the object’s **`native`** JSON is the plugin options
+
+Practical consequences:
+
+- Enable/disable is done by writing the boolean with `ack: false` (user intent)
+- Changing `native` does not automatically reconfigure a running plugin
+  - practical rule: disable + enable (or restart the adapter) to apply option changes
+
+ID scheme (today):
+
+- own id (inside adapter APIs): `<TypeName>.<instanceId>` (instance id is currently always `0`)
+- full id (in ioBroker object tree): `<adapter.namespace>.<TypeName>.<instanceId>` (example: `msghub.0.NotifyIoBrokerStates.0`)
+
+`MsgPlugins` also passes `options.pluginBaseObjectId` to your factory as the **full id** of that base object.
+Many ioBroker adapter APIs expect “own ids”, so plugins commonly strip the adapter namespace first (see `lib/NotifyIoBrokerStates/index.js`).
+
+Bridge plugins follow the same storage model (one enable/config object, options in `native`), but they result in **two registrations**
+behind the scenes (ingest + notify) via `MsgBridge`.
+
+## Interfaces you must implement
+
+Both plugin hosts pass the same shape of context:
+
+- `ctx.api`: stable capabilities (depends on host)
+- `ctx.meta`: dispatch metadata (who triggered the call, plus `running`)
+
+Plugins should treat the core as a black box:
+use `ctx.api.*` and do not mutate `MsgStore` internals.
+
+### Ingest plugins (producer)
+
+Host: `MsgIngest` (see [`docs/modules/MsgIngest.md`](../modules/MsgIngest.md))
+
+What you receive:
+
+- `onStateChange(id, state, ctx)` and/or `onObjectChange(id, obj, ctx)`
+- `ctx.api.store` write API: `addMessage`, `updateMessage`, `addOrUpdateMessage`, `removeMessage`, ...
+- `ctx.api.factory` normalization gate: `createMessage(...)`
+- `ctx.api.constants` for enums and shared vocabulary
+
+What you usually do:
+
+- decide whether an event is relevant
+- compute a stable `ref` (dedupe key)
+- create a new message (via `ctx.api.factory.createMessage`) or patch an existing one (`ctx.api.store.updateMessage`)
+
+### Notify plugins (notifier)
+
+Host: `MsgNotify` (see [`docs/modules/MsgNotify.md`](../modules/MsgNotify.md))
+
+What you receive:
+
+- `(event, notifications, ctx)` where `notifications` is always an array
+- `event` is a value from `MsgConstants.notfication.events` (for example `"due"`, `"updated"`)
+- `ctx.api.constants` for allowed event names and enums
+
+What you usually do:
+
+- map the message objects to your delivery system (states, push, TTS, ...)
+- handle errors best-effort; a notifier should never block other notifiers
+
+### Bridge plugins (bidirectional)
+
+A “bridge plugin” is not a third host interface. It is a packaging/wiring convenience:
+your bridge factory returns **two normal handlers** (ingest + notify), and `MsgPlugins` wires them as a pair via `MsgBridge`.
+
+Bridge factories must return:
+
+- `{ ingest, notify }`
+- optionally `ingestId` / `notifyId` to control the registration ids on `MsgIngest` / `MsgNotify`
+
+Implementation tip:
+create a shared context object (caches, rate limits, “ready” flags) and close over it from both handlers.
 
 ## Bidirectional integrations (“bridges”)
 
-Many real integrations are two-way:
+Many integrations are two-way:
 
-- inbound: external changes → update Message Hub messages
-- outbound: Message Hub events → push changes outward
+- inbound: external changes → update Message Hub messages (ingest plugin)
+- outbound: Message Hub events → push changes outward (notify plugin)
 
-In Message Hub this is modeled as **two independent plugins** (one `Ingest`, one `Notify`).
-To make wiring safer (and avoid “half registered” integrations), the adapter can use `MsgBridge` to register/unregister both sides together, with best-effort rollback.
+Bidirectional integrations are always **two handlers** (ingest + notify), because they connect both directions:
 
-Read more: [`docs/modules/MsgBridge.md`](../modules/MsgBridge.md)
+- inbound: external changes → Message Hub mutations
+- outbound: Message Hub events → external delivery
 
-## What plugins should (and should not) do
+You can implement this in two ways:
 
-Good plugin behavior:
+1. **Two separate plugins** (`Ingest...` + `Notify...`) and wire them together manually (or via `MsgBridge` in adapter code).
+2. **One bridge plugin** (`Bridge...`) and let `MsgPlugins` manage it as one runtime instance (one enable switch + one `native` config object).
 
-- Use `ctx.api.*` (do not reach into core internals)
-- Be best-effort and robust (a plugin runs in the adapter process)
-- Keep handlers reasonably fast (avoid blocking work; rate-limit if needed)
+In both cases, the safe wiring helper is `MsgBridge` (see [`docs/modules/MsgBridge.md`](../modules/MsgBridge.md)).
 
-What plugins should avoid:
+## Common rules and pitfalls
 
-- Mutating `MsgStore` internals directly (bypasses validation and side effects)
-- Assuming “exactly one” notification per call (notify plugins get arrays)
+- Keep handlers fast (plugins run in the adapter process).
+- Be idempotent where possible (ioBroker events can repeat; restarts happen).
+- Use stable ids (`ref`) to avoid uncontrolled message growth.
+- Avoid throwing: log and continue; the hosts will isolate failures, but best-effort behavior is still the goal.
 
 ## Built-in plugins in this repo
 
-The docs in this folder describe the built-in plugins that ship with this repository.
-They can serve as templates for your own plugins.
+The plugin docs in this folder are for the built-in plugins shipped with this repository. They are also good templates for your own code.
 
 ## Modules
 
 <!-- AUTO-GENERATED:MODULE-INDEX:START -->
 - `IngestIoBrokerStates`: [`./IngestIoBrokerStates.md`](./IngestIoBrokerStates.md)
 - `IngestRandomDemo`: [`./IngestRandomDemo.md`](./IngestRandomDemo.md)
-- `NotifyIoBrokerState`: [`./NotifyIoBrokerState.md`](./NotifyIoBrokerState.md)
+- `MsgPlugins`: [`./MsgPlugins.md`](./MsgPlugins.md)
+- `NotifyIoBrokerStates`: [`./NotifyIoBrokerStates.md`](./NotifyIoBrokerStates.md)
 <!-- AUTO-GENERATED:MODULE-INDEX:END -->

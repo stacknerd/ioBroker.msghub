@@ -15,7 +15,7 @@ Message Hub (`msghub`) already provides:
 - a normalized, validated message model (`src/MsgFactory.js`)
 - constants for level/kind (`src/MsgConstants.js`)
 - storage + updates by stable `ref` (`src/MsgStore.js`, etc.)
-- output plugins (e.g., `lib/NotifyIoBrokerState/index.js` writes notifications to states)
+- output plugins (e.g., `lib/NotifyIoBrokerStates/index.js` writes notifications to states)
 
 This producer is an **input side** component:
 

@@ -32,8 +32,11 @@ class Msghub extends utils.Adapter {
 		this.on('unload', this.onUnload.bind(this));
 		this.msgConstants = MsgConstants;
 
-		//todo: config for these values
+		// Default locale (overridden via instance config in onReady)
 		this.locale = 'de-DE';
+
+		// Runtime plugin enable/disable handler (initialized in onReady)
+		this._msgPlugins = null;
 	}
 
 	/**
@@ -47,6 +50,10 @@ class Msghub extends utils.Adapter {
 		this.log?.debug?.(`config option1: ${this.config.option1}`);
 		this.log?.debug?.(`config option2: ${this.config.option2}`);
 
+		const locale = typeof this.config.locale === 'string' ? this.config.locale.trim() : '';
+		this.locale = locale || this.locale || 'de-DE';
+		this.log?.debug?.(`config locale: ${this.locale}`);
+
 		// init fatory
 		this.msgFactory = new MsgFactory(this, this.msgConstants);
 
@@ -57,18 +64,17 @@ class Msghub extends utils.Adapter {
 		//this.log?.info?.(`${serializeWithMaps(this.customMap)}`);
 
 		////////////////////////////////////
-		// Notify Plugins
-
-		const { NotifyIoBrokerState } = require(`${__dirname}/lib`);
-		this.msgStore.msgNotify.registerPlugin('ioBrokerState', NotifyIoBrokerState(this));
-
-		////////////////////////////
-		// Ingest Plugins
-
-		const { IngestRandomDemo, IngestIoBrokerStates } = require(`${__dirname}/lib`);
-		this.msgStore.msgIngest.registerPlugin('iobroker-states', IngestIoBrokerStates(this, { traceEvents: true }));
-		this.msgStore.msgIngest.registerPlugin('random-demo', IngestRandomDemo(this));
-		this.msgStore.msgIngest.start();
+		// Plugin wiring (config-driven)
+		try {
+			const { MsgPlugins } = require(`${__dirname}/lib/MsgPlugins`);
+			if (typeof MsgPlugins?.create !== 'function') {
+				throw new Error('MsgPlugins.create is not a function');
+			}
+			this._msgPlugins = await MsgPlugins.create(this, this.msgStore);
+			this.msgStore.msgIngest.start();
+		} catch (e) {
+			this.log?.error?.(`Plugin wiring failed: ${e?.message || e}`);
+		}
 
 		/*
 		For every state in the system there has to be also an object of type state
@@ -169,6 +175,11 @@ class Msghub extends utils.Adapter {
 	 * @param {ioBroker.State | null | undefined} state - State object
 	 */
 	onStateChange(id, state) {
+		// Intercept plugin enable/disable switches (source of truth).
+		if (this._msgPlugins?.handleStateChange?.(id, state)) {
+			return;
+		}
+
 		if (state) {
 			// Forward the raw event to producer plugins (they decide what to do with ack/val changes).
 			this.msgStore?.msgIngest?.dispatchStateChange?.(id, state, { source: 'iobroker.stateChange' });

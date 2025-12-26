@@ -137,7 +137,7 @@ Where:
 - `api` contains stable capabilities (currently: `api.constants`).
 - `meta` is optional dispatch metadata provided by the caller.
 
-Example plugin: `lib/NotifyIoBrokerState/index.js` implements `onNotifications(event, notifications, ctx)` and typically uses `ctx.meta`.
+Example plugin: `lib/NotifyIoBrokerStates/index.js` implements `onNotifications(event, notifications, ctx)` and typically uses `ctx.meta`.
 
 ---
 
@@ -153,7 +153,7 @@ Example plugin: `lib/NotifyIoBrokerState/index.js` implements `onNotifications(e
 ## Conventions in this repo
 
 - Notifier plugins live in `lib/` and are exported via `lib/index.js`.
-- Plugin filenames follow `Notify<System>.js` (example: `lib/NotifyIoBrokerState/index.js`).
+- Plugin filenames follow `Notify<System>.js` (example: `lib/NotifyIoBrokerStates/index.js`).
 
 ---
 
@@ -162,5 +162,5 @@ Example plugin: `lib/NotifyIoBrokerState/index.js` implements `onNotifications(e
 - Implementation: `src/MsgNotify.js`
 - Notification triggers and semantics: `src/MsgStore.js` and `src/MsgStore.md`
 - Allowed event values: `src/MsgConstants.js` (`MsgConstants.notfication.events`)
-- Example notifier plugin: `lib/NotifyIoBrokerState/index.js`
+- Example notifier plugin: `lib/NotifyIoBrokerStates/index.js`
 - Plugin exports: `lib/index.js`
