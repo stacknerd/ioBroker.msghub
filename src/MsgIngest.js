@@ -3,6 +3,8 @@
  * ========
  * Producer plugin host for MsgHub.
  *
+ * Docs: ../docs/modules/MsgIngest.md
+ *
  * Core responsibilities
  * - Fan out ioBroker input events (stateChange/objectChange) to registered producer plugins.
  * - Provide a narrow ingestion API that writes through MsgStore only.
@@ -269,6 +271,12 @@ class MsgIngest {
 		return called;
 	}
 
+	/**
+	 * Build the context object passed to producer plugins.
+	 *
+	 * @param {object} [meta] Dispatch metadata merged into `ctx.meta`.
+	 * @returns {{ api: object, meta: object }} Context object.
+	 */
 	_buildCtx(meta = {}) {
 		return {
 			api: this.api,

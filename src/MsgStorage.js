@@ -3,6 +3,8 @@
  * ==========
  * Lightweight persistence helper for ioBroker file storage.
  *
+ * Docs: ../docs/modules/MsgStorage.md
+ *
  * Core responsibilities
  * - Persist a single JSON document (commonly the full message list) under the adapter's file namespace.
  * - Provide a read API with robust fallback behavior for missing/invalid files.

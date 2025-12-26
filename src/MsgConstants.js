@@ -1,6 +1,8 @@
 /**
  * MsgConstants
  *
+ * Docs: ../docs/modules/MsgConstants.md
+ *
  * Centralized enum-like constants for the MsgHub `Message` schema.
  * These values define the allowed identifiers for message classification (`level`, `kind`),
  * provenance (`origin.type`), and supported auxiliary sections (`attachments.type`, `actions.type`).

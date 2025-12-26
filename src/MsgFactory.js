@@ -1,6 +1,8 @@
 /**
  * Message model overview
  *
+ * Docs: ../docs/modules/MsgFactory.md
+ *
  * This block documents the canonical shape of a `Message` object used by the MsgHub.
  * A `Message` is the single, normalized payload that represents something the system
  * wants to surface to the user (e.g., a task, a status update, an appointment, or a

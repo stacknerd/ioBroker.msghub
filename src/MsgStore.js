@@ -1,3 +1,7 @@
+/**
+ * Docs: ../docs/modules/MsgStore.md
+ */
+
 const { serializeWithMaps } = require(`${__dirname}/MsgUtils`);
 const { MsgStorage } = require(`${__dirname}/MsgStorage`);
 const { MsgArchive } = require(`${__dirname}/MsgArchive`);

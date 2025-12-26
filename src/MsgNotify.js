@@ -3,6 +3,8 @@
  * ========
  * Notification dispatcher for MsgHub.
  *
+ * Docs: ../docs/modules/MsgNotify.md
+ *
  * Core responsibilities
  * - Validate notification events against `MsgConstants.notfication.events`.
  * - Fan out notifications to registered plugins in a consistent call shape.

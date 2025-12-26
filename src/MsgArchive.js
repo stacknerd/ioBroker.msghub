@@ -1,3 +1,7 @@
+/**
+ * Docs: ../docs/modules/MsgArchive.md
+ */
+
 const { DEFAULT_MAP_TYPE_MARKER, serializeWithMaps, ensureMetaObject, ensureBaseDir, createOpQueue } = require(
 	`${__dirname}/MsgUtils`,
 );

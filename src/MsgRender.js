@@ -5,6 +5,8 @@
  * =========
  * Lightweight template renderer that resolves metric- and timing-related placeholders in message fields.
  *
+ * Docs: ../docs/modules/MsgRender.md
+ *
  * Core responsibilities
  * - Provide a view-only transformation for messages (`renderMessage`) that adds a computed `display` block.
  * - Resolve `{{ ... }}` placeholders in `title`, `text`, and selected `details` fields against:
