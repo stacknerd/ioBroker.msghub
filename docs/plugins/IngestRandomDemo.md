@@ -43,8 +43,8 @@ On `start(ctx)`:
 On every tick:
 
 - picks a random `ref` from a fixed pool:
-  - `msghub.0.IngestRandomDemo.0.ingestRandomDemo.01`
-  - `msghub.0.IngestRandomDemo.0.ingestRandomDemo.02`
+  - `msghub.0.IngestRandomDemo.0_ref01`
+  - `msghub.0.IngestRandomDemo.0_ref02`
   - ...
 - if no message with that `ref` exists yet:
   - creates a new message via `ctx.api.factory.createMessage(...)`
@@ -63,29 +63,9 @@ On `stop()`:
 
 ---
 
-## Examples
-
-Register and start the demo producer (e.g. in `main.js`):
-
-```js
-const { IngestRandomDemo } = require(`${__dirname}/lib`);
-
-this.msgStore.msgIngest.registerPlugin(
-  'IngestRandomDemo:0',
-  IngestRandomDemo(this, {
-    pluginBaseObjectId: `${this.namespace}.IngestRandomDemo.0`,
-    intervalMs: 10_000,
-    ttlMs: 60_000,
-    ttlJitter: 0.5,
-    refPoolSize: 5,
-  })
-);
-this.msgStore.msgIngest.start();
-```
-
 Typical message fields created/updated by this plugin:
 
-- `ref`: `${options.pluginBaseObjectId}.ingestRandomDemo.01` (… `.02`, `.03`, …)
+- `ref`: `${options.pluginBaseObjectId}_ref01` (… `_ref02`, `_ref03`, …)
 - `level` / `kind`: random values from MsgConstants
 - `origin`: `origin.type = automation`, `origin.system = IngestRandomDemo`
 - `timing.expiresAt`: `Date.now() + ttlNow` (a randomized TTL derived from `ttlMs` and `ttlJitter`)
