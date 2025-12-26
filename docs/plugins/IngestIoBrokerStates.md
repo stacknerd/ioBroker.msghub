@@ -62,6 +62,12 @@ Current implementation entry:
 - `lib/IngestIoBrokerStates/index.js`
 - `lib/IngestIoBrokerStates/Engine.js`
 
+Runtime wiring note:
+
+- This plugin is instantiated by `lib/MsgPlugins.js`.
+- `MsgPlugins` passes `options.pluginBaseObjectId` (full id, e.g. `msghub.0.IngestIoBrokerStates.0`) so logs and any future
+  plugin-owned states can be scoped under the plugin base object.
+
 ---
 
 ## 4. General message strategy (anti-spam)
