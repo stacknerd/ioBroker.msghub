@@ -1,9 +1,19 @@
 # Development Notebook
 
-## Docs Index / Stub Docs
+## Naming / Branding
 
-- Generate/update: `npm run docs:generate`
-- Check (CI): `npm run docs:check`
+The adapter is called **Message Hub**.
+
+For compatibility and shorter identifiers, the codebase and ioBroker integration still use these short forms:
+
+- Repository/package name: `ioBroker.msghub` / `iobroker.msghub`
+- Adapter namespace (state IDs): `msghub.<instance>.…` (example: `msghub.0.notifications.latest.due`)
+- Internal class prefix: `Msg*` (example: `MsgStore`, `MsgFactory`)
+
+Documentation and UI text should prefer:
+
+- Use **“Message Hub”** as the public-facing product name.
+- Use `msghub` only when you mean the technical identifier/namespace (repo, package, state IDs, config keys, code).
 
 ## Plugin Structure (`lib/`)
 
@@ -17,6 +27,14 @@ Example `IngestIoBrokerStates`:
 
 - Entry: `lib/IngestIoBrokerStates/index.js`
 - Submodules (optional): `lib/IngestIoBrokerStates/Trigger.js`, `lib/IngestIoBrokerStates/Freshness.js`, ...
+
+
+## Notes to self
+
+### do not forget: Docs Index / Stub Docs
+
+- Generate/update: `npm run docs:generate`
+- Check (CI): `npm run docs:check`
 
 
 
