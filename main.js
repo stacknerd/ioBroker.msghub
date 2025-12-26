@@ -71,10 +71,12 @@ class Msghub extends utils.Adapter {
 				throw new Error('MsgPlugins.create is not a function');
 			}
 			this._msgPlugins = await MsgPlugins.create(this, this.msgStore);
-			this.msgStore.msgIngest.start();
 		} catch (e) {
 			this.log?.error?.(`Plugin wiring failed: ${e?.message || e}`);
 		}
+		// Always start ingestion (even when some plugins failed to wire),
+		// otherwise timer-based producers (e.g. IngestRandomDemo) never run.
+		this.msgStore?.msgIngest?.start?.();
 
 		/*
 		For every state in the system there has to be also an object of type state

@@ -267,6 +267,7 @@ The plugin docs in this folder are for the built-in plugins shipped with this re
 ## Modules
 
 <!-- AUTO-GENERATED:MODULE-INDEX:START -->
+- `BridgeRandomDemo`: [`./BridgeRandomDemo.md`](./BridgeRandomDemo.md)
 - `IngestIoBrokerStates`: [`./IngestIoBrokerStates.md`](./IngestIoBrokerStates.md)
 - `IngestRandomDemo`: [`./IngestRandomDemo.md`](./IngestRandomDemo.md)
 - `MsgPlugins`: [`./MsgPlugins.md`](./MsgPlugins.md)
