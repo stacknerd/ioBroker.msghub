@@ -55,4 +55,4 @@ Fans out the raw ioBroker event to all registered plugins (fault-isolated).
 ## Related files
 
 - Implementation: `src/MsgIngest.js`
-- Example producer plugin: `lib/IngestRandomDemo.js`
+- Example producer plugin: `lib/IngestRandomDemo/index.js`

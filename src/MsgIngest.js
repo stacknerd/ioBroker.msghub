@@ -17,8 +17,8 @@
  * - Fault isolation: plugin failures are caught and logged so one bad plugin cannot break other plugins.
  *
  * Conventions
- * - Producer plugins live in `/lib` and are loaded via `/lib/index.js`.
- * - Plugin filenames follow `Ingest<System>.js` (e.g. `IngestIoBrokerStates.js`).
+ * - Producer plugins live in `lib/` and are loaded via `lib/index.js`.
+ * - Plugin entry files typically live at `lib/Ingest<System>/index.js` (e.g. `lib/IngestIoBrokerStates/index.js`).
  */
 class MsgIngest {
 	/**

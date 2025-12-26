@@ -1,5 +1,7 @@
 /**
  * Shared helper utilities for message storage and archive.
+ *
+ * Docs: ../docs/modules/MsgUtils.md
  */
 
 const DEFAULT_MAP_TYPE_MARKER = '__msghubType';

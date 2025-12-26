@@ -27,7 +27,7 @@ class Msghub extends utils.Adapter {
 		});
 		this.on('ready', this.onReady.bind(this));
 		this.on('stateChange', this.onStateChange.bind(this));
-		// this.on('objectChange', this.onObjectChange.bind(this));
+		this.on('objectChange', this.onObjectChange.bind(this));
 		this.on('message', this.onMessage.bind(this));
 		this.on('unload', this.onUnload.bind(this));
 		this.msgConstants = MsgConstants;
@@ -54,40 +54,6 @@ class Msghub extends utils.Adapter {
 		this.msgStore = new MsgStore(this, this.msgConstants, this.msgFactory);
 		await this.msgStore.init();
 
-		/////////////////////////////////////
-		// Tests zu ystemconfig
-
-		const sysCfg = await this.getForeignObjectAsync('system.config');
-		if (!sysCfg) {
-			this.log?.warn?.('system.config nicht gefunden');
-			return;
-		}
-
-		// Beispiele:
-		const language = sysCfg.common?.language;
-		const latitude = sysCfg.common?.latitude;
-		const longitude = sysCfg.common?.longitude;
-
-		this.log?.info?.(
-			`language=${language}, lat=${latitude}, lon=${longitude}, dateFormat=${sysCfg.common?.dateFormat}`,
-		);
-
-		///////////////////////////////////////////////////
-		// Tests zu customConfig
-
-		this.customMap = new Map(); // id -> customConfig
-
-		const res = await this.getObjectViewAsync('system', 'custom', {});
-		this.customMap.clear();
-
-		for (const row of res.rows) {
-			const id = row.id;
-			const cfg = row.value?.[this.namespace];
-			if (cfg && cfg.enabled) {
-				this.customMap.set(id, cfg);
-			}
-		}
-
 		//this.log?.info?.(`${serializeWithMaps(this.customMap)}`);
 
 		////////////////////////////////////
@@ -99,80 +65,10 @@ class Msghub extends utils.Adapter {
 		////////////////////////////
 		// Ingest Plugins
 
-		// Plugins register on `this.msgStore.msgIngest` and receive ioBroker events via `onStateChange`.
-		// Example demo producer:
-		const { IngestRandomDemo } = require(`${__dirname}/lib`);
+		const { IngestRandomDemo, IngestIoBrokerStates } = require(`${__dirname}/lib`);
+		this.msgStore.msgIngest.registerPlugin('iobroker-states', IngestIoBrokerStates(this, { traceEvents: true }));
 		this.msgStore.msgIngest.registerPlugin('random-demo', IngestRandomDemo(this));
 		this.msgStore.msgIngest.start();
-
-		////////
-
-		const msg1 = this.msgFactory.createMessage({
-			ref: 'ichbineintext',
-			title: 'ein titel-text',
-			text: 'lorem ipsum...',
-			level: this.msgConstants.level.error,
-			kind: this.msgConstants.kind.appointment,
-			origin: { type: this.msgConstants.origin.type.import, system: 'alexa', id: 'alexa.0.test' },
-			timing: { startAt: 2134928374923, endAt: 2134928374950 },
-			details: { location: 'zimmer', tools: ['1', '2'], consumables: ['batterien'] },
-		});
-		this.msgStore.addMessage(msg1);
-
-		const msg2ref = 'pathingthings-3';
-
-		const msg2 = this.msgFactory.createMessage({
-			ref: msg2ref,
-			title: 'titel',
-			text: 'lowefrem ipsum...',
-			level: this.msgConstants.level.warning,
-			kind: this.msgConstants.kind.task,
-			origin: { type: this.msgConstants.origin.type.import, system: 'web', id: '383' },
-			timing: { expiresAt: 2134928374923, dueAt: 2134928374924, notifyAt: 2134928374910 },
-			details: { consumables: ['Eimer', 'Lappen', 'Staubsauger'] },
-			progress: { percentage: 20, startedAt: Date.now() },
-		});
-
-		this.msgStore.addMessage(msg2);
-
-		const patch4msg2 = {
-			title: 'current temp: {{m.temperature}} (this has been updated!)',
-			metrics: new Map([
-				['temperature', { val: 21.7, unit: '?', ts: Date.now() }],
-				['humidity', { val: 46, unit: '%', ts: Date.now() }],
-				['state', { val: 'ok', unit: 'status', ts: Date.now() }],
-				['batteryLow', { val: false, unit: 'bool', ts: Date.now() }],
-				['lastSeen', { val: Date.now(), unit: 'timestamp', ts: Date.now() }],
-			]),
-		};
-		this.msgStore.updateMessage(msg2ref, patch4msg2);
-
-		this.msgStore.updateMessage(msg2ref, {
-			text: '{{m.lastSeen.val|datetime}}',
-			metrics: {
-				set: { temperature: { val: 27.3, unit: '°C', ts: Date.now() } },
-				delete: ['humidity'],
-			},
-		});
-
-		this.msgStore.updateMessage(msg2ref, {
-			actions: { set: { 'ack-1': { type: 'ack' } } },
-		});
-
-		//this.log.debug(JSON.stringify(this.msgStore.getMessages(), null, 2));
-
-		this.msgStore.updateMessage(msg2ref, {
-			listItems: {
-				set: { milk: { name: 'Milk', checked: false } },
-				delete: ['oldItemId'],
-			},
-		});
-
-		this.getObjectView('system', 'custom', {}, (err, doc) => {
-			this.log?.debug?.(JSON.stringify(doc, null, 2)); // doc.rows enthält Objekte, die common.custom haben
-		});
-
-		//this.log.debug(this.msgStorage._serialize(this.msgStore.getMessages(), null, 2));
 
 		/*
 		For every state in the system there has to be also an object of type state
@@ -231,15 +127,10 @@ class Msghub extends utils.Adapter {
 	 */
 	onUnload(callback) {
 		try {
-			// Here you must clear all timeouts or intervals that may still be active
-			// clearTimeout(timeout1);
-			// clearTimeout(timeout2);
-			// ...
-			// clearInterval(interval1);
-
 			this.msgStore?.onUnload();
 		} catch (error) {
 			this.log?.error?.(`Error during unloading: ${error.message}`);
+		} finally {
 			callback();
 		}
 	}
@@ -260,6 +151,16 @@ class Msghub extends utils.Adapter {
 	// 		this.log.info(`object ${id} deleted`);
 	// 	}
 	// }
+
+	/**
+	 * Is called if a subscribed object changes
+	 *
+	 * @param {string} id
+	 * @param {ioBroker.Object | null | undefined} obj
+	 */
+	onObjectChange(id, obj) {
+		this.msgStore?.msgIngest?.dispatchObjectChange?.(id, obj, { source: 'iobroker.objectChange' });
+	}
 
 	/**
 	 * Is called if a subscribed state changes

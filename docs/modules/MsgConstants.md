@@ -142,7 +142,7 @@ Many groups are defined as `{ key: "value" }` mappings.
 - For `kind`, keys and values are the same (`task: "task"`), so it rarely matters.
 - For `level`, keys are names (`"warning"`) but values are numbers (`20`).
 
-Some integrations (like `lib/NotifyIoBrokerState.js`) accept **either** the key or the value, but the message model
+Some integrations (like `lib/NotifyIoBrokerState/index.js`) accept **either** the key or the value, but the message model
 itself stores the value (e.g. `level: 20`).
 
 ### 4) Runtime immutability
@@ -168,4 +168,4 @@ This is intentional: constants should not change while the adapter is running.
 - Message validation/normalization: `src/MsgFactory.js`
 - Notification dispatch: `src/MsgNotify.js`
 - Store + notification scheduling: `src/MsgStore.js`
-- ioBroker state notifier plugin: `lib/NotifyIoBrokerState.js`
+- ioBroker state notifier plugin: `lib/NotifyIoBrokerState/index.js`

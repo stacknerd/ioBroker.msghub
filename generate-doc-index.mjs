@@ -20,6 +20,11 @@ async function listDirFiles(dirPath) {
   return entries.filter((e) => e.isFile()).map((e) => e.name);
 }
 
+async function listDirNames(dirPath) {
+  const entries = await fs.readdir(dirPath, { withFileTypes: true });
+  return entries.filter((e) => e.isDirectory()).map((e) => e.name);
+}
+
 function normalizeNewlines(text) {
   return text.replace(/\r\n/g, '\n');
 }
@@ -213,6 +218,41 @@ async function ensureDocsForJsFiles({ jsDir, docsDir }) {
   return { missingDocs };
 }
 
+async function ensureDocsForPluginEntries({ pluginsDir, docsDir }) {
+  // Convention: plugin entry points live at `lib/<PluginName>/index.js`.
+  // This avoids false positives from helper files in lib/ and guarantees 1 doc per plugin.
+  const pluginDirs = (await listDirNames(pluginsDir))
+    .filter((d) => !d.startsWith('.') && !d.startsWith('_'))
+    .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+
+  const missingDocs = [];
+
+  for (const dir of pluginDirs) {
+    const entryPath = path.join(pluginsDir, dir, 'index.js');
+    if (!(await exists(entryPath))) {
+      continue;
+    }
+
+    const docFilename = `${dir}.md`;
+    const docPath = path.join(docsDir, docFilename);
+
+    if (await exists(docPath)) {
+      continue;
+    }
+
+    if (CHECK_MODE) {
+      missingDocs.push(docPath);
+      continue;
+    }
+
+    const implementationPath = `${pluginsDir}/${dir}/index.js`;
+    const stub = makePluginStubDoc({ title: dir, implementationPath });
+    await fs.writeFile(docPath, stub, 'utf8');
+  }
+
+  return { missingDocs };
+}
+
 async function updateReadmeIndex({ docsDir, readmePath, excludeDocFilenames = [] }) {
   const exclude = new Set(excludeDocFilenames.map((f) => f.toLowerCase()));
   const mdFiles = (await listDirFiles(docsDir)).filter((f) => {
@@ -259,8 +299,8 @@ async function main() {
   });
   results.push({ kind: 'modules', ...modules });
 
-  const plugins = await ensureDocsForJsFiles({
-    jsDir: 'lib',
+  const plugins = await ensureDocsForPluginEntries({
+    pluginsDir: 'lib',
     docsDir: 'docs/plugins',
   });
   results.push({ kind: 'plugins', ...plugins });

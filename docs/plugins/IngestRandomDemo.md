@@ -77,11 +77,11 @@ Typical message fields created/updated by this plugin:
 - `origin`: `origin.type = automation`, `origin.system = IngestRandomDemo`
 - `timing.expiresAt`: `Date.now() + ttlNow` (a randomized TTL derived from `ttlMs` and `ttlJitter`)
 
-Note: the built-in demo `title`/`text` strings are currently German in `lib/IngestRandomDemo.js`.
+Note: the built-in demo `title`/`text` strings are currently German in `lib/IngestRandomDemo/index.js`.
 
 ---
 
 ## Related files
 
-- Implementation: `lib/IngestRandomDemo.js`
+- Implementation: `lib/IngestRandomDemo/index.js`
 - Plugin overview: `docs/plugins/README.md`

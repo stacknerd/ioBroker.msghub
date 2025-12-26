@@ -5,6 +5,19 @@
 - Generate/update: `npm run docs:generate`
 - Check (CI): `npm run docs:check`
 
+## Plugin Structure (`lib/`)
+
+Convention: plugin code stays in `lib/` and must be uniquely attributable by path.
+
+- `lib/index.js`: central registry exporting all plugins (ingest/notify).
+- `lib/<PluginName>/index.js`: plugin entry file (wrapper + core engine, e.g. subscriptions/dispatch).
+- `lib/<PluginName>/...`: optional plugin submodules (e.g. per evaluator/rule type).
+
+Example `IngestIoBrokerStates`:
+
+- Entry: `lib/IngestIoBrokerStates/index.js`
+- Submodules (optional): `lib/IngestIoBrokerStates/Trigger.js`, `lib/IngestIoBrokerStates/Freshness.js`, ...
+
 
 
 

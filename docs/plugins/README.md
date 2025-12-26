@@ -11,7 +11,7 @@ Producer plugins attach to the ingest host `MsgIngest` and receive ioBroker even
 - Registration: `msgStore.msgIngest.registerPlugin(id, handler)`
 - Typical job: ioBroker event → `ctx.api.store.addMessage(...)` / `ctx.api.store.updateMessage(...)`
 - Context: plugins receive `ctx = { api, meta }` where `ctx.api` provides `{ store, factory, constants }` and `ctx.meta` carries dispatch metadata
-- Example in this repo: `lib/IngestRandomDemo.js`
+- Example in this repo: `lib/IngestRandomDemo/index.js`
 
 ### Notify (notifier)
 
@@ -20,7 +20,7 @@ Notifier plugins attach to the dispatcher `MsgNotify` and perform the actual del
 - Registration: `msgStore.msgNotify.registerPlugin(id, handler)`
 - Typical job: `(event, notifications) => delivery`
 - Context: plugins receive `ctx = { api, meta }` where `ctx.api.constants` exposes `MsgConstants` and `ctx.meta` carries dispatch metadata
-- Example in this repo: `lib/NotifyIoBrokerState.js`
+- Example in this repo: `lib/NotifyIoBrokerState/index.js`
 
 ## Module
 

@@ -12,7 +12,7 @@ This is intentionally simple: it is not a history or log, it is only the most re
 
 - Type: `Notify`
 - Registration ID (used in this repo): `ioBrokerState`
-- Implementation: `lib/NotifyIoBrokerState.js` (`NotifyIoBrokerState(adapter, options)`)
+- Implementation: `lib/NotifyIoBrokerState/index.js` (`NotifyIoBrokerState(adapter, options)`)
 - Supported events: values from `MsgConstants.notfication.events` (`due`, `updated`, `deleted`, `expired`)
   - The plugin also accepts the event *keys* (e.g. `update`) and maps them to the event *values* (e.g. `updated`) for the state id.
 
@@ -111,7 +111,7 @@ Example stored JSON when `includeContext: true` (simplified):
 
 ## Related files
 
-- Implementation: `lib/NotifyIoBrokerState.js`
+- Implementation: `lib/NotifyIoBrokerState/index.js`
 - Dispatcher: `src/MsgNotify.js`
 - Constants (events, kinds, levels): `src/MsgConstants.js`
 - JSON/Map serialization: `src/MsgUtils.js`
