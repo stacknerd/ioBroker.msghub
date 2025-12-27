@@ -200,6 +200,19 @@ What you receive:
 - `ctx.api.factory` normalization gate: `createMessage(...)`
 - `ctx.api.constants` for enums and shared vocabulary
 
+Where events come from (important):
+
+- ioBroker calls the adapter’s `onStateChange` / `onObjectChange` **only for ids the adapter has subscribed to**.
+- `main.js` forwards those subscribed events into `MsgIngest`, which then **fans out to all registered ingest plugins**.
+- Plugin enable/disable switches created by `MsgPlugins` are intercepted and **not** forwarded to ingest plugins.
+
+Subscribing from inside a plugin:
+
+- Your factory receives the ioBroker `adapter`, so you can subscribe in `start(ctx)` and unsubscribe in `stop(ctx)`.
+- Use `adapter.subscribeForeignStates(fullId)` / `adapter.subscribeForeignObjects(fullId)` for specific external ids.
+- Use `adapter.subscribeStates(ownId)` / `adapter.subscribeObjects(ownId)` for ids in your own namespace (own ids).
+- Keep subscriptions narrow (avoid `'*'`); after you subscribe, every matching update will go through the adapter and be fanned out to all ingest plugins, so always filter by `id` inside `onStateChange`.
+
 What you usually do:
 
 - decide whether an event is relevant
