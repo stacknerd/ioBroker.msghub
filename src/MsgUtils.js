@@ -6,6 +6,81 @@
 
 const DEFAULT_MAP_TYPE_MARKER = '__msghubType';
 
+function isObject(v) {
+	return !!v && typeof v === 'object' && !Array.isArray(v);
+}
+
+function localeCandidates(locale) {
+	const loc = typeof locale === 'string' ? locale.trim() : '';
+	if (!loc) {
+		return [];
+	}
+	const base = loc.includes('-') ? loc.split('-')[0] : loc;
+	const lower = loc.toLowerCase();
+	const lowerBase = base.toLowerCase();
+	const candidates = [];
+	if (loc) {
+		candidates.push(loc);
+	}
+	if (base && base !== loc) {
+		candidates.push(base);
+	}
+	if (lower && lower !== loc) {
+		candidates.push(lower);
+	}
+	if (lowerBase && lowerBase !== base && lowerBase !== lower) {
+		candidates.push(lowerBase);
+	}
+	return Array.from(new Set(candidates));
+}
+
+/**
+ * Pick a localized string from a string or i18n map (ioBroker-style: `{ en: "...", de: "..." }`).
+ *
+ * @param {unknown} value String or i18n map.
+ * @param {string} [locale] Locale to prefer (e.g. "de", "de-DE").
+ * @param {string[]} [fallbackLocales] Fallback locale keys (default: ["en","de"]).
+ * @returns {string} The best matching localized string, or "".
+ */
+function pickI18n(value, locale, fallbackLocales = ['en', 'de']) {
+	if (typeof value === 'string') {
+		return value;
+	}
+	if (!isObject(value)) {
+		return '';
+	}
+
+	for (const cand of localeCandidates(locale)) {
+		if (typeof value[cand] === 'string') {
+			return value[cand];
+		}
+	}
+	for (const cand of fallbackLocales || []) {
+		if (typeof value[cand] === 'string') {
+			return value[cand];
+		}
+	}
+	const first = Object.values(value).find(v => typeof v === 'string');
+	return typeof first === 'string' ? first : '';
+}
+
+/**
+ * Very small template formatter: replaces `{key}` with `params[key]`.
+ *
+ * @param {string} template
+ * @param {Record<string, any>} [params]
+ * @returns {string}
+ */
+function formatI18n(template, params = {}) {
+	if (typeof template !== 'string' || !template) {
+		return '';
+	}
+	return template.replace(/\{([a-zA-Z0-9_.-]+)\}/g, (_m, key) => {
+		const v = params ? params[key] : undefined;
+		return v == null ? '' : String(v);
+	});
+}
+
 /**
  * Serialize data to JSON while preserving Map values.
  *
@@ -115,4 +190,7 @@ module.exports = {
 	ensureMetaObject,
 	ensureBaseDir,
 	createOpQueue,
+	pickI18n,
+	formatI18n,
+	isObject,
 };
