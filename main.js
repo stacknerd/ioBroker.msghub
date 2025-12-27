@@ -163,8 +163,8 @@ class Msghub extends utils.Adapter {
 	/**
 	 * Is called if a subscribed object changes
 	 *
-	 * @param {string} id
-	 * @param {ioBroker.Object | null | undefined} obj
+	 * @param {string} id Object id.
+	 * @param {ioBroker.Object | null | undefined} obj Object, or `null`/`undefined` when deleted.
 	 */
 	onObjectChange(id, obj) {
 		this.msgStore?.msgIngest?.dispatchObjectChange?.(id, obj, { source: 'iobroker.objectChange' });

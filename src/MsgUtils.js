@@ -6,6 +6,12 @@
 
 const DEFAULT_MAP_TYPE_MARKER = '__msghubType';
 
+/**
+ * Test whether a value is a plain object (and not an Array).
+ *
+ * @param {unknown} v Candidate value.
+ * @returns {boolean} `true` when `v` is a non-null object and not an Array.
+ */
 function isObject(v) {
 	return !!v && typeof v === 'object' && !Array.isArray(v);
 }
@@ -67,9 +73,9 @@ function pickI18n(value, locale, fallbackLocales = ['en', 'de']) {
 /**
  * Very small template formatter: replaces `{key}` with `params[key]`.
  *
- * @param {string} template
- * @param {Record<string, any>} [params]
- * @returns {string}
+ * @param {string} template Template text.
+ * @param {Record<string, any>} [params] Values to substitute.
+ * @returns {string} Formatted string.
  */
 function formatI18n(template, params = {}) {
 	if (typeof template !== 'string' || !template) {
