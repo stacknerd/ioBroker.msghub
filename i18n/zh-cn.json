@@ -27,5 +27,11 @@
   "this is translated by ctx.api.i18n.t()": "this is (indeed) translated by ctx.api.i18n.t()",
   "MsgHub plugin (%s/%s/%s)": "MsgHub plugin (%s/%s/%s)",
   "enable MsgHub plugin (%s/%s/%s)": "enable MsgHub plugin (%s/%s/%s)",
-  "status of MsgHub plugin (%s/%s/%s)": "status of MsgHub plugin (%s/%s/%s)"
+  "status of MsgHub plugin (%s/%s/%s)": "status of MsgHub plugin (%s/%s/%s)",
+  "full json dump of MsgHub store (interval=%ss)": "full json dump of MsgHub store (interval=%ss)",
+  "Messages (total)": "消息总数",
+  "Messages (open)": "消息（打开）",
+  "Messages (due now)": "信息（现在到期）",
+  "Messages (deleted)": "已删除的消息",
+  "Messages (expired)": "已过期消息"
 }

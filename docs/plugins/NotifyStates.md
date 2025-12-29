@@ -27,6 +27,11 @@ This plugin is configured by the adapter via `lib/IoPlugins.js`.
 - Status: `msghub.0.NotifyStates.0.status`
 - The plugin writes into fixed subtrees below that base:
   - `msghub.0.NotifyStates.0.fullJson` (periodic full store dump)
+  - `msghub.0.NotifyStates.0.Stats.total`
+  - `msghub.0.NotifyStates.0.Stats.open`
+  - `msghub.0.NotifyStates.0.Stats.dueNow`
+  - `msghub.0.NotifyStates.0.Stats.deleted`
+  - `msghub.0.NotifyStates.0.Stats.expired`
   - `msghub.0.NotifyStates.0.Latest.<event>`
   - `msghub.0.NotifyStates.0.byKind.<kindKey>.<event>`
   - `msghub.0.NotifyStates.0.byLevel.<levelKey>.<event>`
@@ -35,6 +40,8 @@ Options (stored in the plugin object `native`):
 
 - `mapTypeMarker` (optional): overrides the marker used by `serializeWithMaps` (default: `__msghubType`).
 - `blobIntervalMs` (optional): interval for writing a full JSON snapshot to `*.fullJson` (default: 5 minutes, `0` disables).
+- `statsMinIntervalMs` (optional): throttles stats updates triggered by incoming notifications (default: `1000`, `0` disables throttling).
+- `statsMaxIntervalMs` (optional): ensures stats are refreshed at least this often even if no notifications arrive (default: 5 minutes, `0` disables).
 
 `kindKey` and `levelKey` are the **keys** from `MsgConstants.kind` / `MsgConstants.level`.
 
@@ -60,6 +67,16 @@ Options (stored in the plugin object `native`):
     - It accepts either the stored kind value (e.g. `"task"`) or the kind key.
   - Level routing is based on `notification.level`.
     - It accepts numeric levels (e.g. `10`) and also level keys (e.g. `"warning"`).
+
+- Stats (`Stats.*`)
+  - `total`: number of messages in the store (includes deleted/expired).
+  - `open`: messages with `lifecycle.state === "open"`.
+  - `deleted`: messages with `lifecycle.state === "deleted"`.
+  - `expired`: messages with `lifecycle.state === "expired"`.
+  - `dueNow`: **subset of `open` only**: messages with `lifecycle.state === "open"` and `timing.notifyAt <= now` (and not expired by `timing.expiresAt`).
+  - Update behavior:
+    - on notifications: updates are requested and throttled via `statsMinIntervalMs`
+    - idle refresh: forced via `statsMaxIntervalMs` even without new notifications
 
 - Map-safe JSON
   - Notifications may contain JavaScript `Map` values (for example `metrics`).

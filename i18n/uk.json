@@ -27,5 +27,11 @@
   "this is translated by ctx.api.i18n.t()": "this is (indeed) translated by ctx.api.i18n.t()",
   "MsgHub plugin (%s/%s/%s)": "Плагін MsgHub (%s/%s/%s)",
   "enable MsgHub plugin (%s/%s/%s)": "увімкнути плагін MsgHub (%s/%s/%s)",
-  "status of MsgHub plugin (%s/%s/%s)": "статус плагіна MsgHub (%s/%s/%s)"
+  "status of MsgHub plugin (%s/%s/%s)": "статус плагіна MsgHub (%s/%s/%s)",
+  "full json dump of MsgHub store (interval=%ss)": "повний json-дамп магазину MsgHub (інтервал=%ss)",
+  "Messages (total)": "Повідомлень (загалом)",
+  "Messages (open)": "Повідомлення (відкрито)",
+  "Messages (due now)": "Повідомлення (термін виконання зараз)",
+  "Messages (deleted)": "Повідомлення (видалені)",
+  "Messages (expired)": "Повідомлення (термін дії закінчився)"
 }

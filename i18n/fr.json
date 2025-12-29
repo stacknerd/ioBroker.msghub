@@ -27,5 +27,11 @@
   "this is translated by ctx.api.i18n.t()": "this is (indeed) translated by ctx.api.i18n.t()",
   "MsgHub plugin (%s/%s/%s)": "Plugin MsgHub (%s/%s/%s)",
   "enable MsgHub plugin (%s/%s/%s)": "activer le plugin MsgHub (%s/%s/%s)",
-  "status of MsgHub plugin (%s/%s/%s)": "statut du plugin MsgHub (%s/%s/%s)"
+  "status of MsgHub plugin (%s/%s/%s)": "statut du plugin MsgHub (%s/%s/%s)",
+  "full json dump of MsgHub store (interval=%ss)": "vidage json complet du magasin MsgHub (intervalle=%ss)",
+  "Messages (total)": "Messages (total)",
+  "Messages (open)": "Messages (ouverts)",
+  "Messages (due now)": "Messages (à recevoir maintenant)",
+  "Messages (deleted)": "Messages (supprimés)",
+  "Messages (expired)": "Messages (expirés)"
 }
