@@ -34,6 +34,7 @@ When the plugin is stopped, it removes (soft-deletes) all messages it managed in
 
 - Kinds: `task` and `status`
 - Levels: uses all numeric values from `MsgConstants.level`
+- Refs: stable per run, bounded by `maxPool` and intentionally composed of safe characters (e.g. `chaos.<runId>.<kind>.<slot>`) to avoid ref normalization warnings
 - Excluded on purpose (for now): `listItems`, `actions`, `dependencies`, `attachments`
 - Origin attribution:
   - `origin.type = "automation"`
