@@ -26,6 +26,7 @@ Read more: [`docs/plugins/IoPlugins.md`](./IoPlugins.md)
 This repository currently ships only a small set of built-in plugins:
 
 - `IngestRandomChaos` (demo/load generator ingest plugin)
+- `IngestHue` (Hue device health ingest plugin)
 - `EngageSendTo` (control plane via ioBroker `sendTo`)
 - `NotifyStates` (writes notifications to ioBroker states)
 - `NotifyDebug` (debug notifier)
@@ -180,6 +181,7 @@ function EngageMyChannel(options) {
       // optional: connect, poll, webhook registration, etc.
       // inbound user intents may translate into:
       // - ctx.api.store.addMessage/updateMessage/removeMessage(...)
+      // - ctx.api.store.completeAfterCauseEliminated(ref, { actor, finishedAt })
       // - ctx.api.action.execute({ ref, actionId, actor, payload })
     },
     stop(ctx) {
@@ -370,6 +372,7 @@ What you receive:
     - `updateMessage(msgOrRef, patch)`
     - `addOrUpdateMessage(msg)`
     - `removeMessage(ref)`
+    - `completeAfterCauseEliminated(ref, { actor?, finishedAt? })`
   - read API (views)
     - `getMessageByRef(ref)`
     - `getMessages()`
@@ -446,7 +449,7 @@ What you can do (functional contract):
 
 - Everything an Ingest plugin can do:
   - `ctx.api.factory.createMessage(...)` (normalization gate)
-  - `ctx.api.store.addMessage(...)`, `updateMessage(...)`, `addOrUpdateMessage(...)`, `removeMessage(...)`
+  - `ctx.api.store.addMessage(...)`, `updateMessage(...)`, `addOrUpdateMessage(...)`, `removeMessage(...)`, `completeAfterCauseEliminated(...)`
   - `ctx.api.store.getMessageByRef(...)`, `getMessages()`, `queryMessages(...)`
 - Plus execute whitelisted actions via MsgAction:
   - `ctx.api.action.execute({ ref, actionId, actor?, payload? })`
@@ -516,6 +519,7 @@ The plugin docs in this folder are for the built-in plugins shipped with this re
 
 <!-- AUTO-GENERATED:MODULE-INDEX:START -->
 - `EngageSendTo`: [`./EngageSendTo.md`](./EngageSendTo.md)
+- `IngestHue`: [`./IngestHue.md`](./IngestHue.md)
 - `IngestRandomChaos`: [`./IngestRandomChaos.md`](./IngestRandomChaos.md)
 - `IoPlugins`: [`./IoPlugins.md`](./IoPlugins.md)
 - `NotifyDebug`: [`./NotifyDebug.md`](./NotifyDebug.md)
