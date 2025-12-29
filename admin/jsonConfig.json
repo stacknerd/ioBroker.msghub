@@ -1,0 +1,45 @@
+{
+	"i18n": true,
+	"type": "tabs",
+	"items": {
+		"general": {
+			"type": "panel",
+			"label": "General",
+			"items": {
+				"option1": {
+					"type": "checkbox",
+					"label": "option1",
+					"newLine": true,
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 4,
+					"xl": 4
+				},
+				"option2": {
+					"type": "text",
+					"label": "option2",
+					"newLine": true,
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 4,
+					"xl": 4
+				},
+				"locale": {
+					"type": "text",
+					"label": "Locale",
+					"help": "Locale for number/date formatting (e.g. de-DE, en-US).",
+					"placeholder": "de-DE",
+					"default": "de-DE",
+					"newLine": true,
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 4,
+					"xl": 4
+				}
+			}
+		}
+	}
+}

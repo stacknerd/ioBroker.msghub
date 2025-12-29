@@ -1,0 +1,95 @@
+{
+	"common": {
+		"name": "msghub",
+		"version": "0.0.1",
+		"news": {
+			"0.0.1": {
+				"en": "initial release",
+				"de": "Erstveröffentlichung",
+				"ru": "Начальная версия",
+				"pt": "lançamento inicial",
+				"nl": "Eerste uitgave",
+				"fr": "Première version",
+				"it": "Versione iniziale",
+				"es": "Versión inicial",
+				"pl": "Pierwsze wydanie",
+				"uk": "Початкова версія",
+				"zh-cn": "首次出版"
+			}
+		},
+		"titleLang": {
+			"en": "Message Hub",
+			"de": "Message Hub",
+			"ru": "Message Hub",
+			"pt": "Message Hub",
+			"nl": "Message Hub",
+			"fr": "Message Hub",
+			"it": "Message Hub",
+			"es": "Message Hub",
+			"pl": "Message Hub",
+			"uk": "Message Hub",
+			"zh-cn": "Message Hub"
+		},
+		"desc": {
+			"en": "a hub for all your messages, tasks and notifications",
+			"de": "Ein Hub für alle Deine Nachrichten, Aufgaben und Benachrichtigungen",
+			"ru": "хаб для всех ваших сообщений, задач и уведомлений",
+			"pt": "um hub para todas as suas mensagens, tarefas e notificações",
+			"nl": "een hub voor al uw berichten, taken en meldingen",
+			"fr": "un hub pour tous vos messages, tâches et notifications",
+			"it": "un hub per tutti i tuoi messaggi, attività e notifiche",
+			"es": "un centro para todos sus mensajes, tareas y notificaciones",
+			"pl": "centrum wszystkich wiadomości, zadań i powiadomień",
+			"uk": "центр для всіх ваших повідомлень, завдань і сповіщень",
+			"zh-cn": "所有消息、任务和通知的中心"
+		},
+		"authors": [
+			"Ben <iobroker@hiddenplaces.eu>"
+		],
+		"keywords": [
+			"template",
+			"automation",
+			"IoT",
+			"integration"
+		],
+		"licenseInformation": {
+			"type": "free",
+			"license": "MIT"
+		},
+		"platform": "Javascript/Node.js",
+		"icon": "msghub.png",
+		"enabled": true,
+		"extIcon": "https://raw.githubusercontent.com/stacknerd/ioBroker.msghub/main/admin/msghub.png",
+		"readme": "https://github.com/stacknerd/ioBroker.msghub/blob/main/README.md",
+		"loglevel": "info",
+		"tier": 3,
+		"mode": "daemon",
+		"type": "logic",
+		"compact": true,
+		"connectionType": "local",
+		"dataSource": "push",
+		"messagebox": true,
+		"supportCustoms": true,
+		"adminUI": {
+			"custom": "json",
+			"config": "json"
+		},
+		"dependencies": [
+			{
+				"js-controller": ">=6.0.11"
+			}
+		],
+		"globalDependencies": [
+			{
+				"admin": ">=7.0.23"
+			}
+		]
+	},
+	"native": {
+		"option1": true,
+		"option2": "42",
+		"locale": "de-DE"
+	},
+	"objects": [],
+	"instanceObjects": []
+}

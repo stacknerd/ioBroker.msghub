@@ -1,0 +1,72 @@
+{
+  "name": "iobroker.msghub",
+  "version": "0.0.1",
+  "description": "a hub for all your messages, tasks and notifications",
+  "author": {
+    "name": "Ben",
+    "email": "iobroker@hiddenplaces.eu"
+  },
+  "contributors": [],
+  "homepage": "https://github.com/stacknerd/ioBroker.msghub",
+  "license": "MIT",
+  "keywords": [
+    "template",
+    "automation",
+    "IoT",
+    "integration"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:stacknerd/ioBroker.msghub.git"
+  },
+  "engines": {
+    "node": ">= 22"
+  },
+  "dependencies": {
+    "@iobroker/adapter-core": "^3.3.2"
+  },
+  "devDependencies": {
+    "@alcalzone/release-script": "^5.0.0",
+    "@alcalzone/release-script-plugin-iobroker": "^4.0.0",
+    "@alcalzone/release-script-plugin-license": "^4.0.0",
+    "@alcalzone/release-script-plugin-manual-review": "^4.0.0",
+    "@iobroker/adapter-dev": "^1.5.0",
+    "@iobroker/dev-server": "^0.8.0",
+    "@iobroker/eslint-config": "^2.2.0",
+    "@iobroker/testing": "^5.2.2",
+    "@tsconfig/node22": "^22.0.5",
+    "@types/iobroker": "npm:@iobroker/types@^7.1.0",
+    "@types/node": "^22.19.3",
+    "typescript": "~5.9.3"
+  },
+  "main": "main.js",
+  "files": [
+    "admin{,/!(lib)/**}/!(tsconfig|tsconfig.*|.eslintrc).{json,json5}",
+    "admin{,/!(lib)/**}/*.{html,css,png,svg,jpg,js}",
+    "i18n/",
+    "lib/",
+    "src/",
+    "www/",
+    "io-package.json",
+    "LICENSE",
+    "main.js"
+  ],
+  "scripts": {
+    "docs:generate": "node generate-doc-index.mjs",
+    "docs:check": "node generate-doc-index.mjs --check",
+    "test:js": "mocha --config test/mocharc.custom.json \"{!(node_modules|test)/**/*.test.js,*.test.js,test/**/test!(PackageFiles|Startup).js}\"",
+    "test:package": "mocha test/package --exit",
+    "test:integration": "mocha test/integration --exit",
+    "test": "npm run test:js && npm run test:package",
+    "check": "tsc --noEmit -p tsconfig.check.json",
+    "lint": "eslint -c eslint.config.mjs .",
+    "translate": "translate-adapter",
+    "release": "release-script",
+    "dev-server": "dev-server",
+    "i18n:push": "node i18n-push.mjs"
+  },
+  "bugs": {
+    "url": "https://github.com/stacknerd/ioBroker.msghub/issues"
+  },
+  "readmeFilename": "README.md"
+}

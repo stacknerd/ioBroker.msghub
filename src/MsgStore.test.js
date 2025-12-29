@@ -1,0 +1,651 @@
+'use strict';
+
+const { expect } = require('chai');
+const { MsgStore } = require('./MsgStore');
+const { MsgConstants } = require('./MsgConstants');
+
+function createAdapter() {
+	const logs = { warn: [] };
+	const adapter = {
+		name: 'msghub',
+		namespace: 'msghub.0',
+		locale: 'en-US',
+		log: {
+			warn: msg => logs.warn.push(msg),
+			debug: () => {},
+			silly: () => {},
+			info: () => {},
+		},
+		getObjectAsync: async () => ({ type: 'meta' }),
+		setObjectAsync: async () => {},
+		mkdirAsync: async () => {},
+		writeFileAsync: async () => {},
+		readFileAsync: async () => ({ file: '' }),
+	};
+	return { adapter, logs };
+}
+
+function createStorage() {
+	const writes = [];
+	const storage = {
+		writeJson: value => writes.push(value),
+		flushPending: () => {},
+	};
+	return { storage, writes };
+}
+
+function createRenderer() {
+	const calls = [];
+	const msgRender = {
+		renderMessage: msg => {
+			calls.push(msg);
+			return msg;
+		},
+	};
+	return { msgRender, calls };
+}
+
+function createFactory({ applyPatch } = {}) {
+	return {
+		applyPatch: applyPatch || ((existing, patch) => ({ ...existing, ...patch })),
+	};
+}
+
+function createFactoryWithUpdatedAt() {
+	return {
+		applyPatch: (existing, patch) => {
+			const updated = { ...existing, ...patch };
+			const timing = { ...(existing?.timing || {}), ...(patch?.timing || {}) };
+			const patchKeys = Object.keys(patch || {}).filter(key => key !== 'ref' && key !== 'timing');
+			const isSilent = patchKeys.length === 1 && patchKeys[0] === 'metrics';
+
+			if (!isSilent) {
+				timing.updatedAt = Date.now();
+			}
+
+			updated.timing = timing;
+			return updated;
+		},
+	};
+}
+
+	function createStore({
+		messages = [],
+		factory,
+		storage,
+	adapter,
+	msgArchive,
+	msgRender,
+	msgNotify,
+	options,
+	msgConstants,
+	} = {}) {
+		const { adapter: defaultAdapter, logs } = createAdapter();
+		const { storage: defaultStorage, writes } = createStorage();
+		const { msgRender: defaultRender } = createRenderer();
+		const msgFactory = factory || createFactory();
+
+		const store = new MsgStore(adapter || defaultAdapter, msgConstants || MsgConstants, msgFactory, {
+			notifierIntervalMs: 0,
+			initialMessages: messages,
+			...(options || {}),
+		});
+		store.msgStorage = storage || defaultStorage;
+		store.msgRender = msgRender || defaultRender;
+		store.msgArchive =
+		msgArchive ||
+		({ appendSnapshot: () => {}, appendPatch: () => {}, appendDelete: () => {}, flushPending: () => {} });
+	store.msgNotify = msgNotify || { dispatch: () => {} };
+
+	return { store, logs, writes, msgFactory };
+}
+
+function withFixedNow(now, fn) {
+	const original = Date.now;
+	Date.now = () => now;
+	try {
+		return fn();
+	} finally {
+		Date.now = original;
+	}
+}
+
+describe('MsgStore', () => {
+
+	describe('addMessage guards', () => {
+		it('rejects non-integer levels', () => {
+			const { store, writes } = createStore();
+			const result = store.addMessage({ ref: 'r1', level: '10' });
+			expect(result).to.equal(false);
+			expect(store.getMessages()).to.have.length(0);
+			expect(writes).to.have.length(0);
+		});
+
+		it('rejects duplicate refs', () => {
+			const existing = { ref: 'r1', level: 10 };
+			const { store, writes } = createStore({ messages: [existing] });
+			const result = store.addMessage({ ref: 'r1', level: 10 });
+			expect(result).to.equal(false);
+			expect(store.getMessages()).to.have.length(1);
+			expect(writes).to.have.length(0);
+		});
+	});
+
+	describe('addMessage success', () => {
+		it('adds a valid message and persists', () => {
+			const { store, writes } = createStore();
+			const result = store.addMessage({ ref: 'r1', level: 10, text: 'hello' });
+			expect(result).to.equal(true);
+			expect(store.getMessages()).to.have.length(1);
+			expect(writes).to.have.length(1);
+		});
+	});
+
+	describe('notifications', () => {
+		it('dispatches immediately on addMessage when notifyAt is missing', () => {
+			const received = [];
+			const msgNotify = { dispatch: (event, msg) => received.push({ event, msg }) };
+			const { store } = createStore({ msgNotify });
+
+			const msg = { ref: 'r1', level: 10, timing: {} };
+			store.addMessage(msg);
+
+			expect(received).to.have.length(1);
+			expect(received[0].event).to.equal('due');
+			expect(received[0].msg.ref).to.equal('r1');
+		});
+
+		it('does not dispatch on addMessage when notifyAt is set', () => {
+			const received = [];
+			const msgNotify = { dispatch: (event, msg) => received.push({ event, msg }) };
+			const { store } = createStore({ msgNotify });
+
+			const msg = { ref: 'r1', level: 10, timing: { notifyAt: Date.now() + 1000 } };
+			store.addMessage(msg);
+
+			expect(received).to.have.length(0);
+		});
+
+		it('dispatches updated + due on updateMessage when notifyAt is missing and update is not silent', () => {
+			const received = [];
+			const msgNotify = { dispatch: (event, msg) => received.push({ event, msg }) };
+			const factory = createFactoryWithUpdatedAt();
+			const now = 1000;
+			const { store } = createStore({
+				messages: [{ ref: 'r1', level: 10, timing: {} }],
+				factory,
+				msgNotify,
+			});
+			store.lastPruneAt = now;
+
+			withFixedNow(now, () => {
+				const result = store.updateMessage({ ref: 'r1', text: 'new' });
+				expect(result).to.equal(true);
+			});
+
+			expect(received).to.have.length(2);
+			expect(received[0].event).to.equal('updated');
+			expect(received[0].msg.ref).to.equal('r1');
+			expect(received[1].event).to.equal('due');
+			expect(received[1].msg.ref).to.equal('r1');
+		});
+
+		it('does not dispatch on silent update when notifyAt is missing', () => {
+			const received = [];
+			const msgNotify = { dispatch: (event, msg) => received.push({ event, msg }) };
+			const factory = createFactoryWithUpdatedAt();
+			const now = 2000;
+			const { store } = createStore({
+				messages: [{ ref: 'r1', level: 10, timing: { updatedAt: now } }],
+				factory,
+				msgNotify,
+			});
+			store.lastPruneAt = now;
+
+			withFixedNow(now, () => {
+				const result = store.updateMessage({ ref: 'r1', metrics: new Map() });
+				expect(result).to.equal(true);
+			});
+
+			expect(received).to.have.length(0);
+		});
+
+		it('dispatches updated but not due when the message is expired', () => {
+			const received = [];
+			const msgNotify = { dispatch: (event, msg) => received.push({ event, msg }) };
+			const factory = createFactoryWithUpdatedAt();
+			const now = 3000;
+			const { store } = createStore({
+				messages: [{ ref: 'r1', level: 10, timing: { expiresAt: now - 1 } }],
+				factory,
+				msgNotify,
+			});
+			store.lastPruneAt = now;
+
+			withFixedNow(now, () => {
+				const result = store.updateMessage({ ref: 'r1', text: 'new' });
+				expect(result).to.equal(true);
+			});
+
+			expect(received).to.have.length(1);
+			expect(received[0].event).to.equal('updated');
+			expect(received[0].msg.ref).to.equal('r1');
+		});
+
+		it('dispatches updated but not due when notifyAt is set', () => {
+			const received = [];
+			const msgNotify = { dispatch: (event, msg) => received.push({ event, msg }) };
+			const factory = createFactoryWithUpdatedAt();
+			const now = 4000;
+			const { store } = createStore({
+				messages: [{ ref: 'r1', level: 10, timing: { notifyAt: now + 1000 } }],
+				factory,
+				msgNotify,
+			});
+			store.lastPruneAt = now;
+
+			withFixedNow(now, () => {
+				const result = store.updateMessage({ ref: 'r1', text: 'new' });
+				expect(result).to.equal(true);
+			});
+
+			expect(received).to.have.length(1);
+			expect(received[0].event).to.equal('updated');
+			expect(received[0].msg.ref).to.equal('r1');
+		});
+
+		it('dispatches planned notifications when notifyAt is due', () => {
+			const received = [];
+			const msgNotify = { dispatch: (event, msgs) => received.push({ event, msgs }) };
+			const now = 5000;
+			const messages = [
+				{ ref: 'due', level: 10, timing: { notifyAt: now - 1 } },
+				{ ref: 'later', level: 10, timing: { notifyAt: now + 1000 } },
+				{ ref: 'expired', level: 10, timing: { notifyAt: now - 1, expiresAt: now - 1 } },
+			];
+			const { store } = createStore({ messages, msgNotify });
+
+			withFixedNow(now, () => {
+				store._initiateNotifications();
+			});
+
+			expect(received).to.have.length(1);
+			expect(received[0].event).to.equal('due');
+			expect(received[0].msgs).to.have.length(1);
+			expect(received[0].msgs[0].ref).to.equal('due');
+		});
+
+		it('uses stealthMode when rescheduling due notifications (no updated event)', () => {
+			const received = [];
+			const msgNotify = { dispatch: (event, msgs) => received.push({ event, msgs }) };
+			const now = 5000;
+
+			const factory = {
+				applyPatch: (existing, patch, stealthMode = false) => {
+					const updated = { ...existing, ...patch };
+					updated.timing = { ...(existing?.timing || {}), ...(patch?.timing || {}) };
+					if (!stealthMode) {
+						updated.timing.updatedAt = Date.now();
+					}
+					return updated;
+				},
+			};
+
+			const messages = [{ ref: 'due', level: 10, timing: { notifyAt: now - 1, remindEvery: 1000 } }];
+			const { store } = createStore({ messages, msgNotify, factory });
+
+			withFixedNow(now, () => {
+				store._initiateNotifications();
+			});
+
+			expect(received).to.have.length(1);
+			expect(received[0].event).to.equal('due');
+			expect(store.fullList[0].timing.notifyAt).to.equal(now + 1000);
+			expect(store.fullList[0].timing.updatedAt).to.equal(undefined);
+		});
+	});
+
+	describe('updateMessage guards', () => {
+		it('rejects empty or non-object patches', () => {
+			const { store, writes } = createStore();
+			const result = store.updateMessage(null);
+			expect(result).to.equal(false);
+			expect(writes).to.have.length(0);
+		});
+
+		it('rejects ref-only calls with empty ref', () => {
+			const { store, writes } = createStore();
+			const result = store.updateMessage('   ', { text: 'x' });
+			expect(result).to.equal(false);
+			expect(writes).to.have.length(0);
+		});
+
+		it('rejects patches without a valid ref', () => {
+			const { store, writes } = createStore();
+			const result = store.updateMessage({ ref: '   ' });
+			expect(result).to.equal(false);
+			expect(writes).to.have.length(0);
+		});
+
+		it('rejects updates for missing refs', () => {
+			const { store, writes } = createStore({ messages: [] });
+			const result = store.updateMessage({ ref: 'r1', text: 'x' });
+			expect(result).to.equal(false);
+			expect(writes).to.have.length(0);
+		});
+
+			it('rejects updates when factory lacks applyPatch', () => {
+				const { adapter, logs } = createAdapter();
+				const { storage, writes } = createStorage();
+				const { msgRender } = createRenderer();
+				const msgFactory = {};
+				const store = new MsgStore(adapter, MsgConstants, msgFactory, {
+					notifierIntervalMs: 0,
+					initialMessages: [{ ref: 'r1', level: 10 }],
+				});
+				store.msgStorage = storage;
+				store.msgRender = msgRender;
+				store.msgArchive = { appendSnapshot: () => {}, appendPatch: () => {}, appendDelete: () => {} };
+				store.msgNotify = { dispatch: () => {} };
+
+			const result = store.updateMessage({ ref: 'r1', text: 'x' });
+			expect(result).to.equal(false);
+			expect(logs.warn).to.have.length(1);
+			expect(writes).to.have.length(0);
+		});
+
+		it('rejects updates when factory returns null', () => {
+			const factory = createFactory({ applyPatch: () => null });
+			const { store, writes } = createStore({ messages: [{ ref: 'r1', level: 10 }], factory });
+			const result = store.updateMessage({ ref: 'r1', text: 'x' });
+			expect(result).to.equal(false);
+			expect(writes).to.have.length(0);
+		});
+	});
+
+	describe('updateMessage success', () => {
+		it('applies patch and persists', () => {
+			const factory = createFactory();
+			const { store, writes } = createStore({
+				messages: [{ ref: 'r1', level: 10, text: 'old' }],
+				factory,
+			});
+
+			const result = store.updateMessage({ ref: 'r1', text: 'new' });
+			expect(result).to.equal(true);
+			expect(store.getMessageByRef('r1').text).to.equal('new');
+			expect(writes).to.have.length(1);
+		});
+
+		it('accepts ref + patch overload', () => {
+			const factory = createFactory();
+			const { store, writes } = createStore({
+				messages: [{ ref: 'r1', level: 10, text: 'old' }],
+				factory,
+			});
+
+			const result = store.updateMessage('r1', { text: 'new' });
+			expect(result).to.equal(true);
+			expect(store.getMessageByRef('r1').text).to.equal('new');
+			expect(writes).to.have.length(1);
+		});
+
+		it('does not dispatch updated when stealthMode=true', () => {
+			const received = [];
+			const msgNotify = { dispatch: (event, msg) => received.push({ event, msg }) };
+
+			const factory = {
+				applyPatch: (existing, patch, stealthMode = false) => {
+					const updated = { ...existing, ...patch };
+					updated.timing = { ...(existing?.timing || {}), ...(patch?.timing || {}) };
+					if (!stealthMode) {
+						updated.timing.updatedAt = Date.now();
+					}
+					return updated;
+				},
+			};
+
+			const messages = [{ ref: 'r1', level: 10, timing: { createdAt: 1 }, text: 'old' }];
+			const { store } = createStore({ messages, msgNotify, factory });
+
+			withFixedNow(2000, () => {
+				const ok = store.updateMessage('r1', { text: 'new' }, true);
+				expect(ok).to.equal(true);
+			});
+
+			expect(store.fullList[0].text).to.equal('new');
+			expect(store.fullList[0].timing.updatedAt).to.equal(undefined);
+			expect(received).to.have.length(0);
+		});
+	});
+
+	describe('addOrUpdateMessage guards', () => {
+		it('updates when the ref already exists', () => {
+			const factory = createFactory();
+			const { store, writes } = createStore({
+				messages: [{ ref: 'r1', level: 10, text: 'old' }],
+				factory,
+			});
+
+			const result = store.addOrUpdateMessage({ ref: 'r1', text: 'new' });
+			expect(result).to.equal(true);
+			expect(store.getMessageByRef('r1').text).to.equal('new');
+			expect(writes).to.have.length(1);
+		});
+
+		it('adds when the ref does not exist', () => {
+			const { store, writes } = createStore();
+			const result = store.addOrUpdateMessage({ ref: 'r2', level: 10 });
+			expect(result).to.equal(true);
+			expect(store.getMessages()).to.have.length(1);
+			expect(writes).to.have.length(1);
+		});
+	});
+
+		describe('read helpers', () => {
+			it('finds by ref and returns undefined when missing', () => {
+				const { store } = createStore({ messages: [{ ref: 'r1', level: 10 }] });
+				expect(store.getMessageByRef('r1')).to.be.an('object');
+				expect(store.getMessageByRef('missing')).to.equal(undefined);
+			});
+
+			it('returns the full list', () => {
+				const messages = [{ ref: 'r1', level: 10 }];
+				const { store } = createStore({ messages });
+				expect(store.getMessages().map(msg => msg.ref)).to.deep.equal(['r1']);
+			});
+		});
+
+		describe('queryMessages', () => {
+			it('excludes deleted and expired by default', () => {
+				const messages = [
+					{ ref: 'r1', level: 10, lifecycle: { state: MsgConstants.lifecycle.state.open } },
+					{ ref: 'r2', level: 10, lifecycle: { state: MsgConstants.lifecycle.state.deleted } },
+					{ ref: 'r3', level: 10, lifecycle: { state: MsgConstants.lifecycle.state.expired } },
+					{ ref: 'r4', level: 10 }, // no lifecycle => treated as open
+				];
+				const { store } = createStore({ messages });
+				const result = store.queryMessages();
+				expect(result.total).to.equal(2);
+				expect(result.pages).to.equal(1);
+				expect(result.items.map(msg => msg.ref)).to.deep.equal(['r1', 'r4']);
+			});
+
+			it('includes deleted/expired only when explicitly requested via lifecycle filter', () => {
+				const messages = [
+					{ ref: 'r1', level: 10, lifecycle: { state: MsgConstants.lifecycle.state.open } },
+					{ ref: 'r2', level: 10, lifecycle: { state: MsgConstants.lifecycle.state.deleted } },
+					{ ref: 'r3', level: 10, lifecycle: { state: MsgConstants.lifecycle.state.expired } },
+					{ ref: 'r4', level: 10 },
+				];
+				const { store } = createStore({ messages });
+				const result = store.queryMessages({
+					where: { lifecycle: { state: { in: [MsgConstants.lifecycle.state.deleted, MsgConstants.lifecycle.state.expired] } } },
+				});
+				expect(result.items.map(msg => msg.ref)).to.deep.equal(['r2', 'r3']);
+			});
+
+			it('supports level filtering', () => {
+				const messages = [
+					{ ref: 'r1', level: 10, lifecycle: { state: MsgConstants.lifecycle.state.open } },
+					{ ref: 'r2', level: 20, lifecycle: { state: MsgConstants.lifecycle.state.open } },
+					{ ref: 'r3', level: 10, lifecycle: { state: MsgConstants.lifecycle.state.open } },
+				];
+				const { store } = createStore({ messages });
+				const result = store.queryMessages({ where: { level: 10 } });
+				expect(result.items.map(msg => msg.ref)).to.deep.equal(['r1', 'r3']);
+			});
+
+			it('supports timing range filters (range implies existence)', () => {
+				const messages = [
+					{ ref: 'r1', level: 10, timing: { startAt: 1000 } },
+					{ ref: 'r2', level: 10, timing: { startAt: 2000 } },
+					{ ref: 'r3', level: 10, timing: {} },
+				];
+				const { store } = createStore({ messages });
+				const result = store.queryMessages({ where: { timing: { startAt: { min: 1500, max: 2500 } } } });
+				expect(result.items.map(msg => msg.ref)).to.deep.equal(['r2']);
+			});
+
+			it('supports includes-any and includes-all filters for string lists', () => {
+				const messages = [
+					{ ref: 'r1', level: 10, audience: { tags: ['Maria'] }, dependencies: ['12'] },
+					{ ref: 'r2', level: 10, audience: { tags: ['Eva'] }, dependencies: ['23'] },
+					{ ref: 'r3', level: 10, audience: { tags: ['Maria', 'Eva'] }, dependencies: ['12', '23'] },
+					{ ref: 'r4', level: 10, dependencies: ['12'] },
+				];
+				const { store } = createStore({ messages });
+
+				const anyTags = store.queryMessages({ where: { audience: { tags: ['Maria', 'Eva'] } } });
+				expect(anyTags.items.map(msg => msg.ref)).to.deep.equal(['r1', 'r2', 'r3']);
+
+				const allTags = store.queryMessages({ where: { audience: { tags: { all: ['Maria', 'Eva'] } } } });
+				expect(allTags.items.map(msg => msg.ref)).to.deep.equal(['r3']);
+
+				const anyDeps = store.queryMessages({ where: { dependencies: { any: ['23'] } } });
+				expect(anyDeps.items.map(msg => msg.ref)).to.deep.equal(['r2', 'r3']);
+			});
+
+			it('supports sort and pagination and stays deterministic', () => {
+				const messages = [
+					{ ref: 'r1', level: 10, timing: { createdAt: 100 } },
+					{ ref: 'r2', level: 10, timing: { createdAt: 200 } },
+					{ ref: 'r3', level: 10, timing: { createdAt: 300 } },
+					{ ref: 'r4', level: 10, timing: { createdAt: 400 } },
+					{ ref: 'r5', level: 10, timing: { createdAt: 500 } },
+				];
+				const { store } = createStore({ messages });
+				const result = store.queryMessages({
+					sort: [{ field: 'timing.createdAt', dir: 'desc' }],
+					page: { size: 2, index: 2 },
+				});
+				expect(result.total).to.equal(5);
+				expect(result.pages).to.equal(3);
+				expect(result.items.map(msg => msg.ref)).to.deep.equal(['r3', 'r2']);
+			});
+		});
+
+		describe('removeMessage guards', () => {
+			it('does nothing when the ref does not exist', () => {
+				const messages = [{ ref: 'r1', level: 10 }];
+				const { store } = createStore({ messages });
+			store.removeMessage('missing');
+			expect(store.getMessages()).to.have.length(1);
+		});
+
+		it('dispatches delete notifications', () => {
+			const received = [];
+			const msgNotify = { dispatch: (event, msg) => received.push({ event, msg }) };
+			const messages = [{ ref: 'r1', level: 10 }];
+			const { store } = createStore({ messages, msgNotify });
+			withFixedNow(2000, () => store.removeMessage('r1'));
+			expect(received).to.have.length(1);
+			expect(received[0].event).to.equal('deleted');
+			expect(received[0].msg.ref).to.equal('r1');
+			expect(received[0].msg.lifecycle.state).to.equal('deleted');
+			expect(received[0].msg.lifecycle.stateChangedAt).to.equal(2000);
+		});
+
+		it('soft-deletes the matching message (keeps it in the list)', () => {
+			const messages = [{ ref: 'r1', level: 10 }];
+			const { store } = createStore({ messages });
+			withFixedNow(2000, () => {
+				store.removeMessage('r1');
+				expect(store.getMessages()).to.have.length(1);
+				expect(store.getMessageByRef('r1').lifecycle.state).to.equal('deleted');
+			});
+		});
+	});
+
+	describe('_pruneOldMessages', () => {
+		it('soft-expires messages but keeps them in the list', () => {
+			const now = 10_000;
+			const messages = [
+				{ ref: 'r1', level: 10, timing: { expiresAt: now - 1 } },
+				{ ref: 'r2', level: 10, timing: { expiresAt: now + 1_000 } },
+			];
+			const deletes = [];
+			const msgArchive = {
+				appendDelete: (message, options) => deletes.push({ message, options }),
+			};
+			const received = [];
+			const msgNotify = { dispatch: (event, msg) => received.push({ event, msg }) };
+			const { store } = createStore({ messages, msgArchive, msgNotify });
+			store.lastPruneAt = now - store.pruneIntervalMs - 1;
+
+			withFixedNow(now, () => {
+				store._pruneOldMessages();
+				expect(store.getMessages().map(msg => msg.ref)).to.deep.equal(['r1', 'r2']);
+			});
+
+			expect(deletes).to.have.length(0);
+			expect(received).to.have.length(1);
+			expect(received[0].event).to.equal('expired');
+			expect(received[0].msg).to.have.length(1);
+			expect(received[0].msg[0].ref).to.equal('r1');
+			expect(received[0].msg[0].lifecycle.state).to.equal('expired');
+		});
+
+		it('throttles pruning within the interval', () => {
+			const now = 20_000;
+			const messages = [{ ref: 'r1', level: 10, timing: { expiresAt: now - 1 } }];
+			const { store } = createStore({ messages });
+			store.lastPruneAt = now;
+
+			withFixedNow(now, () => {
+				store._pruneOldMessages();
+				expect(store.getMessages()).to.have.length(1);
+			});
+		});
+
+		it('hard-deletes messages after the retention window and archives purge', () => {
+			const now = 10_000;
+			const deletes = [];
+			const msgArchive = {
+				appendDelete: (message, options) => deletes.push({ message, options }),
+			};
+			const messages = [
+				{
+					ref: 'r1',
+					level: 10,
+					lifecycle: { state: 'deleted', stateChangedAt: now - 2_000, stateChangedBy: 'test' },
+				},
+			];
+			const { store } = createStore({
+				messages,
+				msgArchive,
+				options: { hardDeleteAfterMs: 1000, hardDeleteIntervalMs: 0 },
+			});
+			store.lastPruneAt = now - store.pruneIntervalMs - 1;
+
+			withFixedNow(now, () => {
+				store._pruneOldMessages();
+			});
+
+			expect(store.getMessages().map(msg => msg.ref)).to.deep.equal([]);
+			expect(deletes).to.have.length(1);
+			expect(deletes[0].message.ref).to.equal('r1');
+			expect(deletes[0].options).to.deep.equal({ event: 'purge' });
+		});
+	});
+});

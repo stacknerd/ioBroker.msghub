@@ -1,0 +1,1586 @@
+{
+	"i18n": true,
+	"type": "tabs",
+	"tabsStyle": {
+		"width": "calc(100% - 100px)"
+	},
+	"items": {
+		"managedNotice": {
+			"type": "panel",
+			"label": "Notice",
+			"hidden": "!((data.meta && data.meta.managedBy) || data['meta.managedBy'] )",
+			"items": {
+				"_mngH0": {
+					"type": "header",
+					"size": 2,
+					"text": "This object is managed automatically",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12
+				},
+				"_mngInfo0": {
+					"newLine": true,
+					"type": "staticText",
+					"text": "A higher-priority monitoring rule is active for this object.",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12,
+					"style": {
+						"color": "red",
+						"margin": "1em 0",
+						"fontWeight": "bold"
+					}
+				},
+				"_mngInfo1": {
+					"newLine": true,
+					"type": "staticText",
+					"text": "Manual rules are disabled and not shown.\n\nIf you want to change monitoring, change the configuration of the source (ingest/plugin) that manages this object.",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12,
+					"style": { "whiteSpace": "pre-wrap" }
+				},
+				"meta.managedBy": {
+					"newLine": true,
+					"type": "text",
+					"label": "Managed by:",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 6,
+					"xl": 6,
+					"disabled": true
+				},
+				"meta.managedSince": {
+					"type": "text",
+					"label": "Managed since:",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 6,
+					"xl": 6,
+					"disabled": true
+				},
+				"meta.managedText": {
+					"type": "text",
+					"multiline": true,
+					"label": "Note (from system)",
+					"help": "Additional information from the source that manages this object.",
+					"minRows": 5,
+					"maxRows": 10,
+					"newLine": true,
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12,
+					"disabled": true
+				}
+			}
+		},
+		"mode": {
+			"type": "panel",
+			"label": "Monitoring",
+			"hidden": "!!((data.meta && data.meta.managedBy) || data['meta.managedBy'] )",
+			"items": {
+				"_modeH0": {
+					"type": "header",
+					"size": 2,
+					"text": "Monitoring",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12
+				},
+				"_modeInfo0": {
+					"newLine": true,
+					"type": "staticText",
+					"text": "Choose the rule type that fits this object.",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12
+				},
+				"mode": {
+					"newLine": true,
+					"type": "select",
+					"label": "Rule type",
+					"help": "Choose the rule type; then configure the details in the corresponding tab.",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12,
+					"default": "freshness",
+					"options": [
+						{ "label": "Threshold", "value": "threshold" },
+						{ "label": "Freshness", "value": "freshness" },
+						{ "label": "Dependency (Trigger)", "value": "triggered" },
+						{ "label": "Non-settling value", "value": "nonSettling" },
+						{ "label": "Session (Start/Stop)", "value": "session" }
+					],
+					"style": { "margin": "1em 0" }
+				},
+				"_modeH4Info": {
+					"newLine": true,
+					"type": "header",
+					"size": 4,
+					"text": "Description",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12
+				},
+				"_modeThresholdInfo": {
+					"newLine": true,
+					"hidden": "!!((data.meta && data.meta.managedBy) || data['meta.managedBy'] ) || (((data.watch && data.mode) || data['mode']) !== 'threshold')",
+					"type": "staticText",
+					"text": "Threshold: You get a message if a numeric value is too low/too high, leaves a defined range, or a boolean stays TRUE/FALSE for too long.\n\nExamples:\n- Battery < 10% → warning/error\n- Humidity < 35% for 30 min → notice (“Please ventilate”)\n- Window contact is open for 12 h (TRUE/FALSE depending on device) → warning\n\nTip: Hysteresis and minimum duration help to avoid flapping and short spikes.",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12,
+					"style": { "whiteSpace": "pre-wrap" }
+				},
+				"_modeFreshnessInfo": {
+					"newLine": true,
+					"hidden": "!!((data.meta && data.meta.managedBy) || data['meta.managedBy'] ) || (((data.watch && data.mode) || data['mode']) !== 'freshness')",
+					"type": "staticText",
+					"text": "Freshness: You get a message if this object has no update (ts) or no actual value change (lc) for too long.\n\nExamples:\n- Temperature sensor: at least one update every 12 h\n- Power/energy meter: at least one update every 30 s\n- Device with keepalive: at least one heartbeat every 5 min\n\nTip: If a device sends keepalives even without changes, use ts; if it only sends on change, use lc.",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"minRows": 5,
+					"maxRows": 10,
+					"lg": 12,
+					"xl": 12,
+					"style": { "whiteSpace": "pre-wrap" }
+				},
+				"_modeTriggeredInfo": {
+					"newLine": true,
+					"hidden": "!!((data.meta && data.meta.managedBy) || data['meta.managedBy'] ) || (((data.watch && data.mode) || data['mode']) !== 'triggered')",
+					"type": "staticText",
+					"text": "Dependency (Trigger): When another object becomes active, this object must react within a time window as you expect.\n\nExamples:\n- Valve = ON → water meter must increase within 10 min (delta)\n- Plug = ON → power must become >= 5 W within 30 s\n- Heating = ON → flow temperature must rise within 15 min\n\nTip: Choose a generous time window if devices are slow or have latency.",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12,
+					"style": { "whiteSpace": "pre-wrap" }
+				},
+				"_modeNonSettlingInfo": {
+					"newLine": true,
+					"hidden": "!!((data.meta && data.meta.managedBy) || data['meta.managedBy'] ) || (((data.watch && data.mode) || data['mode']) !== 'nonSettling')",
+					"type": "staticText",
+					"text": "Non-settling value: You get a message if a value has no quiet phase for a long time or shows a suspicious trend in one direction over a time window.\n\nExamples:\n- Water meter increases for hours without quiet phase → possible leak\n- Sensor value keeps fluctuating without stable phase → RF issues / defective sensor\n- Counter keeps running although it usually has idle phases → consumer stuck\n\nTip: Use “Min. delta” to filter measurement noise.",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12,
+					"style": { "whiteSpace": "pre-wrap" }
+				},
+				"_modeSessionInfo": {
+					"newLine": true,
+					"hidden": "!!((data.meta && data.meta.managedBy) || data['meta.managedBy'] ) || (((data.watch && data.mode) || data['mode']) !== 'session')",
+					"type": "staticText",
+					"text": "Session (Start/Stop): You get a message when a process starts and later finishes again – usually detected via power thresholds and a stop delay.\n\nExamples:\n- E-bike charging: start >= 50 W, finish < 15 W for 5 min\n- Washing machine: start > 10 W (with min hold), finish after stop delay\n- Dishwasher: start/finish via typical power phases + stop delay\n\nTip: A short minimum hold time prevents false starts caused by brief spikes.",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12,
+					"style": { "whiteSpace": "pre-wrap" }
+				}
+			}
+		},
+		"threshold": {
+			"type": "panel",
+			"label": "Threshold",
+			"hidden": "!!((data.meta && data.meta.managedBy) || data['meta.managedBy'] ) || (((data.watch && data.mode) || data['mode']) !== 'threshold')",
+			"items": {
+				"_thrH0": {
+					"type": "header",
+					"size": 2,
+					"text": "Threshold",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12
+				},
+				"_thrInfo0": {
+					"newLine": true,
+					"type": "staticText",
+					"text": "Alerts when the current value crosses a boundary, leaves a range, or a boolean stays TRUE/FALSE for too long.",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12,
+					"style": { "whiteSpace": "pre-wrap" }
+				},
+				"_thrH4Condition": {
+					"newLine": true,
+					"type": "header",
+					"size": 4,
+					"text": "Condition",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12
+				},
+				"thr.mode": {
+					"newLine": true,
+					"type": "select",
+					"label": "Check",
+					"help": "When should a message be created? For booleans you can choose “is true”/“is false”.",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 6,
+					"xl": 6,
+					"default": "lt",
+					"options": [
+						{ "label": "below (<)", "value": "lt" },
+						{ "label": "above (>)", "value": "gt" },
+						{ "label": "outside range (min..max)", "value": "outside" },
+						{ "label": "inside range (min..max)", "value": "inside" },
+						{ "label": "is true (TRUE)", "value": "truthy" },
+						{ "label": "is false (FALSE)", "value": "falsy" }
+					]
+				},
+				"thr.value": {
+					"type": "number",
+					"label": "Limit",
+					"help": "Only for below/above (lt/gt).",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 6,
+					"xl": 6,
+					"hidden": "(((data.thr && data.thr.mode) || data['thr.mode']) === 'outside') || (((data.thr && data.thr.mode) || data['thr.mode']) === 'inside') || (((data.thr && data.thr.mode) || data['thr.mode']) === 'truthy') || (((data.thr && data.thr.mode) || data['thr.mode']) === 'falsy')",
+					"default": 10
+				},
+				"thr.min": {
+					"type": "number",
+					"label": "Minimum",
+					"help": "Only for range (inside/outside).",
+					"xs": 12,
+					"sm": 6,
+					"md": 3,
+					"lg": 3,
+					"xl": 3,
+					"hidden": "(((data.thr && data.thr.mode) || data['thr.mode']) !== 'outside') && (((data.thr && data.thr.mode) || data['thr.mode']) !== 'inside')",
+					"default": 0
+				},
+				"thr.max": {
+					"type": "number",
+					"label": "Maximum",
+					"help": "Only for range (inside/outside).",
+					"xs": 12,
+					"sm": 6,
+					"md": 3,
+					"lg": 3,
+					"xl": 3,
+					"hidden": "(((data.thr && data.thr.mode) || data['thr.mode']) !== 'outside') && (((data.thr && data.thr.mode) || data['thr.mode']) !== 'inside')",
+					"default": 100
+				},
+				"_thrH4Stabilize": {
+					"newLine": true,
+					"type": "header",
+					"size": 4,
+					"text": "Stabilization",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12
+				},
+				"thr.hysteresis": {
+					"newLine": true,
+					"type": "number",
+					"label": "Hysteresis",
+					"help": "Avoids flapping around the boundary. Example: alert when < 10, back to ok only above 12 (hysteresis 2). 0 = off.",
+					"xs": 12,
+					"sm": 6,
+					"md": 3,
+					"lg": 3,
+					"xl": 3,
+					"hidden": "(((data.thr && data.thr.mode) || data['thr.mode']) === 'truthy') || (((data.thr && data.thr.mode) || data['thr.mode']) === 'falsy')",
+					"min": 0,
+					"default": 0
+				},
+				"thr.minDurationValue": {
+					"type": "number",
+					"label": "Minimum duration",
+					"help": "The condition must hold for this duration before alerting (0 = immediate).",
+					"xs": 12,
+					"sm": 3,
+					"md": 3,
+					"lg": 3,
+					"xl": 3,
+					"min": 0,
+					"default": 0
+				},
+				"thr.minDurationUnit": {
+					"type": "select",
+					"label": "Unit",
+					"xs": 12,
+					"sm": 3,
+					"md": 3,
+					"lg": 3,
+					"xl": 3,
+					"default": 60,
+					"options": [
+						{ "label": "Seconds", "value": 1 },
+						{ "label": "Minutes", "value": 60 },
+						{ "label": "Hours", "value": 3600 }
+					]
+				},
+				"_thrH4Examples": {
+					"newLine": true,
+					"type": "header",
+					"size": 4,
+					"text": "Examples",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12
+				},
+				"_thrExamples0": {
+					"newLine": true,
+					"type": "staticText",
+					"text": "- Battery: check “below (<)”, limit 10, hysteresis 2, min duration 10 minutes\n- Humidity: check “below (<)”, limit 35, min duration 0\n- Fill level: check “above (>)”, limit 5000, min duration 1 minute\n- Window contact: check “is true” (or “is false”, depending on device), min duration 12 hours",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12,
+					"style": { "whiteSpace": "pre-wrap" }
+				}
+			}
+		},
+		"freshness": {
+			"type": "panel",
+			"label": "Freshness",
+			"hidden": "!!((data.meta && data.meta.managedBy) || data['meta.managedBy'] ) || (((data.watch && data.mode) || data['mode']) !== 'freshness')",
+			"items": {
+				"_freshH0": {
+					"type": "header",
+					"size": 2,
+					"text": "Freshness",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12
+				},
+				"_freshInfo0": {
+					"newLine": true,
+					"type": "staticText",
+					"text": "Alerts if this object has no update (ts) or no value change (lc) longer than allowed.",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12,
+					"style": { "whiteSpace": "pre-wrap" }
+				},
+				"_freshH4Time": {
+					"newLine": true,
+					"type": "header",
+					"size": 4,
+					"text": "Timing",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12
+				},
+				"_freshInfoTime0": {
+					"newLine": true,
+					"type": "staticText",
+					"text": "Set how often an update must arrive at the latest.\nTip: Use a bit more buffer if devices sometimes send with delay.",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12,
+					"style": { "whiteSpace": "pre-wrap" }
+				},
+				"fresh.everyValue": {
+					"newLine": true,
+					"type": "number",
+					"label": "Maximum gap",
+					"help": "An update must arrive within this time.",
+					"xs": 12,
+					"sm": 6,
+					"md": 3,
+					"lg": 3,
+					"xl": 3,
+					"min": 1,
+					"default": 60
+				},
+				"fresh.everyUnit": {
+					"type": "select",
+					"label": "Unit",
+					"xs": 12,
+					"sm": 6,
+					"md": 3,
+					"lg": 3,
+					"xl": 3,
+					"default": 60,
+					"options": [
+						{ "label": "Minutes", "value": 60 },
+						{ "label": "Hours", "value": 3600 },
+						{ "label": "Days", "value": 86400 }
+					]
+				},
+				"fresh.evaluateBy": {
+					"type": "select",
+					"label": "Timestamp",
+					"help": "Which timestamp should be checked?\n- ts: counts every update (even if the value stays the same)\n- lc: counts only actual value changes",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 6,
+					"xl": 6,
+					"default": "ts",
+					"options": [
+						{ "label": "lastUpdate (ts) – every update (ts)", "value": "ts" },
+						{ "label": "lastChange (lc) – value changes only (lc)", "value": "lc" }
+					]
+				},
+				"_freshH4Examples": {
+					"newLine": true,
+					"type": "header",
+					"size": 4,
+					"text": "Examples",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12
+				},
+				"_freshExamples0": {
+					"newLine": true,
+					"type": "staticText",
+					"text": "Examples:\n- Temperature sensor: maximum gap 12 hours\n- Power meter: maximum gap 30 seconds\n- Device with keepalive: maximum gap 5 minutes",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12,
+					"style": { "whiteSpace": "pre-wrap" }
+				}
+			}
+		},
+		"triggered": {
+			"type": "panel",
+			"label": "Dependency (Trigger)",
+			"hidden": "!!((data.meta && data.meta.managedBy) || data['meta.managedBy'] ) || (((data.watch && data.mode) || data['mode']) !== 'triggered')",
+			"items": {
+				"_trgH0": {
+					"type": "header",
+					"size": 2,
+					"text": "Dependency (Trigger)",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12
+				},
+				"_trgInfo0": {
+					"newLine": true,
+					"type": "staticText",
+					"text": "Alerts when a trigger is active and this object does not react as expected within the time window.",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12,
+					"style": { "whiteSpace": "pre-wrap" }
+				},
+				"_trgH4Trigger": {
+					"newLine": true,
+					"type": "header",
+					"size": 4,
+					"text": "Trigger",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12
+				},
+				"trg.id": {
+					"newLine": true,
+					"type": "objectId",
+					"label": "Trigger object (ID)",
+					"help": "This is the trigger source, e.g., a switch (valve, plug), a mode or a state.",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 4,
+					"xl": 4,
+					"default": ""
+				},
+				"trg.operator": {
+					"type": "select",
+					"label": "Trigger condition",
+					"help": "When is the trigger considered active?",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 3,
+					"xl": 3,
+					"default": "eq",
+					"options": [
+						{ "label": "equals (=)", "value": "eq" },
+						{ "label": "not equals (≠)", "value": "neq" },
+						{ "label": "greater than (>)", "value": "gt" },
+						{ "label": "less than (<)", "value": "lt" },
+						{ "label": "true (truthy)", "value": "truthy" },
+						{ "label": "false (falsy)", "value": "falsy" }
+					]
+				},
+				"trg.valueType": {
+					"type": "select",
+					"label": "Value type",
+					"help": "Makes the comparison explicit. For “true/false” you don’t need a comparison value.",
+					"xs": 12,
+					"sm": 12,
+					"md": 4,
+					"lg": 2,
+					"xl": 2,
+					"default": "boolean",
+					"hidden": "(((data.trg && data.trg.operator) || data['trg.operator']) === 'truthy') || (((data.trg && data.trg.operator) || data['trg.operator']) === 'falsy')",
+					"options": [
+						{ "label": "Boolean (true/false)", "value": "boolean" },
+						{ "label": "Number", "value": "number" },
+						{ "label": "Text", "value": "string" }
+					]
+				},
+				"trg.valueBool": {
+					"type": "checkbox",
+					"label": "Trigger is TRUE",
+					"help": "If disabled, FALSE is expected.",
+					"xs": 12,
+					"sm": 12,
+					"md": 4,
+					"lg": 3,
+					"xl": 3,
+					"default": true,
+					"hidden": "(((data.trg && data.trg.operator) || data['trg.operator']) === 'truthy') || (((data.trg && data.trg.operator) || data['trg.operator']) === 'falsy') || (((data.trg && data.trg.valueType) || data['trg.valueType']) !== 'boolean')"
+				},
+				"trg.valueNumber": {
+					"type": "number",
+					"label": "Comparison value (number)",
+					"xs": 12,
+					"sm": 12,
+					"md": 4,
+					"lg": 3,
+					"xl": 3,
+					"hidden": "(((data.trg && data.trg.operator) || data['trg.operator']) === 'truthy') || (((data.trg && data.trg.operator) || data['trg.operator']) === 'falsy') || (((data.trg && data.trg.valueType) || data['trg.valueType']) !== 'number')"
+				},
+				"trg.valueString": {
+					"type": "text",
+					"label": "Comparison value (text)",
+					"xs": 12,
+					"sm": 12,
+					"md": 4,
+					"lg": 3,
+					"xl": 3,
+					"hidden": "(((data.trg && data.trg.operator) || data['trg.operator']) === 'truthy') || (((data.trg && data.trg.operator) || data['trg.operator']) === 'falsy') || (((data.trg && data.trg.valueType) || data['trg.valueType']) !== 'string')"
+				},
+				"_trgH4Window": {
+					"newLine": true,
+					"type": "header",
+					"size": 4,
+					"text": "Time window",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12
+				},
+				"trg.windowValue": {
+					"newLine": true,
+					"type": "number",
+					"label": "Duration",
+					"help": "The reaction must happen within this time.",
+					"xs": 12,
+					"sm": 6,
+					"md": 3,
+					"lg": 3,
+					"xl": 3,
+					"min": 1,
+					"default": 5
+				},
+				"trg.windowUnit": {
+					"type": "select",
+					"label": "Unit",
+					"xs": 12,
+					"sm": 6,
+					"md": 3,
+					"lg": 3,
+					"xl": 3,
+					"default": 60,
+					"options": [
+						{ "label": "Seconds", "value": 1 },
+						{ "label": "Minutes", "value": 60 },
+						{ "label": "Hours", "value": 3600 }
+					]
+				},
+				"_trgH4Expectation": {
+					"newLine": true,
+					"type": "header",
+					"size": 4,
+					"text": "Expected reaction",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12
+				},
+				"trg.expectation": {
+					"newLine": true,
+					"type": "select",
+					"label": "What must happen?",
+					"help": "Choose how this datapoint should react.",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 6,
+					"xl": 6,
+					"default": "changed",
+					"options": [
+						{ "label": "Value changes (at least 1 update/change)", "value": "changed" },
+						{ "label": "Value increases by at least (delta)", "value": "deltaUp" },
+						{ "label": "Value decreases by at least (delta)", "value": "deltaDown" },
+						{ "label": "Value becomes at least (>= threshold)", "value": "thresholdGte" },
+						{ "label": "Value becomes at most (<= threshold)", "value": "thresholdLte" }
+					]
+				},
+				"trg.minDelta": {
+					"type": "number",
+					"label": "Minimum delta",
+					"help": "Only for delta rules. Example: counter must increase by at least 1.",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 6,
+					"xl": 6,
+					"min": 0,
+					"default": 0,
+					"hidden": "(((data.trg && data.trg.expectation) || data['trg.expectation']) !== 'deltaUp') && (((data.trg && data.trg.expectation) || data['trg.expectation']) !== 'deltaDown')"
+				},
+				"trg.threshold": {
+					"type": "number",
+					"label": "Threshold",
+					"help": "Only for threshold rules (>= / <=).",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 6,
+					"xl": 6,
+					"hidden": "(((data.trg && data.trg.expectation) || data['trg.expectation']) !== 'thresholdGte') && (((data.trg && data.trg.expectation) || data['trg.expectation']) !== 'thresholdLte')"
+				},
+				"_trgH4Examples": {
+					"newLine": true,
+					"type": "header",
+					"size": 4,
+					"text": "Examples",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12
+				},
+				"_trgExamples0": {
+					"newLine": true,
+					"type": "staticText",
+					"text": "Examples:\n- Valve == TRUE → within 10 minutes the water meter must increase by at least 1\n- Plug == TRUE → within 30 seconds the power must become >= 5 W\n- Heating == TRUE → within 15 minutes the flow temperature must rise (delta up)",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12,
+					"style": { "whiteSpace": "pre-wrap" }
+				}
+			}
+		},
+		"nonSettling": {
+			"type": "panel",
+			"label": "Non-settling value",
+			"hidden": "!!((data.meta && data.meta.managedBy) || data['meta.managedBy'] ) || (((data.watch && data.mode) || data['mode']) !== 'nonSettling')",
+			"items": {
+				"_nsH0": {
+					"type": "header",
+					"size": 2,
+					"text": "Non-settling value",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12
+				},
+				"_nsInfo0": {
+					"newLine": true,
+					"type": "staticText",
+					"text": "Alerts when a value has no quiet phase for a long time or shows a suspicious trend in one direction within a time window.",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12,
+					"style": { "whiteSpace": "pre-wrap" }
+				},
+				"_nsH4Profile": {
+					"newLine": true,
+					"type": "header",
+					"size": 4,
+					"text": "Profile",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12
+				},
+				"ns.profile": {
+					"newLine": true,
+					"type": "select",
+					"label": "Profile",
+					"help": "Which pattern do you want to detect?",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 6,
+					"xl": 6,
+					"default": "activity",
+					"options": [
+						{ "label": "Continuous activity (changes without longer pause)", "value": "activity" },
+						{ "label": "Leak/trend (rises/falls over long time)", "value": "trend" }
+					]
+				},
+				"ns.minDelta": {
+					"type": "number",
+					"label": "Min. delta",
+					"help": "Filters measurement noise. Only changes >= this delta count (0 = every change).",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 6,
+					"xl": 6,
+					"min": 0,
+					"default": 0
+				},
+				"_nsH4Activity": {
+					"newLine": true,
+					"type": "header",
+					"size": 4,
+					"text": "Continuous activity",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12,
+					"hidden": "((data.ns && data.ns.profile) || data['ns.profile']) !== 'activity'"
+				},
+				"_nsInfoActivity0": {
+					"newLine": true,
+					"type": "staticText",
+					"text": "Alerts when the value has no sufficient quiet phase for a long time.",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12,
+					"hidden": "((data.ns && data.ns.profile) || data['ns.profile']) !== 'activity'"
+				},
+				"ns.maxContinuousValue": {
+					"newLine": true,
+					"type": "number",
+					"label": "Max. time without quiet",
+					"help": "If no quiet phase is reached for this long, alert.",
+					"xs": 12,
+					"sm": 6,
+					"md": 3,
+					"lg": 3,
+					"xl": 3,
+					"min": 1,
+					"default": 180,
+					"hidden": "((data.ns && data.ns.profile) || data['ns.profile']) !== 'activity'"
+				},
+				"ns.maxContinuousUnit": {
+					"type": "select",
+					"label": "Unit",
+					"xs": 12,
+					"sm": 6,
+					"md": 3,
+					"lg": 3,
+					"xl": 3,
+					"default": 60,
+					"hidden": "((data.ns && data.ns.profile) || data['ns.profile']) !== 'activity'",
+					"options": [
+						{ "label": "Minutes", "value": 60 },
+						{ "label": "Hours", "value": 3600 }
+					]
+				},
+				"ns.quietGapValue": {
+					"type": "number",
+					"label": "Quiet phase",
+					"help": "It must be quiet for this long to count as “settled”.",
+					"xs": 12,
+					"sm": 6,
+					"md": 3,
+					"lg": 3,
+					"xl": 3,
+					"min": 0,
+					"default": 15,
+					"hidden": "((data.ns && data.ns.profile) || data['ns.profile']) !== 'activity'"
+				},
+				"ns.quietGapUnit": {
+					"type": "select",
+					"label": "Unit",
+					"xs": 12,
+					"sm": 6,
+					"md": 3,
+					"lg": 3,
+					"xl": 3,
+					"default": 60,
+					"hidden": "((data.ns && data.ns.profile) || data['ns.profile']) !== 'activity'",
+					"options": [
+						{ "label": "Minutes", "value": 60 },
+						{ "label": "Hours", "value": 3600 }
+					]
+				},
+				"_nsH4Trend": {
+					"newLine": true,
+					"type": "header",
+					"size": 4,
+					"text": "Trend / leak",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12,
+					"hidden": "((data.ns && data.ns.profile) || data['ns.profile']) !== 'trend'"
+				},
+				"_nsInfoTrend0": {
+					"newLine": true,
+					"type": "staticText",
+					"text": "Alerts when the value keeps moving in one direction for a long time (e.g. water meter increases for hours).",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12,
+					"hidden": "((data.ns && data.ns.profile) || data['ns.profile']) !== 'trend'"
+				},
+				"ns.direction": {
+					"newLine": true,
+					"type": "select",
+					"label": "Trend direction",
+					"help": "For leaks, “rising” is usually appropriate (e.g. water meter).",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 3,
+					"xl": 3,
+					"default": "up",
+					"hidden": "((data.ns && data.ns.profile) || data['ns.profile']) !== 'trend'",
+					"options": [
+						{ "label": "rising", "value": "up" },
+						{ "label": "falling", "value": "down" },
+						{ "label": "any", "value": "any" }
+					]
+				},
+				"ns.trendWindowValue": {
+					"type": "number",
+					"label": "Trend window",
+					"help": "How long the trend must persist before alerting.",
+					"xs": 12,
+					"sm": 6,
+					"md": 3,
+					"lg": 3,
+					"xl": 3,
+					"min": 1,
+					"default": 6,
+					"hidden": "((data.ns && data.ns.profile) || data['ns.profile']) !== 'trend'"
+				},
+				"ns.trendWindowUnit": {
+					"type": "select",
+					"label": "Unit",
+					"xs": 12,
+					"sm": 6,
+					"md": 3,
+					"lg": 2,
+					"xl": 2,
+					"default": 3600,
+					"hidden": "((data.ns && data.ns.profile) || data['ns.profile']) !== 'trend'",
+					"options": [
+						{ "label": "Hours", "value": 3600 },
+						{ "label": "Days", "value": 86400 }
+					]
+				},
+				"ns.minTotalDelta": {
+					"type": "number",
+					"label": "Min. total change",
+					"help": "Optional: Only alert if the value changes by at least X in total within the trend window (0 = ignore).",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 4,
+					"xl": 4,
+					"min": 0,
+					"default": 0,
+					"hidden": "((data.ns && data.ns.profile) || data['ns.profile']) !== 'trend'"
+				},
+				"_nsH4Examples": {
+					"newLine": true,
+					"type": "header",
+					"size": 4,
+					"text": "Examples",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12
+				},
+				"_nsExamples0": {
+					"newLine": true,
+					"type": "staticText",
+					"text": "Examples:\n- Leak: profile “Trend”, direction “rising”, trend window 12 hours\n- Flapping sensor: profile “Continuous activity”, max time without quiet 3 hours, quiet phase 10 minutes",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12,
+					"style": { "whiteSpace": "pre-wrap" }
+				}
+			}
+		},
+		"session": {
+			"type": "panel",
+			"label": "Session (Start/Stop)",
+			"hidden": "!!((data.meta && data.meta.managedBy) || data['meta.managedBy'] ) || (((data.watch && data.mode) || data['mode']) !== 'session')",
+			"items": {
+				"_sessH0": {
+					"type": "header",
+					"size": 2,
+					"text": "Session (Start/Stop)",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12
+				},
+				"_sessInfo0": {
+					"newLine": true,
+					"type": "staticText",
+					"text": "Detects the start and end of a process based on power thresholds and a stop delay.",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12,
+					"style": { "whiteSpace": "pre-wrap" }
+				},
+				"_sessH4Inputs": {
+					"newLine": true,
+					"type": "header",
+					"size": 4,
+					"text": "Inputs",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12
+				},
+				"_sessInfoInputs0": {
+					"newLine": true,
+					"type": "staticText",
+					"text": "Optionally set a gate (on/off). Then the session is evaluated only while the gate is active.",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12
+				},
+				"sess.onOffId": {
+					"newLine": true,
+					"type": "objectId",
+					"label": "Gate (on/off) – optional",
+					"help": "If set, start/stop is checked only while this gate is active (e.g. switch ON).",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 6,
+					"xl": 6,
+					"default": ""
+				},
+				"sess.onOffActive": {
+					"newLine": true,
+					"type": "select",
+					"label": "Gate active when",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 6,
+					"xl": 6,
+					"default": "truthy",
+					"options": [
+						{ "label": "true (truthy)", "value": "truthy" },
+						{ "label": "false (falsy)", "value": "falsy" },
+						{ "label": "equals (=) …", "value": "eq" }
+					],
+					"hidden": "!((data.sess && data.sess.onOffId) || data['sess.onOffId'])"
+				},
+				"sess.onOffValue": {
+					"type": "text",
+					"label": "Comparison value",
+					"help": "Only relevant for “equals”. Examples: true, 1, ON, auto …",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 6,
+					"xl": 6,
+					"default": "true",
+					"hidden": "!((data.sess && data.sess.onOffId) || data['sess.onOffId']) || (((data.sess && data.sess.onOffActive) || data['sess.onOffActive']) !== 'eq')"
+				},
+				"_sessH4Start": {
+					"newLine": true,
+					"type": "header",
+					"size": 4,
+					"text": "Start",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12
+				},
+				"sess.startThreshold": {
+					"newLine": true,
+					"type": "number",
+					"label": "Start threshold",
+					"help": "Starts when power is above this threshold.",
+					"xs": 12,
+					"sm": 6,
+					"md": 3,
+					"lg": 3,
+					"xl": 3,
+					"min": 0,
+					"default": 50
+				},
+				"sess.startMinHoldValue": {
+					"type": "number",
+					"label": "Min. hold above start",
+					"help": "Filters short peaks (0 = immediate).",
+					"xs": 12,
+					"sm": 3,
+					"md": 3,
+					"lg": 3,
+					"xl": 3,
+					"min": 0,
+					"default": 0
+				},
+				"sess.startMinHoldUnit": {
+					"type": "select",
+					"label": "Unit",
+					"xs": 12,
+					"sm": 3,
+					"md": 3,
+					"lg": 3,
+					"xl": 3,
+					"default": 1,
+					"options": [
+						{ "label": "Seconds", "value": 1 },
+						{ "label": "Minutes", "value": 60 }
+					]
+				},
+				"_sessH4Stop": {
+					"newLine": true,
+					"type": "header",
+					"size": 4,
+					"text": "Stop / finished",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12
+				},
+				"sess.stopThreshold": {
+					"newLine": true,
+					"type": "number",
+					"label": "Stop threshold (W)",
+					"help": "When power falls below this threshold, the finish check starts.",
+					"xs": 12,
+					"sm": 6,
+					"md": 3,
+					"lg": 3,
+					"xl": 3,
+					"min": 0,
+					"default": 15
+				},
+				"sess.stopDelayValue": {
+					"type": "number",
+					"label": "Finish after",
+					"help": "The session is considered finished only if power stays below the stop threshold for this duration.",
+					"xs": 12,
+					"sm": 3,
+					"md": 3,
+					"lg": 3,
+					"xl": 3,
+					"min": 0,
+					"default": 5
+				},
+				"sess.stopDelayUnit": {
+					"type": "select",
+					"label": "Unit",
+					"xs": 12,
+					"sm": 3,
+					"md": 3,
+					"lg": 3,
+					"xl": 3,
+					"default": 60,
+					"options": [
+						{ "label": "Seconds", "value": 1 },
+						{ "label": "Minutes", "value": 60 },
+						{ "label": "Hours", "value": 3600 }
+					]
+				},
+				"sess.cancelStopIfAboveStopThreshold": {
+					"newLine": true,
+					"type": "checkbox",
+					"label": "Cancel finish timer if power rises again",
+					"help": "If power rises above the stop threshold again, the finish timer is cancelled.",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12,
+					"default": true
+				},
+				"_sessH4Summary": {
+					"newLine": true,
+					"type": "header",
+					"size": 4,
+					"text": "Optional: summary",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12
+				},
+				"sess.energyCounterId": {
+					"newLine": true,
+					"type": "objectId",
+					"label": "Consumption counter (optional)",
+					"help": "If set, the start value is stored and consumption is calculated at the end (end − start).",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 6,
+					"xl": 6,
+					"default": ""
+				},
+				"sess.pricePerKwhId": {
+					"type": "objectId",
+					"label": "Cost per consumption unit (optional)",
+					"help": "If set, a cost in € is calculated at the end.",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 6,
+					"xl": 6,
+					"default": ""
+				},
+				"_sessH4Examples": {
+					"newLine": true,
+					"type": "header",
+					"size": 4,
+					"text": "Examples",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12
+				},
+				"_sessExamples0": {
+					"newLine": true,
+					"type": "staticText",
+					"text": "Example (EV charging):\n- Start threshold 50 W\n- Stop threshold 15 W\n- Finish after 5 minutes below 15 W\n- Optional: energy counter (kWh) + price (€/kWh) → consumption & cost",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12,
+					"style": { "whiteSpace": "pre-wrap" }
+				}
+			}
+		},
+		"message": {
+			"type": "panel",
+			"label": "Message",
+			"hidden": "!!((data.meta && data.meta.managedBy) || data['meta.managedBy'] ) || (((data.mode) || data['mode']) == null)",
+			"items": {
+				"_msgH0": {
+					"type": "header",
+					"size": 2,
+					"text": "Message",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12
+				},
+				"_msgInfo0": {
+					"newLine": true,
+					"type": "staticText",
+					"text": "Configure what the message looks like, when it repeats, and how it is closed when everything is back to normal.",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12,
+					"style": { "whiteSpace": "pre-wrap" }
+				},
+				"_msgSessionInfo0": {
+					"newLine": true,
+					"type": "staticText",
+					"text": "Note (Session): The following settings apply to the session end (finished) message.",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12,
+					"hidden": "((data.mode) || data['mode']) !== 'session'",
+					"style": { "whiteSpace": "pre-wrap", "color": "green", "margin": "1em 0", "fontWeight": "bold" }
+				},
+				"_msgH4Details": {
+					"newLine": true,
+					"type": "header",
+					"size": 4,
+					"text": "Message details",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12
+				},
+				"msg.kind": {
+					"newLine": true,
+					"type": "select",
+					"label": "Kind",
+					"help": "Message kind.",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 6,
+					"xl": 6,
+					"default": "status",
+					"options": [
+						{ "label": "status", "value": "status" },
+						{ "label": "task", "value": "task" }
+					]
+				},
+				"msg.level": {
+					"type": "select",
+					"label": "Level",
+					"help": "How important is the message?",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 6,
+					"xl": 6,
+					"default": 10,
+					"options": [
+						{ "label": "not defined / none", "value": 0 },
+						{ "label": "notice", "value": 10 },
+						{ "label": "warning", "value": 20 },
+						{ "label": "error", "value": 30 }
+					]
+				},
+				"msg.title": {
+					"newLine": true,
+					"type": "text",
+					"label": "Title (optional)",
+					"help": "Short title. If empty, msghub may use a default title later.",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 6,
+					"xl": 6,
+					"placeholder": "e.g. Sensor offline: Basement temperature"
+				},
+				"msg.text": {
+					"type": "text",
+					"label": "Text (optional)",
+					"help": "Short description. If empty, msghub may use a default text later.",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 6,
+					"xl": 6,
+					"placeholder": "e.g. No update for 12h – please check sensor."
+				},
+				"_msgH4Spam": {
+					"newLine": true,
+					"type": "header",
+					"size": 4,
+					"text": "Repeats and reminders",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12
+				},
+				"msg.cooldownValue": {
+					"newLine": true,
+					"type": "number",
+					"label": "Cooldown",
+					"help": "Suppress repeated messages for this duration (0 = off).",
+					"xs": 12,
+					"sm": 6,
+					"md": 3,
+					"lg": 3,
+					"xl": 3,
+					"min": 0,
+					"default": 60
+				},
+				"msg.cooldownUnit": {
+					"type": "select",
+					"label": "Unit",
+					"xs": 12,
+					"sm": 6,
+					"md": 3,
+					"lg": 3,
+					"xl": 3,
+					"default": 60,
+					"options": [
+						{ "label": "Minutes", "value": 60 },
+						{ "label": "Hours", "value": 3600 },
+						{ "label": "Days", "value": 86400 }
+					]
+				},
+				"msg.remindValue": {
+					"type": "number",
+					"label": "Reminder",
+					"help": "Repeat while the issue is still active (0 = off).",
+					"xs": 12,
+					"sm": 6,
+					"md": 3,
+					"lg": 3,
+					"xl": 3,
+					"min": 0,
+					"default": 0,
+					"hidden": "(['threshold','freshness','triggered','nonSettling','session'].indexOf(((data.mode) || data['mode'])) === -1)"
+				},
+				"msg.remindUnit": {
+					"type": "select",
+					"label": "Unit",
+					"xs": 12,
+					"sm": 6,
+					"md": 3,
+					"lg": 3,
+					"xl": 3,
+					"default": 3600,
+					"options": [
+						{ "label": "Seconds", "value": 1 },
+						{ "label": "Minutes", "value": 60 },
+						{ "label": "Hours", "value": 3600 },
+						{ "label": "Days", "value": 86400 }
+					],
+					"hidden": "(['threshold','freshness','triggered','nonSettling','session'].indexOf(((data.mode) || data['mode'])) === -1)"
+				},
+				"_msgH4Recovery": {
+					"newLine": true,
+					"type": "header",
+					"size": 4,
+					"text": "Back to normal",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12
+				},
+				"msg.resetOnNormal": {
+					"newLine": true,
+					"type": "checkbox",
+					"label": "Auto-remove message(s)",
+					"help": "When back to normal: close the message automatically.\nIf disabled: the message stays and must be acknowledged manually.",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 6,
+					"xl": 6,
+					"default": true
+				},
+					"msg.resetDelayValue": {
+						"type": "number",
+						"label": "Delay",
+						"help": "When back to normal: wait this long and then remove the message (0 = immediately).",
+					"xs": 12,
+					"sm": 6,
+					"md": 3,
+					"lg": 3,
+					"xl": 3,
+						"min": 0,
+						"default": 0,
+					"hidden": "((data.msg && data.msg.resetOnNormal !== undefined) ? !data.msg.resetOnNormal : !data['msg.resetOnNormal'])"
+				},
+					"msg.resetDelayUnit": {
+						"type": "select",
+						"label": "Unit",
+					"xs": 12,
+					"sm": 6,
+					"md": 3,
+					"lg": 3,
+					"xl": 3,
+					"default": 60,
+					"options": [
+						{ "label": "Seconds", "value": 1 },
+						{ "label": "Minutes", "value": 60 },
+							{ "label": "Hours", "value": 3600 },
+							{ "label": "Days", "value": 86400 }
+						],
+					"hidden": "((data.msg && data.msg.resetOnNormal !== undefined) ? !data.msg.resetOnNormal : !data['msg.resetOnNormal'])"
+				},
+				"_msgSessionInfo1": {
+					"newLine": true,
+					"type": "staticText",
+					"text": "Note (Session): The following settings apply to the session start (beginning) message.",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12,
+					"hidden": "((data.mode) || data['mode']) !== 'session'",
+					"style": { "whiteSpace": "pre-wrap", "color": "green", "margin": "1em 0", "fontWeight": "bold" }
+				},
+				"_msgH4SessionStart": {
+					"newLine": true,
+					"type": "header",
+					"size": 4,
+					"text": "Additional message on session start",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12,
+					"hidden": "((data.mode) || data['mode']) !== 'session'"
+				},
+				"msg.sessionStartEnabled": {
+					"newLine": true,
+					"type": "checkbox",
+					"label": "Create start message",
+					"help": "If enabled, msghub creates an additional message when the session starts.",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 6,
+					"xl": 6,
+					"default": false,
+					"hidden": "((data.mode) || data['mode']) !== 'session'"
+				},
+				"msg.sessionStartKind": {
+					"newLine": true,
+					"type": "select",
+					"label": "Kind",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 6,
+					"xl": 6,
+					"default": "status",
+					"options": [
+						{ "label": "status", "value": "status" },
+						{ "label": "task", "value": "task" }
+					],
+					"hidden": "((data.mode) || data['mode']) !== 'session' || !((data.msg && data.msg.sessionStartEnabled) || data['msg.sessionStartEnabled'])"
+				},
+				"msg.sessionStartLevel": {
+					"type": "select",
+					"label": "Level",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 6,
+					"xl": 6,
+					"default": 10,
+					"options": [
+						{ "label": "not defined / none", "value": 10 },
+						{ "label": "notice", "value": 10 },
+						{ "label": "warning", "value": 20 },
+						{ "label": "error", "value": 30 }
+					],
+					"hidden": "((data.mode) || data['mode']) !== 'session' || !((data.msg && data.msg.sessionStartEnabled) || data['msg.sessionStartEnabled'])"
+				},
+				"msg.sessionStartTitle": {
+					"newLine": true,
+					"type": "text",
+					"label": "Title (optional)",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 6,
+					"xl": 6,
+					"placeholder": "e.g. Washing machine started",
+					"hidden": "((data.mode) || data['mode']) !== 'session' || !((data.msg && data.msg.sessionStartEnabled) || data['msg.sessionStartEnabled'])"
+				},
+				"msg.sessionStartText": {
+					"type": "text",
+					"label": "Text (optional)",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 6,
+					"xl": 6,
+					"placeholder": "e.g. Process has started.",
+					"hidden": "((data.mode) || data['mode']) !== 'session' || !((data.msg && data.msg.sessionStartEnabled) || data['msg.sessionStartEnabled'])"
+				}
+			}
+		},
+		"expertJson": {
+			"type": "panel",
+			"label": "Expert",
+			"hidden": "!!((data.meta && data.meta.managedBy) || data['meta.managedBy'] ) || !(((window.sessionStorage && window.sessionStorage.getItem && window.sessionStorage.getItem('App.expertMode') === 'true')) || (_system && _system.expertMode))",
+			"items": {
+				"_expH0": {
+					"type": "header",
+					"size": 2,
+					"text": "Expert",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12
+				},
+				"_expInfo0": {
+					"newLine": true,
+					"type": "staticText",
+					"text": "This tab is only visible in expert mode.\nCurrently there are no inputs in this tab.",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12,
+					"style": { "whiteSpace": "pre-wrap" }
+				}
+			}
+		}
+	}
+}

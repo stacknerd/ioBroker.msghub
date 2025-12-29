@@ -1,0 +1,217 @@
+# MsgRender (Message Hub): render a “display view” from raw messages
+
+`MsgRender` is a lightweight template renderer for Message Hub messages.
+It resolves simple placeholders like `{{m.temperature}}` or `{{t.createdAt|datetime}}` and writes the result into a
+separate `display` block.
+
+Important: `MsgRender` is **view-only**. It does not change the stored/canonical message.
+
+---
+
+## Where it sits in the system
+
+Simplified flow:
+
+1. A producer plugin creates or patches a message (usually via `MsgFactory` and `MsgStore`).
+2. `MsgStore` stores the **raw** message in its canonical list (`fullList`).
+3. When a consumer reads messages (`getMessages()`, `getMessageByRef()`, …), `MsgStore` returns a **rendered view**:
+   - `MsgRender.renderMessage(msg)` adds `msg.display` with resolved strings.
+4. The rendered output is used for UI or human-facing text, but it is not written back to storage.
+
+This keeps the persisted data stable and compact, while still allowing dynamic display text.
+
+---
+
+## What problem does it solve?
+
+Some messages should show values that are only known at runtime, for example:
+
+- “Temperature is 21.7 °C”
+- “Last seen at 13:45”
+- “Task started 10 minutes ago”
+
+Instead of rebuilding the entire title/text every time, a message can contain templates, and the actual values live in:
+
+- `msg.metrics` (a `Map` of measured values), and/or
+- `msg.timing` (timestamps like `createdAt`, `updatedAt`, `notifyAt`, …).
+
+`MsgRender` combines both into human-readable strings.
+
+---
+
+## What gets rendered?
+
+`MsgRender` creates a `display` block with rendered strings:
+
+- `display.title` from `msg.title`
+- `display.text` from `msg.text`
+- `display.details` from selected `msg.details` fields
+
+Only a small subset of `details` is rendered on purpose (predictability and safety):
+
+- string fields: `details.location`, `details.task`, `details.reason`
+- string entries inside arrays: `details.tools[]`, `details.consumables[]`
+
+All other `details` keys (and non-string values) are left unchanged.
+
+---
+
+## Template model (what you can write inside `{{ ... }}`)
+
+A placeholder always uses this shape:
+
+`{{ <path> | <filter> | <filter> ... }}`
+
+Examples:
+
+```js
+Temp is {{m.temperature}}
+Created at {{t.createdAt|datetime}}
+Flag: {{m.enabled|bool:on/off|default:unknown}}
+```
+
+### Paths
+
+#### Metrics: `m.<key>`
+
+Metrics come from `msg.metrics`, which is expected to be:
+
+`Map<string, { val, unit?, ts? }>`
+
+You can reference:
+
+- `m.<key>` (default formatting, often “value + unit”)
+- `m.<key>.val` (raw value)
+- `m.<key>.unit` (unit string)
+- `m.<key>.ts` (timestamp in Unix ms)
+
+Examples:
+
+```js
+{{m.temperature}}      // "21.75 C" (formatted, locale-aware)
+{{m.temperature.val}}  // "21.75"
+{{m.temperature.unit}} // "C"
+{{m.temperature.ts}}   // 1735776000000
+```
+
+Practical note: metric keys are split by `.` internally, so keep metric keys simple (avoid dots).
+
+#### Timing: `t.<field>` (or `timing.<field>`)
+
+Timing values come from `msg.timing` (plain object). Example fields:
+
+- `createdAt`, `updatedAt`
+- `notifyAt`, `dueAt`, `expiresAt`
+- `startAt`, `endAt`
+
+Example:
+
+```js
+{{t.createdAt}}         // raw timestamp value
+{{timing.createdAt}}    // same as above
+{{t.createdAt|datetime}} // formatted date/time (locale-aware)
+```
+
+---
+
+## Resolution rules (important behavior)
+
+- Every `{{ ... }}` block is replaced.
+- Unknown paths resolve to an empty string (`''`).
+- Filters are applied left-to-right: `{{m.temp|num:1|default:--}}`.
+- Rendering is not recursive: values inserted by a placeholder are not scanned again for placeholders.
+
+To avoid “missing value = empty output”, use `default`.
+
+---
+
+## Filters (formatting helpers)
+
+Filters are small, deterministic formatting steps. They are intentionally limited.
+
+### `raw`
+
+For metrics, `raw` disables the default “value + unit” formatting:
+
+```js
+{{m.temperature}}     // "21.75 C"
+{{m.temperature|raw}} // "21.75"
+```
+
+### `num:<digits>`
+
+Locale-aware number formatting with a maximum number of fraction digits:
+
+```js
+{{m.humidity.val|num:1}} // e.g. "46.2" (depending on locale)
+```
+
+Works for numbers and numeric strings.
+
+### `datetime`
+
+Formats a Unix ms timestamp (or a numeric/date string) as a localized date/time:
+
+```js
+{{m.lastSeen.ts|datetime}}
+{{t.createdAt|datetime}}
+```
+
+### `bool:trueLabel/falseLabel`
+
+Maps common boolean inputs to two strings:
+
+```js
+{{m.flag|bool:yes/no}}
+{{m.enabled|bool:on/off}}
+```
+
+Accepted inputs include booleans, numbers (`0/1`), and strings like `true/false`, `yes/no`, `y/n`.
+
+### `default:<fallback>`
+
+Replaces `null`, `undefined`, or `''` with a fallback string:
+
+```js
+{{m.missing|default:--}}
+{{m.temperature.unit|default:(no unit)}}
+```
+
+---
+
+## Public API (what other components call)
+
+### `new MsgRender(adapter, { locale })`
+
+- `adapter` is used for logging only.
+- `locale` is used for `Intl.NumberFormat` and `Intl.DateTimeFormat` (default: `en-US`).
+
+### `renderMessage(msg, { locale }): object`
+
+Returns a **new** message object:
+
+- original message fields are copied (shallow)
+- `display` is added:
+  - `display.title`, `display.text`, `display.details`
+
+### `renderTemplate(input, { msg, locale }): string`
+
+Renders a single string and resolves placeholders using `msg.metrics` + `msg.timing`.
+Non-strings (and strings without `{{`) are returned unchanged.
+
+---
+
+## Design guidelines / invariants (the key rules)
+
+- Canonical vs. view: never mutate the input message; only add a `display` view.
+- No hidden state: templates are evaluated on-demand; there is no caching or compilation.
+- Graceful degradation: missing metrics/timing do not throw; they resolve to empty output (use `default` if needed).
+- Minimal template language: no loops, no conditions, no function calls; just paths + filters.
+
+---
+
+## Related files
+
+- Implementation: `src/MsgRender.js`
+- Tests / examples: `src/MsgRender.test.js`
+- Where it is used (render on reads): `src/MsgStore.js` and `src/MsgStore.md`
