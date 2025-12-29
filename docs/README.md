@@ -23,10 +23,12 @@ Naming note: the adapter is called **Message Hub**. In code and ioBroker object 
 ## What This Repo Ships Today
 
 - Built-in plugins:
+  - `IngestRandomChaos` (demo/load generator ingest plugin, disabled by default)
+  - `IngestHue` (Hue device health ingest plugin, disabled by default)
   - `EngageSendTo` (control plane via ioBroker `sendTo`)
   - `NotifyStates` (writes notification events to ioBroker states)
   - `NotifyDebug` (debug notifier, disabled by default)
-- No built-in ingest/bridge integrations yet (the core supports them, but this repo currently does not ship any).
+- No built-in bridge integrations yet (the core supports them, but this repo currently does not ship any).
 
 ## Big Picture: Core vs. Plugins
 
