@@ -49,6 +49,7 @@ Practical result: the canonical list stays stable and “clean”, and rendering
 
 4. **Lifecycle maintenance**
    - removing expired messages (`expiresAt`)
+   - cleaning up completed messages (`closed` → `deleted` → hard-delete)
    - dispatching due notifications (`notifyAt`, optionally via a timer)
 
 ---
@@ -105,7 +106,8 @@ In addition to the current list, there is an append-only archive log (default: `
 - One file per `ref`, so files stay small and are easy to inspect.
 - `ref` is URL-encoded for filenames (`encodeURIComponent`) to avoid problematic characters.
 - Typical archive events: `"create"`, `"patch"`, `"delete"`
-- When pruning, deletes are archived with `{ event: "expired" }` (“deleted because expired”).
+- Expiration is recorded as a `"patch"` (setting `lifecycle.state="expired"`), and later hard-delete is recorded as a `"delete"` event with `{ event: "purge" }`.
+- When recreating a message with an already-used `ref` (see `addMessage` below), the replaced message is hard-removed and archived with `{ event: "purgeOnRecreate" }`.
 
 Naming note: notification events (e.g. `"deleted"`, `"expired"`) come from `MsgConstants.notfication.events.*`
 and are not identical to the archive event names.
@@ -166,6 +168,14 @@ Messages can have an expiry timestamp: `timing.expiresAt` (Unix ms).
   - dispatch `"expired"` via `MsgNotify` (as an array of expired messages)
   - keep the message in the list for a retention window, then hard-delete later (`purge`)
 
+### Closed messages (completed)
+
+Messages in `lifecycle.state === "closed"` are treated as completed.
+To keep the store bounded over time:
+
+- `_deleteClosedMessages()` periodically soft-deletes them via `removeMessage(ref)` (so they become `lifecycle.state="deleted"`).
+- After `hardDeleteAfterMs` the regular hard-delete pass removes them from the list and archives a `{ event: "purge" }` delete.
+
 ---
 
 ## Public API (what you typically use)
@@ -175,6 +185,10 @@ Adds a new message if its `ref` does not exist yet.
 
 - Expectation: `msg` is already normalized (typically via `MsgFactory.createMessage()`).
 - Guard: `level` must be a real integer number (numeric strings like `"10"` are rejected).
+- `ref` handling:
+  - If `ref` is unused: message is added.
+  - If a message with the same `ref` exists and is `deleted` / `expired` / `closed`: the existing entry is replaced (hard-removed) and the new message is added (recreate).
+  - Otherwise: the call is rejected (`false`).
 - Triggers: persist + archive + `"added"` + maybe an immediate `"due"`.
 
 ### `updateMessage(ref, patch)` / `updateMessage({ ref, ...patch }): boolean`
@@ -214,6 +228,7 @@ When creating `MsgStore`, you can pass options:
 - `notifierIntervalMs` (default `10000`, `0` disables): polling interval for due notifications (`notifyAt`)
 - `hardDeleteAfterMs` (default `259200000` / 3 days): retention window before hard-delete for `deleted`/`expired` messages
 - `hardDeleteIntervalMs` (default `14400000` / 4 hours): how often the store checks for hard-deletes
+- `deleteClosedIntervalMs` (default `10000`): how often the store soft-deletes `closed` messages
 - `storage`: options forwarded to `MsgStorage` (e.g. `baseDir`, `fileName`, `writeIntervalMs`)
 - `archive`: options forwarded to `MsgArchive` (e.g. `baseDir`, `fileExtension`, `flushIntervalMs`)
 

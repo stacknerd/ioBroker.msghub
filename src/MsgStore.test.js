@@ -69,32 +69,35 @@ function createFactoryWithUpdatedAt() {
 	};
 }
 
-	function createStore({
-		messages = [],
-		factory,
-		storage,
+function createStore({
+	messages = [],
+	factory,
+	storage,
 	adapter,
 	msgArchive,
 	msgRender,
 	msgNotify,
 	options,
 	msgConstants,
-	} = {}) {
-		const { adapter: defaultAdapter, logs } = createAdapter();
-		const { storage: defaultStorage, writes } = createStorage();
-		const { msgRender: defaultRender } = createRenderer();
-		const msgFactory = factory || createFactory();
+} = {}) {
+	const { adapter: defaultAdapter, logs } = createAdapter();
+	const { storage: defaultStorage, writes } = createStorage();
+	const { msgRender: defaultRender } = createRenderer();
+	const msgFactory = factory || createFactory();
 
-		const store = new MsgStore(adapter || defaultAdapter, msgConstants || MsgConstants, msgFactory, {
-			notifierIntervalMs: 0,
-			initialMessages: messages,
-			...(options || {}),
-		});
-		store.msgStorage = storage || defaultStorage;
-		store.msgRender = msgRender || defaultRender;
-		store.msgArchive =
-		msgArchive ||
-		({ appendSnapshot: () => {}, appendPatch: () => {}, appendDelete: () => {}, flushPending: () => {} });
+	const store = new MsgStore(adapter || defaultAdapter, msgConstants || MsgConstants, msgFactory, {
+		notifierIntervalMs: 0,
+		initialMessages: messages,
+		...(options || {}),
+	});
+	store.msgStorage = storage || defaultStorage;
+	store.msgRender = msgRender || defaultRender;
+	store.msgArchive = msgArchive || {
+		appendSnapshot: () => {},
+		appendPatch: () => {},
+		appendDelete: () => {},
+		flushPending: () => {},
+	};
 	store.msgNotify = msgNotify || { dispatch: () => {} };
 
 	return { store, logs, writes, msgFactory };
@@ -111,7 +114,6 @@ function withFixedNow(now, fn) {
 }
 
 describe('MsgStore', () => {
-
 	describe('addMessage guards', () => {
 		it('rejects non-integer levels', () => {
 			const { store, writes } = createStore();
@@ -138,6 +140,77 @@ describe('MsgStore', () => {
 			expect(result).to.equal(true);
 			expect(store.getMessages()).to.have.length(1);
 			expect(writes).to.have.length(1);
+		});
+	});
+
+	describe('addMessage recreate', () => {
+		it('allows recreate when an existing message is deleted', () => {
+			const deletes = [];
+			const msgArchive = {
+				appendSnapshot: () => {},
+				appendPatch: () => {},
+				appendDelete: (msg, options) => deletes.push({ msg, options }),
+				flushPending: () => {},
+			};
+			const { store } = createStore({
+				messages: [{ ref: 'r1', level: 10, lifecycle: { state: MsgConstants.lifecycle.state.deleted } }],
+				msgArchive,
+			});
+
+			const ok = store.addMessage({ ref: 'r1', level: 10, text: 'new' });
+			expect(ok).to.equal(true);
+			expect(store.fullList.filter(msg => msg.ref === 'r1')).to.have.length(1);
+			expect(store.getMessageByRef('r1').text).to.equal('new');
+			expect(deletes).to.have.length(1);
+			expect(deletes[0].msg.ref).to.equal('r1');
+			expect(deletes[0].options.event).to.equal('purgeOnRecreate');
+		});
+
+		it('allows recreate when an existing message is expired', () => {
+			const deletes = [];
+			const msgArchive = {
+				appendSnapshot: () => {},
+				appendPatch: () => {},
+				appendDelete: (msg, options) => deletes.push({ msg, options }),
+				flushPending: () => {},
+			};
+			const { store } = createStore({
+				messages: [{ ref: 'r1', level: 10, lifecycle: { state: MsgConstants.lifecycle.state.expired } }],
+				msgArchive,
+			});
+
+			const ok = store.addMessage({ ref: 'r1', level: 10, text: 'new' });
+			expect(ok).to.equal(true);
+			expect(store.fullList.filter(msg => msg.ref === 'r1')).to.have.length(1);
+			expect(store.getMessageByRef('r1').text).to.equal('new');
+			expect(deletes).to.have.length(1);
+			expect(deletes[0].msg.ref).to.equal('r1');
+			expect(deletes[0].options.event).to.equal('purgeOnRecreate');
+		});
+
+		it('allows recreate when an existing message is closed', () => {
+			const deletes = [];
+			const msgArchive = {
+				appendSnapshot: () => {},
+				appendPatch: () => {},
+				appendDelete: (msg, options) => deletes.push({ msg, options }),
+				flushPending: () => {},
+			};
+			const { store } = createStore({
+				messages: [{ ref: 'r1', level: 10, lifecycle: { state: MsgConstants.lifecycle.state.closed } }],
+				msgArchive,
+			});
+
+			// Keep the closed message in place so addMessage has to handle the closed state directly.
+			store._lastDeleteClosedAt = Date.now();
+
+			const ok = store.addMessage({ ref: 'r1', level: 10, text: 'new' });
+			expect(ok).to.equal(true);
+			expect(store.fullList.filter(msg => msg.ref === 'r1')).to.have.length(1);
+			expect(store.getMessageByRef('r1').text).to.equal('new');
+			expect(deletes).to.have.length(1);
+			expect(deletes[0].msg.ref).to.equal('r1');
+			expect(deletes[0].options.event).to.equal('purgeOnRecreate');
 		});
 	});
 
@@ -309,6 +382,17 @@ describe('MsgStore', () => {
 		});
 	});
 
+	describe('closed lifecycle cleanup', () => {
+		it('soft-deletes closed messages via _deleteClosedMessages', () => {
+			const { store } = createStore({
+				messages: [{ ref: 'r1', level: 10, lifecycle: { state: MsgConstants.lifecycle.state.closed } }],
+				options: { deleteClosedIntervalMs: 0 },
+			});
+			store._deleteClosedMessages();
+			expect(store.getMessageByRef('r1').lifecycle.state).to.equal(MsgConstants.lifecycle.state.deleted);
+		});
+	});
+
 	describe('updateMessage guards', () => {
 		it('rejects empty or non-object patches', () => {
 			const { store, writes } = createStore();
@@ -338,19 +422,19 @@ describe('MsgStore', () => {
 			expect(writes).to.have.length(0);
 		});
 
-			it('rejects updates when factory lacks applyPatch', () => {
-				const { adapter, logs } = createAdapter();
-				const { storage, writes } = createStorage();
-				const { msgRender } = createRenderer();
-				const msgFactory = {};
-				const store = new MsgStore(adapter, MsgConstants, msgFactory, {
-					notifierIntervalMs: 0,
-					initialMessages: [{ ref: 'r1', level: 10 }],
-				});
-				store.msgStorage = storage;
-				store.msgRender = msgRender;
-				store.msgArchive = { appendSnapshot: () => {}, appendPatch: () => {}, appendDelete: () => {} };
-				store.msgNotify = { dispatch: () => {} };
+		it('rejects updates when factory lacks applyPatch', () => {
+			const { adapter, logs } = createAdapter();
+			const { storage, writes } = createStorage();
+			const { msgRender } = createRenderer();
+			const msgFactory = {};
+			const store = new MsgStore(adapter, MsgConstants, msgFactory, {
+				notifierIntervalMs: 0,
+				initialMessages: [{ ref: 'r1', level: 10 }],
+			});
+			store.msgStorage = storage;
+			store.msgRender = msgRender;
+			store.msgArchive = { appendSnapshot: () => {}, appendPatch: () => {}, appendDelete: () => {} };
+			store.msgNotify = { dispatch: () => {} };
 
 			const result = store.updateMessage({ ref: 'r1', text: 'x' });
 			expect(result).to.equal(false);
@@ -446,113 +530,117 @@ describe('MsgStore', () => {
 		});
 	});
 
-		describe('read helpers', () => {
-			it('finds by ref and returns undefined when missing', () => {
-				const { store } = createStore({ messages: [{ ref: 'r1', level: 10 }] });
-				expect(store.getMessageByRef('r1')).to.be.an('object');
-				expect(store.getMessageByRef('missing')).to.equal(undefined);
-			});
-
-			it('returns the full list', () => {
-				const messages = [{ ref: 'r1', level: 10 }];
-				const { store } = createStore({ messages });
-				expect(store.getMessages().map(msg => msg.ref)).to.deep.equal(['r1']);
-			});
+	describe('read helpers', () => {
+		it('finds by ref and returns undefined when missing', () => {
+			const { store } = createStore({ messages: [{ ref: 'r1', level: 10 }] });
+			expect(store.getMessageByRef('r1')).to.be.an('object');
+			expect(store.getMessageByRef('missing')).to.equal(undefined);
 		});
 
-		describe('queryMessages', () => {
-			it('excludes deleted and expired by default', () => {
-				const messages = [
-					{ ref: 'r1', level: 10, lifecycle: { state: MsgConstants.lifecycle.state.open } },
-					{ ref: 'r2', level: 10, lifecycle: { state: MsgConstants.lifecycle.state.deleted } },
-					{ ref: 'r3', level: 10, lifecycle: { state: MsgConstants.lifecycle.state.expired } },
-					{ ref: 'r4', level: 10 }, // no lifecycle => treated as open
-				];
-				const { store } = createStore({ messages });
-				const result = store.queryMessages();
-				expect(result.total).to.equal(2);
-				expect(result.pages).to.equal(1);
-				expect(result.items.map(msg => msg.ref)).to.deep.equal(['r1', 'r4']);
-			});
+		it('returns the full list', () => {
+			const messages = [{ ref: 'r1', level: 10 }];
+			const { store } = createStore({ messages });
+			expect(store.getMessages().map(msg => msg.ref)).to.deep.equal(['r1']);
+		});
+	});
 
-			it('includes deleted/expired only when explicitly requested via lifecycle filter', () => {
-				const messages = [
-					{ ref: 'r1', level: 10, lifecycle: { state: MsgConstants.lifecycle.state.open } },
-					{ ref: 'r2', level: 10, lifecycle: { state: MsgConstants.lifecycle.state.deleted } },
-					{ ref: 'r3', level: 10, lifecycle: { state: MsgConstants.lifecycle.state.expired } },
-					{ ref: 'r4', level: 10 },
-				];
-				const { store } = createStore({ messages });
-				const result = store.queryMessages({
-					where: { lifecycle: { state: { in: [MsgConstants.lifecycle.state.deleted, MsgConstants.lifecycle.state.expired] } } },
-				});
-				expect(result.items.map(msg => msg.ref)).to.deep.equal(['r2', 'r3']);
-			});
-
-			it('supports level filtering', () => {
-				const messages = [
-					{ ref: 'r1', level: 10, lifecycle: { state: MsgConstants.lifecycle.state.open } },
-					{ ref: 'r2', level: 20, lifecycle: { state: MsgConstants.lifecycle.state.open } },
-					{ ref: 'r3', level: 10, lifecycle: { state: MsgConstants.lifecycle.state.open } },
-				];
-				const { store } = createStore({ messages });
-				const result = store.queryMessages({ where: { level: 10 } });
-				expect(result.items.map(msg => msg.ref)).to.deep.equal(['r1', 'r3']);
-			});
-
-			it('supports timing range filters (range implies existence)', () => {
-				const messages = [
-					{ ref: 'r1', level: 10, timing: { startAt: 1000 } },
-					{ ref: 'r2', level: 10, timing: { startAt: 2000 } },
-					{ ref: 'r3', level: 10, timing: {} },
-				];
-				const { store } = createStore({ messages });
-				const result = store.queryMessages({ where: { timing: { startAt: { min: 1500, max: 2500 } } } });
-				expect(result.items.map(msg => msg.ref)).to.deep.equal(['r2']);
-			});
-
-			it('supports includes-any and includes-all filters for string lists', () => {
-				const messages = [
-					{ ref: 'r1', level: 10, audience: { tags: ['Maria'] }, dependencies: ['12'] },
-					{ ref: 'r2', level: 10, audience: { tags: ['Eva'] }, dependencies: ['23'] },
-					{ ref: 'r3', level: 10, audience: { tags: ['Maria', 'Eva'] }, dependencies: ['12', '23'] },
-					{ ref: 'r4', level: 10, dependencies: ['12'] },
-				];
-				const { store } = createStore({ messages });
-
-				const anyTags = store.queryMessages({ where: { audience: { tags: ['Maria', 'Eva'] } } });
-				expect(anyTags.items.map(msg => msg.ref)).to.deep.equal(['r1', 'r2', 'r3']);
-
-				const allTags = store.queryMessages({ where: { audience: { tags: { all: ['Maria', 'Eva'] } } } });
-				expect(allTags.items.map(msg => msg.ref)).to.deep.equal(['r3']);
-
-				const anyDeps = store.queryMessages({ where: { dependencies: { any: ['23'] } } });
-				expect(anyDeps.items.map(msg => msg.ref)).to.deep.equal(['r2', 'r3']);
-			});
-
-			it('supports sort and pagination and stays deterministic', () => {
-				const messages = [
-					{ ref: 'r1', level: 10, timing: { createdAt: 100 } },
-					{ ref: 'r2', level: 10, timing: { createdAt: 200 } },
-					{ ref: 'r3', level: 10, timing: { createdAt: 300 } },
-					{ ref: 'r4', level: 10, timing: { createdAt: 400 } },
-					{ ref: 'r5', level: 10, timing: { createdAt: 500 } },
-				];
-				const { store } = createStore({ messages });
-				const result = store.queryMessages({
-					sort: [{ field: 'timing.createdAt', dir: 'desc' }],
-					page: { size: 2, index: 2 },
-				});
-				expect(result.total).to.equal(5);
-				expect(result.pages).to.equal(3);
-				expect(result.items.map(msg => msg.ref)).to.deep.equal(['r3', 'r2']);
-			});
+	describe('queryMessages', () => {
+		it('excludes deleted and expired by default', () => {
+			const messages = [
+				{ ref: 'r1', level: 10, lifecycle: { state: MsgConstants.lifecycle.state.open } },
+				{ ref: 'r2', level: 10, lifecycle: { state: MsgConstants.lifecycle.state.deleted } },
+				{ ref: 'r3', level: 10, lifecycle: { state: MsgConstants.lifecycle.state.expired } },
+				{ ref: 'r4', level: 10 }, // no lifecycle => treated as open
+			];
+			const { store } = createStore({ messages });
+			const result = store.queryMessages();
+			expect(result.total).to.equal(2);
+			expect(result.pages).to.equal(1);
+			expect(result.items.map(msg => msg.ref)).to.deep.equal(['r1', 'r4']);
 		});
 
-		describe('removeMessage guards', () => {
-			it('does nothing when the ref does not exist', () => {
-				const messages = [{ ref: 'r1', level: 10 }];
-				const { store } = createStore({ messages });
+		it('includes deleted/expired only when explicitly requested via lifecycle filter', () => {
+			const messages = [
+				{ ref: 'r1', level: 10, lifecycle: { state: MsgConstants.lifecycle.state.open } },
+				{ ref: 'r2', level: 10, lifecycle: { state: MsgConstants.lifecycle.state.deleted } },
+				{ ref: 'r3', level: 10, lifecycle: { state: MsgConstants.lifecycle.state.expired } },
+				{ ref: 'r4', level: 10 },
+			];
+			const { store } = createStore({ messages });
+			const result = store.queryMessages({
+				where: {
+					lifecycle: {
+						state: { in: [MsgConstants.lifecycle.state.deleted, MsgConstants.lifecycle.state.expired] },
+					},
+				},
+			});
+			expect(result.items.map(msg => msg.ref)).to.deep.equal(['r2', 'r3']);
+		});
+
+		it('supports level filtering', () => {
+			const messages = [
+				{ ref: 'r1', level: 10, lifecycle: { state: MsgConstants.lifecycle.state.open } },
+				{ ref: 'r2', level: 20, lifecycle: { state: MsgConstants.lifecycle.state.open } },
+				{ ref: 'r3', level: 10, lifecycle: { state: MsgConstants.lifecycle.state.open } },
+			];
+			const { store } = createStore({ messages });
+			const result = store.queryMessages({ where: { level: 10 } });
+			expect(result.items.map(msg => msg.ref)).to.deep.equal(['r1', 'r3']);
+		});
+
+		it('supports timing range filters (range implies existence)', () => {
+			const messages = [
+				{ ref: 'r1', level: 10, timing: { startAt: 1000 } },
+				{ ref: 'r2', level: 10, timing: { startAt: 2000 } },
+				{ ref: 'r3', level: 10, timing: {} },
+			];
+			const { store } = createStore({ messages });
+			const result = store.queryMessages({ where: { timing: { startAt: { min: 1500, max: 2500 } } } });
+			expect(result.items.map(msg => msg.ref)).to.deep.equal(['r2']);
+		});
+
+		it('supports includes-any and includes-all filters for string lists', () => {
+			const messages = [
+				{ ref: 'r1', level: 10, audience: { tags: ['Maria'] }, dependencies: ['12'] },
+				{ ref: 'r2', level: 10, audience: { tags: ['Eva'] }, dependencies: ['23'] },
+				{ ref: 'r3', level: 10, audience: { tags: ['Maria', 'Eva'] }, dependencies: ['12', '23'] },
+				{ ref: 'r4', level: 10, dependencies: ['12'] },
+			];
+			const { store } = createStore({ messages });
+
+			const anyTags = store.queryMessages({ where: { audience: { tags: ['Maria', 'Eva'] } } });
+			expect(anyTags.items.map(msg => msg.ref)).to.deep.equal(['r1', 'r2', 'r3']);
+
+			const allTags = store.queryMessages({ where: { audience: { tags: { all: ['Maria', 'Eva'] } } } });
+			expect(allTags.items.map(msg => msg.ref)).to.deep.equal(['r3']);
+
+			const anyDeps = store.queryMessages({ where: { dependencies: { any: ['23'] } } });
+			expect(anyDeps.items.map(msg => msg.ref)).to.deep.equal(['r2', 'r3']);
+		});
+
+		it('supports sort and pagination and stays deterministic', () => {
+			const messages = [
+				{ ref: 'r1', level: 10, timing: { createdAt: 100 } },
+				{ ref: 'r2', level: 10, timing: { createdAt: 200 } },
+				{ ref: 'r3', level: 10, timing: { createdAt: 300 } },
+				{ ref: 'r4', level: 10, timing: { createdAt: 400 } },
+				{ ref: 'r5', level: 10, timing: { createdAt: 500 } },
+			];
+			const { store } = createStore({ messages });
+			const result = store.queryMessages({
+				sort: [{ field: 'timing.createdAt', dir: 'desc' }],
+				page: { size: 2, index: 2 },
+			});
+			expect(result.total).to.equal(5);
+			expect(result.pages).to.equal(3);
+			expect(result.items.map(msg => msg.ref)).to.deep.equal(['r3', 'r2']);
+		});
+	});
+
+	describe('removeMessage guards', () => {
+		it('does nothing when the ref does not exist', () => {
+			const messages = [{ ref: 'r1', level: 10 }];
+			const { store } = createStore({ messages });
 			store.removeMessage('missing');
 			expect(store.getMessages()).to.have.length(1);
 		});

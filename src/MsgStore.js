@@ -90,6 +90,7 @@ class MsgStore {
 	 * @param {number} [options.notifierIntervalMs] Due-notification polling interval in ms (default: 10000, 0 disables).
 	 * @param {number} [options.hardDeleteAfterMs] After this time in "deleted"/"expired", messages are hard-deleted (default: 259200000).
 	 * @param {number} [options.hardDeleteIntervalMs] Interval for checking hard-deletes (default: 14400000).
+	 * @param {number} [options.deleteClosedIntervalMs] Interval for checking for closed messages (default: 10000).
 	 * @param {object} [options.storage] Options forwarded to `MsgStorage` (e.g. `baseDir`, `fileName`, `writeIntervalMs`).
 	 * @param {object} [options.archive] Options forwarded to `MsgArchive` (e.g. `baseDir`, `fileExtension`, `flushIntervalMs`).
 	 */
@@ -100,6 +101,7 @@ class MsgStore {
 			notifierIntervalMs = 10000,
 			hardDeleteAfterMs = 1000 * 60 * 60 * 24 * 3,
 			hardDeleteIntervalMs = 1000 * 60 * 60 * 4,
+			deleteClosedIntervalMs = 1000 * 10,
 			storage = {},
 			archive = {},
 		} = options || {};
@@ -150,6 +152,8 @@ class MsgStore {
 		this._keepDeletedAndExpiredFilesMs = hardDeleteAfterMs;
 		this._hardDeleteIntervalMs = hardDeleteIntervalMs;
 		this._lastHardDeleteAt = 0;
+		this._deleteClosedIntervalMs = deleteClosedIntervalMs;
+		this._lastDeleteClosedAt = 0;
 
 		this.adapter?.log?.info?.(
 			`MsgStore initialized: pruneIntervalMs=${this.pruneIntervalMs}ms, notifierIntervalMs=${this.notifierIntervalMs}ms`,
@@ -206,15 +210,38 @@ class MsgStore {
 	 */
 	addMessage(msg) {
 		// Keep the list clean before inserting anything new.
+		this._deleteClosedMessages();
 		this._pruneOldMessages();
 
-		// Guard: enforce numeric integer levels (no coercion, no numeric strings).
-		if (msg.level !== parseInt(msg.level, 10)) {
+		// Guards: msg must be a normalized object, with integer level (no numeric strings).
+		if (!msg || typeof msg !== 'object') {
 			return false;
 		}
-		// Guard: reject duplicates by ref.
-		if (this.getMessageByRef(msg.ref) != null) {
+		if (typeof msg.ref !== 'string' || !msg.ref.trim()) {
 			return false;
+		}
+		if (typeof msg.level !== 'number' || !Number.isInteger(msg.level)) {
+			return false;
+		}
+
+		// Guard: reject duplicates by ref.
+		const candidates = this.fullList.filter(item => item?.ref === msg.ref);
+		if (candidates.length > 0) {
+			const replaceableStates = new Set([
+				this.msgConstants.lifecycle.state.expired,
+				this.msgConstants.lifecycle.state.deleted,
+				this.msgConstants.lifecycle.state.closed,
+			]);
+			const nonReplaceable = candidates.find(item => !replaceableStates.has(item?.lifecycle?.state));
+			if (nonReplaceable) {
+				return false;
+			}
+
+			// Hard-delete existing messages with the same ref so the new message can be recreated.
+			for (const existing of candidates) {
+				this.msgArchive?.appendDelete?.(existing, { event: 'purgeOnRecreate' });
+			}
+			this.fullList = this.fullList.filter(item => item?.ref !== msg.ref);
 		}
 
 		// Mutate canonical list.
@@ -993,6 +1020,7 @@ class MsgStore {
 		);
 
 		if (removals.length === 0) {
+			this._deleteClosedMessages();
 			this._hardDeleteMessages();
 			return;
 		}
@@ -1016,7 +1044,38 @@ class MsgStore {
 		this.adapter?.log?.debug?.(`MsgStore: soft-expired Message(s) '${expiredNow.map(msg => msg.ref).join(', ')}'`);
 		this.adapter?.log?.silly?.(`MsgStore: soft-expired Message(s) '${serializeWithMaps(expiredNow)}'`);
 
+		this._deleteClosedMessages();
 		this._hardDeleteMessages();
+	}
+
+	/**
+	 * Soft-delete messages that are in `lifecycle.state === "closed"`.
+	 *
+	 * Closed messages are transitioned to `deleted` via `removeMessage` so they can be removed
+	 * later by the regular hard-delete retention logic (`_hardDeleteMessages`).
+	 *
+	 * @returns {void} No return value.
+	 */
+	_deleteClosedMessages() {
+		const now = Date.now();
+		// Throttle scans to reduce CPU overhead on frequent reads/writes.
+		if (now - this._lastDeleteClosedAt < this._deleteClosedIntervalMs) {
+			return;
+		}
+		this._lastDeleteClosedAt = now;
+
+		// Determine which entries are due to be deleted.
+		const needsDeletion = item => item?.lifecycle?.state === this.msgConstants.lifecycle.state.closed;
+
+		const removals = this.fullList.filter(needsDeletion);
+
+		if (removals.length === 0) {
+			return;
+		}
+
+		for (const msg of removals) {
+			this.removeMessage(msg?.ref);
+		}
 	}
 
 	/**
