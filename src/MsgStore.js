@@ -32,7 +32,7 @@
  * - `onUnload()` calls `flushPending()` to best-effort persist the latest state.
  *
  * Archiving (MsgArchive)
- * - Appends lifecycle events to a per-ref JSONL archive (default: `data/archive/<ref>.jsonl`).
+ * - Appends lifecycle events to a per-ref JSONL archive (default: `data/archive/<refPath>.jsonl`, dots → folders).
  * - Archiving is best-effort and must never block core operations.
  * - Note on naming: archive events default to `"create"|"patch"|"delete"`, while notifications use
  *   `MsgConstants.notfication.events.*` (e.g. `"deleted"` / `"expired"`).

@@ -90,8 +90,9 @@ Each line is one JSON object:
 
 - Default directory: `data/archive`
 - Default extension: `.jsonl`
-- Filename: `<encodeURIComponent(ref)>.jsonl`
+- Path: `<encodeURIComponent(ref) with dots as folders>.jsonl`
   - Example: ref `a/1` becomes `a%2F1.jsonl`
+  - Example: ref `javascript.0.foo.bar` becomes `javascript/0/foo/bar.jsonl`
 
 The files live in ioBroker’s file storage under a “meta id” (by default the adapter namespace).
 

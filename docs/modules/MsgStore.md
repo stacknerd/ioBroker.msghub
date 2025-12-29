@@ -101,10 +101,11 @@ so downstream consumers observe the post-mutation state.
 
 ## Archive: `MsgArchive` (JSONL per message)
 
-In addition to the current list, there is an append-only archive log (default: `data/archive/<encodedRef>.jsonl`).
+In addition to the current list, there is an append-only archive log (default: `data/archive/<refPath>.jsonl`).
 
 - One file per `ref`, so files stay small and are easy to inspect.
-- `ref` is URL-encoded for filenames (`encodeURIComponent`) to avoid problematic characters.
+- `ref` is URL-encoded (`encodeURIComponent`) to avoid problematic characters.
+- Dots in the (encoded) ref create folder levels (e.g. `a.b` → `a/b.jsonl`).
 - Typical archive events: `"create"`, `"patch"`, `"delete"`
 - Expiration is recorded as a `"patch"` (setting `lifecycle.state="expired"`), and later hard-delete is recorded as a `"delete"` event with `{ event: "purge" }`.
 - When recreating a message with an already-used `ref` (see `addMessage` below), the replaced message is hard-removed and archived with `{ event: "purgeOnRecreate" }`.

@@ -87,15 +87,30 @@ describe('MsgArchive', () => {
 			expect(lines[0].ts).to.equal(123456);
 			expect(lines[0].snapshot).to.be.an('object');
 			expect(lines[0].snapshot.metrics.__msghubType).to.equal('Map');
-		} finally {
-			Date.now = originalNow;
-		}
-	});
+			} finally {
+				Date.now = originalNow;
+			}
+		});
 
-	it('supports overriding the snapshot event name', async () => {
-		const { adapter, files } = createAdapter();
-		const archive = new MsgArchive(adapter, { baseDir: 'archive', flushIntervalMs: 0 });
-		await archive.init();
+		it('splits dotted refs into nested directories', async () => {
+			const { adapter, files } = createAdapter();
+			const archive = new MsgArchive(adapter, { baseDir: 'archive', flushIntervalMs: 0 });
+			await archive.init();
+
+			const ref = 'javascript.0.HaldeGarten.Garten.Frostgefahr.GartenIstJetztFrostsicher';
+			await archive.appendSnapshot({ ref, title: 'hello' });
+
+			const newKey = `${adapter.namespace}/archive/javascript/0/HaldeGarten/Garten/Frostgefahr/GartenIstJetztFrostsicher.jsonl`;
+			expect(files.has(newKey)).to.equal(true);
+
+			const legacyKey = `${adapter.namespace}/archive/${ref}.jsonl`;
+			expect(files.has(legacyKey)).to.equal(false);
+		});
+
+		it('supports overriding the snapshot event name', async () => {
+			const { adapter, files } = createAdapter();
+			const archive = new MsgArchive(adapter, { baseDir: 'archive', flushIntervalMs: 0 });
+			await archive.init();
 
 		await archive.appendSnapshot({ ref: 'e1', title: 'x' }, { event: 'snapshot' });
 

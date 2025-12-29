@@ -20,8 +20,9 @@
  *   read-the-whole-file + rewrite-with-added-lines. For large archive files this is O(fileSize) per flush.
  *
  * File naming and refs
- * - Refs are URL-encoded (`encodeURIComponent`) to generate filesystem-friendly file names.
- * - The on-disk file name is `<encodedRef>.<fileExtension>` under `baseDir`.
+ * - Refs are URL-encoded (`encodeURIComponent`) to generate filesystem-friendly path segments.
+ * - Dots in the (encoded) ref split the archive path into subdirectories to keep folder listings small.
+ * - The on-disk path is `<encodedRefWithDotsAsSlashes>.<fileExtension>` under `baseDir`.
  *
  * Map-safe JSON
  * - Entries are serialized via `serializeWithMaps()` so `Map` values (e.g. metrics) remain intact.
@@ -74,6 +75,9 @@ class MsgArchive {
 
 		// Pending events per ref file key, along with timers and waiters.
 		this._pending = new Map();
+
+		// Best-effort cache of directories we already attempted to create.
+		this._ensuredDirs = new Set();
 
 		this._mapTypeMarker = DEFAULT_MAP_TYPE_MARKER;
 	}
@@ -796,6 +800,7 @@ class MsgArchive {
 	 */
 	async _appendEvents(refKey, events) {
 		const filePath = this._filePathForRef(refKey);
+		await this._ensureDirForFilePath(filePath);
 		const existing = await this._readFileText(filePath);
 		const existingTrimmed = existing ? existing.replace(/\s+$/, '') : '';
 		const newLines = events.map(entry => serializeWithMaps(entry, this._mapTypeMarker)).join('\n');
@@ -831,13 +836,34 @@ class MsgArchive {
 	}
 
 	/**
+	 * Ensure the folder path for a file exists (best-effort).
+	 *
+	 * @param {string} filePath File path under the file store.
+	 * @returns {Promise<void>}
+	 */
+	async _ensureDirForFilePath(filePath) {
+		const idx = typeof filePath === 'string' ? filePath.lastIndexOf('/') : -1;
+		if (idx <= 0) {
+			return;
+		}
+		const dir = filePath.slice(0, idx);
+		if (this._ensuredDirs.has(dir)) {
+			return;
+		}
+		this._ensuredDirs.add(dir);
+		await ensureBaseDir(this.adapter, this.metaId, dir);
+	}
+
+	/**
 	 * Builds the archive file path for a ref key.
 	 *
 	 * @param {string} refKey Normalized ref key.
 	 * @returns {string} File path under the archive base dir.
 	 */
 	_filePathForRef(refKey) {
-		const fileName = `${refKey}.${this.fileExtension}`;
+		const key = String(refKey || '').trim();
+		const relPath = key.split('.').filter(Boolean).join('/');
+		const fileName = `${relPath || key || 'unknown'}.${this.fileExtension}`;
 		return this.baseDir ? `${this.baseDir}/${fileName}` : fileName;
 	}
 }
