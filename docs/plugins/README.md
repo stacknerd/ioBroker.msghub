@@ -25,11 +25,12 @@ Read more: [`docs/plugins/IoPlugins.md`](./IoPlugins.md)
 
 This repository currently ships only a small set of built-in plugins:
 
+- `IngestRandomChaos` (demo/load generator ingest plugin)
 - `EngageSendTo` (control plane via ioBroker `sendTo`)
 - `NotifyStates` (writes notifications to ioBroker states)
 - `NotifyDebug` (debug notifier)
 
-There are no built-in `Ingest...` or `Bridge...` plugins yet. The core supports these plugin families, and you can add your own.
+There are no built-in `Bridge...` plugins yet. The core supports this plugin family, and you can add your own.
 
 ## Plugin families (concept): `Ingest` / `Notify` / `Bridge` / `Engage`
 
@@ -515,6 +516,7 @@ The plugin docs in this folder are for the built-in plugins shipped with this re
 
 <!-- AUTO-GENERATED:MODULE-INDEX:START -->
 - `EngageSendTo`: [`./EngageSendTo.md`](./EngageSendTo.md)
+- `IngestRandomChaos`: [`./IngestRandomChaos.md`](./IngestRandomChaos.md)
 - `IoPlugins`: [`./IoPlugins.md`](./IoPlugins.md)
 - `NotifyDebug`: [`./NotifyDebug.md`](./NotifyDebug.md)
 - `NotifyStates`: [`./NotifyStates.md`](./NotifyStates.md)

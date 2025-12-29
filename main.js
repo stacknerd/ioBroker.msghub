@@ -73,7 +73,7 @@ class Msghub extends utils.Adapter {
 			this.log?.error?.(`Plugin wiring failed: ${e?.message || e}`);
 		}
 		// Always start ingestion (even when some plugins failed to wire),
-		// otherwise timer-based producers (e.g. IngestRandomDemo) never run.
+		// otherwise timer-based producers (e.g. IngestRandomChaos) never run.
 		const ingestMeta = this._msgPlugins?.getIngestMeta?.() || {};
 		this.msgStore?.msgIngest?.start?.(ingestMeta);
 	}
