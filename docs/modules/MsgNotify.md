@@ -1,7 +1,7 @@
 # MsgNotify (Message Hub): dispatch notification events to plugins
 
 `MsgNotify` is the notification dispatcher of Message Hub.
-It takes a **notification event** (like `"due"` or `"updated"`) plus one or more messages, and then forwards that
+It takes a **notification event** (like `"added"`, `"due"` or `"updated"`) plus one or more messages, and then forwards that
 information to all registered notifier plugins.
 
 Important: `MsgNotify` does **not** send notifications by itself. It only calls plugins that do the actual delivery
@@ -27,7 +27,7 @@ So `MsgNotify` is the “bridge” between the **core message store** and the **
 In Message Hub a “notification” is simply a **Message Hub `Message` object** that is being announced to the outside world.
 
 - The `notification` payload is the message itself (not a separate schema).
-- The `event` tells plugins *why* the message is sent now (due/updated/deleted/expired).
+- The `event` tells plugins *why* the message is sent now (added/due/updated/deleted/expired).
 - `meta` is optional metadata that can help plugins (for example: where the dispatch came from).
 
 `MsgNotify` does not interpret message content. It only forwards it.
@@ -115,6 +115,7 @@ This split is intentional:
 
 `dispatch()` expects the **stored event value** from `MsgConstants.notfication.events`, for example:
 
+- `"added"`
 - `"due"`
 - `"updated"` (note: the key is `update`, the value is `"updated"`)
 - `"deleted"`

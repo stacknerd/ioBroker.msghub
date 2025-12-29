@@ -13,7 +13,7 @@ This is intentionally simple: it is not a history or log, it is only the most re
 - Type: `Notify`
 - Registration ID (as used by `lib/IoPlugins.js`): `NotifyStates:0`
 - Implementation: `lib/NotifyStates/index.js` (`NotifyStates(options)`)
-- Supported events: values from `MsgConstants.notfication.events` (`due`, `updated`, `deleted`, `expired`)
+- Supported events: values from `MsgConstants.notfication.events` (`added`, `due`, `updated`, `deleted`, `expired`)
   - The plugin also accepts the event *keys* (e.g. `update`) and maps them to the event *values* (e.g. `updated`) for the state id.
 
 ---

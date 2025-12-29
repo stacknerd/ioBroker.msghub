@@ -102,6 +102,7 @@ These values represent the current UI/workflow state of a message:
 
 These event names are used when dispatching notifications via `MsgNotify`:
 
+- `added` → a new message was added to the store
 - `due` → the message is “due now” (e.g. `notifyAt` reached or missing)
 - `updated` → the message changed in a user-visible way
 - `deleted` → the message was removed explicitly

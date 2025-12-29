@@ -222,6 +222,9 @@ class MsgStore {
 		// Persist the entire list (best-effort; MsgStorage may throttle).
 		this.msgStorage.writeJson(this.fullList);
 
+		// notify about added message
+		this.msgNotify?.dispatch?.(this.msgConstants.notfication.events.added, msg);
+
 		// If no future notifyAt exists, treat the message as immediately due.
 		const isOpen =
 			(msg?.lifecycle?.state || this.msgConstants.lifecycle?.state?.open) ===

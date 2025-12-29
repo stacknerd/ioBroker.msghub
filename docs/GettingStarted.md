@@ -70,6 +70,7 @@ The `list` command supports filtering and pagination. See [`docs/plugins/EngageS
 
 Typical states (instance `msghub.0`):
 
+- `msghub.0.NotifyStates.0.Latest.added`
 - `msghub.0.NotifyStates.0.Latest.due`
 - `msghub.0.NotifyStates.0.Latest.updated`
 - `msghub.0.NotifyStates.0.byKind.task.due`
@@ -82,6 +83,5 @@ Details: [`docs/plugins/NotifyStates.md`](./plugins/NotifyStates.md)
 ## Troubleshooting
 
 - `NOT_READY` on `sendTo`: `EngageSendTo` is disabled/not running, or plugin wiring failed at adapter startup.
-- No state output: `NotifyStates` is disabled/not running, or no `due/updated/deleted/expired` events are dispatched.
+- No state output: `NotifyStates` is disabled/not running, or no `added/due/updated/deleted/expired` events are dispatched.
 - Nothing ever becomes “due”: create a message without `timing.notifyAt` (immediate `due`), or set `timing.notifyAt` to a timestamp in the past.
-

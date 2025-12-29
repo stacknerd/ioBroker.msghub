@@ -404,7 +404,7 @@ Host: `MsgNotify` (see [`docs/modules/MsgNotify.md`](../modules/MsgNotify.md))
 What you receive:
 
 - `(event, notifications, ctx)` where `notifications` is always an array
-- `event` is a value from `MsgConstants.notfication.events` (for example `"due"`, `"updated"`)
+- `event` is a value from `MsgConstants.notfication.events` (for example `"added"`, `"due"`, `"updated"`)
 - optional lifecycle: `start(ctx)` (on registration) and `stop(ctx)` (on unregister/overwrite)
 - `ctx.api.constants` for allowed event names and enums
 - `ctx.api.store` read API (optional; when the host was constructed with a store)

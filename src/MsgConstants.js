@@ -53,7 +53,13 @@ const MsgConstants = Object.freeze({
 		}),
 	}),
 	notfication: Object.freeze({
-		events: Object.freeze({ due: 'due', update: 'updated', deleted: 'deleted', expired: 'expired' }),
+		events: Object.freeze({
+			added: 'added',
+			due: 'due',
+			update: 'updated',
+			deleted: 'deleted',
+			expired: 'expired',
+		}),
 	}),
 });
 module.exports = { MsgConstants };

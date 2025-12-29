@@ -126,6 +126,7 @@ Important semantics:
 When does the store dispatch?
 
 - `addMessage(msg)`
+  - Dispatch `"added"` for the newly created message.
   - If `timing.notifyAt` is missing/not finite **and** `lifecycle.state === "open"`: dispatch `"due"` immediately (message is “due now”).
 - `updateMessage(...)`
   - Dispatch `"updated"` only when the update is non-silent (detected by a change in `timing.updatedAt`).
@@ -174,7 +175,7 @@ Adds a new message if its `ref` does not exist yet.
 
 - Expectation: `msg` is already normalized (typically via `MsgFactory.createMessage()`).
 - Guard: `level` must be a real integer number (numeric strings like `"10"` are rejected).
-- Triggers: persist + archive + maybe an immediate `"due"`.
+- Triggers: persist + archive + `"added"` + maybe an immediate `"due"`.
 
 ### `updateMessage(ref, patch)` / `updateMessage({ ref, ...patch }): boolean`
 Updates an existing message by delegating to `MsgFactory.applyPatch()`.
