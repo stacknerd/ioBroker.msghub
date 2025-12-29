@@ -139,6 +139,16 @@ Write APIs (ingest only):
 - `updateMessage(msgOrRef, patch)`
 - `addOrUpdateMessage(msg)`
 - `removeMessage(ref)`
+- `completeAfterCauseEliminated(ref, { actor?, finishedAt? })`
+
+Notes:
+
+- `removeMessage(ref)` performs a soft delete (`lifecycle.state="deleted"`). This is meant for explicit deletion semantics.
+- `completeAfterCauseEliminated(...)` is meant for condition-based ingest plugins: when the external cause becomes OK again,
+  the plugin can mark the message as completed by patching it to:
+  - `lifecycle.state="closed"` (with `stateChangedAt`, and optional `stateChangedBy`)
+  - `timing.notifyAt=null`
+  - `progress.percentage=100` and `progress.finishedAt` (defaults to `Date.now()` when omitted)
 
 ### `buildFactoryApi(msgFactory, { hostName })`
 

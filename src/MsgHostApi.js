@@ -92,6 +92,30 @@ function buildStoreApi(store, { hostName = 'Host' } = {}) {
 		api.updateMessage = (msgOrRef, patch) => store.updateMessage(msgOrRef, patch);
 		api.addOrUpdateMessage = msg => store.addOrUpdateMessage(msg);
 		api.removeMessage = ref => store.removeMessage(ref);
+
+		// "Shortcut" for Ingest-Plugins to remove Messages that have been "resoved by taking action"
+		// on a easy and standardized way.
+		api.completeAfterCauseEliminated = (ref, options = {}) => {
+			const msgRef = typeof ref === 'string' ? ref.trim() : '';
+			if (!msgRef) {
+				return false;
+			}
+			const actor = typeof options?.actor === 'string' && options.actor.trim() ? options.actor.trim() : null;
+			const finishedAt =
+				typeof options?.finishedAt === 'number' && Number.isFinite(options.finishedAt)
+					? Math.trunc(options.finishedAt)
+					: Date.now();
+
+			return store.updateMessage(msgRef, {
+				lifecycle: {
+					state: 'closed',
+					stateChangedAt: Date.now(),
+					...(actor ? { stateChangedBy: actor } : {}),
+				},
+				timing: { notifyAt: null },
+				progress: { percentage: 100, finishedAt },
+			});
+		};
 	}
 
 	return Object.freeze(api);
