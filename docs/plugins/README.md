@@ -307,8 +307,8 @@ Where it is stored:
 Signature:
 
 - `ids`: `string` or `string[]` (ioBroker object ids, usually full foreign ids)
-- `managedBy`: string (human-readable owner label, e.g. `"IngestMySystem plugin"`)
-- `managedText`: string (should already be localized via `ctx.api.i18n.t(...)`)
+- `managedBy`: string (best practice: set this to `options.pluginBaseObjectId`, e.g. `"msghub.0.IngestHue.0"`)
+  - `managedText`: string (should already be localized via `ctx.api.i18n.t(...)`)
 
 Semantics:
 

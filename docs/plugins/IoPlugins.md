@@ -84,6 +84,8 @@ When the adapter is wired via `IoPlugins`, ingest plugins also receive a helper 
 
 This is a best-effort convenience to stamp ioBroker objects that the plugin “owns”/monitors (for example foreign states) with small metadata (`managedBy`, `managedText`, `managedSince`).
 
+Best practice: set `managedBy` to `options.pluginBaseObjectId` (e.g. `"msghub.0.IngestHue.0"`) so `IoPlugins` can treat it as a stable plugin/instance identifier.
+
 ---
 
 ## Built-in catalog (this repo)
@@ -105,4 +107,3 @@ Today it contains:
 - Bridge wiring helper: `src/MsgBridge.js`
 - Engage wiring helper: `src/MsgEngage.js`
 - Plugin developer guide: `docs/plugins/README.md`
-
