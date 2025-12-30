@@ -259,7 +259,9 @@ function buildIoBrokerApi(adapter, { hostName }) {
 			},
 			getForeignObjects: (pattern, type = undefined) => {
 				if (typeof adapter?.getForeignObjectsAsync === 'function') {
-					return type === undefined ? adapter.getForeignObjectsAsync(pattern) : adapter.getForeignObjectsAsync(pattern, type);
+					return type === undefined
+						? adapter.getForeignObjectsAsync(pattern)
+						: adapter.getForeignObjectsAsync(pattern, type);
 				}
 				requireFn(adapter?.getForeignObjects, 'getForeignObjects');
 				return new Promise((resolve, reject) => {

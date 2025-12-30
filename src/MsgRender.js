@@ -78,7 +78,6 @@ class MsgRender {
 		// Return a view-only message clone with rendered presentation fields.
 		// Explicitly drop any existing `display` key to keep the output shape stable.
 		// (Canonical messages should not contain `display`, but this also protects against accidental persistence.)
-		// eslint-disable-next-line no-unused-vars
 		const { display, ...rest } = msg;
 		const out = { ...rest };
 
