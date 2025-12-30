@@ -49,6 +49,12 @@ function buildBase(overrides = {}) {
 			expect(msg.ref).to.equal('ref-%0A-1');
 		});
 
+		it('does not double-encode already URL-encoded refs', () => {
+			const { factory } = makeFactory();
+			const msg = factory.createMessage(buildBase({ ref: 'ref-%0A-1' }));
+			expect(msg.ref).to.equal('ref-%0A-1');
+		});
+
 		it('rejects missing title', () => {
 			const { factory, logs } = makeFactory();
 			const msg = factory.createMessage(buildBase({ title: undefined }));
@@ -471,6 +477,17 @@ describe('MsgFactory.applyPatch', () => {
 		expect(updated).to.be.an('object');
 		expect(updated.ref).to.equal(msg.ref);
 		expect(updated.title).to.equal('Same ref ok');
+	});
+
+	it('accepts patches that include an already normalized ref', () => {
+		const { factory, logs } = makeFactory();
+		const msg = factory.createMessage(buildBase({ ref: 'ref-\n-1' }));
+
+		const updated = factory.applyPatch(msg, { ref: msg.ref, title: 'Same ref ok' });
+		expect(updated).to.be.an('object');
+		expect(updated.ref).to.equal(msg.ref);
+		expect(updated.title).to.equal('Same ref ok');
+		expect(logs.error).to.deep.equal([]);
 	});
 
 	it('rejects kind changes', () => {

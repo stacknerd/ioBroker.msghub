@@ -920,11 +920,17 @@ class MsgFactory {
 	 */
 	_normalizeMsgRef(value) {
 		const ref = this._normalizeMsgString(value, 'ref', { required: true });
-		const saferef = encodeURIComponent(ref);
+		let decoded = ref;
+		try {
+			decoded = decodeURIComponent(ref);
+		} catch {
+			decoded = ref;
+		}
+		const saferef = encodeURIComponent(decoded);
 
 		// Log only when normalization changed something (e.g. spaces -> %20).
-		if (value != saferef) {
-			this.adapter?.log?.warn?.(`MsgFactory: received ref='${value}', normalized to  '${saferef}'`);
+		if (ref !== saferef) {
+			this.adapter?.log?.warn?.(`MsgFactory: received ref='${ref}', normalized to  '${saferef}'`);
 		}
 		return saferef;
 	}
