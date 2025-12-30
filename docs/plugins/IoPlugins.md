@@ -79,6 +79,21 @@ Only one Engage plugin can own the adapter messagebox handler at a time.
 
 ---
 
+## Per-call plugin meta injection
+
+For every plugin call, `IoPlugins` injects a stable identity bundle into `ctx.meta.plugin`:
+
+- `category`: `ingest | notify | bridge | engage`
+- `type`: plugin type (example: `IngestHue`)
+- `instanceId`: numeric instance id (today: always `0`)
+- `regId`: registration id in the hosts (example: `IngestHue:0`)
+- `baseFullId`: full ioBroker base object id (example: `msghub.0.IngestHue.0`)
+- `baseOwnId`: own id (example: `IngestHue.0`)
+
+This avoids repeating boilerplate in every plugin (deriving ids from `ctx.api.iobroker.ids` or parsing `pluginId` strings).
+
+---
+
 ## Managed-meta helper for ingest plugins
 
 When the adapter is wired via `IoPlugins`, ingest plugins also receive a helper in `ctx.meta`:

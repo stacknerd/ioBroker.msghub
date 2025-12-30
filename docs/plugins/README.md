@@ -130,6 +130,11 @@ The runtime will pass your `options` from ioBroker `native` plus an extra field:
 
 - `options.pluginBaseObjectId` (full id) so you can create states below your own subtree if needed
 
+Additionally, for every plugin call you get a stable identity bundle in `ctx.meta.plugin`:
+
+- `category`, `type`, `instanceId`, `regId`
+- `baseFullId` (full ioBroker id) and `baseOwnId` (own id)
+
 Example: ingest plugin skeleton:
 
 ```js
