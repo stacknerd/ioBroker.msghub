@@ -1,4 +1,5 @@
 {
+	"(please select)": "(bitte auswählen)",
 	"- Battery: check “below (<)”, limit 10, hysteresis 2, min duration 10 minutes\n- Humidity: check “below (<)”, limit 35, min duration 0\n- Fill level: check “above (>)”, limit 5000, min duration 1 minute\n- Window contact: check “is true” (or “is false”, depending on device), min duration 12 hours": "- Batterie: Prüfung „unter (<)“, Grenzwert 10, Hysterese 2, Mindestdauer 10 Minuten\n- Luftfeuchte: Prüfung „unter (<)“, Grenzwert 35, Mindestdauer 0\n- Füllstand: Prüfung „über (>)“, Grenzwert 5000, Mindestdauer 1 Minute\n- Fensterkontakt: Prüfung „ist wahr“ (oder „ist falsch“ – je nach Gerät), Mindestdauer 12 Stunden",
 	"A higher-priority monitoring rule is active for this object.": "Für dieses Objekt ist eine höher priorisierte Überwachung aktiv.",
 	"Additional information from the source that manages this object.": "Zusätzliche Informationen der Quelle, die dieses Objekt verwaltet.",

@@ -8,7 +8,7 @@
 		"managedNotice": {
 			"type": "panel",
 			"label": "Notice",
-			"hidden": "!((data.meta && data.meta.managedBy) || data['meta.managedBy'] )",
+			"hidden": "!((data.managedMeta && data.managedMeta.managedMessage) || data['managedMeta.managedMessage'] )",
 			"items": {
 				"_mngH0": {
 					"type": "header",
@@ -46,7 +46,7 @@
 					"xl": 12,
 					"style": { "whiteSpace": "pre-wrap" }
 				},
-				"meta.managedBy": {
+				"managedMeta.managedBy": {
 					"newLine": true,
 					"type": "text",
 					"label": "Managed by:",
@@ -57,7 +57,7 @@
 					"xl": 6,
 					"disabled": true
 				},
-				"meta.managedSince": {
+				"managedMeta.managedSince": {
 					"type": "text",
 					"label": "Managed since:",
 					"xs": 12,
@@ -67,7 +67,7 @@
 					"xl": 6,
 					"disabled": true
 				},
-				"meta.managedText": {
+				"managedMeta.managedText": {
 					"type": "text",
 					"multiline": true,
 					"label": "Note (from system)",
@@ -87,7 +87,7 @@
 		"mode": {
 			"type": "panel",
 			"label": "Monitoring",
-			"hidden": "!!((data.meta && data.meta.managedBy) || data['meta.managedBy'] )",
+			"hidden": "!!((data.managedMeta && data.managedMeta.managedMessage) || data['managedMeta.managedMessage'] )",
 			"items": {
 				"_modeH0": {
 					"type": "header",
@@ -119,8 +119,9 @@
 					"md": 12,
 					"lg": 12,
 					"xl": 12,
-					"default": "freshness",
+					"default": "",
 					"options": [
+						{ "label": "(please select)", "value": "" },
 						{ "label": "Threshold", "value": "threshold" },
 						{ "label": "Freshness", "value": "freshness" },
 						{ "label": "Dependency (Trigger)", "value": "triggered" },
@@ -142,7 +143,7 @@
 				},
 				"_modeThresholdInfo": {
 					"newLine": true,
-					"hidden": "!!((data.meta && data.meta.managedBy) || data['meta.managedBy'] ) || (((data.watch && data.mode) || data['mode']) !== 'threshold')",
+					"hidden": "!!((data.managedMeta && data.managedMeta.managedMessage) || data['managedMeta.managedMessage'] ) || (((data.watch && data.mode) || data['mode']) !== 'threshold')",
 					"type": "staticText",
 					"text": "Threshold: You get a message if a numeric value is too low/too high, leaves a defined range, or a boolean stays TRUE/FALSE for too long.\n\nExamples:\n- Battery < 10% → warning/error\n- Humidity < 35% for 30 min → notice (“Please ventilate”)\n- Window contact is open for 12 h (TRUE/FALSE depending on device) → warning\n\nTip: Hysteresis and minimum duration help to avoid flapping and short spikes.",
 					"xs": 12,
@@ -154,7 +155,7 @@
 				},
 				"_modeFreshnessInfo": {
 					"newLine": true,
-					"hidden": "!!((data.meta && data.meta.managedBy) || data['meta.managedBy'] ) || (((data.watch && data.mode) || data['mode']) !== 'freshness')",
+					"hidden": "!!((data.managedMeta && data.managedMeta.managedMessage) || data['managedMeta.managedMessage'] ) || (((data.watch && data.mode) || data['mode']) !== 'freshness')",
 					"type": "staticText",
 					"text": "Freshness: You get a message if this object has no update (ts) or no actual value change (lc) for too long.\n\nExamples:\n- Temperature sensor: at least one update every 12 h\n- Power/energy meter: at least one update every 30 s\n- Device with keepalive: at least one heartbeat every 5 min\n\nTip: If a device sends keepalives even without changes, use ts; if it only sends on change, use lc.",
 					"xs": 12,
@@ -168,7 +169,7 @@
 				},
 				"_modeTriggeredInfo": {
 					"newLine": true,
-					"hidden": "!!((data.meta && data.meta.managedBy) || data['meta.managedBy'] ) || (((data.watch && data.mode) || data['mode']) !== 'triggered')",
+					"hidden": "!!((data.managedMeta && data.managedMeta.managedMessage) || data['managedMeta.managedMessage'] ) || (((data.watch && data.mode) || data['mode']) !== 'triggered')",
 					"type": "staticText",
 					"text": "Dependency (Trigger): When another object becomes active, this object must react within a time window as you expect.\n\nExamples:\n- Valve = ON → water meter must increase within 10 min (delta)\n- Plug = ON → power must become >= 5 W within 30 s\n- Heating = ON → flow temperature must rise within 15 min\n\nTip: Choose a generous time window if devices are slow or have latency.",
 					"xs": 12,
@@ -180,7 +181,7 @@
 				},
 				"_modeNonSettlingInfo": {
 					"newLine": true,
-					"hidden": "!!((data.meta && data.meta.managedBy) || data['meta.managedBy'] ) || (((data.watch && data.mode) || data['mode']) !== 'nonSettling')",
+					"hidden": "!!((data.managedMeta && data.managedMeta.managedMessage) || data['managedMeta.managedMessage'] ) || (((data.watch && data.mode) || data['mode']) !== 'nonSettling')",
 					"type": "staticText",
 					"text": "Non-settling value: You get a message if a value has no quiet phase for a long time or shows a suspicious trend in one direction over a time window.\n\nExamples:\n- Water meter increases for hours without quiet phase → possible leak\n- Sensor value keeps fluctuating without stable phase → RF issues / defective sensor\n- Counter keeps running although it usually has idle phases → consumer stuck\n\nTip: Use “Min. delta” to filter measurement noise.",
 					"xs": 12,
@@ -192,7 +193,7 @@
 				},
 				"_modeSessionInfo": {
 					"newLine": true,
-					"hidden": "!!((data.meta && data.meta.managedBy) || data['meta.managedBy'] ) || (((data.watch && data.mode) || data['mode']) !== 'session')",
+					"hidden": "!!((data.managedMeta && data.managedMeta.managedMessage) || data['managedMeta.managedMessage'] ) || (((data.watch && data.mode) || data['mode']) !== 'session')",
 					"type": "staticText",
 					"text": "Session (Start/Stop): You get a message when a process starts and later finishes again – usually detected via power thresholds and a stop delay.\n\nExamples:\n- E-bike charging: start >= 50 W, finish < 15 W for 5 min\n- Washing machine: start > 10 W (with min hold), finish after stop delay\n- Dishwasher: start/finish via typical power phases + stop delay\n\nTip: A short minimum hold time prevents false starts caused by brief spikes.",
 					"xs": 12,
@@ -207,7 +208,7 @@
 		"threshold": {
 			"type": "panel",
 			"label": "Threshold",
-			"hidden": "!!((data.meta && data.meta.managedBy) || data['meta.managedBy'] ) || (((data.watch && data.mode) || data['mode']) !== 'threshold')",
+			"hidden": "!!((data.managedMeta && data.managedMeta.managedMessage) || data['managedMeta.managedMessage'] ) || (((data.watch && data.mode) || data['mode']) !== 'threshold')",
 			"items": {
 				"_thrH0": {
 					"type": "header",
@@ -376,7 +377,7 @@
 		"freshness": {
 			"type": "panel",
 			"label": "Freshness",
-			"hidden": "!!((data.meta && data.meta.managedBy) || data['meta.managedBy'] ) || (((data.watch && data.mode) || data['mode']) !== 'freshness')",
+			"hidden": "!!((data.managedMeta && data.managedMeta.managedMessage) || data['managedMeta.managedMessage'] ) || (((data.watch && data.mode) || data['mode']) !== 'freshness')",
 			"items": {
 				"_freshH0": {
 					"type": "header",
@@ -491,7 +492,7 @@
 		"triggered": {
 			"type": "panel",
 			"label": "Dependency (Trigger)",
-			"hidden": "!!((data.meta && data.meta.managedBy) || data['meta.managedBy'] ) || (((data.watch && data.mode) || data['mode']) !== 'triggered')",
+			"hidden": "!!((data.managedMeta && data.managedMeta.managedMessage) || data['managedMeta.managedMessage'] ) || (((data.watch && data.mode) || data['mode']) !== 'triggered')",
 			"items": {
 				"_trgH0": {
 					"type": "header",
@@ -725,7 +726,7 @@
 		"nonSettling": {
 			"type": "panel",
 			"label": "Non-settling value",
-			"hidden": "!!((data.meta && data.meta.managedBy) || data['meta.managedBy'] ) || (((data.watch && data.mode) || data['mode']) !== 'nonSettling')",
+			"hidden": "!!((data.managedMeta && data.managedMeta.managedMessage) || data['managedMeta.managedMessage'] ) || (((data.watch && data.mode) || data['mode']) !== 'nonSettling')",
 			"items": {
 				"_nsH0": {
 					"type": "header",
@@ -976,7 +977,7 @@
 		"session": {
 			"type": "panel",
 			"label": "Session (Start/Stop)",
-			"hidden": "!!((data.meta && data.meta.managedBy) || data['meta.managedBy'] ) || (((data.watch && data.mode) || data['mode']) !== 'session')",
+			"hidden": "!!((data.managedMeta && data.managedMeta.managedMessage) || data['managedMeta.managedMessage'] ) || (((data.watch && data.mode) || data['mode']) !== 'session')",
 			"items": {
 				"_sessH0": {
 					"type": "header",
@@ -1235,7 +1236,7 @@
 		"message": {
 			"type": "panel",
 			"label": "Message",
-			"hidden": "!!((data.meta && data.meta.managedBy) || data['meta.managedBy'] ) || (((data.mode) || data['mode']) == null)",
+			"hidden": "!!((data.managedMeta && data.managedMeta.managedMessage) || data['managedMeta.managedMessage'] ) || (((data.mode) || data['mode']) == '')",
 			"items": {
 				"_msgH0": {
 					"type": "header",
@@ -1557,7 +1558,7 @@
 		"expertJson": {
 			"type": "panel",
 			"label": "Expert",
-			"hidden": "!!((data.meta && data.meta.managedBy) || data['meta.managedBy'] ) || !(((window.sessionStorage && window.sessionStorage.getItem && window.sessionStorage.getItem('App.expertMode') === 'true')) || (_system && _system.expertMode))",
+			"hidden": "!!((data.managedMeta && data.managedMeta.managedMessage) || data['managedMeta.managedMessage'] ) || !(((window.sessionStorage && window.sessionStorage.getItem && window.sessionStorage.getItem('App.expertMode') === 'true')) || (_system && _system.expertMode))",
 			"items": {
 				"_expH0": {
 					"type": "header",

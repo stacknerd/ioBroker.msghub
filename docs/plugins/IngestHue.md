@@ -147,8 +147,12 @@ To reduce noise, reachable states can be filtered by the **parent role** (option
 
 ## “Managed” metadata on Hue states
 
-Besides creating messages, `IngestHue` also reports watched state ids via `ctx.meta.managedObjects.report(...)`.
-`IoPlugins` then uses that information to stamp a small “managed by plugin” meta block onto those Hue state objects.
+Besides creating messages, `IngestHue` also reports watched state ids via:
+
+- `await ctx.meta.managedObjects.report(...)`
+- `await ctx.meta.managedObjects.applyReported()`
+
+MsgHub then uses that information to stamp a small “managed by plugin” meta block onto those Hue state objects.
 
 This makes it easier to understand in Admin *why* a `.battery` or `.reachable` state is monitored.
 

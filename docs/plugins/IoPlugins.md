@@ -41,6 +41,9 @@ For each plugin instance, `IoPlugins` creates a small subtree below the adapter 
   - `IoPlugins` commits the persisted value with `ack:true` after start/stop
 - Status (type `state`, string, ro): `msghub.0.<Type>.<instanceId>.status`
   - `starting | running | stopping | stopped | error`
+- Watchlist (type `state`, string/JSON, ro): `msghub.0.<Type>.<instanceId>.watchlist`
+  - contains a JSON string array of “managed” object ids reported by the plugin
+  - created lazily (only for plugins that report managed objects)
 
 Instance ids are numeric. Today this repo always uses `0`.
 
@@ -80,11 +83,28 @@ Only one Engage plugin can own the adapter messagebox handler at a time.
 
 When the adapter is wired via `IoPlugins`, ingest plugins also receive a helper in `ctx.meta`:
 
-- `ctx.meta.managedObjects.report(ids, { managedBy, managedText })`
+- `await ctx.meta.managedObjects.report(ids, { managedText })`
+- `await ctx.meta.managedObjects.applyReported()`
 
-This is a best-effort convenience to stamp ioBroker objects that the plugin “owns”/monitors (for example foreign states) with small metadata (`managedBy`, `managedText`, `managedSince`).
+This is a best-effort convenience to stamp ioBroker objects that the plugin “owns”/monitors (for example foreign states) with small metadata (`managedBy`, `managedText`, `managedSince`) and to persist a watchlist of managed ids.
 
-Best practice: set `managedBy` to `options.pluginBaseObjectId` (e.g. `"msghub.0.IngestHue.0"`) so `IoPlugins` can treat it as a stable plugin/instance identifier.
+Behavior:
+- `report(...)` buffers ids (deduped) and optional text; it does not write immediately.
+- `applyReported()` performs the writes (managedMeta stamping + watchlist update) and clears the buffer.
+
+Stored `managedBy` is always the plugin base object id (`options.pluginBaseObjectId`, e.g. `"msghub.0.IngestHue.0"`).
+
+Storage:
+
+- The metadata is stored on the target object under `common.custom.<msghubInstance>.managedMeta` (example: `common.custom.msghub.0.managedMeta`).
+- `managedMeta.managedMessage` is set to `true` while the plugin actively manages the object (used by the Admin UI to show/hide the “managed automatically” notice).
+- The watchlist is written as a JSON string array into `<Type>.<instanceId>.watchlist` (example: `IngestHue.0.watchlist`).
+  The watchlist state is created lazily on the first `applyReported()` call (plugins that never report managed objects do not create a watchlist).
+
+Cleanup / stale entries:
+
+- When a plugin instance is disabled/unregistered, MsgHub clears its watchlist state immediately and then (in the background) marks all previously listed objects as “no longer managed” (`managedMeta.managedMessage=false`). When `common.custom.<ns>.mode` is empty and `common.custom.<ns>.enabled===true`, MsgHub also flips `enabled` to `false`.
+- Additionally, a slow background janitor periodically scans `common.custom.<ns>.managedMeta` entries and applies the same “no longer managed” policy when objects are not listed in the corresponding watchlist (or the watchlist does not exist).
 
 ---
 
@@ -103,6 +123,7 @@ Today it contains:
 ## Related files
 
 - Implementation: `lib/IoPlugins.js`
+- Managed-meta runtime + janitor: `lib/IoManagedMeta.js`
 - Catalog: `lib/index.js`
 - Bridge wiring helper: `src/MsgBridge.js`
 - Engage wiring helper: `src/MsgEngage.js`

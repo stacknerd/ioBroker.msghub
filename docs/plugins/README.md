@@ -291,29 +291,33 @@ use `ctx.api.*` and do not mutate `MsgStore` internals.
 
 When the adapter is wired via `IoPlugins`, ingest plugins receive an additional helper:
 
-- `ctx.meta.managedObjects.report(ids, { managedBy, managedText })`
+- `await ctx.meta.managedObjects.report(ids, { managedText })`
+- `await ctx.meta.managedObjects.applyReported()`
 
-This lets ingest plugins report which ioBroker objects they “own”/monitor (typically foreign states). `IoPlugins` then writes a small metadata block into those objects:
+This lets ingest plugins report which ioBroker objects they “own”/monitor (typically foreign states). MsgHub then writes a small metadata block into those objects:
 
 - `managedBy`
 - `managedText`
 - `managedSince`
+- `managedMessage` (`true` while actively managed; used by the Admin UI)
 
 Where it is stored:
 
-- `obj.native.meta` (always)
-- `obj.common.custom[<adapter namespace>].meta` (only if that custom block already exists)
+- `obj.common.custom[<adapter namespace>].managedMeta` (example key: `common.custom.msghub.0.managedMeta`)
 
 Signature:
 
 - `ids`: `string` or `string[]` (ioBroker object ids, usually full foreign ids)
-- `managedBy`: string (best practice: set this to `options.pluginBaseObjectId`, e.g. `"msghub.0.IngestHue.0"`)
-  - `managedText`: string (should already be localized via `ctx.api.i18n.t(...)`)
+- `managedText`: string (should already be localized via `ctx.api.i18n.t(...)`)
 
 Semantics:
 
-- Best-effort: failures are logged and swallowed by `IoPlugins`.
+- `report(...)` buffers ids (deduped); it does not write immediately.
+- `applyReported()` performs the writes (managedMeta stamping + watchlist update) and clears the buffer.
+- Stored `managedBy` is always `options.pluginBaseObjectId` (e.g. `"msghub.0.IngestHue.0"`).
+- Best-effort: failures are logged and swallowed.
 - Minimal writes: only updates when content differs or `managedSince` is missing.
+- Cleanup: when a plugin instance is disabled, MsgHub clears the plugin watchlist and marks previously listed objects as “no longer managed” (`managedMessage=false`). If the object has no active IngestStates rule (`mode===""`) and `enabled===true`, MsgHub also sets `enabled=false`.
 
 If a plugin depends on this feature, validate it in `start(ctx)` (throw a clear error when missing).
 

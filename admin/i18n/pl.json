@@ -1,4 +1,5 @@
 {
+	"(please select)": "(wybierz)",
 	"- Battery: check “below (<)”, limit 10, hysteresis 2, min duration 10 minutes\n- Humidity: check “below (<)”, limit 35, min duration 0\n- Fill level: check “above (>)”, limit 5000, min duration 1 minute\n- Window contact: check “is true” (or “is false”, depending on device), min duration 12 hours": "- Battery: check “below (<)”, limit 10, hysteresis 2, min duration 10 minutes\n- Humidity: check “below (<)”, limit 35, min duration 0\n- Fill level: check “above (>)”, limit 5000, min duration 1 minute\n- Window contact: check “is true” (or “is false”, depending on device), min duration 12 hours",
 	"A higher-priority monitoring rule is active for this object.": "A higher-priority monitoring rule is active for this object.",
 	"Additional information from the source that manages this object.": "Additional information from the source that manages this object.",

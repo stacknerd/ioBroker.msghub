@@ -180,7 +180,7 @@ class MsgIngest {
 	 * @param {object} [meta] Startup metadata (exposed to plugins via `ctx.meta`).
 	 */
 	start(meta = {}) {
-		// Persist only stable, host-provided meta keys across subsequent ctx builds (e.g. managedObjects reporter).
+		// Persist only stable, host-provided meta keys across subsequent ctx builds.
 		// Call-specific meta (like { boot: true }) should not leak into later calls (stop/register/unregister).
 		this._baseMeta = meta && meta.managedObjects ? { managedObjects: meta.managedObjects } : {};
 		this._running = true;
