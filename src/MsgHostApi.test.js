@@ -206,8 +206,8 @@ describe('MsgHostApi', () => {
 		});
 	});
 
-	describe('buildIoBrokerApi', () => {
-		it('uses async adapter methods when available', async () => {
+		describe('buildIoBrokerApi', () => {
+			it('uses async adapter methods when available', async () => {
 			const { adapter, calls } = createAdapterStub({
 				async setObjectNotExistsAsync(ownId, obj) {
 					calls.objects.push(['setObjectNotExistsAsync', ownId, obj]);
@@ -291,16 +291,72 @@ describe('MsgHostApi', () => {
 				['setStateAsync', 'x', { val: 2, ack: true }],
 				['getForeignStateAsync', 'system.adapter.test.alive'],
 			]);
-			expect(calls.subscribe).to.deep.equal([
-				['subscribeStates', '*'],
-				['unsubscribeForeignObjects', '*'],
-			]);
-		});
+				expect(calls.subscribe).to.deep.equal([
+					['subscribeStates', '*'],
+					['unsubscribeForeignObjects', '*'],
+				]);
+			});
 
-		it('wraps callback-based adapter methods into promises', async () => {
-			const { adapter, calls } = createAdapterStub({
-				setObjectNotExists(ownId, obj, cb) {
-					calls.objects.push(['setObjectNotExists', ownId, obj]);
+			it('binds subscribe methods to the adapter instance', () => {
+				const { adapter } = createAdapterStub({
+					_subscribeStates: [],
+					subscribeStates(pattern) {
+						this._subscribeStates.push(pattern);
+					},
+					_unsubscribeStates: [],
+					unsubscribeStates(pattern) {
+						this._unsubscribeStates.push(pattern);
+					},
+					_subscribeForeignStates: [],
+					subscribeForeignStates(pattern) {
+						this._subscribeForeignStates.push(pattern);
+					},
+					_unsubscribeForeignStates: [],
+					unsubscribeForeignStates(pattern) {
+						this._unsubscribeForeignStates.push(pattern);
+					},
+					_subscribeForeignObjects: [],
+					subscribeForeignObjects(pattern) {
+						this._subscribeForeignObjects.push(pattern);
+					},
+					_unsubscribeForeignObjects: [],
+					unsubscribeForeignObjects(pattern) {
+						this._unsubscribeForeignObjects.push(pattern);
+					},
+					_subscribeObjects: [],
+					subscribeObjects(pattern) {
+						this._subscribeObjects.push(pattern);
+					},
+					_unsubscribeObjects: [],
+					unsubscribeObjects(pattern) {
+						this._unsubscribeObjects.push(pattern);
+					},
+				});
+
+				const api = buildIoBrokerApi(adapter, { hostName: 'MyHost' });
+				api.subscribe.subscribeStates('a');
+				api.subscribe.unsubscribeStates('b');
+				api.subscribe.subscribeObjects('c');
+				api.subscribe.unsubscribeObjects('d');
+				api.subscribe.subscribeForeignStates('e');
+				api.subscribe.unsubscribeForeignStates('f');
+				api.subscribe.subscribeForeignObjects('g');
+				api.subscribe.unsubscribeForeignObjects('h');
+
+				expect(adapter._subscribeStates).to.deep.equal(['a']);
+				expect(adapter._unsubscribeStates).to.deep.equal(['b']);
+				expect(adapter._subscribeObjects).to.deep.equal(['c']);
+				expect(adapter._unsubscribeObjects).to.deep.equal(['d']);
+				expect(adapter._subscribeForeignStates).to.deep.equal(['e']);
+				expect(adapter._unsubscribeForeignStates).to.deep.equal(['f']);
+				expect(adapter._subscribeForeignObjects).to.deep.equal(['g']);
+				expect(adapter._unsubscribeForeignObjects).to.deep.equal(['h']);
+			});
+
+			it('wraps callback-based adapter methods into promises', async () => {
+				const { adapter, calls } = createAdapterStub({
+					setObjectNotExists(ownId, obj, cb) {
+						calls.objects.push(['setObjectNotExists', ownId, obj]);
 					cb(null);
 				},
 				delObject(ownId, cb) {
