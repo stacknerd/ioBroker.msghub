@@ -32,6 +32,9 @@ In Message Hub a “notification” is simply a **Message Hub `Message` object**
 
 `MsgNotify` does not interpret message content. It only forwards it.
 
+Practical note: in the default core wiring, `MsgStore` dispatches a **rendered view** of messages (see `MsgRender`),
+so notifier plugins typically receive already-rendered `title`/`text`/`details` fields.
+
 ---
 
 ## Core responsibilities
