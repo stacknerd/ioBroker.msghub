@@ -15,7 +15,7 @@ Core modules can:
 - Define what a valid Message Hub `Message` looks like and how updates (“patches”) work
 - Keep a canonical in-memory list of messages (single source of truth)
 - Persist/restore that list and write append-only history
-- Render messages into display-friendly output (template placeholders → `display.*`)
+- Render messages into display-friendly output (template placeholders → rendered `title`/`text`/`details`)
 - Trigger notification events (dispatch), without caring about delivery channels
 
 Core modules intentionally do not:
@@ -37,9 +37,9 @@ For runtime enable/disable + configuration of plugins (including bidirectional `
 6. **Side Effects (best-effort)**: After mutations, `MsgStore` triggers side effects:
    - Persistence of the full list via `MsgStorage`
    - Append-only history via `MsgArchive`
-   - Notification dispatch via `MsgNotify` (fan-out to notifier plugins in `lib/`)
+   - Notification dispatch via `MsgNotify` (fan-out to notifier plugins in `lib/`, typically with rendered message views via `MsgRender`)
 7. **Notifier Plugins (delivery)**: Notifier plugins (e.g. `lib/Notify*.js`) receive events from `MsgNotify` and perform the actual delivery (ioBroker states, push, TTS, ...). See [`docs/plugins/README.md`](../plugins/README.md).
-8. **Output (read view)**: On reads, `MsgStore` returns a view; `MsgRender` creates `display.*` fields (resolving template placeholders from `metrics`/`timing`).
+8. **Output (read view)**: On reads, `MsgStore` returns a view; `MsgRender` returns rendered `title`/`text`/`details` (resolving template placeholders from `metrics`/`timing`).
 
 ASCII sketch - WRITE / MUTATE (create/update/delete + side effects):
 ```
@@ -57,7 +57,7 @@ MsgIngest  --->  MsgFactory  --->  MsgStore (canonical list)
 
 ASCII sketch - READ / VIEW (rendering only; no mutation)
 ```
-Consumer/UI  --->  MsgStore.getMessages()/getMessageByRef()  --->  MsgRender  --->  rendered output (display.*)
+Consumer/UI  --->  MsgStore.getMessages()/getMessageByRef()  --->  MsgRender  --->  rendered output (title/text/details)
 ```
 
 ## Design ideas (why it is built like this)
@@ -77,7 +77,7 @@ Consumer/UI  --->  MsgStore.getMessages()/getMessageByRef()  --->  MsgRender  --
 - `MsgStorage` persists and restores the full message list (including revival of `Map` fields such as `metrics`).
 - `MsgArchive` writes an append-only history (JSONL) per message `ref` for audit/debug/replay.
 - `MsgNotify` dispatches notification events to registered notifier plugins (delivery happens in plugins).
-- `MsgRender` resolves template placeholders (`{{m.*}}`, `{{t.*}}`) into a separate `display` block.
+- `MsgRender` resolves template placeholders (`{{m.*}}`, `{{t.*}}`) into rendered `title`/`text`/`details`.
 - `MsgIngest` hosts producer plugins and fans out inbound events to them.
 - `MsgAction` executes whitelisted message actions and patches `lifecycle`/`timing` via the store.
 - `MsgUtils` contains small shared helpers used by storage/archive.

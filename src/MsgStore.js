@@ -250,14 +250,14 @@ class MsgStore {
 		this.msgStorage.writeJson(this.fullList);
 
 		// notify about added message
-		this.msgNotify?.dispatch?.(this.msgConstants.notfication.events.added, msg);
+		this._dispatchNotify(this.msgConstants.notfication.events.added, msg);
 
 		// If no future notifyAt exists, treat the message as immediately due.
 		const isOpen =
 			(msg?.lifecycle?.state || this.msgConstants.lifecycle?.state?.open) ===
 			this.msgConstants.lifecycle?.state?.open;
 		if (isOpen && !Number.isFinite(msg?.timing?.notifyAt)) {
-			this.msgNotify?.dispatch?.(this.msgConstants.notfication.events.due, msg);
+			this._dispatchNotify(this.msgConstants.notfication.events.due, msg);
 		}
 
 		// Archive the creation for audit/replay. This must not block the store.
@@ -349,7 +349,7 @@ class MsgStore {
 			state !== existingState;
 
 		if (hadUpdate && !isSoftDeletedTransition) {
-			this.msgNotify?.dispatch?.(this.msgConstants.notfication.events.update, updated);
+			this._dispatchNotify(this.msgConstants.notfication.events.update, updated);
 		}
 
 		// Immediate due semantics (only for non-silent updates and only when not expired).
@@ -360,7 +360,7 @@ class MsgStore {
 			(updated?.lifecycle?.state || this.msgConstants.lifecycle?.state?.open) ===
 			this.msgConstants.lifecycle?.state?.open;
 		if (!Number.isFinite(t?.notifyAt) && hadUpdate && notExpired && isOpen) {
-			this.msgNotify?.dispatch?.(this.msgConstants.notfication.events.due, updated);
+			this._dispatchNotify(this.msgConstants.notfication.events.due, updated);
 		}
 
 		// Archive patch information for audit and debugging (best-effort).
@@ -953,7 +953,7 @@ class MsgStore {
 		const deleted = ok ? this.fullList.find(item => item.ref === remove.ref) || remove : remove;
 
 		// Notify plugins (semantic delete).
-		this.msgNotify?.dispatch?.(this.msgConstants.notfication.events.deleted, deleted);
+		this._dispatchNotify(this.msgConstants.notfication.events.deleted, deleted);
 
 		this.adapter?.log?.debug?.(`MsgStore: removed Message '${reference}'`);
 		this.adapter?.log?.silly?.(`MsgStore: removed Message '${serializeWithMaps(deleted)}'`);
@@ -1039,7 +1039,7 @@ class MsgStore {
 		}
 
 		// Notify plugins once per prune cycle with the list of removed messages.
-		this.msgNotify?.dispatch?.(this.msgConstants.notfication.events.expired, expiredNow);
+		this._dispatchNotify(this.msgConstants.notfication.events.expired, expiredNow);
 
 		this.adapter?.log?.debug?.(`MsgStore: soft-expired Message(s) '${expiredNow.map(msg => msg.ref).join(', ')}'`);
 		this.adapter?.log?.silly?.(`MsgStore: soft-expired Message(s) '${serializeWithMaps(expiredNow)}'`);
@@ -1155,7 +1155,7 @@ class MsgStore {
 		}
 
 		// Dispatch as a batch; MsgNotify will fan out per message internally.
-		this.msgNotify?.dispatch?.(this.msgConstants.notfication.events.due, notifications);
+		this._dispatchNotify(this.msgConstants.notfication.events.due, notifications);
 
 		// Update notifyAt to reschedule notification as needed.
 		for (const msg of notifications) {
@@ -1169,6 +1169,29 @@ class MsgStore {
 		this.adapter?.log?.silly?.(
 			`MsgStore: initiated Notification for Message(s) '${serializeWithMaps(notifications)}'`,
 		);
+	}
+
+	/**
+	 * Dispatch notifications via MsgNotify using a rendered (view-only) message payload.
+	 *
+	 * Invariants:
+	 * - Notify always receives rendered message views.
+	 * - Archive/persistence always receive raw canonical messages.
+	 *
+	 * @param {string} event Notification event value (see MsgConstants.notfication.events).
+	 * @param {object|Array<object>} payload Message or list of messages.
+	 */
+	_dispatchNotify(event, payload) {
+		if (!this.msgNotify?.dispatch) {
+			return;
+		}
+
+		const render = this.msgRender;
+		const rendered = Array.isArray(payload)
+			? render?.renderMessages?.(payload) || payload
+			: render?.renderMessage?.(payload) || payload;
+
+		this.msgNotify.dispatch(event, rendered);
 	}
 }
 

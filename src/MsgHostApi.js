@@ -304,26 +304,26 @@ function buildIoBrokerApi(adapter, { hostName }) {
 					adapter.getForeignState(id, (err, state) => (err ? reject(err) : resolve(state)));
 				});
 			},
-			}),
-			subscribe: Object.freeze({
-				subscribeStates: pattern => requireFn(adapter?.subscribeStates, 'subscribeStates').call(adapter, pattern),
-				unsubscribeStates: pattern =>
-					requireFn(adapter?.unsubscribeStates, 'unsubscribeStates').call(adapter, pattern),
-				subscribeObjects: pattern =>
-					requireFn(adapter?.subscribeObjects, 'subscribeObjects').call(adapter, pattern),
-				unsubscribeObjects: pattern =>
-					requireFn(adapter?.unsubscribeObjects, 'unsubscribeObjects').call(adapter, pattern),
-				subscribeForeignStates: pattern =>
-					requireFn(adapter?.subscribeForeignStates, 'subscribeForeignStates').call(adapter, pattern),
-				unsubscribeForeignStates: pattern =>
-					requireFn(adapter?.unsubscribeForeignStates, 'unsubscribeForeignStates').call(adapter, pattern),
-				subscribeForeignObjects: pattern =>
-					requireFn(adapter?.subscribeForeignObjects, 'subscribeForeignObjects').call(adapter, pattern),
-				unsubscribeForeignObjects: pattern =>
-					requireFn(adapter?.unsubscribeForeignObjects, 'unsubscribeForeignObjects').call(adapter, pattern),
-			}),
-		});
-	}
+		}),
+		subscribe: Object.freeze({
+			subscribeStates: pattern => requireFn(adapter?.subscribeStates, 'subscribeStates').call(adapter, pattern),
+			unsubscribeStates: pattern =>
+				requireFn(adapter?.unsubscribeStates, 'unsubscribeStates').call(adapter, pattern),
+			subscribeObjects: pattern =>
+				requireFn(adapter?.subscribeObjects, 'subscribeObjects').call(adapter, pattern),
+			unsubscribeObjects: pattern =>
+				requireFn(adapter?.unsubscribeObjects, 'unsubscribeObjects').call(adapter, pattern),
+			subscribeForeignStates: pattern =>
+				requireFn(adapter?.subscribeForeignStates, 'subscribeForeignStates').call(adapter, pattern),
+			unsubscribeForeignStates: pattern =>
+				requireFn(adapter?.unsubscribeForeignStates, 'unsubscribeForeignStates').call(adapter, pattern),
+			subscribeForeignObjects: pattern =>
+				requireFn(adapter?.subscribeForeignObjects, 'subscribeForeignObjects').call(adapter, pattern),
+			unsubscribeForeignObjects: pattern =>
+				requireFn(adapter?.unsubscribeForeignObjects, 'unsubscribeForeignObjects').call(adapter, pattern),
+		}),
+	});
+}
 
 module.exports = {
 	buildLogApi,

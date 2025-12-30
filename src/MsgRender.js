@@ -8,14 +8,15 @@
  * Docs: ../docs/modules/MsgRender.md
  *
  * Core responsibilities
- * - Provide a view-only transformation for messages (`renderMessage`) that adds a computed `display` block.
+ * - Provide a view-only transformation for messages (`renderMessage`) that returns a rendered view
+ *   of `title`, `text` and selected `details` fields.
  * - Resolve `{{ ... }}` placeholders in `title`, `text`, and selected `details` fields against:
  *   - `msg.metrics` (a `Map<string, { val, unit?, ts? }>`), and
  *   - `msg.timing` (a plain object containing timestamps like `createdAt`, `updatedAt`, `notifyAt`, ...).
  * - Apply a small, deterministic filter pipeline for formatting numbers, dates, booleans, and defaults.
  *
  * Design guidelines / invariants
- * - Canonical vs. view: this renderer never mutates the input message; it returns a shallow clone with a `display` section.
+ * - Canonical vs. view: this renderer never mutates the input message; it returns a shallow clone with rendered fields.
  * - No magic state: templates are evaluated on-demand; there is no caching or compilation step.
  * - Graceful degradation: missing metrics/timing paths resolve to an empty string in templates (or can be handled via `default`).
  * - Minimal template language: this is intentionally *not* a full templating engine (no loops/conditions/functions).
@@ -58,15 +59,15 @@ class MsgRender {
 	}
 
 	/**
-	 * Render a message and attach a `display` view without mutating the input.
+	 * Render a message without mutating the input.
 	 *
-	 * The output contains the original fields plus `display.title`, `display.text` and `display.details`,
-	 * which are the rendered (template-resolved) versions of the corresponding fields.
+	 * The output contains all original fields, but `title`, `text` and selected `details` fields are returned
+	 * in their rendered (template-resolved) form.
 	 *
 	 * @param {object} msg Message object that may contain "metrics" and displayable fields.
 	 * @param {object} [options] Render options.
 	 * @param {string} [options.locale] Optional locale override for this render call.
-	 * @returns {object} New message object with a "display" section added.
+	 * @returns {object} New message object with rendered fields.
 	 */
 	renderMessage(msg, { locale } = {}) {
 		const lc = locale || this.locale;
@@ -74,15 +75,40 @@ class MsgRender {
 			return msg;
 		}
 
-		// Create a view-only "display" section while keeping the original fields intact.
-		return {
-			...msg,
-			display: {
-				title: this.renderTemplate(msg.title, { msg, locale: lc }),
-				text: this.renderTemplate(msg.text, { msg, locale: lc }),
-				details: this.renderDetails(msg.details, { msg, locale: lc }),
-			},
-		};
+		// Return a view-only message clone with rendered presentation fields.
+		// Explicitly drop any existing `display` key to keep the output shape stable.
+		// (Canonical messages should not contain `display`, but this also protects against accidental persistence.)
+		// eslint-disable-next-line no-unused-vars
+		const { display, ...rest } = msg;
+		const out = { ...rest };
+
+		// Only render/override fields that exist on the input message to avoid adding new keys.
+		if (Object.prototype.hasOwnProperty.call(msg, 'title')) {
+			out.title = this.renderTemplate(msg.title, { msg, locale: lc });
+		}
+		if (Object.prototype.hasOwnProperty.call(msg, 'text')) {
+			out.text = this.renderTemplate(msg.text, { msg, locale: lc });
+		}
+		if (Object.prototype.hasOwnProperty.call(msg, 'details')) {
+			out.details = this.renderDetails(msg.details, { msg, locale: lc });
+		}
+
+		return out;
+	}
+
+	/**
+	 * Render a list of messages without mutating inputs.
+	 *
+	 * @param {Array<object>} messages Message list.
+	 * @param {object} [options] Render options.
+	 * @param {string} [options.locale] Optional locale override for this render call.
+	 * @returns {Array<object>} Rendered message list.
+	 */
+	renderMessages(messages, options = {}) {
+		if (!Array.isArray(messages)) {
+			return messages;
+		}
+		return messages.map(msg => this.renderMessage(msg, options));
 	}
 
 	/**

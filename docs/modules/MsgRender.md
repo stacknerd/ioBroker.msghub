@@ -1,8 +1,8 @@
-# MsgRender (Message Hub): render a “display view” from raw messages
+# MsgRender (Message Hub): render a view from raw messages
 
 `MsgRender` is a lightweight template renderer for Message Hub messages.
-It resolves simple placeholders like `{{m.temperature}}` or `{{t.createdAt|datetime}}` and writes the result into a
-separate `display` block.
+It resolves simple placeholders like `{{m.temperature}}` or `{{t.createdAt|datetime}}` and returns a rendered **view**
+of `title`, `text` and selected `details` fields.
 
 Important: `MsgRender` is **view-only**. It does not change the stored/canonical message.
 
@@ -15,7 +15,7 @@ Simplified flow:
 1. A producer plugin creates or patches a message (usually via `MsgFactory` and `MsgStore`).
 2. `MsgStore` stores the **raw** message in its canonical list (`fullList`).
 3. When a consumer reads messages (`getMessages()`, `getMessageByRef()`, …), `MsgStore` returns a **rendered view**:
-   - `MsgRender.renderMessage(msg)` adds `msg.display` with resolved strings.
+   - `MsgRender.renderMessage(msg)` returns the message with rendered `title`/`text`/`details` (no `display` block).
 4. The rendered output is used for UI or human-facing text, but it is not written back to storage.
 
 This keeps the persisted data stable and compact, while still allowing dynamic display text.
@@ -41,11 +41,11 @@ Instead of rebuilding the entire title/text every time, a message can contain te
 
 ## What gets rendered?
 
-`MsgRender` creates a `display` block with rendered strings:
+`MsgRender` renders these fields:
 
-- `display.title` from `msg.title`
-- `display.text` from `msg.text`
-- `display.details` from selected `msg.details` fields
+- `title` from `msg.title`
+- `text` from `msg.text`
+- `details` from selected `msg.details` fields
 
 Only a small subset of `details` is rendered on purpose (predictability and safety):
 
@@ -191,8 +191,14 @@ Replaces `null`, `undefined`, or `''` with a fallback string:
 Returns a **new** message object:
 
 - original message fields are copied (shallow)
-- `display` is added:
-  - `display.title`, `display.text`, `display.details`
+- `title`, `text`, and selected `details` fields are returned in their rendered form
+
+### `renderMessages(messages, { locale }): Array<object>`
+
+Returns a **new** message list:
+
+- each entry is rendered as if by `renderMessage(msg, { locale })`
+- the input list is not mutated
 
 ### `renderTemplate(input, { msg, locale }): string`
 
@@ -203,7 +209,7 @@ Non-strings (and strings without `{{`) are returned unchanged.
 
 ## Design guidelines / invariants (the key rules)
 
-- Canonical vs. view: never mutate the input message; only add a `display` view.
+- Canonical vs. view: never mutate the input message; return a rendered view.
 - No hidden state: templates are evaluated on-demand; there is no caching or compilation.
 - Graceful degradation: missing metrics/timing do not throw; they resolve to empty output (use `default` if needed).
 - Minimal template language: no loops, no conditions, no function calls; just paths + filters.
@@ -214,4 +220,4 @@ Non-strings (and strings without `{{`) are returned unchanged.
 
 - Implementation: `src/MsgRender.js`
 - Tests / examples: `src/MsgRender.test.js`
-- Where it is used (render on reads): `src/MsgStore.js` and `src/MsgStore.md`
+- Where it is used (render on reads/notify): `src/MsgStore.js` and `docs/modules/MsgStore.md`

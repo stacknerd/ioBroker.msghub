@@ -26,7 +26,8 @@ describe('MsgRender', () => {
 		const out = renderer.renderMessage(msg);
 		const nf = new Intl.NumberFormat(locale, { maximumFractionDigits: 2 });
 
-		expect(out.display.title).to.equal(`Temp ${nf.format(21.75)} C`);
+		expect(out.title).to.equal(`Temp ${nf.format(21.75)} C`);
+		expect(out).to.not.have.property('display');
 	});
 
 	it('renders explicit val, unit, and ts fields', () => {
@@ -37,7 +38,7 @@ describe('MsgRender', () => {
 
 		const out = renderer.renderMessage(msg);
 
-		expect(out.display.title).to.equal(`V21.75 U C T${ts}`);
+		expect(out.title).to.equal(`V21.75 U C T${ts}`);
 	});
 
 	it('applies num filter to numbers', () => {
@@ -48,7 +49,7 @@ describe('MsgRender', () => {
 		const out = renderer.renderMessage(msg);
 		const nf = new Intl.NumberFormat(locale, { maximumFractionDigits: 1 });
 
-		expect(out.display.title).to.equal(nf.format(46.234));
+		expect(out.title).to.equal(nf.format(46.234));
 	});
 
 	it('applies num filter to numeric strings', () => {
@@ -59,7 +60,7 @@ describe('MsgRender', () => {
 		const out = renderer.renderMessage(msg);
 		const nf = new Intl.NumberFormat(locale, { maximumFractionDigits: 0 });
 
-		expect(out.display.title).to.equal(nf.format(12.9));
+		expect(out.title).to.equal(nf.format(12.9));
 	});
 
 	it('applies datetime filter to timestamps', () => {
@@ -71,7 +72,7 @@ describe('MsgRender', () => {
 		const out = renderer.renderMessage(msg);
 		const df = new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' });
 
-		expect(out.display.title).to.equal(df.format(new Date(ts)));
+		expect(out.title).to.equal(df.format(new Date(ts)));
 	});
 
 	it('renders raw metric values without units', () => {
@@ -81,7 +82,7 @@ describe('MsgRender', () => {
 
 		const out = renderer.renderMessage(msg);
 
-		expect(out.display.title).to.equal('21.75');
+		expect(out.title).to.equal('21.75');
 	});
 
 	it('renders timing fields with the t prefix', () => {
@@ -92,7 +93,7 @@ describe('MsgRender', () => {
 		const out = renderer.renderMessage(msg);
 		const df = new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' });
 
-		expect(out.display.title).to.equal(df.format(new Date(ts)));
+		expect(out.title).to.equal(df.format(new Date(ts)));
 	});
 
 	it('renders raw timing fields without formatting', () => {
@@ -102,7 +103,7 @@ describe('MsgRender', () => {
 
 		const out = renderer.renderMessage(msg);
 
-		expect(out.display.title).to.equal(String(ts));
+		expect(out.title).to.equal(String(ts));
 	});
 
 	it('applies bool filter with custom labels', () => {
@@ -115,7 +116,7 @@ describe('MsgRender', () => {
 
 		const out = renderer.renderMessage(msg);
 
-		expect(out.display.title).to.equal('yes/off');
+		expect(out.title).to.equal('yes/off');
 	});
 
 	it('applies default filter to missing or empty values', () => {
@@ -125,7 +126,7 @@ describe('MsgRender', () => {
 
 		const out = renderer.renderMessage(msg);
 
-		expect(out.display.title).to.equal('--/--/--');
+		expect(out.title).to.equal('--/--/--');
 	});
 
 	it('keeps values unchanged for unknown filters', () => {
@@ -136,7 +137,7 @@ describe('MsgRender', () => {
 		const out = renderer.renderMessage(msg);
 		const nf = new Intl.NumberFormat(locale, { maximumFractionDigits: 2 });
 
-		expect(out.display.title).to.equal(`${nf.format(21.75)} C`);
+		expect(out.title).to.equal(`${nf.format(21.75)} C`);
 	});
 
 	it('returns non-template inputs unchanged', () => {
@@ -165,11 +166,11 @@ describe('MsgRender', () => {
 
 		const out = renderer.renderMessage(msg);
 
-		expect(out.display.details.location).to.equal('Room Kitchen');
-		expect(out.display.details.task).to.equal('Do Filter');
-		expect(out.display.details.reason).to.equal('Because Filter');
-		expect(out.display.details.tools).to.deep.equal(['Use Brush', 123]);
-		expect(out.display.details.consumables).to.deep.equal(['Add Soap']);
+		expect(out.details.location).to.equal('Room Kitchen');
+		expect(out.details.task).to.equal('Do Filter');
+		expect(out.details.reason).to.equal('Because Filter');
+		expect(out.details.tools).to.deep.equal(['Use Brush', 123]);
+		expect(out.details.consumables).to.deep.equal(['Add Soap']);
 
 		expect(msg.details.location).to.equal('Room {{m.room.val}}');
 		expect(msg.details.tools).to.deep.equal(['Use {{m.tool.val}}', 123]);
@@ -185,6 +186,27 @@ describe('MsgRender', () => {
 
 		const out = renderer.renderMessage(msg);
 
-		expect(out.display.title).to.equal('A1-B2');
+		expect(out.title).to.equal('A1-B2');
+	});
+
+	it('renders a list of messages via renderMessages', () => {
+		const renderer = createRenderer({ locale });
+		const metrics = buildMetrics([
+			['temperature', { val: 21.75, unit: 'C', ts: Date.UTC(2025, 0, 1) }],
+			['humidity', { val: 46.234, unit: '%', ts: Date.UTC(2025, 0, 3) }],
+		]);
+
+		const list = renderer.renderMessages(
+			[
+				createMessage({ title: 'Temp {{m.temperature}}', metrics }),
+				createMessage({ title: '{{m.humidity.val|num:1}}', metrics }),
+			],
+			{ locale },
+		);
+
+		expect(list).to.have.length(2);
+		expect(list[0].title).to.include('Temp');
+		expect(list[0]).to.not.have.property('display');
+		expect(list[1]).to.not.have.property('display');
 	});
 });

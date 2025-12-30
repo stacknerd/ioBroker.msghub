@@ -36,11 +36,16 @@ function createStorage() {
 
 function createRenderer() {
 	const calls = [];
-	const msgRender = {
-		renderMessage: msg => {
-			calls.push(msg);
+	const renderOne = msg => {
+		calls.push(msg);
+		if (!msg || typeof msg !== 'object') {
 			return msg;
-		},
+		}
+		return { ...msg, __rendered: true };
+	};
+	const msgRender = {
+		renderMessage: renderOne,
+		renderMessages: msgs => (Array.isArray(msgs) ? msgs.map(renderOne) : msgs),
 	};
 	return { msgRender, calls };
 }
@@ -226,8 +231,10 @@ describe('MsgStore', () => {
 			expect(received).to.have.length(2);
 			expect(received[0].event).to.equal('added');
 			expect(received[0].msg.ref).to.equal('r1');
+			expect(received[0].msg.__rendered).to.equal(true);
 			expect(received[1].event).to.equal('due');
 			expect(received[1].msg.ref).to.equal('r1');
+			expect(received[1].msg.__rendered).to.equal(true);
 		});
 
 		it('does not dispatch on addMessage when notifyAt is set', () => {
@@ -241,6 +248,7 @@ describe('MsgStore', () => {
 			expect(received).to.have.length(1);
 			expect(received[0].event).to.equal('added');
 			expect(received[0].msg.ref).to.equal('r1');
+			expect(received[0].msg.__rendered).to.equal(true);
 		});
 
 		it('dispatches updated + due on updateMessage when notifyAt is missing and update is not silent', () => {
@@ -263,8 +271,10 @@ describe('MsgStore', () => {
 			expect(received).to.have.length(2);
 			expect(received[0].event).to.equal('updated');
 			expect(received[0].msg.ref).to.equal('r1');
+			expect(received[0].msg.__rendered).to.equal(true);
 			expect(received[1].event).to.equal('due');
 			expect(received[1].msg.ref).to.equal('r1');
+			expect(received[1].msg.__rendered).to.equal(true);
 		});
 
 		it('does not dispatch on silent update when notifyAt is missing', () => {
@@ -307,6 +317,7 @@ describe('MsgStore', () => {
 			expect(received).to.have.length(1);
 			expect(received[0].event).to.equal('updated');
 			expect(received[0].msg.ref).to.equal('r1');
+			expect(received[0].msg.__rendered).to.equal(true);
 		});
 
 		it('dispatches updated but not due when notifyAt is set', () => {
@@ -329,6 +340,7 @@ describe('MsgStore', () => {
 			expect(received).to.have.length(1);
 			expect(received[0].event).to.equal('updated');
 			expect(received[0].msg.ref).to.equal('r1');
+			expect(received[0].msg.__rendered).to.equal(true);
 		});
 
 		it('dispatches planned notifications when notifyAt is due', () => {
@@ -350,6 +362,7 @@ describe('MsgStore', () => {
 			expect(received[0].event).to.equal('due');
 			expect(received[0].msgs).to.have.length(1);
 			expect(received[0].msgs[0].ref).to.equal('due');
+			expect(received[0].msgs[0].__rendered).to.equal(true);
 		});
 
 		it('uses stealthMode when rescheduling due notifications (no updated event)', () => {
@@ -377,8 +390,39 @@ describe('MsgStore', () => {
 
 			expect(received).to.have.length(1);
 			expect(received[0].event).to.equal('due');
+			expect(received[0].msgs[0].__rendered).to.equal(true);
 			expect(store.fullList[0].timing.notifyAt).to.equal(now + 1000);
 			expect(store.fullList[0].timing.updatedAt).to.equal(undefined);
+		});
+
+		it('archives raw messages while notifying rendered views', () => {
+			const received = [];
+			const msgNotify = { dispatch: (event, msg) => received.push({ event, msg }) };
+			const patches = [];
+			const msgArchive = {
+				appendSnapshot: () => {},
+				appendDelete: () => {},
+				appendPatch: (ref, patch, existing, updated) => patches.push({ ref, patch, existing, updated }),
+			};
+			const factory = createFactoryWithUpdatedAt();
+			const now = 6000;
+			const { store } = createStore({
+				messages: [{ ref: 'r1', level: 10, timing: {}, title: 'T', text: 'old' }],
+				factory,
+				msgNotify,
+				msgArchive,
+			});
+			store.lastPruneAt = now;
+
+			withFixedNow(now, () => {
+				const ok = store.updateMessage({ ref: 'r1', text: 'new' });
+				expect(ok).to.equal(true);
+			});
+
+			expect(received[0].msg.__rendered).to.equal(true);
+			expect(patches).to.have.length(1);
+			expect(patches[0].updated).to.not.have.property('__rendered');
+			expect(patches[0].existing).to.not.have.property('__rendered');
 		});
 	});
 
@@ -654,6 +698,7 @@ describe('MsgStore', () => {
 			expect(received).to.have.length(1);
 			expect(received[0].event).to.equal('deleted');
 			expect(received[0].msg.ref).to.equal('r1');
+			expect(received[0].msg.__rendered).to.equal(true);
 			expect(received[0].msg.lifecycle.state).to.equal('deleted');
 			expect(received[0].msg.lifecycle.stateChangedAt).to.equal(2000);
 		});
@@ -695,6 +740,7 @@ describe('MsgStore', () => {
 			expect(received[0].event).to.equal('expired');
 			expect(received[0].msg).to.have.length(1);
 			expect(received[0].msg[0].ref).to.equal('r1');
+			expect(received[0].msg[0].__rendered).to.equal(true);
 			expect(received[0].msg[0].lifecycle.state).to.equal('expired');
 		});
 
