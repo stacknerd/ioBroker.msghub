@@ -257,13 +257,17 @@ function buildIoBrokerApi(adapter, { hostName }) {
 					adapter.delObject(ownId, err => (err ? reject(err) : resolve(undefined)));
 				});
 			},
-			getForeignObjects: pattern => {
+			getForeignObjects: (pattern, type = undefined) => {
 				if (typeof adapter?.getForeignObjectsAsync === 'function') {
-					return adapter.getForeignObjectsAsync(pattern);
+					return type === undefined ? adapter.getForeignObjectsAsync(pattern) : adapter.getForeignObjectsAsync(pattern, type);
 				}
 				requireFn(adapter?.getForeignObjects, 'getForeignObjects');
 				return new Promise((resolve, reject) => {
-					adapter.getForeignObjects(pattern, (err, objs) => (err ? reject(err) : resolve(objs)));
+					if (type === undefined) {
+						adapter.getForeignObjects(pattern, (err, objs) => (err ? reject(err) : resolve(objs)));
+						return;
+					}
+					adapter.getForeignObjects(pattern, type, (err, objs) => (err ? reject(err) : resolve(objs)));
 				});
 			},
 			getForeignObject: id => {

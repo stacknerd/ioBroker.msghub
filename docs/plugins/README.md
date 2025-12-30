@@ -346,7 +346,7 @@ The plugin hosts expose a **capability-based** API surface:
   - `objects` (foreign object access)
     - `objects.setObjectNotExists(ownId, obj): Promise<void>`
     - `objects.delObject(ownId): Promise<void>`
-    - `objects.getForeignObjects(pattern): Promise<Record<string, ioBroker.Object>>`
+    - `objects.getForeignObjects(pattern, type?): Promise<Record<string, ioBroker.Object>>`
     - `objects.getForeignObject(id): Promise<ioBroker.Object|null>`
     - `objects.extendForeignObject(id, patch): Promise<void>` (deep-merge for `common/native`)
     - Best practice: keep `extendForeignObject` patches minimal to avoid overwriting unrelated data.

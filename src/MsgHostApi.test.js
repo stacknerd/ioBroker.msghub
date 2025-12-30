@@ -206,8 +206,8 @@ describe('MsgHostApi', () => {
 		});
 	});
 
-		describe('buildIoBrokerApi', () => {
-			it('uses async adapter methods when available', async () => {
+	describe('buildIoBrokerApi', () => {
+		it('uses async adapter methods when available', async () => {
 			const { adapter, calls } = createAdapterStub({
 				async setObjectNotExistsAsync(ownId, obj) {
 					calls.objects.push(['setObjectNotExistsAsync', ownId, obj]);
@@ -215,8 +215,8 @@ describe('MsgHostApi', () => {
 				async delObjectAsync(ownId) {
 					calls.objects.push(['delObjectAsync', ownId]);
 				},
-				async getForeignObjectsAsync(pattern) {
-					calls.objects.push(['getForeignObjectsAsync', pattern]);
+				async getForeignObjectsAsync(pattern, type) {
+					calls.objects.push(['getForeignObjectsAsync', pattern, type]);
 					return { a: { _id: 'a' } };
 				},
 				async getForeignObjectAsync(id) {
@@ -268,12 +268,14 @@ describe('MsgHostApi', () => {
 			await api.objects.setObjectNotExists('x', { type: 'state' });
 			await api.objects.delObject('x');
 			const objs = await api.objects.getForeignObjects('system.*');
+			const enumObjs = await api.objects.getForeignObjects('enum.rooms.*', 'enum');
 			const obj = await api.objects.getForeignObject('system.adapter.test');
 			await api.objects.extendForeignObject('system.adapter.test', { common: { name: 'x' } });
 			await api.states.setState('x', { val: 2, ack: true });
 			const state = await api.states.getForeignState('system.adapter.test.alive');
 
 			assert.deepStrictEqual(objs, { a: { _id: 'a' } });
+			assert.deepStrictEqual(enumObjs, { a: { _id: 'a' } });
 			assert.deepStrictEqual(obj, { _id: 'system.adapter.test', type: 'state' });
 			assert.deepStrictEqual(state, { val: 1, ack: true });
 
@@ -283,7 +285,8 @@ describe('MsgHostApi', () => {
 			expect(calls.objects).to.deep.equal([
 				['setObjectNotExistsAsync', 'x', { type: 'state' }],
 				['delObjectAsync', 'x'],
-				['getForeignObjectsAsync', 'system.*'],
+				['getForeignObjectsAsync', 'system.*', undefined],
+				['getForeignObjectsAsync', 'enum.rooms.*', 'enum'],
 				['getForeignObjectAsync', 'system.adapter.test'],
 				['extendForeignObjectAsync', 'system.adapter.test', { common: { name: 'x' } }],
 			]);
@@ -295,9 +298,9 @@ describe('MsgHostApi', () => {
 					['subscribeStates', '*'],
 					['unsubscribeForeignObjects', '*'],
 				]);
-			});
+		});
 
-			it('binds subscribe methods to the adapter instance', () => {
+		it('binds subscribe methods to the adapter instance', () => {
 				const { adapter } = createAdapterStub({
 					_subscribeStates: [],
 					subscribeStates(pattern) {
@@ -351,9 +354,9 @@ describe('MsgHostApi', () => {
 				expect(adapter._unsubscribeForeignStates).to.deep.equal(['f']);
 				expect(adapter._subscribeForeignObjects).to.deep.equal(['g']);
 				expect(adapter._unsubscribeForeignObjects).to.deep.equal(['h']);
-			});
+		});
 
-			it('wraps callback-based adapter methods into promises', async () => {
+		it('wraps callback-based adapter methods into promises', async () => {
 				const { adapter, calls } = createAdapterStub({
 					setObjectNotExists(ownId, obj, cb) {
 						calls.objects.push(['setObjectNotExists', ownId, obj]);
@@ -363,9 +366,14 @@ describe('MsgHostApi', () => {
 					calls.objects.push(['delObject', ownId]);
 					cb(null);
 				},
-				getForeignObjects(pattern, cb) {
-					calls.objects.push(['getForeignObjects', pattern]);
-					cb(null, { x: { _id: 'x' } });
+				getForeignObjects(pattern, typeOrCb, cbMaybe) {
+					if (typeof typeOrCb === 'function') {
+						calls.objects.push(['getForeignObjects', pattern, undefined]);
+						typeOrCb(null, { x: { _id: 'x' } });
+						return;
+					}
+					calls.objects.push(['getForeignObjects', pattern, typeOrCb]);
+					cbMaybe(null, { x: { _id: 'x' } });
 				},
 				getForeignObject(id, cb) {
 					calls.objects.push(['getForeignObject', id]);
@@ -390,6 +398,7 @@ describe('MsgHostApi', () => {
 			await api.objects.setObjectNotExists('x', { type: 'state' });
 			await api.objects.delObject('x');
 			expect(await api.objects.getForeignObjects('*')).to.deep.equal({ x: { _id: 'x' } });
+			expect(await api.objects.getForeignObjects('enum.rooms.*', 'enum')).to.deep.equal({ x: { _id: 'x' } });
 			expect(await api.objects.getForeignObject('id')).to.deep.equal({ _id: 'id' });
 			await api.objects.extendForeignObject('id', { common: {} });
 			await api.states.setState('x', { val: 1, ack: true });
@@ -398,7 +407,8 @@ describe('MsgHostApi', () => {
 			expect(calls.objects).to.deep.equal([
 				['setObjectNotExists', 'x', { type: 'state' }],
 				['delObject', 'x'],
-				['getForeignObjects', '*'],
+				['getForeignObjects', '*', undefined],
+				['getForeignObjects', 'enum.rooms.*', 'enum'],
 				['getForeignObject', 'id'],
 				['extendForeignObject', 'id', { common: {} }],
 			]);

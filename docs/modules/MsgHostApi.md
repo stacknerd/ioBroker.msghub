@@ -118,6 +118,19 @@ function onStateChange(id, state, ctx) {
 }
 ```
 
+#### `iobroker.objects.getForeignObjects(pattern, type?)`
+
+`getForeignObjects` supports an optional `type` argument. This is useful when you need to fetch non-state objects such as
+enums:
+
+```js
+// Example: load all room enums
+const rooms = await ctx.api.iobroker.objects.getForeignObjects('enum.rooms.*', 'enum');
+```
+
+Note: Without `type`, some ioBroker installations return primarily state objects. When you expect `type: "enum"` entries,
+pass `type: "enum"` explicitly.
+
 ### `buildStoreApi(store, { hostName })`
 
 Builds a small `MsgStore` facade for plugins (`ctx.api.store`).
