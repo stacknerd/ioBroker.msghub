@@ -476,7 +476,7 @@ class MsgStore {
 	 * 3) Timing range filters (`where.timing`)
 	 * - `where.timing` is an object; each supported timing field may be filtered by a range.
 	 * - Supported keys:
-	 *   - `createdAt`, `updatedAt`, `expiresAt`, `notifyAt`, `remindEvery`, `dueAt`, `startAt`, `endAt`
+	 *   - `createdAt`, `updatedAt`, `expiresAt`, `notifyAt`, `remindEvery`, `timeBudget`, `dueAt`, `startAt`, `endAt`
 	 *
 	 * Shapes per field:
 	 * - Exact number: `where.timing.notifyAt = 1730000000000`
@@ -516,8 +516,8 @@ class MsgStore {
 	 * - `dir` defaults to `"asc"`; `"desc"` reverses the order.
 	 * - Only the following fields are allowed (others are ignored):
 	 *   - `ref`, `level`, `kind`, `origin.type`, `lifecycle.state`, `details.location`
-	 *   - `timing.createdAt`, `timing.updatedAt`, `timing.expiresAt`, `timing.notifyAt`, `timing.remindEvery`, `timing.dueAt`,
-	 *     `timing.startAt`, `timing.endAt`
+	 *   - `timing.createdAt`, `timing.updatedAt`, `timing.expiresAt`, `timing.notifyAt`, `timing.remindEvery`, `timing.timeBudget`,
+	 *     `timing.dueAt`, `timing.startAt`, `timing.endAt`
 	 *
 	 * Notes:
 	 * - Missing values (`null`/`undefined`) are always sorted last (regardless of direction).
@@ -728,6 +728,7 @@ class MsgStore {
 			'expiresAt',
 			'notifyAt',
 			'remindEvery',
+			'timeBudget',
 			'dueAt',
 			'startAt',
 			'endAt',
@@ -830,6 +831,7 @@ class MsgStore {
 			'timing.expiresAt',
 			'timing.notifyAt',
 			'timing.remindEvery',
+			'timing.timeBudget',
 			'timing.dueAt',
 			'timing.startAt',
 			'timing.endAt',

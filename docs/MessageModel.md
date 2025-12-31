@@ -77,12 +77,13 @@ Lifecycle transitions can be applied either by patches (`patch` command) or by e
 
 ## Timing: created, updated, due, notify, expire (`timing`)
 
-Message Hub keeps several timestamps (Unix ms) in `timing`:
+Message Hub keeps several time-related fields in `timing` (Unix ms timestamps + durations in ms):
 
 - `createdAt`: when the message was created
 - `updatedAt`: when a user-visible update happened (not all internal updates bump this)
 - `notifyAt`: when the message should trigger a `due` notification
 - `remindEvery`: reminder interval in ms (used to reschedule `notifyAt` after a `due`)
+- `timeBudget`: planned time budget in ms (estimate for planning/scheduling; does not affect due handling)
 - `expiresAt`: when the message becomes expired
 - `dueAt` / `startAt` / `endAt`: kind-specific timestamps (tasks vs. appointments)
 
@@ -128,4 +129,3 @@ If you use `NotifyStates`, metric maps are serialized into JSON-safe form automa
 - Control plane API: [`docs/plugins/EngageSendTo.md`](./plugins/EngageSendTo.md)
 - Core schema and rules (developer-level detail): [`docs/modules/MsgFactory.md`](./modules/MsgFactory.md)
 - Constants (allowed kinds/levels/actions/events): [`docs/modules/MsgConstants.md`](./modules/MsgConstants.md)
-

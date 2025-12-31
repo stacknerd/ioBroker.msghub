@@ -219,6 +219,12 @@ function buildBase(overrides = {}) {
 				const msg = factory.createMessage(buildBase({ timing: { remindEvery: 60000.9 } }));
 				expect(msg.timing.remindEvery).to.equal(60000);
 			});
+
+			it('normalizes timeBudget', () => {
+				const { factory } = makeFactory();
+				const msg = factory.createMessage(buildBase({ timing: { timeBudget: 900000.9 } }));
+				expect(msg.timing.timeBudget).to.equal(900000);
+			});
 		});
 
 	describe('details', () => {
@@ -465,6 +471,20 @@ describe('MsgFactory.applyPatch', () => {
 		expect(updated.timing.updatedAt).to.equal(4000);
 	});
 
+	it('sets updatedAt when timing.timeBudget changes', () => {
+		const { factory } = makeFactory();
+		const originalNow = Date.now;
+		Date.now = () => 3000;
+		const msg = factory.createMessage(buildBase());
+
+		Date.now = () => 4000;
+		const updated = factory.applyPatch(msg, { timing: { timeBudget: 900000 } });
+		Date.now = originalNow;
+
+		expect(updated.timing.timeBudget).to.equal(900000);
+		expect(updated.timing.updatedAt).to.equal(4000);
+	});
+
 	it('rejects ref changes but allows same ref', () => {
 		const { factory, logs } = makeFactory();
 		const msg = factory.createMessage(buildBase());
@@ -588,6 +608,14 @@ describe('MsgFactory.applyPatch', () => {
 
 		const updated = factory.applyPatch(msg, { timing: { notifyAt: null } });
 		expect(updated.timing).to.not.have.property('notifyAt');
+	});
+
+	it('removes timing.timeBudget when set to null', () => {
+		const { factory } = makeFactory();
+		const msg = factory.createMessage(buildBase({ timing: { timeBudget: 900000 } }));
+
+		const updated = factory.applyPatch(msg, { timing: { timeBudget: null } });
+		expect(updated.timing).to.not.have.property('timeBudget');
 	});
 
 	it('clears attachments when set to null', () => {

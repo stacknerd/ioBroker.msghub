@@ -121,6 +121,10 @@ Cleanup / stale entries:
 - When a plugin instance is disabled/unregistered, MsgHub clears its watchlist state immediately and then (in the background) marks all previously listed objects as “no longer managed” (`managedMeta.managedMessage=false`). When `common.custom.<ns>.mode` is empty and `common.custom.<ns>.enabled===true`, MsgHub also flips `enabled` to `false`.
 - Additionally, a slow background janitor periodically scans `common.custom.<ns>.managedMeta` entries and applies the same “no longer managed” policy when objects are not listed in the corresponding watchlist (or the watchlist does not exist).
 
+Storage:
+
+- The metadata is stored on the target object under `common.custom.<msghubInstance>.managedMeta` (example: `common.custom.msghub.0.managedMeta`).
+
 ---
 
 ## Built-in catalog (this repo)

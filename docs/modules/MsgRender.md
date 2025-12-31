@@ -33,7 +33,7 @@ Some messages should show values that are only known at runtime, for example:
 Instead of rebuilding the entire title/text every time, a message can contain templates, and the actual values live in:
 
 - `msg.metrics` (a `Map` of measured values), and/or
-- `msg.timing` (timestamps like `createdAt`, `updatedAt`, `notifyAt`, …).
+- `msg.timing` (time-related fields like `createdAt`, `notifyAt`, `remindEvery`, `timeBudget`, …).
 
 `MsgRender` combines both into human-readable strings.
 
@@ -101,6 +101,7 @@ Practical note: metric keys are split by `.` internally, so keep metric keys sim
 Timing values come from `msg.timing` (plain object). Example fields:
 
 - `createdAt`, `updatedAt`
+- `remindEvery`, `timeBudget` (durations in ms)
 - `notifyAt`, `dueAt`, `expiresAt`
 - `startAt`, `endAt`
 

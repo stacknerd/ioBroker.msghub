@@ -288,7 +288,7 @@ Common filter fields include:
 - `where.level`
 - `where.origin.type`
 - `where.lifecycle.state`
-- `where.timing.*` (range filters; e.g. `createdAt`, `updatedAt`, `expiresAt`, `notifyAt`)
+- `where.timing.*` (range filters; e.g. `createdAt`, `updatedAt`, `expiresAt`, `notifyAt`, `timeBudget`)
 - `where.details.location`
 - `where.audience.tags`
 - `where.dependencies`

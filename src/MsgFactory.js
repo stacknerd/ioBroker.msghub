@@ -20,7 +20,7 @@
  *   and optionally which external system/id it was derived from.
  * - Lifecycle semantics: `lifecycle` holds the current workflow/UI state (open/acked/closed/...) with attribution.
  * - Temporal semantics: `timing` holds creation/update timestamps plus optional reminder/domain timestamps
- *   (e.g., notifyAt/remindEvery, due dates, appointment start/end).
+ *   (e.g., notifyAt/remindEvery, timeBudget planning duration, due dates, appointment start/end).
  * - Extensibility: optional sections (`details`, `metrics`, `attachments`, `actions`, etc.)
  *   allow richer structured content without bloating the required core fields.
  *
@@ -59,6 +59,7 @@
  *     expiresAt?: number | null
  *     notifyAt?: number | null
  *     remindEvery?: number | null
+ *     timeBudget?: number | null // planning duration (ms)
  *
  *     dueAt?: number | null       // task
  *     startAt?: number | null     // appointment
@@ -206,7 +207,7 @@ class MsgFactory {
 	 * @param {number} [options.level] Severity level from msgconst.level (required).
 	 * @param {string} [options.kind] Message kind from msgconst.kind (required).
 	 * @param {object} [options.origin] Origin metadata including type/system/id (required).
-	 * @param {object} [options.timing] Timing metadata including due/start/end.
+	 * @param {object} [options.timing] Timing metadata including due/start/end and timeBudget.
 	 * @param {object} [options.details] Structured details like location or tools.
 	 * @param {object} [options.audience] Audience hints (tags/channels) for notification plugins.
 	 * @param {object} [options.lifecycle] Lifecycle state (state + attribution timestamps).
@@ -304,6 +305,8 @@ class MsgFactory {
 	 *     => sets/updates timing.dueAt; other timing fields stay as-is.
 	 *   - applyPatch(existing, { timing: { notifyAt: null } })
 	 *     => removes timing.notifyAt from the message.
+	 *   - applyPatch(existing, { timing: { timeBudget: 900000 } })
+	 *     => sets/updates the planning duration (ms).
 	 *   - applyPatch(existing, { progress: { percentage: 60 } })
 	 *     => updates progress.percentage to 60, keeps startedAt/finishedAt unchanged.
 	 *   - applyPatch(existing, { progress: { delete: ['finishedAt'] } })
@@ -385,7 +388,7 @@ class MsgFactory {
 	 * @param {string} [patch.ref] Message ref (must match existing ref).
 	 * @param {string} [patch.kind] Message kind (must match existing kind).
 	 * @param {object} [patch.origin] Origin object (must match existing origin).
-	 * @param {object} [patch.timing] Timing patch (only provided fields are applied).
+	 * @param {object} [patch.timing] Timing patch (only provided fields are applied, supports timeBudget).
 	 * @param {object|null} [patch.details] Updated structured details or null to clear.
 	 * @param {object|null} [patch.lifecycle] Lifecycle patch (partial allowed) or null to reset to "open".
 	 * @param {object|null} [patch.audience] Audience patch (partial allowed) or null to clear.
@@ -971,6 +974,7 @@ class MsgFactory {
 	 * Kind guards:
 	 * - `dueAt` is only meaningful for tasks.
 	 * - `startAt`/`endAt` are only meaningful for appointments.
+	 * - `timeBudget` is an optional planning duration in ms (not a timestamp).
 	 *
 	 * Clearing semantics:
 	 * - Passing `null` for a timing key removes that key from the message.
@@ -1039,6 +1043,18 @@ class MsgFactory {
 				const v = this._normalizeMsgNumber(value.remindEvery, 'timing.remindEvery');
 				if (v !== undefined) {
 					timing.remindEvery = v;
+				}
+			}
+		}
+		// Planning time budget (duration in ms). This is intentionally treated as a duration, not a timestamp.
+		// Null clears the field.
+		if (has('timeBudget')) {
+			if (value.timeBudget === null) {
+				delete timing.timeBudget;
+			} else {
+				const v = this._normalizeMsgNumber(value.timeBudget, 'timing.timeBudget');
+				if (v !== undefined) {
+					timing.timeBudget = v;
 				}
 			}
 		}

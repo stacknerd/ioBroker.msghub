@@ -643,6 +643,17 @@ describe('MsgStore', () => {
 			expect(result.items.map(msg => msg.ref)).to.deep.equal(['r2']);
 		});
 
+		it('supports timing range filters for timeBudget (range implies existence)', () => {
+			const messages = [
+				{ ref: 'r1', level: 10, timing: { timeBudget: 1000 } },
+				{ ref: 'r2', level: 10, timing: { timeBudget: 2000 } },
+				{ ref: 'r3', level: 10, timing: {} },
+			];
+			const { store } = createStore({ messages });
+			const result = store.queryMessages({ where: { timing: { timeBudget: { min: 1500, max: 2500 } } } });
+			expect(result.items.map(msg => msg.ref)).to.deep.equal(['r2']);
+		});
+
 		it('supports includes-any and includes-all filters for string lists', () => {
 			const messages = [
 				{ ref: 'r1', level: 10, audience: { tags: ['Maria'] }, dependencies: ['12'] },
@@ -660,6 +671,17 @@ describe('MsgStore', () => {
 
 			const anyDeps = store.queryMessages({ where: { dependencies: { any: ['23'] } } });
 			expect(anyDeps.items.map(msg => msg.ref)).to.deep.equal(['r2', 'r3']);
+		});
+
+		it('supports sorting by timing.timeBudget', () => {
+			const messages = [
+				{ ref: 'r1', level: 10, timing: { timeBudget: 200 } },
+				{ ref: 'r2', level: 10, timing: { timeBudget: 100 } },
+				{ ref: 'r3', level: 10, timing: {} },
+			];
+			const { store } = createStore({ messages });
+			const result = store.queryMessages({ sort: [{ field: 'timing.timeBudget', dir: 'asc' }] });
+			expect(result.items.map(msg => msg.ref)).to.deep.equal(['r2', 'r1', 'r3']);
 		});
 
 		it('supports sort and pagination and stays deterministic', () => {

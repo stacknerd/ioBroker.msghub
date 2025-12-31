@@ -37,7 +37,7 @@ Very roughly, the required core looks like:
   ref, title, text, level, kind,
   origin: { type, system?, id? },
   lifecycle: { state, stateChangedAt?, stateChangedBy? },
-  timing: { createdAt, updatedAt?, notifyAt?, remindEvery?, ... },
+  timing: { createdAt, updatedAt?, notifyAt?, remindEvery?, timeBudget?, ... },
   progress: { percentage, startedAt?, finishedAt? }
 }
 ```
@@ -47,6 +47,7 @@ Allowed enum values (like `kind`, `level`, `origin.type`, `lifecycle.state`, att
 Notes:
 - `lifecycle.state` is the canonical current state for UI/sorting.
 - `timing.remindEvery` is a reminder interval (ms) used by the store/scheduler (logic implemented later).
+- `timing.timeBudget` is an optional planning duration (ms) for scheduling/UX (no core side effects).
 
 ---
 
@@ -116,6 +117,8 @@ If a producer sends kind-specific fields on the wrong kind, the factory logs a w
 Example ideas:
 
 - Patch: `timing: { notifyAt: null }` removes `timing.notifyAt`
+- Patch: `timing: { timeBudget: 900000 }` sets `timing.timeBudget` (planning duration in ms)
+- Patch: `timing: { timeBudget: null }` removes `timing.timeBudget`
 - Patch: `audience: null` removes the entire `audience` block
 
 ### 5) No guessing for enums
