@@ -26,6 +26,10 @@ function buildLogApi(adapter, { hostName }) {
 		}
 	};
 	return Object.freeze({
+		silly: message => {
+			assertString('silly', message);
+			adapter?.log?.silly?.(message);
+		},
 		debug: message => {
 			assertString('debug', message);
 			adapter?.log?.debug?.(message);
