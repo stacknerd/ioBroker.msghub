@@ -101,11 +101,13 @@ so downstream consumers observe the post-mutation state.
 
 ## Archive: `MsgArchive` (JSONL per message)
 
-In addition to the current list, there is an append-only archive log (default: `data/archive/<refPath>.jsonl`).
+In addition to the current list, there is an append-only archive log (default: `data/archive/<refPath>.<YYYYMMDD>.jsonl`).
 
-- One file per `ref`, so files stay small and are easy to inspect.
+- One file per `ref` **and week segment**, so files stay small and are easy to inspect.
 - `ref` is URL-encoded (`encodeURIComponent`) to avoid problematic characters.
-- Dots in the (encoded) ref create folder levels (e.g. `a.b` → `a/b.jsonl`).
+- Dots in the (encoded) ref create folder levels, except the first `.<digits>` segment (plugin instance) which stays together (e.g. `IngestHue.0/...`).
+- `YYYYMMDD` is the **local-week segment start** (Monday 00:00, local time).
+- Retention is controlled via `keepPreviousWeeks` (keep current + N previous week segments).
 - Typical archive events: `"create"`, `"patch"`, `"delete"`
 - Expiration is recorded as a `"patch"` (setting `lifecycle.state="expired"`), and later hard-delete is recorded as a `"delete"` event with `{ event: "purge" }`.
 - When recreating a message with an already-used `ref` (see `addMessage` below), the replaced message is hard-removed and archived with `{ event: "purgeOnRecreate" }`.

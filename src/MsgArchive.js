@@ -7,7 +7,7 @@
  *
  * Core responsibilities
  * - Persist immutable lifecycle events for messages as newline-delimited JSON (JSONL).
- * - Store one archive file per message ref to keep files small and make per-message inspection easy.
+ * - Store one archive file per message ref and week segment to keep files small and make per-message inspection easy.
  * - Batch and serialize writes to reduce storage churn while preserving per-ref event ordering.
  *
  * Design guidelines / invariants
@@ -18,11 +18,16 @@
  * - JSONL format: each line is a single JSON object. This is friendly for streaming, grepping, and replay tools.
  * - Backend constraints: ioBroker file storage does not provide an "append" API, so appends are implemented as
  *   read-the-whole-file + rewrite-with-added-lines. For large archive files this is O(fileSize) per flush.
+ * - Retention: optional best-effort cleanup of old weekly segments (`keepPreviousWeeks`).
  *
  * File naming and refs
  * - Refs are URL-encoded (`encodeURIComponent`) to generate filesystem-friendly path segments.
- * - Dots in the (encoded) ref split the archive path into subdirectories to keep folder listings small.
- * - The on-disk path is `<encodedRefWithDotsAsSlashes>.<fileExtension>` under `baseDir`.
+ * - Dots in the (encoded) ref split the archive path into subdirectories to keep folder listings small,
+ *   with one exception: the first `.<digits>` segment is kept as part of the first path segment
+ *   (e.g. `IngestHue.0.*` becomes `IngestHue.0/...`, not `IngestHue/0/...`).
+ * - Archive files are segmented by local-week (Monday 00:00) and named as:
+ *   `<encodedRefWithDotsAsSlashes>.<YYYYMMDD>.<fileExtension>` under `baseDir`,
+ *   where `YYYYMMDD` is the Monday start date of the segment in local time.
  *
  * Map-safe JSON
  * - Entries are serialized via `serializeWithMaps()` so `Map` values (e.g. metrics) remain intact.
@@ -46,6 +51,7 @@ class MsgArchive {
 	 * @param {string} [options.fileExtension] File extension without leading dot (default: "jsonl").
 	 * @param {number} [options.flushIntervalMs] Flush interval in ms (0 = immediate; default 10000).
 	 * @param {number} [options.maxBatchSize] Max queued events per ref before forced flush (default 200).
+	 * @param {number} [options.keepPreviousWeeks] How many previous week segments to keep, in addition to the current one (default 3).
 	 */
 	constructor(adapter, options = {}) {
 		if (!adapter) {
@@ -67,6 +73,10 @@ class MsgArchive {
 			typeof options.maxBatchSize === 'number' && Number.isFinite(options.maxBatchSize)
 				? Math.max(1, options.maxBatchSize)
 				: 200;
+		this.keepPreviousWeeks =
+			typeof options.keepPreviousWeeks === 'number' && Number.isFinite(options.keepPreviousWeeks)
+				? Math.max(0, Math.trunc(options.keepPreviousWeeks))
+				: 3;
 
 		this.schemaVersion = 1;
 
@@ -83,6 +93,192 @@ class MsgArchive {
 	}
 
 	/**
+	 * Determine the local-week segment start (Monday 00:00) for a timestamp.
+	 *
+	 * @param {number} ts Epoch milliseconds.
+	 * @returns {Date} Date set to local Monday 00:00.
+	 */
+	_weekStartLocal(ts) {
+		const t = typeof ts === 'number' && Number.isFinite(ts) ? ts : Date.now();
+		const d = new Date(t);
+		const day = d.getDay(); // 0 (Sun) .. 6 (Sat)
+		const daysSinceMonday = (day + 6) % 7; // Mon -> 0, Sun -> 6
+		d.setHours(0, 0, 0, 0);
+		d.setDate(d.getDate() - daysSinceMonday);
+		return d;
+	}
+
+	/**
+	 * Format a date as YYYYMMDD in local time.
+	 *
+	 * @param {Date} d Date instance (local time).
+	 * @returns {string} YYYYMMDD.
+	 */
+	_formatLocalYyyyMmDd(d) {
+		const year = d.getFullYear();
+		const month = String(d.getMonth() + 1).padStart(2, '0');
+		const day = String(d.getDate()).padStart(2, '0');
+		return `${year}${month}${day}`;
+	}
+
+	/**
+	 * Compute the segment key for a timestamp (local-week start, Monday 00:00).
+	 *
+	 * @param {number} ts Epoch milliseconds.
+	 * @returns {string} Segment key as YYYYMMDD.
+	 */
+	_segmentKeyForTs(ts) {
+		return this._formatLocalYyyyMmDd(this._weekStartLocal(ts));
+	}
+
+	/**
+	 * Returns the set of segment keys that should be kept, based on `keepPreviousWeeks`.
+	 *
+	 * Semantics:
+	 * - keepPreviousWeeks = 0 -> keep only the current segment
+	 * - keepPreviousWeeks = 3 -> keep current + 3 previous segments (4 segments total)
+	 *
+	 * @param {number} nowTs Timestamp used to determine the "current week".
+	 * @returns {Set<string>} Set of segment keys (YYYYMMDD) to keep.
+	 */
+	_segmentKeysToKeep(nowTs) {
+		const keep =
+			typeof this.keepPreviousWeeks === 'number' && Number.isFinite(this.keepPreviousWeeks)
+				? this.keepPreviousWeeks
+				: 0;
+		const start = this._weekStartLocal(nowTs);
+		const keys = new Set();
+		for (let i = 0; i <= keep; i += 1) {
+			const d = new Date(start.getTime());
+			d.setDate(d.getDate() - i * 7);
+			keys.add(this._formatLocalYyyyMmDd(d));
+		}
+		return keys;
+	}
+
+	/**
+	 * Compute directory + base name for a ref key (already URL-encoded).
+	 *
+	 * @param {string} refKey Encoded ref key (encodeURIComponent(ref)).
+	 * @returns {{dirPath: string, baseName: string}} Directory path and base filename (without segment/ext).
+	 */
+	_refPathInfo(refKey) {
+		const segments = this._refPathSegments(refKey);
+		const baseName = segments.length > 0 ? segments[segments.length - 1] : String(refKey || '').trim() || 'unknown';
+		const relDir = segments.length > 1 ? segments.slice(0, -1).join('/') : '';
+		const dirPath = this.baseDir ? (relDir ? `${this.baseDir}/${relDir}` : this.baseDir) : relDir;
+		return { dirPath, baseName };
+	}
+
+	/**
+	 * Convert an encoded ref key into path segments.
+	 *
+	 * Rules:
+	 * - Split by dot (`.`) to create folder segments.
+	 * - Exception: when the second segment is numeric (plugin instance), keep `<name>.<digits>` together.
+	 *
+	 * @param {string} refKey Encoded ref key (encodeURIComponent(ref)).
+	 * @returns {string[]} Path segments.
+	 */
+	_refPathSegments(refKey) {
+		const key = String(refKey || '').trim();
+		if (!key) {
+			return [];
+		}
+
+		const parts = key.split('.').filter(Boolean);
+		if (parts.length >= 2 && /^[0-9]+$/.test(parts[1])) {
+			return [`${parts[0]}.${parts[1]}`, ...parts.slice(2)];
+		}
+		return parts;
+	}
+
+	/**
+	 * Best-effort delete a file from adapter file storage.
+	 *
+	 * @param {string} filePath Full file path under the adapter file store.
+	 * @returns {Promise<void>}
+	 */
+	async _deleteFile(filePath) {
+		try {
+			if (typeof this.adapter.delFileAsync === 'function') {
+				await this.adapter.delFileAsync(this.metaId, filePath);
+				return;
+			}
+		} catch {
+			// fall through
+		}
+
+		try {
+			if (typeof this.adapter.unlinkAsync === 'function') {
+				await this.adapter.unlinkAsync(this.metaId, filePath);
+			}
+		} catch {
+			// best-effort
+		}
+	}
+
+	/**
+	 * Enforce retention policy for a single ref by deleting old weekly segment files (best-effort).
+	 *
+	 * @param {string} refKey Encoded ref key.
+	 * @returns {Promise<void>}
+	 */
+	async _applyRetention(refKey) {
+		const keep =
+			typeof this.keepPreviousWeeks === 'number' && Number.isFinite(this.keepPreviousWeeks)
+				? this.keepPreviousWeeks
+				: 0;
+		if (keep < 0) {
+			return;
+		}
+		if (typeof this.adapter.readDirAsync !== 'function') {
+			return;
+		}
+
+		const keepKeys = this._segmentKeysToKeep(Date.now());
+		const { dirPath, baseName } = this._refPathInfo(refKey);
+		const prefix = `${baseName}.`;
+		const suffix = `.${this.fileExtension}`;
+
+		let entries;
+		try {
+			entries = await this.adapter.readDirAsync(this.metaId, dirPath || '');
+		} catch (e) {
+			this.adapter?.log?.debug?.(`MsgArchive retention readDir failed (${dirPath || '.'}): ${e?.message || e}`);
+			return;
+		}
+
+		const deletions = [];
+		for (const entry of entries || []) {
+			if (!entry || entry.isDir) {
+				continue;
+			}
+			const file = entry.file;
+			if (typeof file !== 'string' || !file.startsWith(prefix) || !file.endsWith(suffix)) {
+				continue;
+			}
+			const segmentKey = file.slice(prefix.length, file.length - suffix.length);
+			if (!/^[0-9]{8}$/.test(segmentKey)) {
+				continue;
+			}
+			if (keepKeys.has(segmentKey)) {
+				continue;
+			}
+
+			const fullPath = dirPath ? `${dirPath}/${file}` : file;
+			deletions.push(this._deleteFile(fullPath));
+		}
+
+		if (deletions.length > 0) {
+			await Promise.allSettled(deletions);
+			this.adapter?.log?.debug?.(
+				`MsgArchive retention: deleted ${deletions.length} old segment file(s) for ${baseName} (keepPreviousWeeks=${keep})`,
+			);
+		}
+	}
+
+	/**
 	 * Call once during startup.
 	 *
 	 * Ensures the ioBroker file storage meta object exists and (optionally) creates the base directory.
@@ -94,7 +290,7 @@ class MsgArchive {
 		await ensureMetaObject(this.adapter, this.metaId);
 		await ensureBaseDir(this.adapter, this.metaId, this.baseDir);
 		this.adapter?.log?.info?.(
-			`MsgArchive initialized: baseDir=${this.baseDir || '.'}, ext=${this.fileExtension}, interval=${this.flushIntervalMs}ms`,
+			`MsgArchive initialized: baseDir=${this.baseDir || '.'}, ext=${this.fileExtension}, interval=${this.flushIntervalMs}ms, keepPreviousWeeks=${this.keepPreviousWeeks}`,
 		);
 	}
 
@@ -799,18 +995,36 @@ class MsgArchive {
 	 * @returns {Promise<void>} Resolves after the file has been rewritten with the new lines.
 	 */
 	async _appendEvents(refKey, events) {
-		const filePath = this._filePathForRef(refKey);
-		await this._ensureDirForFilePath(filePath);
-		const existing = await this._readFileText(filePath);
-		const existingTrimmed = existing ? existing.replace(/\s+$/, '') : '';
-		const newLines = events.map(entry => serializeWithMaps(entry, this._mapTypeMarker)).join('\n');
-		const combined = existingTrimmed ? `${existingTrimmed}\n${newLines}\n` : `${newLines}\n`;
+		const bySegment = new Map();
+		for (const entry of events) {
+			const ts = typeof entry?.ts === 'number' && Number.isFinite(entry.ts) ? entry.ts : Date.now();
+			const segmentKey = this._segmentKeyForTs(ts);
+			const list = bySegment.get(segmentKey) || [];
+			list.push(entry);
+			bySegment.set(segmentKey, list);
+		}
 
-		await this.adapter.writeFileAsync(this.metaId, filePath, combined);
+		for (const [segmentKey, entries] of bySegment.entries()) {
+			const filePath = this._filePathForRef(refKey, segmentKey);
+			await this._ensureDirForFilePath(filePath);
+			const existing = await this._readFileText(filePath);
+			const existingTrimmed = existing ? existing.replace(/\s+$/, '') : '';
+			const newLines = entries.map(entry => serializeWithMaps(entry, this._mapTypeMarker)).join('\n');
+			const combined = existingTrimmed ? `${existingTrimmed}\n${newLines}\n` : `${newLines}\n`;
 
-		this.adapter?.log?.debug?.(
-			`MsgArchive append ${events.length} event(s) -> ${filePath}, ${Buffer.byteLength(combined, 'utf8')} bytes`,
-		);
+			await this.adapter.writeFileAsync(this.metaId, filePath, combined);
+
+			this.adapter?.log?.debug?.(
+				`MsgArchive append ${entries.length} event(s) -> ${filePath}, ${Buffer.byteLength(combined, 'utf8')} bytes`,
+			);
+		}
+
+		// Best-effort retention cleanup for this ref.
+		try {
+			await this._applyRetention(refKey);
+		} catch {
+			// must never break archiving
+		}
 	}
 
 	/**
@@ -858,12 +1072,17 @@ class MsgArchive {
 	 * Builds the archive file path for a ref key.
 	 *
 	 * @param {string} refKey Normalized ref key.
+	 * @param {string} segmentKey Segment key (YYYYMMDD) for the weekly file, or undefined to omit.
 	 * @returns {string} File path under the archive base dir.
 	 */
-	_filePathForRef(refKey) {
+	_filePathForRef(refKey, segmentKey) {
 		const key = String(refKey || '').trim();
-		const relPath = key.split('.').filter(Boolean).join('/');
-		const fileName = `${relPath || key || 'unknown'}.${this.fileExtension}`;
+		const relPath = this._refPathSegments(refKey).join('/');
+		const safeSegment =
+			typeof segmentKey === 'string' && /^[0-9]{8}$/.test(segmentKey.trim()) ? segmentKey.trim() : null;
+		const fileName = safeSegment
+			? `${relPath || key || 'unknown'}.${safeSegment}.${this.fileExtension}`
+			: `${relPath || key || 'unknown'}.${this.fileExtension}`;
 		return this.baseDir ? `${this.baseDir}/${fileName}` : fileName;
 	}
 }

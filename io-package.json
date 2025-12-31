@@ -69,6 +69,7 @@
 		"connectionType": "local",
 		"dataSource": "push",
 		"messagebox": true,
+		"dataFolder": "files/msghub.%INSTANCE%",
 		"supportCustoms": true,
 		"adminUI": {
 			"custom": "json",
@@ -88,6 +89,7 @@
 	"native": {
 		"option1": true,
 		"option2": "42",
+		"keepPreviousWeeks": 3,
 		"locale": "de-DE"
 	},
 	"objects": [],

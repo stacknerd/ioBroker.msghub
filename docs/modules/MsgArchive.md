@@ -86,13 +86,14 @@ Each line is one JSON object:
 
 ## File layout on disk
 
-`MsgArchive` stores **one file per message ref** to keep files small and make manual inspection easy.
+`MsgArchive` stores **one file per message ref and week segment** to keep files small and make manual inspection easy.
 
 - Default directory: `data/archive`
 - Default extension: `.jsonl`
-- Path: `<encodeURIComponent(ref) with dots as folders>.jsonl`
-  - Example: ref `a/1` becomes `a%2F1.jsonl`
-  - Example: ref `javascript.0.foo.bar` becomes `javascript/0/foo/bar.jsonl`
+- Segment key: `YYYYMMDD` = **local-week start** (Monday 00:00, local time)
+- Path: `<encodeURIComponent(ref) with dots as folders>.<YYYYMMDD>.jsonl`
+  - Example: ref `a/1` becomes `a%2F1.20250106.jsonl`
+  - Example: ref `javascript.0.foo.bar` becomes `javascript.0/foo/bar.20250106.jsonl` (note: `javascript.0` stays together)
 
 The files live in ioBroker’s file storage under a “meta id” (by default the adapter namespace).
 
@@ -108,6 +109,15 @@ Archiving is designed to be low impact:
 - **Per-ref ordering**: events for the same ref are written in the exact order they were enqueued.
 - **Serialized I/O**: actual storage reads/writes are globally serialized so they don’t overlap.
 - **Shutdown support**: `flushPending()` forces a best-effort flush of all buffered events.
+
+### Retention (weekly segments)
+
+`MsgArchive` can optionally delete old weekly segment files after writes:
+
+- Option: `keepPreviousWeeks` (default `3`)
+- Meaning: keep **current week** plus **N previous weeks**
+  - `0` → current only
+  - `3` → 4 weeks total (current + 3 previous)
 
 ### Backend constraint (important)
 
@@ -158,7 +168,7 @@ Typical stored fields (payload is not strictly enforced):
 ## Design guidelines / invariants (the important rules)
 
 - **Append-only log**: archive entries are never edited or removed by `MsgArchive`.
-- **One file per ref**: easy to inspect, avoids huge monolithic logs.
+- **One file per ref + week segment**: easy to inspect, avoids huge monolithic logs.
 - **Best-effort durability**: failures are logged; callers usually do not wait for archive writes.
 - **Optional strict mode**: set `{ throwOnError: true }` to make failures reject (useful in tests/debugging).
 - **Streaming-friendly format**: JSONL is easy to grep, tail, parse line-by-line, and replay.

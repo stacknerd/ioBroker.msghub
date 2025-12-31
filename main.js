@@ -56,7 +56,16 @@ class Msghub extends utils.Adapter {
 
 		this.msgFactory = new MsgFactory(this, this.msgConstants);
 
-		this.msgStore = new MsgStore(this, this.msgConstants, this.msgFactory);
+		const keepPreviousWeeksRaw = this.config?.keepPreviousWeeks;
+		const keepPreviousWeeksParsed =
+			typeof keepPreviousWeeksRaw === 'number' ? keepPreviousWeeksRaw : Number(keepPreviousWeeksRaw);
+		const keepPreviousWeeks = Number.isFinite(keepPreviousWeeksParsed)
+			? Math.max(0, Math.trunc(keepPreviousWeeksParsed))
+			: undefined;
+
+		this.msgStore = new MsgStore(this, this.msgConstants, this.msgFactory, {
+			archive: { keepPreviousWeeks },
+		});
 		await this.msgStore.init();
 
 		/////////////////////////////////////////

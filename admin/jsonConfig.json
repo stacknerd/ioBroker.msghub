@@ -38,6 +38,18 @@
 					"md": 6,
 					"lg": 4,
 					"xl": 4
+				},
+				"keepPreviousWeeks": {
+					"type": "number",
+					"label": "keepPreviousWeeks",
+					"help": "Archive retention (weeks): keep N previous weeks plus the current week. 0 = current only.",
+					"default": 3,
+					"newLine": true,
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 4,
+					"xl": 4
 				}
 			}
 		}
