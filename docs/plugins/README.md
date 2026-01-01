@@ -145,6 +145,7 @@ function IngestMyPlugin(options) {
   return {
     start(ctx) {
       // optional: subscribe / discovery using ctx.api.iobroker.*
+      // tip: for performant lookups in `system/custom`, use ctx.api.iobroker.objects.getObjectView('system', 'custom', ...)
       // ctx.api.log.info('IngestMyPlugin started');
     },
     onStateChange(id, state, ctx) {
@@ -565,11 +566,6 @@ The plugin docs in this folder are for the built-in plugins shipped with this re
 ## Modules
 
 <!-- AUTO-GENERATED:MODULE-INDEX:START -->
-- `EngageSendTo`: [`./EngageSendTo.md`](./EngageSendTo.md)
-- `IngestHue`: [`./IngestHue.md`](./IngestHue.md)
-- `IngestRandomChaos`: [`./IngestRandomChaos.md`](./IngestRandomChaos.md)
 - `IoPlugins`: [`./IoPlugins.md`](./IoPlugins.md)
-- `NotifyDebug`: [`./NotifyDebug.md`](./NotifyDebug.md)
-- `NotifyStates`: [`./NotifyStates.md`](./NotifyStates.md)
 - `PLUGIN-INDEX`: [`./PLUGIN-INDEX.md`](./PLUGIN-INDEX.md)
 <!-- AUTO-GENERATED:MODULE-INDEX:END -->

@@ -95,7 +95,7 @@ Builds a small ioBroker facade used by plugins. It contains:
 
 Currently exposed helpers (overview):
 
-- `iobroker.objects`: `setObjectNotExists`, `delObject`, `getForeignObjects`, `getForeignObject`, `extendForeignObject`
+- `iobroker.objects`: `setObjectNotExists`, `delObject`, `getObjectView`, `getForeignObjects`, `getForeignObject`, `extendForeignObject`
 - `iobroker.states`: `setState`, `getForeignState`
 - `iobroker.subscribe`: `subscribeStates/Objects/ForeignStates/ForeignObjects` and matching `unsubscribe...`
 
@@ -130,6 +130,27 @@ const rooms = await ctx.api.iobroker.objects.getForeignObjects('enum.rooms.*', '
 
 Note: Without `type`, some ioBroker installations return primarily state objects. When you expect `type: "enum"` entries,
 pass `type: "enum"` explicitly.
+
+#### `iobroker.objects.getObjectView(design, search, params)`
+
+Provides access to ioBroker’s Objects DB views via `adapter.getObjectView(...)` / `adapter.getObjectViewAsync(...)`.
+
+This is the preferred way to do *performant* lookups for certain global indexes like `system/custom` (instead of scanning
+all objects via `getForeignObjects('*')`).
+
+Example: list objects that have a `common.custom['msghub.0']` entry:
+
+```js
+const customKey = ctx.api.iobroker.ids.namespace; // e.g. "msghub.0"
+const res = await ctx.api.iobroker.objects.getObjectView('system', 'custom', {
+	startkey: customKey,
+	endkey: `${customKey}\u9999`,
+	include_docs: true,
+});
+
+// ioBroker returns rows; with include_docs, each row may contain row.doc (the object)
+const rows = Array.isArray(res?.rows) ? res.rows : [];
+```
 
 ### `buildStoreApi(store, { hostName })`
 

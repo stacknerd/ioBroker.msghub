@@ -261,6 +261,15 @@ function buildIoBrokerApi(adapter, { hostName }) {
 					adapter.delObject(ownId, err => (err ? reject(err) : resolve(undefined)));
 				});
 			},
+			getObjectView: (design, search, params) => {
+				if (typeof adapter?.getObjectViewAsync === 'function') {
+					return adapter.getObjectViewAsync(design, search, params);
+				}
+				requireFn(adapter?.getObjectView, 'getObjectView');
+				return new Promise((resolve, reject) => {
+					adapter.getObjectView(design, search, params, (err, res) => (err ? reject(err) : resolve(res)));
+				});
+			},
 			getForeignObjects: (pattern, type = undefined) => {
 				if (typeof adapter?.getForeignObjectsAsync === 'function') {
 					return type === undefined
