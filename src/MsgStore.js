@@ -978,6 +978,7 @@ class MsgStore {
 	onUnload() {
 		// Stop producer plugins first so they can stop timers/subscriptions before storage flushes.
 		this.msgIngest?.stop?.({ reason: 'unload' });
+		this.msgNotify?.stop?.({ reason: 'unload' });
 
 		// Stop dispatching due messages to msgNotify
 		if (this._notifyTimer) {

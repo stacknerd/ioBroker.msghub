@@ -74,6 +74,27 @@ class MsgNotify {
 	}
 
 	/**
+	 * Stops all registered plugins (best-effort) and prevents further dispatches.
+	 *
+	 * @param {object} [meta] Stop metadata (exposed to plugins via `ctx.meta`).
+	 * @returns {void}
+	 */
+	stop(meta = {}) {
+		const ctx = this._buildCtx(meta);
+		for (const [id, plugin] of this._plugins.entries()) {
+			if (!plugin?.stopFn) {
+				continue;
+			}
+			try {
+				plugin.stopFn(ctx);
+			} catch (e) {
+				this.adapter?.log?.warn?.(`MsgNotify: plugin '${id}' failed to stop: ${e?.message || e}`);
+			}
+		}
+		this._running = false;
+	}
+
+	/**
 	 * Registers a notification plugin.
 	 *
 	 * Handler shapes:
@@ -134,7 +155,7 @@ class MsgNotify {
 		this._plugins.delete(id);
 
 		// Best-effort stop to release intervals/connections.
-		if (plugin?.stopFn) {
+		if (this._running && plugin?.stopFn) {
 			try {
 				plugin.stopFn(this._buildCtx({ reason: 'unregisterPlugin', pluginId: id }));
 			} catch (e) {
