@@ -456,6 +456,20 @@ describe('MsgFactory.applyPatch', () => {
 		expect(updated.timing.updatedAt).to.equal(2222);
 	});
 
+	it('does not set updatedAt for noop title patch', () => {
+		const { factory } = makeFactory();
+		const originalNow = Date.now;
+		Date.now = () => 1111;
+		const msg = factory.createMessage(buildBase());
+
+		Date.now = () => 2222;
+		const updated = factory.applyPatch(msg, { title: '  Test title  ' });
+		Date.now = originalNow;
+
+		expect(updated.title).to.equal('Test title');
+		expect(updated.timing.updatedAt).to.equal(undefined);
+	});
+
 	it('sets updatedAt when timing.endAt changes', () => {
 		const { factory } = makeFactory();
 		const originalNow = Date.now;
@@ -483,6 +497,22 @@ describe('MsgFactory.applyPatch', () => {
 
 		expect(updated.timing.timeBudget).to.equal(900000);
 		expect(updated.timing.updatedAt).to.equal(4000);
+	});
+
+	it('does not set updatedAt for noop timing patch', () => {
+		const { factory } = makeFactory();
+		const originalNow = Date.now;
+		const dueAt = Date.UTC(2025, 0, 1, 10);
+
+		Date.now = () => 3000;
+		const msg = factory.createMessage(buildBase({ timing: { dueAt } }));
+
+		Date.now = () => 4000;
+		const updated = factory.applyPatch(msg, { timing: { dueAt } });
+		Date.now = originalNow;
+
+		expect(updated.timing.dueAt).to.equal(dueAt);
+		expect(updated.timing.updatedAt).to.equal(undefined);
 	});
 
 	it('rejects ref changes but allows same ref', () => {

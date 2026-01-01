@@ -412,6 +412,56 @@ class MsgFactory {
 			const updated = { ...existing };
 			let refreshUpdatedAt = false;
 			const has = key => Object.prototype.hasOwnProperty.call(patch, key);
+			const isEqual = (a, b) => {
+				if (Object.is(a, b)) {
+					return true;
+				}
+				if (a instanceof Map && b instanceof Map) {
+					if (a.size !== b.size) {
+						return false;
+					}
+					for (const [key, val] of a.entries()) {
+						if (!b.has(key) || !isEqual(val, b.get(key))) {
+							return false;
+						}
+					}
+					return true;
+				}
+				if (Array.isArray(a) && Array.isArray(b)) {
+					if (a.length !== b.length) {
+						return false;
+					}
+					for (let i = 0; i < a.length; i += 1) {
+						if (!isEqual(a[i], b[i])) {
+							return false;
+						}
+					}
+					return true;
+				}
+				if (this._isPlainObject(a) && this._isPlainObject(b)) {
+					const aKeys = Object.keys(a);
+					const bKeys = Object.keys(b);
+					if (aKeys.length !== bKeys.length) {
+						return false;
+					}
+					for (const key of aKeys) {
+						if (!Object.prototype.hasOwnProperty.call(b, key) || !isEqual(a[key], b[key])) {
+							return false;
+						}
+					}
+					return true;
+				}
+				return false;
+			};
+			const markUserVisibleChange = (before, after) => {
+				// Once we know we have a user-visible change, no further comparisons are needed.
+				if (refreshUpdatedAt) {
+					return;
+				}
+				if (!isEqual(before, after)) {
+					refreshUpdatedAt = true;
+				}
+			};
 
 			// Enforce immutability: the caller may provide these fields, but only with the
 			// exact same value as the existing message.
@@ -448,28 +498,34 @@ class MsgFactory {
 			// Apply scalar field updates. When one of these changes, we consider it a user-visible
 			// update and refresh timing.updatedAt.
 			if (has('title')) {
-				updated.title = this._normalizeMsgString(patch.title, 'title', { required: true });
-				refreshUpdatedAt = true;
+				const value = this._normalizeMsgString(patch.title, 'title', { required: true });
+				markUserVisibleChange(existing.title, value);
+				updated.title = value;
 			}
 			if (has('text')) {
-				updated.text = this._normalizeMsgString(patch.text, 'text', { required: true });
-				refreshUpdatedAt = true;
+				const value = this._normalizeMsgString(patch.text, 'text', { required: true });
+				markUserVisibleChange(existing.text, value);
+				updated.text = value;
 			}
 			if (has('level')) {
-				updated.level = this._normalizeMsgEnum(patch.level, this.levelValueSet, 'level', { required: true });
-				refreshUpdatedAt = true;
+				const value = this._normalizeMsgEnum(patch.level, this.levelValueSet, 'level', { required: true });
+				markUserVisibleChange(existing.level, value);
+				updated.level = value;
 			}
 			if (has('details')) {
-				updated.details = patch.details === null ? undefined : this._normalizeMsgDetails(patch.details);
-				refreshUpdatedAt = true;
+				const value = patch.details === null ? undefined : this._normalizeMsgDetails(patch.details);
+				markUserVisibleChange(existing.details, value);
+				updated.details = value;
 			}
 			if (has('lifecycle')) {
-				updated.lifecycle = this._applyLifecyclePatch(existing.lifecycle, patch.lifecycle);
-				refreshUpdatedAt = true;
+				const value = this._applyLifecyclePatch(existing.lifecycle, patch.lifecycle);
+				markUserVisibleChange(existing.lifecycle, value);
+				updated.lifecycle = value;
 			}
 			if (has('audience')) {
-				updated.audience = this._applyAudiencePatch(existing.audience, patch.audience);
-				refreshUpdatedAt = true;
+				const value = this._applyAudiencePatch(existing.audience, patch.audience);
+				markUserVisibleChange(existing.audience, value);
+				updated.audience = value;
 			}
 			if (has('metrics')) {
 				updated.metrics = this._applyMetricsPatch(existing.metrics, patch.metrics);
@@ -477,38 +533,44 @@ class MsgFactory {
 				// metrics are treated as high-frequency telemetry that should not "bump" the message.
 			}
 			if (has('attachments')) {
-				updated.attachments = this._applyArrayPatchByIndex(
+				const value = this._applyArrayPatchByIndex(
 					existing.attachments,
 					patch.attachments,
 					this._normalizeMsgAttachments.bind(this),
 					'attachments',
 				);
-				refreshUpdatedAt = true;
+				markUserVisibleChange(existing.attachments, value);
+				updated.attachments = value;
 			}
 			if (has('listItems')) {
-				updated.listItems = this._applyListItemsPatch(existing.listItems, patch.listItems, existing.kind);
-				refreshUpdatedAt = true;
+				const value = this._applyListItemsPatch(existing.listItems, patch.listItems, existing.kind);
+				markUserVisibleChange(existing.listItems, value);
+				updated.listItems = value;
 			}
 			if (has('actions')) {
-				updated.actions = this._applyActionsPatch(existing.actions, patch.actions);
-				refreshUpdatedAt = true;
+				const value = this._applyActionsPatch(existing.actions, patch.actions);
+				markUserVisibleChange(existing.actions, value);
+				updated.actions = value;
 			}
 			if (has('progress')) {
-				updated.progress = this._applyProgressPatch(existing.progress, patch.progress);
-				refreshUpdatedAt = true;
+				const value = this._applyProgressPatch(existing.progress, patch.progress);
+				markUserVisibleChange(existing.progress, value);
+				updated.progress = value;
 			}
 			if (has('dependencies')) {
-				updated.dependencies = this._applyDependenciesPatch(existing.dependencies, patch.dependencies);
-				refreshUpdatedAt = true;
-			}
-			if (has('timing')) {
-				refreshUpdatedAt = true;
+				const value = this._applyDependenciesPatch(existing.dependencies, patch.dependencies);
+				markUserVisibleChange(existing.dependencies, value);
+				updated.dependencies = value;
 			}
 
-			updated.timing = this._normalineMsgTiming(has('timing') ? patch.timing : {}, existing.kind, {
-				existing,
-				setUpdatedAt: refreshUpdatedAt && !stealthMode,
-			});
+			const timing = this._normalineMsgTiming(has('timing') ? patch.timing : {}, existing.kind, { existing });
+			if (has('timing')) {
+				markUserVisibleChange(existing?.timing || {}, timing);
+			}
+			if (refreshUpdatedAt && !stealthMode) {
+				timing.updatedAt = Date.now();
+			}
+			updated.timing = timing;
 			// TODO: If timing-only changes should also bump updatedAt, move that decision into
 			// `_normalineMsgTiming` (so timing normalization can decide based on the specific keys).
 
