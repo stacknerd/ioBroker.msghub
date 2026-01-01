@@ -76,7 +76,7 @@ If disabled or not started, `sendTo(...)` returns:
 { ok: false, error: { code: 'NOT_READY', message: '...' } }
 ```
 
-Note: there are currently no user-facing plugin options (`defaultOptions: {}`).
+Note: there are currently no user-facing plugin options (`options: {}`).
 
 ---
 

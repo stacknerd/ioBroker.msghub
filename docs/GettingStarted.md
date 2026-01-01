@@ -17,9 +17,15 @@ If you want to understand the data model first, read [`docs/MessageModel.md`](./
 
 Message Hub manages plugins via `IoPlugins`. Each plugin instance has:
 
-- a base object with options in `native`: `msghub.0.<PluginType>.0`
-- an enable switch: `msghub.0.<PluginType>.0.enable`
-- a status state: `msghub.0.<PluginType>.0.status`
+- a base object with options in `native`: `msghub.0.<PluginType>.<instanceId>`
+- an enable switch: `msghub.0.<PluginType>.<instanceId>.enable`
+- a status state: `msghub.0.<PluginType>.<instanceId>.status`
+
+Instance ids are numeric (`0`, `1`, `2`, …). Most built-ins run as instance `0` by default.
+
+Recommended: use the adapter’s **Admin Tab** (“Plugin Config”) to enable/disable plugins, create instances (when supported),
+and edit options. Option changes apply immediately because `IoPlugins` restarts the affected instance (no adapter restart).
+See: [`docs/AdminTab.md`](./AdminTab.md)
 
 For the initial release, the important built-ins are:
 

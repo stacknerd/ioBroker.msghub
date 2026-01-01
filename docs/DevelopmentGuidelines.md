@@ -19,8 +19,9 @@ Documentation and UI text should prefer:
 
 Convention: plugin code stays in `lib/` and must be uniquely attributable by path.
 
-- `lib/index.js`: central registry exporting all plugins (ingest/notify).
-- `lib/<PluginName>/index.js`: plugin entry file (wrapper + core engine, e.g. subscriptions/dispatch).
+- `lib/index.js`: plugin catalog builder (autodiscovery) exporting `IoPluginsCatalog` + discovered factories.
+- `lib/<PluginName>/manifest.js`: plugin manifest (type/title/description/options schema).
+- `lib/<PluginName>/index.js`: plugin entry file (exports the factory + `manifest`).
 - `lib/<PluginName>/...`: optional plugin submodules (e.g. per evaluator/rule type).
 
 Example `IngestMySystem`:
@@ -37,10 +38,12 @@ When adding new plugins, keep the naming and ID schemas uniform. Many parts of t
 - Ingest (producer): `Ingest<System>`
 - Notify (delivery): `Notify<System>`
 - Bridge (bidirectional): `Bridge<System>`
+- Engage (interactive): `Engage<System>`
 
 ### Runtime instance ids / registration ids
 
-- Instance ids are currently numeric (today: always `0`).
+- Instance ids are numeric and start at `0`.
+- Plugins may allow multiple instances (`manifest.supportsMultiple === true`); ids are assigned automatically (`0`, `1`, `2`, …).
 - Registration id (inside the hosts): `<TypeName>:<instanceId>` (example: `IngestMySystem:0`, `NotifyStates:0`)
 - Plugin config object id (ioBroker tree): `<adapter.namespace>.<TypeName>.<instanceId>` (example: `msghub.0.IngestMySystem.0`)
 

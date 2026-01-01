@@ -22,7 +22,9 @@ export default [
 			'widgets/**/*.js',
 			'generate-doc-index.mjs',
 			'i18n-push.mjs',
-			'i18n-input.js'
+			'i18n-input.js',
+			'admin/tab.js',
+			'admin/tab.*.js',
 		],
 	},
 	{

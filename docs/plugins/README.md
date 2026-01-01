@@ -23,15 +23,8 @@ Read more: [`docs/plugins/IoPlugins.md`](./IoPlugins.md)
 
 ## Status of this repo (built-in plugins)
 
-This repository currently ships only a small set of built-in plugins:
-
-- `IngestRandomChaos` (demo/load generator ingest plugin)
-- `IngestHue` (Hue device health ingest plugin)
-- `EngageSendTo` (control plane via ioBroker `sendTo`)
-- `NotifyStates` (writes notifications to ioBroker states)
-- `NotifyDebug` (debug notifier)
-
-There are no built-in `Bridge...` plugins yet. The core supports this plugin family, and you can add your own.
+For the canonical “what this repo ships today” list (types, defaults, and docs links), see
+[`docs/plugins/PLUGIN-INDEX.md`](./PLUGIN-INDEX.md).
 
 ## Plugin families (concept): `Ingest` / `Notify` / `Bridge` / `Engage`
 
@@ -78,8 +71,10 @@ Note: `Engage` is wired via `MsgEngage` (see “Engage plugins” below).
 
 ```
 ioBroker Objects (per plugin instance)
-  - state boolean      -> enable/disable (ack:false = user intent)
-  - object.native JSON -> plugin options
+  - base object (channel) -> plugin options in `object.native`
+  - enable state (boolean) -> enable/disable (ack:false = user intent)
+  - status state (string)  -> starting|running|stopping|stopped|error
+  - watchlist state (optional) -> JSON array of managed ids (ingest plugins)
             |
             v
       IoPlugins (lib/)
@@ -113,7 +108,7 @@ Message Hub supports four plugin families:
 
 - **Ingest plugins** (type prefix `Ingest...`): ioBroker events → message create/update/remove
 - **Notify plugins** (type prefix `Notify...`): Message Hub events → delivery (one-way)
-- **Bridge plugins** (type prefix `Bridge...`): bidirectional integrations (one enable switch; registered as ingest+notify via `MsgBridge`)
+- **Bridge plugins** (type prefix `Bridge...`): bidirectional integrations (one runtime-managed instance; registered as ingest+notify via `MsgBridge`)
 - **Engage plugins** (type prefix `Engage...`): interactive channels (bidirectional; messages + inbound intents + actions)
 
 Naming is not cosmetic: `IoPlugins` enforces the prefix by category to prevent catalog mistakes
@@ -134,6 +129,11 @@ Additionally, for every plugin call you get a stable identity bundle in `ctx.met
 
 - `category`, `type`, `instanceId`, `regId`
 - `baseFullId` (full ioBroker id) and `baseOwnId` (own id)
+- `manifest` (includes the options schema in `manifest.options`)
+
+And you get manifest-backed option helpers:
+
+- `ctx.meta.options.resolveInt/resolveString/resolveBool`
 
 Example: ingest plugin skeleton:
 
@@ -213,6 +213,11 @@ function BridgeMySystem(options) {
   return {
     start(ctx) {
       // optional: subscribe / discovery / resync using ctx.api.iobroker.*
+
+      // Option helpers (manifest-backed)
+      // - Schema source of truth: `ctx.meta.plugin.manifest.options`
+      // - Resolvers: `ctx.meta.options.resolveInt/resolveString/resolveBool`
+      // const maxItems = ctx.meta.options.resolveInt('maxItems', options.maxItems);
     },
     onStateChange(id, state, ctx) {
       // inbound: external -> Message Hub mutations (via ctx.api.store.*)
@@ -226,18 +231,40 @@ function BridgeMySystem(options) {
 module.exports = { BridgeMySystem };
 ```
 
-### 3) Add the plugin to the catalog (`lib/index.js`)
+### 3) Autodiscovery (no manual catalog wiring)
 
-To make the plugin show up as a runtime-managed plugin, add it to `IoPluginsCatalog`:
+To make the plugin show up as a runtime-managed plugin, just follow the conventions:
 
-- choose `type` (stable identifier; usually the factory name)
-- put it into the correct category list (`ingest` / `notify` / `bridge` / `engage`)
-- set `defaultEnabled` and `defaultOptions`
-- set `create` to your factory
+- put it into a folder `lib/<TypeName>/`
+- export `{ manifest }` from `lib/<TypeName>/manifest.js` with at least `manifest.type`
+- export a factory function named exactly like `manifest.type` from `lib/<TypeName>/index.js`
+- set `defaultEnabled` and define `options.<key>.default` (used to seed per-instance `native` on first creation)
+- set `supportsMultiple` to `true` if the plugin can run in multiple instances
+- set `title` and `description` (shown in the Admin Tab)
 
-After that, the adapter’s `IoPlugins` layer will create the enable/config object and can start/stop your plugin.
+`lib/index.js` builds `IoPluginsCatalog` at runtime by scanning `lib/<plugin>/manifest.js` and inferring the category from the
+type prefix (`Ingest*` / `Notify*` / `Bridge*` / `Engage*`).
 
-Note: `IoPlugins` wires `ingest` / `notify` / `bridge` / `engage`.
+#### Plugin manifest format (quick reference)
+
+`lib/<TypeName>/manifest.js` exports `{ manifest }` (plain JSON object).
+
+Common fields:
+
+- `schemaVersion` (`number`): manifest format version (currently `1`)
+- `type` (`string`): plugin type name (must match the exported factory function name)
+- `defaultEnabled` (`boolean`): initial enable state when instance `0` is first created
+- `supportsMultiple` (`boolean`): whether multiple instances (`0`, `1`, `2`, …) are allowed
+- `title` / `description`: translated strings shown in the Admin Tab (`{ en: '...', de: '...', ... }`)
+- `options`: option schema used for:
+  - seeding defaults into `object.native` (`options.<key>.default`)
+  - dynamic Admin Tab config UI
+  - `ctx.meta.options` resolvers (manifest-backed)
+
+Option spec fields (per `options.<key>`):
+
+- common: `type` (`number|string|boolean`), `default`, `order`, `label`, `help`
+- number: additionally `min`, `max`, `step`
 
 ### 4) Create documentation and keep indexes updated
 
@@ -246,27 +273,38 @@ Note: `IoPlugins` wires `ingest` / `notify` / `bridge` / `engage`.
 
 ## Runtime model: enable/disable + configuration
 
-With `IoPlugins`, each plugin instance is represented by one ioBroker object id that has **two roles**:
+With `IoPlugins`, each plugin instance is represented by a small ioBroker object subtree:
 
-- the **state value** (`boolean`) is the enable switch
-- the object’s **`native`** JSON is the plugin options
+- Base object (type `channel`): `msghub.0.<TypeName>.<instanceId>`
+  - raw plugin options live in `object.native`
+- Enable switch (type `state`, boolean, rw): `msghub.0.<TypeName>.<instanceId>.enable`
+- Status (type `state`, string, ro): `msghub.0.<TypeName>.<instanceId>.status`
+- Watchlist (optional, ingest plugins only): `msghub.0.<TypeName>.<instanceId>.watchlist`
 
 Practical consequences:
 
-- Enable/disable is done by writing the boolean with `ack: false` (user intent)
-- Changing `native` does not automatically reconfigure a running plugin
-  - practical rule: disable + enable (or restart the adapter) to apply option changes
+- Enable/disable is done by writing `*.enable` with `ack: false` (user intent).
+- When `object.native` is updated via `IoPlugins` (Admin Tab / admin command), enabled instances are restarted automatically:
+  `IoPlugins` restarts the **single affected plugin instance** (no adapter restart).
+  If you change `native` manually in the Objects view, do a disable+enable toggle to apply the new config.
 
 ID scheme (today):
 
-- own id (inside adapter APIs): `<TypeName>.<instanceId>` (instance id is currently always `0`)
+- own id (inside adapter APIs): `<TypeName>.<instanceId>` (instance ids are numeric, starting at `0`)
 - full id (in ioBroker object tree): `<namespace>.<TypeName>.<instanceId>` (example: `msghub.0.NotifyStates.0`)
   - `namespace` is available as `ctx.api.iobroker.ids.namespace`
+
+Multiple instances:
+
+- Plugins may allow multiple instances (`manifest.supportsMultiple === true`).
+- Instance ids are assigned automatically (`0`, `1`, `2`, …).
+- New ids are allocated by incrementing the current max id (deleted ids are not reused today).
+- If `supportsMultiple === false`, only instance `0` is allowed.
 
 `IoPlugins` also passes `options.pluginBaseObjectId` to your factory as the **full id** of that base object.
 Many ioBroker adapter APIs expect “own ids” (without namespace). Use `ctx.api.iobroker.ids.toOwnId(fullId)` / `toFullId(ownId)` instead of manual string slicing.
 
-Bridge plugins follow the same storage model (one enable/config object, options in `native`), but they result in **two registrations**
+Bridge plugins follow the same storage model (one instance subtree), but they result in **two registrations**
 behind the scenes (ingest + notify) via `MsgBridge`.
 
 ## Interfaces you must implement
@@ -508,7 +546,7 @@ Bidirectional integrations always have **two directions** (inbound + outbound):
 You can implement this in two ways:
 
 1. **Two separate plugins** (`Ingest...` + `Notify...`) and wire them together manually (or via `MsgBridge` in adapter code).
-2. **One bridge plugin** (`Bridge...`) and let `IoPlugins` manage it as one runtime instance (one enable switch + one `native` config object),
+2. **One bridge plugin** (`Bridge...`) and let `IoPlugins` manage it as one runtime instance subtree (base object + enable/status states; options in `native`),
    with a single handler wired into both hosts via `MsgBridge`.
 
 In both cases, the safe wiring helper is `MsgBridge` (see [`docs/modules/MsgBridge.md`](../modules/MsgBridge.md)).
@@ -533,4 +571,5 @@ The plugin docs in this folder are for the built-in plugins shipped with this re
 - `IoPlugins`: [`./IoPlugins.md`](./IoPlugins.md)
 - `NotifyDebug`: [`./NotifyDebug.md`](./NotifyDebug.md)
 - `NotifyStates`: [`./NotifyStates.md`](./NotifyStates.md)
+- `PLUGIN-INDEX`: [`./PLUGIN-INDEX.md`](./PLUGIN-INDEX.md)
 <!-- AUTO-GENERATED:MODULE-INDEX:END -->

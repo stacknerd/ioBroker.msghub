@@ -1,7 +1,9 @@
 // Specialized tsconfig for type-checking js files
 {
 	"extends": "./tsconfig.json",
-	"compilerOptions": {},
+	"compilerOptions": {
+		"lib": ["ES2023", "DOM", "DOM.Iterable"]
+	},
 	"include": ["**/*.js", "**/*.d.ts"],
 	"exclude": ["**/build", "node_modules/", "widgets/","**/*.test.js"]
 }

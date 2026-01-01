@@ -9,7 +9,8 @@ It is responsible for:
 - registering/unregistering plugin handler instances into the two plugin hosts (`MsgIngest` and `MsgNotify`),
 - wiring special cases like `Bridge...` (via `MsgBridge`) and `Engage...` (via `MsgEngage`).
 
-It does **not** auto-discover plugins. Available plugin types are defined by the catalog in `lib/index.js`.
+Plugin types are auto-discovered by the catalog builder in `lib/index.js` (it scans `lib/<plugin>/manifest.js`).
+`IoPlugins` consumes that catalog; it does not do filesystem discovery itself.
 
 ---
 
@@ -45,7 +46,21 @@ For each plugin instance, `IoPlugins` creates a small subtree below the adapter 
   - contains a JSON string array of “managed” object ids reported by the plugin
   - created lazily (only for plugins that report managed objects)
 
-Instance ids are numeric. Today this repo always uses `0`.
+Instance ids are numeric.
+
+Multiple instances:
+
+- Plugins may allow multiple instances (`manifest.supportsMultiple === true`).
+- Instance ids are assigned automatically (`0`, `1`, `2`, …).
+- New ids are allocated by incrementing the current max id (deleted ids are not reused today).
+- If `supportsMultiple === false`, only instance `0` is allowed.
+
+Applying option changes:
+
+- Plugin options are stored in the base object’s `native`.
+- When `native` is updated via `IoPlugins` (Admin Tab / `admin.plugins.updateInstance`) for an **enabled** instance,
+  `IoPlugins` restarts that **single instance** so changes apply immediately (no adapter restart).
+- If you edit `native` manually in the Objects view, do a disable+enable toggle to apply the new config.
 
 ---
 
@@ -85,12 +100,17 @@ For every plugin call, `IoPlugins` injects a stable identity bundle into `ctx.me
 
 - `category`: `ingest | notify | bridge | engage`
 - `type`: plugin type (example: `IngestHue`)
-- `instanceId`: numeric instance id (today: always `0`)
+- `instanceId`: numeric instance id (starting at `0`)
 - `regId`: registration id in the hosts (example: `IngestHue:0`)
 - `baseFullId`: full ioBroker base object id (example: `msghub.0.IngestHue.0`)
 - `baseOwnId`: own id (example: `IngestHue.0`)
+- `manifest`: the plugin manifest (includes the options schema in `manifest.options`)
 
 This avoids repeating boilerplate in every plugin (deriving ids from `ctx.api.iobroker.ids` or parsing `pluginId` strings).
+
+Additionally, `IoPlugins` injects manifest-backed option helpers into `ctx.meta.options`:
+
+- `ctx.meta.options.resolveInt/resolveString/resolveBool`
 
 ---
 
@@ -127,17 +147,6 @@ Storage:
 
 ---
 
-## Built-in catalog (this repo)
-
-The default catalog lives in `lib/index.js`.
-
-Today it contains:
-
-- Notify: `NotifyStates`, `NotifyDebug`
-- Engage: `EngageSendTo`
-- Ingest/Bridge: none (yet)
-
----
 
 ## Related files
 

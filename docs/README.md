@@ -9,6 +9,7 @@ Naming note: the adapter is called **Message Hub**. In code and ioBroker object 
 ## Start Here (recommended reading order)
 
 - Getting started (first steps, what you can do today): [`docs/GettingStarted.md`](./GettingStarted.md)
+- Admin Tab (configure plugins and instances): [`docs/AdminTab.md`](./AdminTab.md)
 - Message model (what a “message” is, lifecycle, timing, actions): [`docs/MessageModel.md`](./MessageModel.md)
 - Control plane API (create/patch/list via `sendTo`): [`docs/plugins/EngageSendTo.md`](./plugins/EngageSendTo.md)
 - Notification output states (what `NotifyStates` writes): [`docs/plugins/NotifyStates.md`](./plugins/NotifyStates.md)
@@ -22,13 +23,7 @@ Naming note: the adapter is called **Message Hub**. In code and ioBroker object 
 
 ## What This Repo Ships Today
 
-- Built-in plugins:
-  - `IngestRandomChaos` (demo/load generator ingest plugin, disabled by default)
-  - `IngestHue` (Hue device health ingest plugin, disabled by default)
-  - `EngageSendTo` (control plane via ioBroker `sendTo`)
-  - `NotifyStates` (writes notification events to ioBroker states)
-  - `NotifyDebug` (debug notifier, disabled by default)
-- No built-in bridge integrations yet (the core supports them, but this repo currently does not ship any).
+- Built-in plugins (types, defaults, and docs links): [`docs/plugins/PLUGIN-INDEX.md`](./plugins/PLUGIN-INDEX.md)
 
 ## Big Picture: Core vs. Plugins
 
@@ -48,7 +43,9 @@ ioBroker events  ->  Ingest plugins (lib/)  ->  Core (src/)  ->  Notify plugins 
                        (create/patch msgs)     (store+rules)     (deliver outside)
 ```
 
-Runtime note: plugins are not auto-discovered. On a running adapter instance, `IoPlugins` (in `lib/`) loads plugin options from ioBroker objects, maintains enable/disable switches, and registers/unregisters plugins at runtime (including bidirectional `Bridge...` plugins via `MsgBridge`).
+Runtime note: plugin types are auto-discovered at adapter startup from `lib/<plugin>/manifest.js` (via `lib/index.js`).
+On a running adapter instance, `IoPlugins` (in `lib/`) loads plugin options from ioBroker objects, maintains enable/status
+states, and registers/unregisters plugin instances at runtime (including bidirectional `Bridge...` plugins via `MsgBridge`).
 
 ## Modules (Core)
 

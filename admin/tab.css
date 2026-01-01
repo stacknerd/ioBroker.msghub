@@ -1,0 +1,726 @@
+/* tab.css — MsgHub UI (Materialize overrides), scoped to .msghub-root */
+
+.msghub-root {
+  /* Theme tokens */
+  --msghub-bg: #fafafa;
+  --msghub-surface: #ffffff;
+  --msghub-surface-2: #f6f7f9;
+  --msghub-text: rgba(0, 0, 0, 0.87);
+  --msghub-muted: rgba(0, 0, 0, 0.62);
+  --msghub-border: rgba(0, 0, 0, 0.10);
+
+  --msghub-accent: #26a69a;
+  --msghub-accent-weak: rgba(38, 166, 154, 0.16);
+
+  --msghub-danger: #d32f2f;
+  --msghub-danger-weak: rgba(211, 47, 47, 0.16);
+
+  --msghub-radius: 14px;
+  --msghub-radius-sm: 10px;
+
+  --msghub-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+  --msghub-shadow-sm: 0 6px 18px rgba(0, 0, 0, 0.08);
+
+  --msghub-focus: 0 0 0 3px var(--msghub-accent-weak);
+}
+
+html[data-msghub-theme="dark"] .msghub-root {
+  --msghub-bg: #0f1115;
+  --msghub-surface: #141823;
+  --msghub-surface-2: #0f1420;
+  --msghub-text: rgba(255, 255, 255, 0.90);
+  --msghub-muted: rgba(255, 255, 255, 0.68);
+  --msghub-border: rgba(255, 255, 255, 0.12);
+
+  --msghub-accent: #2dd4bf;
+  --msghub-accent-weak: rgba(45, 212, 191, 0.18);
+
+  --msghub-danger: #ef5350;
+  --msghub-danger-weak: rgba(239, 83, 80, 0.18);
+
+  --msghub-shadow: 0 14px 40px rgba(0, 0, 0, 0.45);
+  --msghub-shadow-sm: 0 10px 28px rgba(0, 0, 0, 0.40);
+
+  --msghub-focus: 0 0 0 3px var(--msghub-accent-weak);
+}
+
+html[data-msghub-theme="dark"] { color-scheme: dark; }
+html:not([data-msghub-theme="dark"]) { color-scheme: light; }
+
+html, body { background: transparent; }
+
+/* ---------- Base / layout ---------- */
+
+.msghub-root,
+.msghub-root * { box-sizing: border-box; }
+
+.msghub-root {
+  min-height: 100vh;
+  padding: 22px;
+  background: radial-gradient(1100px 420px at 20% 0%,
+      rgba(38, 166, 154, 0.08),
+      transparent 55%),
+    radial-gradient(900px 380px at 100% 10%,
+      rgba(45, 212, 191, 0.06),
+      transparent 55%),
+    var(--msghub-bg);
+  color: var(--msghub-text);
+
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica,
+    Arial, "Apple Color Emoji", "Segoe UI Emoji";
+  letter-spacing: 0.2px;
+}
+
+.msghub-root .row { margin-bottom: 0; }
+.msghub-root .col { padding-left: 0 !important; padding-right: 0 !important; }
+
+/* Optional: Centered app frame */
+.msghub-root > .row,
+.msghub-header {
+  max-width: 1120px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* ---------- Header ---------- */
+
+.msghub-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 14px;
+  padding: 14px 16px;
+  background: linear-gradient(180deg,
+      rgba(255, 255, 255, 0.06),
+      rgba(255, 255, 255, 0.00)),
+    var(--msghub-surface);
+  border: 1px solid var(--msghub-border);
+  border-radius: var(--msghub-radius);
+  box-shadow: var(--msghub-shadow-sm);
+}
+
+.msghub-header h5 {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.2;
+  font-weight: 650;
+  letter-spacing: 0.2px;
+}
+
+.msghub-muted {
+  opacity: 1;
+  color: var(--msghub-muted);
+}
+
+#msghub-connection.msghub-muted {
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--msghub-border);
+  background: var(--msghub-surface-2);
+  font-size: 12px;
+  line-height: 1;
+}
+
+#msghub-connection.online {
+  color: var(--msghub-accent);
+  border-color: var(--msghub-accent);
+  background: var(--msghub-accent-weak);
+}
+
+#msghub-connection.offline {
+  color: var(--msghub-danger);
+  border-color: var(--msghub-danger);
+  background: var(--msghub-danger-weak);
+}
+
+/* ---------- Tabs (Materialize overrides) ---------- */
+
+.msghub-root .tabs {
+  border-radius: var(--msghub-radius);
+  overflow: hidden;
+  background: var(--msghub-surface);
+  border: 1px solid var(--msghub-border);
+  box-shadow: var(--msghub-shadow-sm);
+}
+
+.msghub-root .tabs .tab a {
+  color: var(--msghub-muted);
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0.2px;
+  height: 48px;
+  line-height: 48px;
+  transition: background 160ms ease, color 160ms ease;
+}
+
+.msghub-root .tabs .tab a:hover {
+  background: var(--msghub-surface-2);
+  color: var(--msghub-text);
+}
+
+.msghub-root .tabs .tab a.active {
+  color: var(--msghub-text);
+  background: linear-gradient(180deg, var(--msghub-accent-weak), transparent);
+}
+
+.msghub-root .tabs .indicator {
+  height: 3px;
+  background-color: var(--msghub-accent);
+}
+
+/* Tab panels spacing */
+.msghub-root #tab-plugins,
+.msghub-root #tab-dashboard,
+.msghub-root #tab-calendar {
+  padding-top: 16px;
+}
+
+/* ---------- Cards ---------- */
+
+.msghub-root .card {
+  margin: 16px 0 0 0;
+  background: var(--msghub-surface);
+  color: var(--msghub-text);
+  border: 1px solid var(--msghub-border);
+  border-radius: var(--msghub-radius);
+  box-shadow: var(--msghub-shadow);
+  overflow: hidden;
+}
+
+.msghub-root .card .card-content {
+  padding: 16px;
+}
+
+.msghub-root .card .card-title {
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 6px;
+  letter-spacing: 0.2px;
+}
+
+.msghub-plugin-card {
+  position: relative;
+}
+
+.msghub-plugin-card .msghub-acc-input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.msghub-plugin-card .msghub-card-head {
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--msghub-border);
+  background: linear-gradient(180deg,
+      rgba(255, 255, 255, 0.06),
+      rgba(255, 255, 255, 0.00));
+}
+
+/* Collapse all card-content blocks after the head when unchecked */
+.msghub-plugin-card .msghub-acc-input:not(:checked) ~ .card-content:not(.msghub-card-head) {
+  display: none;
+}
+
+.msghub-card-headrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.msghub-card-headleft {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.msghub-acc-toggle {
+  cursor: pointer;
+  color: var(--msghub-muted);
+  user-select: none;
+}
+
+.msghub-acc-toggle:hover {
+  color: var(--msghub-text);
+}
+
+.msghub-status-ring {
+  --p-running: 0;
+  --p-error: 0;
+  --p-stopped: 0;
+
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+
+  background: conic-gradient(
+    var(--msghub-accent) 0 calc(var(--p-running) * 1%),
+    var(--msghub-danger) calc(var(--p-running) * 1%) calc((var(--p-running) + var(--p-error)) * 1%),
+    var(--msghub-muted) calc((var(--p-running) + var(--p-error)) * 1%) 100%
+  );
+  position: relative;
+  box-shadow: inset 0 0 0 1px var(--msghub-border);
+}
+
+.msghub-status-ring::after {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: var(--msghub-surface);
+}
+
+/* ---------- Actions / buttons ---------- */
+
+.msghub-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  margin-bottom: 12px;
+}
+
+.msghub-root a { color: inherit; }
+.msghub-root a:focus { outline: none; }
+.msghub-root .btn,
+.msghub-root .btn-flat,
+.msghub-root .btn-small {
+  border-radius: 999px;
+  text-transform: none;
+  font-weight: 650;
+  letter-spacing: 0.2px;
+}
+
+.msghub-root .btn {
+  height: 36px;
+  line-height: 36px;
+  padding: 0 14px;
+  background: var(--msghub-accent);
+  box-shadow: none;
+  transition: transform 120ms ease, filter 120ms ease, box-shadow 120ms ease;
+}
+
+.msghub-root .btn:hover {
+  filter: brightness(1.02);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.14);
+}
+
+.msghub-root .btn:active { transform: translateY(1px); }
+
+.msghub-root .btn:focus {
+  outline: none;
+  box-shadow: var(--msghub-focus);
+}
+
+.msghub-root .btn-flat {
+  height: 34px;
+  line-height: 34px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: transparent;
+}
+
+.msghub-root .btn-flat.red-text {
+  color: var(--msghub-danger) !important;
+}
+
+.msghub-root .btn-flat.red-text:hover {
+  background: var(--msghub-danger-weak);
+}
+
+/* ---------- Instance rows ---------- */
+
+.msghub-instance-row {
+  display: grid;
+  grid-template-columns: 80px 160px 1fr;
+  gap: 14px;
+  align-items: start;
+
+  padding: 14px;
+  margin-top: 12px;
+  border: 1px solid var(--msghub-border);
+  border-radius: var(--msghub-radius-sm);
+  background: var(--msghub-surface-2);
+}
+
+.msghub-instance-meta {
+  display: grid;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.msghub-instance-meta > div:first-child {
+  font-weight: 800;
+  letter-spacing: 0.2px;
+}
+
+.msghub-instance-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.msghub-field { min-width: 220px; }
+
+/* ---------- Inputs (Materialize overrides) ---------- */
+
+.msghub-root label { color: var(--msghub-muted); }
+
+.msghub-root .input-field {
+  margin: 0;
+}
+
+.msghub-root .input-field label {
+  color: var(--msghub-muted);
+  font-weight: 600;
+}
+
+.msghub-root .input-field input[type="number"],
+.msghub-root .input-field input[type="text"],
+.msghub-root .input-field input[type="password"],
+.msghub-root .input-field input[type="email"] {
+  height: 44px;
+  margin: 6px 0 0 0;
+  padding: 0 12px;
+  border: 1px solid var(--msghub-border) !important;
+  border-radius: 12px;
+  background: var(--msghub-surface);
+  color: var(--msghub-text);
+  box-shadow: none !important;
+}
+
+.msghub-root .input-field input:focus {
+  border: 1px solid var(--msghub-accent) !important;
+  box-shadow: var(--msghub-focus) !important;
+}
+
+.msghub-root .input-field input:focus + label {
+  color: var(--msghub-accent) !important;
+}
+
+/* Checkboxes (Materialize: input + label) */
+.msghub-root input[type="checkbox"] + label {
+  color: var(--msghub-text);
+  font-weight: 600;
+}
+
+.msghub-root input[type="checkbox"] + label:before {
+  border-radius: 6px;
+  border: 1px solid var(--msghub-border);
+  background: var(--msghub-surface);
+}
+
+.msghub-root input[type="checkbox"]:checked + label:before {
+  border-right: 2px solid var(--msghub-accent);
+  border-bottom: 2px solid var(--msghub-accent);
+}
+
+/* ---------- Errors / placeholder ---------- */
+
+.msghub-error {
+  color: var(--msghub-danger);
+  white-space: pre-wrap;
+}
+
+.msghub-root p { margin: 0; }
+.msghub-root p + p { margin-top: 8px; }
+/* ---------- Pure-CSS Accordion (pro Card) ---------- */
+
+.msghub-plugin-card {
+  position: relative;
+}
+
+/* unsichtbarer Checkbox-State */
+.msghub-plugin-card .msghub-acc-input {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+}
+
+/* Head-Layout: Titel links, Toggle rechts */
+.msghub-plugin-card .msghub-card-headrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* Toggle-Button im Head */
+.msghub-plugin-card .msghub-acc-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+
+  padding: 8px 12px;
+  border-radius: 999px;
+
+  border: 1px solid var(--msghub-border);
+  background: var(--msghub-surface-2);
+  color: var(--msghub-text);
+
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+
+  transition: transform 120ms ease, background 160ms ease, border-color 160ms ease;
+}
+
+.msghub-plugin-card .msghub-acc-toggle:hover {
+  background: linear-gradient(180deg, var(--msghub-accent-weak), transparent);
+  border-color: color-mix(in srgb, var(--msghub-border), var(--msghub-accent) 35%);
+}
+
+.msghub-plugin-card .msghub-acc-toggle:active {
+  transform: translateY(1px);
+}
+
+/* Fokus sichtbar (Keyboard) */
+.msghub-plugin-card .msghub-acc-input:focus-visible ~ .msghub-card-head .msghub-acc-toggle {
+  outline: none;
+  box-shadow: var(--msghub-focus);
+}
+
+/* Chevron (pseudo-icon) */
+.msghub-plugin-card .msghub-acc-toggle::after {
+  content: "";
+  inline-size: 8px;
+  block-size: 8px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg);
+  transition: transform 200ms ease;
+  opacity: 0.85;
+}
+
+/* offen => Chevron nach oben */
+.msghub-plugin-card .msghub-acc-input:checked ~ .msghub-card-head .msghub-acc-toggle::after {
+  transform: rotate(225deg);
+}
+
+/* Panels (alle card-content nach dem Head) animiert ein/aus */
+.msghub-plugin-card .card-content:not(.msghub-card-head) {
+  overflow: hidden;
+
+  max-height: 2200px; /* ausreichend groß wählen */
+  opacity: 1;
+  transform: translateY(0);
+
+  transition:
+    max-height 360ms ease,
+    opacity 220ms ease,
+    transform 220ms ease,
+    padding-top 220ms ease,
+    padding-bottom 220ms ease,
+    border-color 220ms ease;
+  will-change: max-height, opacity, transform;
+}
+
+/* zugeklappt */
+.msghub-plugin-card .msghub-acc-input:not(:checked) ~ .card-content:not(.msghub-card-head) {
+  max-height: 0;
+  opacity: 0;
+  transform: translateY(-6px);
+
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+
+  border-top-color: transparent;
+  border-bottom-color: transparent;
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .msghub-plugin-card .card-content:not(.msghub-card-head),
+  .msghub-plugin-card .msghub-acc-toggle,
+  .msghub-plugin-card .msghub-acc-toggle::after {
+    transition: none !important;
+  }
+}
+/* ---------- Status Ring (Donut) ---------- */
+
+.msghub-root {
+  --msghub-ok: var(--msghub-accent);
+  --msghub-stop: rgba(255,255,255,0.92); /* "weiß" für stopped */
+}
+
+html:not([data-msghub-theme="dark"]) .msghub-root {
+  --msghub-stop: #ffffff;
+}
+
+/* Head left group */
+.msghub-plugin-card .msghub-card-headleft {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.msghub-plugin-card .msghub-status-ring {
+  --p-running: 0;
+  --p-error: 0;
+  --p-stopped: 0;
+
+  /* Farben */
+  --c-running: var(--msghub-ok);
+  --c-error: var(--msghub-danger);
+  --c-stopped: var(--msghub-stop);
+
+  inline-size: 34px;
+  block-size: 34px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+
+  border: 1px solid var(--msghub-border);
+  background:
+    conic-gradient(
+      var(--c-running) 0 calc(var(--p-running) * 1%),
+      var(--c-error)   0 calc((var(--p-running) + var(--p-error)) * 1%),
+      var(--c-stopped) 0 100%
+    );
+
+  position: relative;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.06);
+}
+
+/* Donut-Loch */
+.msghub-plugin-card .msghub-status-ring::after {
+  content: "";
+  position: absolute;
+  inset: 7px;
+  border-radius: 50%;
+  background: var(--msghub-surface);
+  border: 1px solid var(--msghub-border);
+}
+
+/* ---------- Checkbox als Schiebeschalter (Toggle) ---------- */
+
+.msghub-root p:has(> input[type="checkbox"] + label) {
+  margin: 0;
+}
+
+/* Label als Switch-Container */
+.msghub-root input[type="checkbox"] + label {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+
+  gap: 10px;
+  padding-left: 54px; /* Platz für Switch */
+  min-height: 28px;
+
+  font-weight: 650;
+  color: var(--msghub-text);
+
+  cursor: pointer;
+  user-select: none;
+}
+
+/* Track */
+.msghub-root input[type="checkbox"] + label::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+
+  width: 44px;
+  height: 24px;
+  border-radius: 999px;
+
+  background: var(--msghub-surface);
+  border: 1px solid var(--msghub-border);
+
+  transition: background 180ms ease, border-color 180ms ease;
+}
+
+/* Thumb */
+.msghub-root input[type="checkbox"] + label::after {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 50%;
+  transform: translateY(-50%);
+
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+
+  background: rgba(255,255,255,0.92);
+  border: 1px solid var(--msghub-border);
+  box-shadow: 0 6px 14px rgba(0,0,0,0.18);
+
+  transition: left 180ms ease, background 180ms ease, border-color 180ms ease, transform 120ms ease;
+}
+
+/* Checked: Track + Thumb */
+.msghub-root input[type="checkbox"]:checked + label::before {
+  background: var(--msghub-accent);
+  border-color: color-mix(in srgb, var(--msghub-accent), #000 18%);
+}
+
+.msghub-root input[type="checkbox"]:checked + label::after {
+  left: 23px;
+  background: var(--msghub-surface);
+  border-color: rgba(0,0,0,0.08);
+}
+
+/* Focus (Keyboard) */
+.msghub-root input[type="checkbox"]:focus-visible + label::before {
+  box-shadow: var(--msghub-focus);
+}
+
+/* Disabled */
+.msghub-root input[type="checkbox"]:disabled + label {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* Active press */
+.msghub-root input[type="checkbox"]:active + label::after {
+  transform: translateY(-50%) scale(0.98);
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .msghub-root input[type="checkbox"] + label::before,
+  .msghub-root input[type="checkbox"] + label::after {
+    transition: none !important;
+  }
+}
+/* Checkbox selbst ausblenden (zugänglich bleiben) */
+.msghub-root input[type="checkbox"] {
+  position: absolute !important;
+  inline-size: 1px !important;
+  block-size: 1px !important;
+  margin: -1px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  opacity: 0 !important;
+  overflow: hidden !important;
+  clip: rect(0 0 0 0) !important;
+  clip-path: inset(50%) !important;
+  white-space: nowrap !important;
+}
+
+/* Optional: falls Materialize das Input noch mit eigener Positionierung "sichtbar" macht */
+.msghub-root input[type="checkbox"] + label {
+  position: relative;
+}

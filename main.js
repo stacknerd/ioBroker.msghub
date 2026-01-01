@@ -37,6 +37,9 @@ class Msghub extends utils.Adapter {
 
 		// Runtime plugin enable/disable handler  (initialized in onReady)
 		this._msgPlugins = null;
+
+		// AdminTab command facade (initialized in onReady)
+		this._adminTab = null;
 	}
 
 	/**
@@ -78,6 +81,9 @@ class Msghub extends utils.Adapter {
 				throw new Error('IoPlugins.create is not a function');
 			}
 			this._msgPlugins = await IoPlugins.create(this, this.msgStore);
+
+			const { IoAdminTab } = require(`${__dirname}/lib/IoAdminTab`);
+			this._adminTab = new IoAdminTab(this, this._msgPlugins);
 		} catch (e) {
 			this.log?.error?.(`Plugin wiring failed: ${e?.message || e}`);
 		}
@@ -193,9 +199,13 @@ class Msghub extends utils.Adapter {
 		let result;
 
 		try {
-			result = await this._msgPlugins?.dispatchMessagebox?.(obj);
-			if (result == null) {
-				result = { ok: false, error: { code: 'NOT_READY', message: 'No messagebox handler registered' } };
+			if (typeof cmd === 'string' && cmd.startsWith('admin.')) {
+				result = await this._handleAdminCommand(cmd, payload);
+			} else {
+				result = await this._msgPlugins?.dispatchMessagebox?.(obj);
+				if (result == null) {
+					result = { ok: false, error: { code: 'NOT_READY', message: 'No messagebox handler registered' } };
+				}
 			}
 		} catch (e) {
 			this.log?.error?.(`onMessage error: ${e?.message || e}`);
@@ -205,6 +215,13 @@ class Msghub extends utils.Adapter {
 		if (obj.callback) {
 			this.sendTo(obj.from, obj.command, result, obj.callback);
 		}
+	}
+
+	async _handleAdminCommand(cmd, payload) {
+		if (!this._adminTab) {
+			return { ok: false, error: { code: 'NOT_READY', message: 'AdminTab runtime not ready' } };
+		}
+		return await this._adminTab.handleCommand(cmd, payload);
 	}
 
 	async _i18ninit(locale) {
