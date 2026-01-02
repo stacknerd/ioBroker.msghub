@@ -21,7 +21,14 @@
  * - Plugin entry files typically live at `lib/Ingest<System>/index.js` (e.g. `lib/IngestIoBrokerStates/index.js`).
  */
 
-const { buildIoBrokerApi, buildI18nApi, buildLogApi, buildStoreApi, buildFactoryApi } = require('./MsgHostApi');
+const {
+	buildIoBrokerApi,
+	buildI18nApi,
+	buildLogApi,
+	buildStoreApi,
+	buildFactoryApi,
+	buildAiApi,
+} = require('./MsgHostApi');
 
 /**
  * MsgIngest
@@ -34,8 +41,9 @@ class MsgIngest {
 	 * @param {import('./MsgConstants').MsgConstants} msgConstants Centralized enum-like constants (optional for plugins).
 	 * @param {import('./MsgFactory').MsgFactory} msgFactory Factory (used to create normalized messages on "create" paths).
 	 * @param {import('./MsgStore').MsgStore} msgStore Store API (single write path).
+	 * @param {{ ai?: import('./MsgAi').MsgAi|null }} [options] Optional host extensions.
 	 */
-	constructor(adapter, msgConstants, msgFactory, msgStore) {
+	constructor(adapter, msgConstants, msgFactory, msgStore, options = {}) {
 		if (!adapter) {
 			throw new Error('MsgIngest: adapter is required');
 		}
@@ -63,6 +71,7 @@ class MsgIngest {
 		const hostName = this?.constructor?.name || 'MsgIngest';
 		const store = buildStoreApi(this.msgStore, { hostName });
 		const factory = buildFactoryApi(this.msgFactory, { hostName });
+		const ai = buildAiApi(options?.ai || null);
 
 		const i18n = buildI18nApi(this.adapter);
 
@@ -74,6 +83,7 @@ class MsgIngest {
 			constants: this.msgConstants,
 			factory,
 			store,
+			ai,
 			i18n,
 			iobroker,
 			log,

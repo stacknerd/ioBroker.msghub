@@ -86,6 +86,7 @@ Consumer/UI  --->  MsgStore.getMessages()/getMessageByRef()  --->  MsgRender  --
 
 <!-- AUTO-GENERATED:MODULE-INDEX:START -->
 - `MsgAction`: [`./MsgAction.md`](./MsgAction.md)
+- `MsgAi`: [`./MsgAi.md`](./MsgAi.md)
 - `MsgArchive`: [`./MsgArchive.md`](./MsgArchive.md)
 - `MsgBridge`: [`./MsgBridge.md`](./MsgBridge.md)
 - `MsgConstants`: [`./MsgConstants.md`](./MsgConstants.md)

@@ -11,6 +11,77 @@ const utils = require('@iobroker/adapter-core');
 const { MsgFactory } = require(`${__dirname}/src/MsgFactory`);
 const { MsgConstants } = require(`${__dirname}/src/MsgConstants`);
 const { MsgStore } = require(`${__dirname}/src/MsgStore`);
+const { MsgAi } = require(`${__dirname}/src/MsgAi`);
+
+function decryptIfPossible(adapter, value) {
+	const v = typeof value === 'string' ? value : '';
+	if (!v || typeof adapter?.decrypt !== 'function') {
+		return v;
+	}
+	try {
+		return adapter.decrypt(v);
+	} catch {
+		return v;
+	}
+}
+
+function parseJsonArrayWithWarn(adapter, value, label) {
+	const text = typeof value === 'string' ? value.trim() : '';
+	if (!text) {
+		return [];
+	}
+	try {
+		const parsed = JSON.parse(text);
+		return Array.isArray(parsed) ? parsed : [];
+	} catch (e) {
+		adapter?.log?.warn?.(`MsgAi config: invalid JSON for ${label} (${e?.message || e})`);
+		return [];
+	}
+}
+
+const REDACT_KEYS = new Set(['apiKey', 'token', 'password', 'aiOpenAiApiKey']);
+function sanitizeForLog(value) {
+	const isObject = v => !!v && typeof v === 'object' && !Array.isArray(v);
+	if (!isObject(value)) {
+		return value;
+	}
+	const out = Array.isArray(value) ? value.slice(0, 50) : { ...value };
+	for (const k of Object.keys(out)) {
+		if (REDACT_KEYS.has(k)) {
+			out[k] = '***';
+		} else if (isObject(out[k])) {
+			out[k] = sanitizeForLog(out[k]);
+		}
+	}
+	return out;
+}
+
+function createMsgAiFromConfig(adapter, config) {
+	const c = config && typeof config === 'object' ? config : {};
+	return new MsgAi(adapter, {
+		enabled: c.aiEnabled === true,
+		provider: c.aiProvider,
+		openai: {
+			apiKey: decryptIfPossible(adapter, c.aiOpenAiApiKey),
+			baseUrl: c.aiOpenAiBaseUrl,
+			model: c.aiOpenAiModelBalanced || c.aiOpenAiModel,
+			modelsByQuality: {
+				fast: c.aiOpenAiModelFast,
+				balanced: c.aiOpenAiModelBalanced || c.aiOpenAiModel,
+				best: c.aiOpenAiModelBest,
+			},
+			purposeModelOverrides: parseJsonArrayWithWarn(
+				adapter,
+				c.aiPurposeModelOverrides,
+				'aiPurposeModelOverrides',
+			),
+		},
+		timeoutMs: c.aiTimeoutMs,
+		maxConcurrency: c.aiMaxConcurrency,
+		rpm: c.aiRpm,
+		cacheTtlMs: c.aiCacheTtlMs,
+	});
+}
 
 // Load your modules here, e.g.:
 // const fs = require('fs');
@@ -59,6 +130,9 @@ class Msghub extends utils.Adapter {
 
 		this.msgFactory = new MsgFactory(this, this.msgConstants);
 
+		const msgAi = createMsgAiFromConfig(this, this.config);
+		this.msgAi = msgAi;
+
 		const keepPreviousWeeksRaw = this.config?.keepPreviousWeeks;
 		const keepPreviousWeeksParsed =
 			typeof keepPreviousWeeksRaw === 'number' ? keepPreviousWeeksRaw : Number(keepPreviousWeeksRaw);
@@ -68,6 +142,7 @@ class Msghub extends utils.Adapter {
 
 		this.msgStore = new MsgStore(this, this.msgConstants, this.msgFactory, {
 			archive: { keepPreviousWeeks },
+			ai: msgAi,
 		});
 		await this.msgStore.init();
 
@@ -83,7 +158,7 @@ class Msghub extends utils.Adapter {
 			this._msgPlugins = await IoPlugins.create(this, this.msgStore);
 
 			const { IoAdminTab } = require(`${__dirname}/lib/IoAdminTab`);
-			this._adminTab = new IoAdminTab(this, this._msgPlugins);
+			this._adminTab = new IoAdminTab(this, this._msgPlugins, { ai: msgAi });
 		} catch (e) {
 			this.log?.error?.(`Plugin wiring failed: ${e?.message || e}`);
 		}
@@ -195,7 +270,7 @@ class Msghub extends utils.Adapter {
 		const cmd = obj.command;
 		const payload = obj.message;
 
-		this.log?.debug?.(`onMessage: '${cmd}' ${JSON.stringify(payload, null, 2)}`);
+		this.log?.debug?.(`onMessage: '${cmd}' ${JSON.stringify(sanitizeForLog(payload), null, 2)}`);
 		let result;
 
 		try {
@@ -219,6 +294,9 @@ class Msghub extends utils.Adapter {
 
 	async _handleAdminCommand(cmd, payload) {
 		if (!this._adminTab) {
+			if (cmd === 'admin.ai.test') {
+				return { native: { aiTestLastResult: 'ERROR NOT_READY: AdminTab runtime not ready' } };
+			}
 			return { ok: false, error: { code: 'NOT_READY', message: 'AdminTab runtime not ready' } };
 		}
 		return await this._adminTab.handleCommand(cmd, payload);

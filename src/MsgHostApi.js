@@ -193,6 +193,39 @@ function buildFactoryApi(msgFactory, { hostName = 'Host' } = {}) {
 }
 
 /**
+ * Build the MsgAi facade for plugins.
+ *
+ * Derivation rule:
+ * - When MsgAi is wired: expose `ctx.api.ai.*` as a best-effort helper that never throws/rejects.
+ * - When MsgAi is not wired: return null.
+ *
+ * @param {import('./MsgAi').MsgAi|null} msgAi MsgAi instance.
+ */
+function buildAiApi(msgAi) {
+	if (!msgAi || typeof msgAi !== 'object' || typeof msgAi.getStatus !== 'function') {
+		return null;
+	}
+
+	const base = Object.freeze({
+		getStatus: () => msgAi.getStatus(),
+		text: request => msgAi.text(request, null),
+		json: request => msgAi.json(request, null),
+	});
+
+	// Internal hook: IoPlugins binds per-plugin identity into ctx.api.ai for rate limiting/caching partition.
+	return Object.freeze({
+		...base,
+		__bindCaller: pluginMeta => {
+			if (typeof msgAi.createCallerApi !== 'function') {
+				return base;
+			}
+			const regId = typeof pluginMeta?.regId === 'string' ? pluginMeta.regId.trim() : '';
+			return msgAi.createCallerApi({ regId });
+		},
+	});
+}
+
+/**
  * Build id helpers for converting between full ids and "own ids".
  *
  * @param {import('@iobroker/adapter-core').AdapterInstance & { i18n?: ({ t?: Function, getTranslatedObject?: Function } | null) }} adapter Adapter instance.
@@ -361,4 +394,5 @@ module.exports = {
 	buildStoreApi,
 	buildActionApi,
 	buildFactoryApi,
+	buildAiApi,
 };

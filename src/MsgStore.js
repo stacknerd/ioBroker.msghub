@@ -94,6 +94,7 @@ class MsgStore {
 	 * @param {number} [options.deleteClosedIntervalMs] Interval for checking for closed messages (default: 10000).
 	 * @param {object} [options.storage] Options forwarded to `MsgStorage` (e.g. `baseDir`, `fileName`, `writeIntervalMs`).
 	 * @param {object} [options.archive] Options forwarded to `MsgArchive` (e.g. `baseDir`, `fileExtension`, `flushIntervalMs`).
+	 * @param {any} [options.ai] Optional AI helper instance.
 	 */
 	constructor(adapter, msgConstants, msgFactory, options = {}) {
 		const {
@@ -105,6 +106,7 @@ class MsgStore {
 			deleteClosedIntervalMs = 1000 * 10,
 			storage = {},
 			archive = {},
+			ai = null,
 		} = options || {};
 
 		if (!adapter) {
@@ -136,10 +138,10 @@ class MsgStore {
 		this.msgRender = new MsgRender(this.adapter, { locale: this.adapter?.locale });
 
 		// Notification dispatcher (plugins register elsewhere).
-		this.msgNotify = new MsgNotify(this.adapter, this.msgConstants, { store: this });
+		this.msgNotify = new MsgNotify(this.adapter, this.msgConstants, { store: this, ai });
 
 		// Producer host for inbound events (plugins register elsewhere).
-		this.msgIngest = new MsgIngest(this.adapter, this.msgConstants, this.msgFactory, this);
+		this.msgIngest = new MsgIngest(this.adapter, this.msgConstants, this.msgFactory, this, { ai });
 
 		// Canonical in-memory list (do not store rendered output here).
 		this.fullList = Array.isArray(initialMessages) ? initialMessages : [];

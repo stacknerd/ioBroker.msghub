@@ -6,26 +6,6 @@
 			"type": "panel",
 			"label": "General",
 			"items": {
-				"option1": {
-					"type": "checkbox",
-					"label": "option1",
-					"newLine": true,
-					"xs": 12,
-					"sm": 12,
-					"md": 6,
-					"lg": 4,
-					"xl": 4
-				},
-				"option2": {
-					"type": "text",
-					"label": "option2",
-					"newLine": true,
-					"xs": 12,
-					"sm": 12,
-					"md": 6,
-					"lg": 4,
-					"xl": 4
-				},
 				"locale": {
 					"type": "text",
 					"label": "Locale",
@@ -38,7 +18,13 @@
 					"md": 6,
 					"lg": 4,
 					"xl": 4
-				},
+				}
+			}
+		},
+		"archive": {
+			"type": "panel",
+			"label": "Archive",
+			"items": {
 				"keepPreviousWeeks": {
 					"type": "number",
 					"label": "keepPreviousWeeks",
@@ -50,6 +36,255 @@
 					"md": 6,
 					"lg": 4,
 					"xl": 4
+				}
+			}
+		},
+		"ai": {
+			"type": "panel",
+			"label": "AI",
+			"items": {
+				"aiEnabled": {
+					"type": "checkbox",
+					"label": "Enable AI enhancements",
+					"help": "Enable the core AI service (plugins may use ctx.api.ai.*).",
+					"default": false,
+					"newLine": true,
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12
+				},
+				"_aiProviderHeader": {
+					"type": "header",
+					"text": "AI Provider",
+					"newLine": true,
+					"size": 2
+				},
+				"aiProvider": {
+					"type": "select",
+					"label": "AI provider",
+					"help": "Currently supported: OpenAI.",
+					"options": [
+						{
+							"label": "OpenAI",
+							"value": "openai"
+						}
+					],
+					"default": "openai",
+					"newLine": true,
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 6,
+					"xl": 6
+				},
+				"aiOpenAiApiKey": {
+					"type": "password",
+					"label": "OpenAI API key",
+					"help": "Stored encrypted in ioBroker objects (admins can still access).",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 6,
+					"xl": 6
+				},
+				"_aiOpenAiHeader": {
+					"type": "header",
+					"text": "OpenAi Models",
+					"newLine": true,
+					"size": 2
+				},
+				"aiOpenAiModel": {
+					"type": "text",
+					"label": "OpenAI model (fallback)",
+					"help": "Fallback model when no profile model is set. Example: gpt-5-mini",
+					"default": "gpt-5-mini",
+					"newLine": true,
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 3,
+					"xl": 3
+				},
+				"aiOpenAiModelFast": {
+					"type": "text",
+					"label": "OpenAI model (fast)",
+					"help": "Used when plugins call ctx.api.ai.* with hints.quality='fast'.",
+					"default": "gpt-4o-mini",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 3,
+					"xl": 3
+				},
+				"aiOpenAiModelBalanced": {
+					"type": "text",
+					"label": "OpenAI model (balanced)",
+					"help": "Used when plugins call ctx.api.ai.* with hints.quality='balanced'. If empty, fallback model is used.",
+					"default": "gpt-5-mini",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 3,
+					"xl": 3
+				},
+				"aiOpenAiModelBest": {
+					"type": "text",
+					"label": "OpenAI model (best)",
+					"help": "Used when plugins call ctx.api.ai.* with hints.quality='best'.",
+					"default": "gpt-5.2",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 3,
+					"xl": 3
+				},
+				"aiPurposeModelOverrides": {
+					"type": "text",
+					"label": "Purpose→model overrides (JSON)",
+					"help": "Optional array of overrides: [{\"purpose\":\"ssml\",\"quality\":\"best\",\"model\":\"gpt-4o-mini\"},{\"purpose\":\"categorize\",\"model\":\"gpt-4o-mini\"}]. Precedence: purpose+quality > purpose(any) > profile model.",
+					"default": "[]",
+					"minRows": 5,
+					"maxRows": 20,
+					"newLine": true,
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12
+				},
+				"aiOpenAiBaseUrl": {
+					"type": "text",
+					"label": "OpenAI base URL",
+					"help": "Default: https://api.openai.com/v1 (useful for proxies).",
+					"default": "https://api.openai.com/v1",
+					"newLine": true,
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 4,
+					"xl": 4
+				},
+				"aiTimeoutMs": {
+					"type": "number",
+					"label": "AI timeout (ms)",
+					"help": "Default request timeout for ctx.api.ai.* calls.",
+					"default": 30000,
+					"xs": 12,
+					"sm": 6,
+					"md": 4,
+					"lg": 2,
+					"xl": 2
+				},
+				"aiMaxConcurrency": {
+					"type": "number",
+					"label": "AI max concurrency",
+					"help": "Max concurrent requests (global).",
+					"default": 2,
+					"xs": 12,
+					"sm": 6,
+					"md": 4,
+					"lg": 2,
+					"xl": 2
+				},
+				"aiRpm": {
+					"type": "number",
+					"label": "AI rate limit (RPM)",
+					"help": "Requests per minute per plugin (0 = unlimited).",
+					"default": 0,
+					"xs": 12,
+					"sm": 6,
+					"md": 4,
+					"lg": 2,
+					"xl": 2
+				},
+				"aiCacheTtlMs": {
+					"type": "number",
+					"label": "AI cache TTL (ms)",
+					"help": "Default TTL for request.cache (0 = off).",
+					"default": 0,
+					"xs": 12,
+					"sm": 6,
+					"md": 4,
+					"lg": 2,
+					"xl": 2
+				},
+				"_aiTestHeader": {
+					"type": "header",
+					"text": "AI Test",
+					"size": 2
+				},
+				"aiTestPurpose": {
+					"type": "text",
+					"label": "Test purpose",
+					"help": "Used for model selection (purpose overrides + profile mapping).",
+					"default": "ai-test",
+					"doNotSave": true,
+					"newLine": true,
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 3,
+					"xl": 3
+				},
+				"aiTestQuality": {
+					"type": "select",
+					"label": "Test quality",
+					"help": "Maps to the configured model profile (fast|balanced|best).",
+					"options": [
+						{ "label": "fast", "value": "fast" },
+						{ "label": "balanced", "value": "balanced" },
+						{ "label": "best", "value": "best" }
+					],
+					"default": "balanced",
+					"doNotSave": true,
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 3,
+					"xl": 3
+				},
+				"aiTestPrompt": {
+					"type": "text",
+					"label": "Test prompt",
+					"help": "Sent as the user prompt for the AI test.",
+					"default": "Respond with a short sentence: Hi, i am Message Hub! who are you?",
+					"doNotSave": true,
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 6,
+					"xl": 6
+				},
+				"aiTestRun": {
+					"type": "sendTo",
+					"label": "Run AI test",
+					"command": "admin.ai.test",
+					"timeout": 15000,
+					"useNative": true,
+					"jsonData": "{\n  \"purpose\": ${JSON.stringify(data.aiTestPurpose || 'ai-test')},\n  \"quality\": ${JSON.stringify(data.aiTestQuality || 'balanced')},\n  \"prompt\": ${JSON.stringify(data.aiTestPrompt || '')},\n  \"provider\": ${JSON.stringify(data.aiProvider || 'openai')},\n  \"openai\": {\n    \"apiKey\": ${JSON.stringify(data.aiOpenAiApiKey || '')},\n    \"baseUrl\": ${JSON.stringify(data.aiOpenAiBaseUrl || '')},\n    \"modelsByQuality\": {\n      \"fast\": ${JSON.stringify(data.aiOpenAiModelFast || '')},\n      \"balanced\": ${JSON.stringify(data.aiOpenAiModelBalanced || data.aiOpenAiModel || '')},\n      \"best\": ${JSON.stringify(data.aiOpenAiModelBest || '')}\n    },\n    \"purposeModelOverrides\": ${data.aiPurposeModelOverrides || '[]'}\n  }\n}",
+					"newLine": true,
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12
+				},
+				"aiTestLastResult": {
+					"type": "text",
+					"label": "AI test result",
+					"help": "Filled by the test action. Not saved.",
+					"minRows": 5,
+					"maxRows": 5,
+					"doNotSave": true,
+					"disabled": true,
+					"newLine": true,
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12
 				}
 			}
 		}

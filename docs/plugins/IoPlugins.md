@@ -7,6 +7,7 @@ It is responsible for:
 - creating enable/disable switches as ioBroker states,
 - loading plugin options from ioBroker objects (`native`),
 - registering/unregistering plugin handler instances into the two plugin hosts (`MsgIngest` and `MsgNotify`),
+- injecting `ctx.meta.resources` (per-plugin resource tracker) and cleaning up timers/subscriptions on stop/unregister,
 - wiring special cases like `Bridge...` (via `MsgBridge`) and `Engage...` (via `MsgEngage`).
 
 Plugin types are auto-discovered by the catalog builder in `lib/index.js` (it scans `lib/<plugin>/manifest.js`).
@@ -111,6 +112,9 @@ This avoids repeating boilerplate in every plugin (deriving ids from `ctx.api.io
 Additionally, `IoPlugins` injects manifest-backed option helpers into `ctx.meta.options`:
 
 - `ctx.meta.options.resolveInt/resolveString/resolveBool`
+
+If the core exposes `ctx.api.ai` (MsgAi), `IoPlugins` also binds the plugin registration id into that facade so the core
+can apply per-plugin policies (rate limiting / cache partitioning) without plugins needing to pass identity manually.
 
 ---
 

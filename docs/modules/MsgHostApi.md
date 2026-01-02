@@ -39,6 +39,7 @@ This module exports small builder functions. Hosts call them once and then pass 
 - `buildStoreApi(store, { hostName })` → `ctx.api.store`
 - `buildFactoryApi(msgFactory, { hostName })` → `ctx.api.factory` (or `null`)
 - `buildActionApi(adapter, msgConstants, store, { hostName })` → `ctx.api.action` (or `null`)
+- `buildAiApi(msgAi)` → `ctx.api.ai` (or `null`)
 - `buildIdsApi(adapter)` → `ctx.api.iobroker.ids` (also exported for reuse)
 
 ### `buildLogApi(adapter, { hostName })`

@@ -71,6 +71,9 @@
 		"messagebox": true,
 		"dataFolder": "files/msghub.%INSTANCE%",
 		"supportCustoms": true,
+		"encryptedNative": [
+			"aiOpenAiApiKey"
+		],
 		"adminUI": {
 			"custom": "json",
 			"config": "json",
@@ -107,6 +110,19 @@
 	"native": {
 		"option1": true,
 		"option2": "42",
+		"aiEnabled": false,
+		"aiProvider": "openai",
+		"aiOpenAiApiKey": "",
+		"aiOpenAiBaseUrl": "https://api.openai.com/v1",
+		"aiOpenAiModel": "gpt-4o-mini",
+		"aiOpenAiModelFast": "gpt-4o-mini",
+		"aiOpenAiModelBalanced": "gpt-4o-mini",
+		"aiOpenAiModelBest": "gpt-4o-mini",
+		"aiPurposeModelOverrides": "[]",
+		"aiTimeoutMs": 30000,
+		"aiMaxConcurrency": 2,
+		"aiRpm": 0,
+		"aiCacheTtlMs": 0,
 		"keepPreviousWeeks": 3,
 		"locale": "de-DE"
 	},

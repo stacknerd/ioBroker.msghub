@@ -430,6 +430,7 @@ The plugin hosts expose a **capability-based** API surface:
   - `getStatus()` → `{ enabled, provider?, reason? }`
   - `text(request)` → best-effort text result (`{ ok, value|error }`)
   - `json(request)` → best-effort JSON result (`BAD_JSON` when output is invalid JSON)
+  - Model selection is core-controlled (uses `request.purpose` + `request.hints.quality`).
   - Design doc: [`docs/modules/MsgAi.md`](../modules/MsgAi.md)
 
 ### Ingest plugins (producer)
