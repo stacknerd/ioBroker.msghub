@@ -364,7 +364,26 @@ Semantics:
 - Minimal writes: only updates when content differs or `managedSince` is missing.
 - Cleanup: when a plugin instance is disabled, MsgHub clears the plugin watchlist and marks previously listed objects as “no longer managed” (`managedMessage=false`). If the object has no active IngestStates rule (`mode===""`) and `enabled===true`, MsgHub also sets `enabled=false`.
 
-If a plugin depends on this feature, validate it in `start(ctx)` (throw a clear error when missing).
+	If a plugin depends on this feature, validate it in `start(ctx)` (throw a clear error when missing).
+
+### Plugin resources (auto-cleanup)
+
+When the adapter is wired via `IoPlugins`, every plugin call receives a per-instance resource tracker:
+
+- `ctx.meta.resources` (`IoPluginResources`)
+
+It is meant to prevent leaked intervals/subscriptions and is disposed automatically when the instance stops/unregisters (best-effort, even if `stop(ctx)` throws).
+
+Tracked resources:
+
+- Timers
+  - `ctx.meta.resources.setTimeout(fn, ms, ...args)` / `ctx.meta.resources.clearTimeout(handle)`
+  - `ctx.meta.resources.setInterval(fn, ms, ...args)` / `ctx.meta.resources.clearInterval(handle)`
+- Generic cleanup hooks
+  - `ctx.meta.resources.add(disposer)` where `disposer` is `() => void` or `{ dispose() }`
+- ioBroker subscriptions
+  - Calls to `ctx.api.iobroker.subscribe.*` are automatically tracked and unsubscribed on stop/unregister.
+  - When you manually call `ctx.api.iobroker.subscribe.unsubscribe...`, the tracker forgets that subscription to avoid double-unsubscribe attempts.
 
 ---
 
@@ -407,6 +426,11 @@ The plugin hosts expose a **capability-based** API surface:
     - `subscribeObjects(pattern)`, `unsubscribeObjects(pattern)`
     - `subscribeForeignStates(idOrPattern)`, `unsubscribeForeignStates(idOrPattern)`
     - `subscribeForeignObjects(idOrPattern)`, `unsubscribeForeignObjects(idOrPattern)`
+- `ctx.api.ai`: optional AI enhancement facade (can be `null`; never throws/rejects)
+  - `getStatus()` → `{ enabled, provider?, reason? }`
+  - `text(request)` → best-effort text result (`{ ok, value|error }`)
+  - `json(request)` → best-effort JSON result (`BAD_JSON` when output is invalid JSON)
+  - Design doc: [`docs/modules/MsgAi.md`](../modules/MsgAi.md)
 
 ### Ingest plugins (producer)
 
@@ -439,7 +463,8 @@ Where events come from (important):
 
 Subscribing from inside a plugin:
 
-- Subscribe in `start(ctx)` and unsubscribe in `stop(ctx)` via `ctx.api.iobroker.subscribe.*`.
+- Subscribe in `start(ctx)` via `ctx.api.iobroker.subscribe.*` (auto-cleanup is provided by `ctx.meta.resources` when wired via `IoPlugins`).
+- Unsubscribe explicitly when you need to release early (manual unsubs are automatically forgotten by the tracker).
 - Use `subscribeForeignStates(fullId)` / `subscribeForeignObjects(fullId)` for specific external ids.
 - Use `subscribeStates(ownId)` / `subscribeObjects(ownId)` for ids in your own namespace (own ids).
 - Keep subscriptions narrow (avoid `'*'`); after you subscribe, every matching update will go through the adapter and be fanned out to all ingest plugins, so always filter by `id` inside `onStateChange`.
@@ -562,7 +587,8 @@ In both cases, the safe wiring helper is `MsgBridge` (see [`docs/modules/MsgBrid
 
 ## Built-in plugins in this repo
 
-The plugin docs in this folder are for the built-in plugins shipped with this repository. They are also good templates for your own code.
+This branch currently ships no built-in plugin implementations under `lib/*/`.
+The docs in this folder describe the plugin API and runtime wiring (`IoPlugins`); plugin-specific docs will appear once plugins are added again.
 
 ## Modules
 
