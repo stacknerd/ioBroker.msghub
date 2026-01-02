@@ -36,17 +36,16 @@ This plugin is configured and enabled by the adapter via `lib/IoPlugins.js`:
 
 Options (stored in the plugin object’s `native` JSON; all optional):
 
-Note: unlike the other built-ins, `IngestHue` does not expose its option schema via `manifest.options` yet.
-This means the dynamic Admin Tab config UI currently has no fields for it, but the keys below are still supported.
-After changing `native`, restart the instance (disable+enable) to apply.
+The option schema is exposed via `lib/IngestHue/manifest.js` (`manifest.options`), so the Admin Tab renders fields automatically.
+When you save options for an enabled instance, MsgHub restarts that instance so changes apply immediately.
 
 - `monitorBattery` (boolean, default `true`): watch `.battery` states
 - `monitorReachable` (boolean, default `true`): watch `.reachable` states
 - `batteryCreateBelow` (number, default `7`): create/update the battery message when battery is below this value
 - `batteryRemoveAbove` (number, default `30`): remove the battery message when battery is at/above this value
-- `reachableAllowRoles` (string array, default `["ZLLSwitch","ZLLPresence"]`):
+- `reachableAllowRoles` (string or string array, default `"ZLLSwitch,ZLLPresence"`):
   - filters reachable states by the **parent channel role** (to avoid noise)
-  - `[]` means “allow all roles” (no filtering)
+  - empty / `[]` means “allow all roles” (no filtering)
 
 ---
 
