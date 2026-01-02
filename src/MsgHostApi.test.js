@@ -233,6 +233,9 @@ describe('MsgHostApi', () => {
 				async setStateAsync(ownId, state) {
 					calls.states.push(['setStateAsync', ownId, state]);
 				},
+				async setForeignStateAsync(id, state) {
+					calls.states.push(['setForeignStateAsync', id, state]);
+				},
 				async getForeignStateAsync(id) {
 					calls.states.push(['getForeignStateAsync', id]);
 					return { val: 1, ack: true };
@@ -277,6 +280,7 @@ describe('MsgHostApi', () => {
 			const obj = await api.objects.getForeignObject('system.adapter.test');
 			await api.objects.extendForeignObject('system.adapter.test', { common: { name: 'x' } });
 			await api.states.setState('x', { val: 2, ack: true });
+			await api.states.setForeignState('some.0.y', { val: 3, ack: false });
 			const state = await api.states.getForeignState('system.adapter.test.alive');
 
 			assert.deepStrictEqual(objs, { a: { _id: 'a' } });
@@ -299,6 +303,7 @@ describe('MsgHostApi', () => {
 			]);
 			expect(calls.states).to.deep.equal([
 				['setStateAsync', 'x', { val: 2, ack: true }],
+				['setForeignStateAsync', 'some.0.y', { val: 3, ack: false }],
 				['getForeignStateAsync', 'system.adapter.test.alive'],
 			]);
 				expect(calls.subscribe).to.deep.equal([
@@ -398,6 +403,10 @@ describe('MsgHostApi', () => {
 					calls.states.push(['setState', ownId, state]);
 					cb(null);
 				},
+				setForeignState(id, state, cb) {
+					calls.states.push(['setForeignState', id, state]);
+					cb(null);
+				},
 				getForeignState(id, cb) {
 					calls.states.push(['getForeignState', id]);
 					cb(null, { val: 3 });
@@ -416,6 +425,7 @@ describe('MsgHostApi', () => {
 			expect(await api.objects.getForeignObject('id')).to.deep.equal({ _id: 'id' });
 			await api.objects.extendForeignObject('id', { common: {} });
 			await api.states.setState('x', { val: 1, ack: true });
+			await api.states.setForeignState('some.0.y', { val: 2, ack: false });
 			expect(await api.states.getForeignState('id')).to.deep.equal({ val: 3 });
 
 			expect(calls.objects).to.deep.equal([
@@ -429,6 +439,7 @@ describe('MsgHostApi', () => {
 			]);
 			expect(calls.states).to.deep.equal([
 				['setState', 'x', { val: 1, ack: true }],
+				['setForeignState', 'some.0.y', { val: 2, ack: false }],
 				['getForeignState', 'id'],
 			]);
 		});
@@ -439,6 +450,9 @@ describe('MsgHostApi', () => {
 			expect(() => api.subscribe.subscribeStates('*')).to.throw('MyHost: adapter.subscribeStates is not available');
 			expect(() => api.objects.getObjectView('system', 'custom', {})).to.throw(
 				'MyHost: adapter.getObjectView is not available',
+			);
+			expect(() => api.states.setForeignState('x', { val: 1 })).to.throw(
+				'MyHost: adapter.setForeignState is not available',
 			);
 			expect(() => api.objects.setObjectNotExists('x', {})).to.throw(
 				'MyHost: adapter.setObjectNotExists is not available',

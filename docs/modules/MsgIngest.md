@@ -204,7 +204,7 @@ function IngestExample(_options) {
       if (!state) return;
       const c = ctx.api.constants;
       const msg = ctx.api.factory?.createMessage?.({
-        ref: `demo:status:${id}`,
+        ref: `demo.0.status.${id}`,
         title: 'Demo',
         text: `${id} = ${state.val}`,
         level: c.level.notice,

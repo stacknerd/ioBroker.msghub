@@ -314,6 +314,15 @@ function buildIoBrokerApi(adapter, { hostName }) {
 					adapter.setState(ownId, state, err => (err ? reject(err) : resolve(undefined)));
 				});
 			},
+			setForeignState: (id, state) => {
+				if (typeof adapter?.setForeignStateAsync === 'function') {
+					return adapter.setForeignStateAsync(id, state).then(() => undefined);
+				}
+				requireFn(adapter?.setForeignState, 'setForeignState');
+				return new Promise((resolve, reject) => {
+					adapter.setForeignState(id, state, err => (err ? reject(err) : resolve(undefined)));
+				});
+			},
 			getForeignState: id => {
 				if (typeof adapter?.getForeignStateAsync === 'function') {
 					return adapter.getForeignStateAsync(id);

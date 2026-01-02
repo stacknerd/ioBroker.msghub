@@ -141,15 +141,16 @@ Example: ingest plugin skeleton:
 // lib/IngestMyPlugin/index.js
 'use strict';
 
-function IngestMyPlugin(options) {
-  return {
-    start(ctx) {
-      // optional: subscribe / discovery using ctx.api.iobroker.*
-      // tip: for performant lookups in `system/custom`, use ctx.api.iobroker.objects.getObjectView('system', 'custom', ...)
-      // ctx.api.log.info('IngestMyPlugin started');
-    },
-    onStateChange(id, state, ctx) {
-      // decide: ignore / create / patch
+	function IngestMyPlugin(options) {
+	  return {
+	    start(ctx) {
+	      // optional: subscribe / discovery using ctx.api.iobroker.*
+	      // tip: for performant lookups in `system/custom`, use ctx.api.iobroker.objects.getObjectView('system', 'custom', ...)
+	      // tip: to write to foreign states, use ctx.api.iobroker.states.setForeignState('some.0.id', { val, ack })
+	      // ctx.api.log.info('IngestMyPlugin started');
+	    },
+	    onStateChange(id, state, ctx) {
+	      // decide: ignore / create / patch
       // writes go through ctx.api.store.*
     },
   };

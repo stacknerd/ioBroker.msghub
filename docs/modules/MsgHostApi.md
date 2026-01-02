@@ -96,7 +96,7 @@ Builds a small ioBroker facade used by plugins. It contains:
 Currently exposed helpers (overview):
 
 - `iobroker.objects`: `setObjectNotExists`, `delObject`, `getObjectView`, `getForeignObjects`, `getForeignObject`, `extendForeignObject`
-- `iobroker.states`: `setState`, `getForeignState`
+- `iobroker.states`: `setState`, `setForeignState`, `getForeignState`
 - `iobroker.subscribe`: `subscribeStates/Objects/ForeignStates/ForeignObjects` and matching `unsubscribe...`
 
 Compatibility behavior:
@@ -150,6 +150,16 @@ const res = await ctx.api.iobroker.objects.getObjectView('system', 'custom', {
 
 // ioBroker returns rows; with include_docs, each row may contain row.doc (the object)
 const rows = Array.isArray(res?.rows) ? res.rows : [];
+```
+
+#### `iobroker.states.setForeignState(id, state)`
+
+Promisified wrapper for `adapter.setForeignState(...)` / `adapter.setForeignStateAsync(...)`.
+
+Example:
+
+```js
+await ctx.api.iobroker.states.setForeignState('some.0.device.switch', { val: true, ack: false });
 ```
 
 ### `buildStoreApi(store, { hostName })`

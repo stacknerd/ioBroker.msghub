@@ -42,7 +42,7 @@ Example (e.g. in `javascript.0`):
 
 ```js
 sendTo('msghub.0', 'create', {
-  ref: 'demo:task:1',
+  ref: 'demo.0.task.1',
   kind: 'task',
   level: 10, // notice
   title: 'Laundry',
