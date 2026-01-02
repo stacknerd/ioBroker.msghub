@@ -81,18 +81,18 @@
 		},
 		"adminTab": {
 			"name": {
-			"en": "Message Hub",
-			"de": "Message Hub",
-			"ru": "Message Hub",
-			"pt": "Message Hub",
-			"nl": "Message Hub",
-			"fr": "Message Hub",
-			"it": "Message Hub",
-			"es": "Message Hub",
-			"pl": "Message Hub",
-			"uk": "Message Hub",
-			"zh-cn": "Message Hub"
-		},
+				"en": "Message Hub",
+				"de": "Message Hub",
+				"ru": "Message Hub",
+				"pt": "Message Hub",
+				"nl": "Message Hub",
+				"fr": "Message Hub",
+				"it": "Message Hub",
+				"es": "Message Hub",
+				"pl": "Message Hub",
+				"uk": "Message Hub",
+				"zh-cn": "Message Hub"
+			},
 			"link": "/adapter/msghub/tab.html",
 			"ignoreConfigUpdate": true
 		},

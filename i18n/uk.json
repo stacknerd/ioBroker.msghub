@@ -33,5 +33,7 @@
   "Messages (open)": "Повідомлення (відкрито)",
   "Messages (due now)": "Повідомлення (термін виконання зараз)",
   "Messages (deleted)": "Повідомлення (видалені)",
-  "Messages (expired)": "Повідомлення (термін дії закінчився)"
+  "Messages (expired)": "Повідомлення (термін дії закінчився)",
+  "Automatically synchronized shopping list based on the Alexa list \"%s\".": "Automatically synchronized shopping list based on the Alexa list \"%s\".",
+  "Connection to Alexa service lost": "Connection to Alexa service lost"
 }

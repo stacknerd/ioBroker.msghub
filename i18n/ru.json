@@ -33,5 +33,7 @@
   "Messages (open)": "Сообщения (открытые)",
   "Messages (due now)": "Сообщения (срок подачи — сейчас)",
   "Messages (deleted)": "Сообщения (удалённые)",
-  "Messages (expired)": "Сообщения (просрочены)"
+  "Messages (expired)": "Сообщения (просрочены)",
+  "Automatically synchronized shopping list based on the Alexa list \"%s\".": "Automatically synchronized shopping list based on the Alexa list \"%s\".",
+  "Connection to Alexa service lost": "Connection to Alexa service lost"
 }

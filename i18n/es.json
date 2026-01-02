@@ -33,5 +33,7 @@
   "Messages (open)": "Mensajes (abiertos)",
   "Messages (due now)": "Mensajes (debido ahora)",
   "Messages (deleted)": "Mensajes (eliminados)",
-  "Messages (expired)": "Mensajes (caducados)"
+  "Messages (expired)": "Mensajes (caducados)",
+  "Automatically synchronized shopping list based on the Alexa list \"%s\".": "Automatically synchronized shopping list based on the Alexa list \"%s\".",
+  "Connection to Alexa service lost": "Connection to Alexa service lost"
 }

@@ -33,5 +33,7 @@
   "Messages (open)": "消息（打开）",
   "Messages (due now)": "信息（现在到期）",
   "Messages (deleted)": "已删除的消息",
-  "Messages (expired)": "已过期消息"
+  "Messages (expired)": "已过期消息",
+  "Automatically synchronized shopping list based on the Alexa list \"%s\".": "Automatically synchronized shopping list based on the Alexa list \"%s\".",
+  "Connection to Alexa service lost": "Connection to Alexa service lost"
 }

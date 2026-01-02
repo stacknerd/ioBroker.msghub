@@ -17,5 +17,6 @@ Notes:
 | `EngageSendTo` | Engage | Control plane via ioBroker `sendTo` | `true` | `false` | [`./EngageSendTo.md`](./EngageSendTo.md) |
 | `NotifyStates` | Notify | Writes notification events to ioBroker states | `true` | `false` | [`./NotifyStates.md`](./NotifyStates.md) |
 | `NotifyDebug` | Notify | Logs notification dispatches (debug/dev only) | `false` | `false` | [`./NotifyDebug.md`](./NotifyDebug.md) |
+| `BridgeAlexaShopping` | Bridge | Sync Alexa (alexa2) list items with MsgHub | `false` | `true` | [`./BridgeAlexaShopping.md`](./BridgeAlexaShopping.md) |
 
-This repo currently ships no `Bridge...` plugins (the core/runtime supports them, but there are no built-in bridge implementations yet).
+This repo also ships a first `Bridge...` implementation as a bidirectional example.
