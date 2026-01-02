@@ -53,14 +53,14 @@ Producers must create stable `ref`s so updates don’t create duplicates and mes
 
 Guidelines:
 
-- Use a simple, colon-separated format: `<system>:<topic>:<sourceId>`
+- Use a simple, dot-separated format: `<system>.<instance>.<topic>.<sourceId>`
 - Keep it technical and stable (do not use localized names, no spaces).
 - Include the external/source id when available (full ioBroker state id/object id is fine).
 
 Example (`IngestMySystem`):
 
-- Battery: `mysystem:battery:<stateId>` (e.g. `mysystem:battery:some.0.device.battery`)
-- Reachable: `mysystem:reachable:<stateId>` (e.g. `mysystem:reachable:some.0.device.reachable`)
+- Battery: `mysystem.0.battery.<stateId>` (e.g. `mysystem.0.battery.some.0.device.battery`)
+- Reachable: `mysystem.0.reachable.<stateId>` (e.g. `mysystem.0.reachable.some.0.device.reachable`)
 
 ## i18n helper
 

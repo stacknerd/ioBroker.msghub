@@ -304,7 +304,12 @@ Multiple instances:
 - If `supportsMultiple === false`, only instance `0` is allowed.
 
 `IoPlugins` also passes `options.pluginBaseObjectId` to your factory as the **full id** of that base object.
-Many ioBroker adapter APIs expect “own ids” (without namespace). Use `ctx.api.iobroker.ids.toOwnId(fullId)` / `toFullId(ownId)` instead of manual string slicing.
+Additionally, `IoPlugins` injects `ctx.meta.plugin.baseFullId` and `ctx.meta.plugin.baseOwnId` on every call.
+
+Best practice:
+
+- For ids **inside your plugin subtree**, prefer `ctx.meta.plugin.baseOwnId` (own id) and `ctx.meta.plugin.baseFullId` (full id).
+- Use `ctx.api.iobroker.ids.toOwnId(fullId)` / `toFullId(ownId)` only for converting arbitrary ids (and avoid manual string slicing).
 
 Bridge plugins follow the same storage model (one instance subtree), but they result in **two registrations**
 behind the scenes (ingest + notify) via `MsgBridge`.
@@ -379,6 +384,7 @@ Tracked resources:
 - Timers
   - `ctx.meta.resources.setTimeout(fn, ms, ...args)` / `ctx.meta.resources.clearTimeout(handle)`
   - `ctx.meta.resources.setInterval(fn, ms, ...args)` / `ctx.meta.resources.clearInterval(handle)`
+  - Note: one-shot timeouts are automatically forgotten after they fire; you only need `clearTimeout` when canceling early.
 - Generic cleanup hooks
   - `ctx.meta.resources.add(disposer)` where `disposer` is `() => void` or `{ dispose() }`
 - ioBroker subscriptions
@@ -410,7 +416,7 @@ The plugin hosts expose a **capability-based** API surface:
     - `ids.namespace`: adapter namespace (e.g. `msghub.0`)
     - `ids.toOwnId(fullId)`: strip `<namespace>.` from a full id (returns the input if it’s not under the namespace)
     - `ids.toFullId(ownId)`: add `<namespace>.` to an own id (returns the input if it already has the prefix)
-    - Best practice: use this to convert `options.pluginBaseObjectId` before calling ioBroker APIs that expect “own ids”.
+    - Best practice: prefer `ctx.meta.plugin.baseOwnId` / `baseFullId` for your plugin subtree ids; use `ids.*` for converting arbitrary ids when needed.
   - `objects` (foreign object access)
     - `objects.setObjectNotExists(ownId, obj): Promise<void>`
     - `objects.delObject(ownId): Promise<void>`
@@ -584,16 +590,28 @@ In both cases, the safe wiring helper is `MsgBridge` (see [`docs/modules/MsgBrid
 - Keep handlers fast (plugins run in the adapter process).
 - Be idempotent where possible (ioBroker events can repeat; restarts happen).
 - Use stable ids (`ref`) to avoid uncontrolled message growth.
-- Avoid throwing: log and continue; the hosts will isolate failures, but best-effort behavior is still the goal.
+- Fail fast on hard misconfiguration: validate required capabilities in `start(ctx)` and throw a clear error when missing.
+- During regular operation (delivery / per-event processing): avoid throwing; log and continue (best-effort).
 
 ## Built-in plugins in this repo
 
-This branch currently ships no built-in plugin implementations under `lib/*/`.
-The docs in this folder describe the plugin API and runtime wiring (`IoPlugins`); plugin-specific docs will appear once plugins are added again.
+This repo ships built-in plugin implementations under `lib/*/` (see [`docs/plugins/PLUGIN-INDEX.md`](./PLUGIN-INDEX.md)).
+
+They are designed to run **only** in the Message Hub runtime (wired via `IoPlugins`). As a result, built-in plugins validate required `ctx.api`/`ctx.meta`
+capabilities in `start(ctx)` and throw on missing wiring (no “non-IoPlugins” fallbacks).
+
+To keep this validation readable and consistent, the repo provides a small helper:
+
+- `lib/IoPluginGuards.js` (`ensureCtxAvailability(prefix, ctx, { plainObject, fn, stringNonEmpty })`)
 
 ## Modules
 
 <!-- AUTO-GENERATED:MODULE-INDEX:START -->
+- `EngageSendTo`: [`./EngageSendTo.md`](./EngageSendTo.md)
+- `IngestHue`: [`./IngestHue.md`](./IngestHue.md)
+- `IngestRandomChaos`: [`./IngestRandomChaos.md`](./IngestRandomChaos.md)
 - `IoPlugins`: [`./IoPlugins.md`](./IoPlugins.md)
+- `NotifyDebug`: [`./NotifyDebug.md`](./NotifyDebug.md)
+- `NotifyStates`: [`./NotifyStates.md`](./NotifyStates.md)
 - `PLUGIN-INDEX`: [`./PLUGIN-INDEX.md`](./PLUGIN-INDEX.md)
 <!-- AUTO-GENERATED:MODULE-INDEX:END -->

@@ -91,8 +91,8 @@ Unknown ids are ignored (important for safety, because all ingest plugins share 
 
 Every message uses a stable `ref` so updates don’t create duplicates and messages survive restarts:
 
-- Battery: `hue:battery:<stateId>`
-- Reachable: `hue:reachable:<stateId>`
+- Battery: `hue.0.battery.<stateId>`
+- Reachable: `hue.0.reachable.<stateId>`
 
 The plugin writes through `ctx.api.store.addOrUpdateMessage(...)`.
 

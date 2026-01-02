@@ -118,6 +118,15 @@ can apply per-plugin policies (rate limiting / cache partitioning) without plugi
 
 ---
 
+## Fail-fast contract (built-in plugins)
+
+Built-in plugins in this repo are designed to run **only** under `IoPlugins` (Message Hub context).
+They validate required `ctx.api`/`ctx.meta` capabilities in `start(ctx)` and throw on missing wiring (no compatibility fallbacks).
+
+To keep `start(ctx)` checks consistent and compact, plugins may use:
+
+- `lib/IoPluginGuards.js` (`ensureCtxAvailability(prefix, ctx, { plainObject, fn, stringNonEmpty })`)
+
 ## Managed-meta helper for ingest plugins
 
 When the adapter is wired via `IoPlugins`, ingest plugins also receive a helper in `ctx.meta`:

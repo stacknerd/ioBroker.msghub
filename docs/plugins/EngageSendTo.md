@@ -29,7 +29,7 @@ sendTo('msghub.0', 'list', {}, res => {
 
 // Create a message
 sendTo('msghub.0', 'create', {
-  ref: 'demo:task:1',
+  ref: 'demo.0.task.1',
   kind: 'task',
   level: 10, // notice
   title: 'Laundry',
@@ -138,7 +138,7 @@ Request payload (minimal):
 
 ```js
 {
-  ref: 'demo:task:1', // optional, but recommended
+  ref: 'demo.0.task.1', // optional, but recommended
   kind: 'task',       // required
   level: 10,          // required
   title: 'Title',     // required
@@ -170,13 +170,13 @@ Request payload:
 - Variant A (recommended):
 
 ```js
-{ ref: 'demo:task:1', patch: { title: 'New title' } }
+{ ref: 'demo.0.task.1', patch: { title: 'New title' } }
 ```
 
 - Variant B (short form): everything except control keys is treated as a patch
 
 ```js
-{ ref: 'demo:task:1', title: 'New title' }
+{ ref: 'demo.0.task.1', title: 'New title' }
 ```
 
 Response `data`:
@@ -226,8 +226,8 @@ Important: the core implements this as a **soft delete** (`lifecycle.state="dele
 
 Request payload:
 
-- string: `'demo:task:1'`
-- or object: `{ ref: 'demo:task:1' }`
+- string: `'demo.0.task.1'`
+- or object: `{ ref: 'demo.0.task.1' }`
 
 Response `data`:
 
@@ -248,8 +248,8 @@ Reads one message by `ref`.
 
 Request payload:
 
-- string: `'demo:task:1'`
-- or object: `{ ref: 'demo:task:1' }`
+- string: `'demo.0.task.1'`
+- or object: `{ ref: 'demo.0.task.1' }`
 
 Response `data`:
 
@@ -319,7 +319,7 @@ Request payload:
 
 ```js
 {
-  ref: 'demo:task:1',
+  ref: 'demo.0.task.1',
   actionId: 'ack-1',
   actor?: 'telegram:user123', // optional attribution for lifecycle.stateChangedBy
   payload?: object|null       // optional override for action.payload (e.g. snooze.forMs)
