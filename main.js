@@ -313,6 +313,29 @@ class Msghub extends utils.Adapter {
 		this.log?.debug?.(`config locale: ${locale} (time and date) / ${i18nlocale} (i18n)`);
 
 		const baseI18n = utils.I18n;
+		// Depending on adapter-core/js-controller versions, I18n may be wrapped and expose functions under `.default`.
+		const translateFn =
+			typeof baseI18n?.t === 'function'
+				? baseI18n.t
+				: typeof baseI18n?.translate === 'function'
+					? baseI18n.translate
+					: typeof baseI18n?.default?.t === 'function'
+						? baseI18n.default.t
+						: typeof baseI18n?.default?.translate === 'function'
+							? baseI18n.default.translate
+							: null;
+		const getTranslatedObjectFn =
+			typeof baseI18n?.getTranslatedObject === 'function'
+				? baseI18n.getTranslatedObject
+				: typeof baseI18n?.default?.getTranslatedObject === 'function'
+					? baseI18n.default.getTranslatedObject
+					: null;
+
+		if (!translateFn) {
+			this.log?.warn?.(
+				'I18n: adapter-core did not provide a translate function (I18n.t/I18n.translate); falling back to identity translation',
+			);
+		}
 		this.i18n = baseI18n //would be the real way, if iobroker would not be broken at this point and return wrong string on getTranslatedObject
 			? Object.freeze({
 					t: (...args) => {
@@ -322,8 +345,11 @@ class Msghub extends utils.Adapter {
 								`[i18n.t] key=${JSON.stringify(key)} opts=${JSON.stringify(options ?? {})}`,
 							);
 						}
-						// @ts-expect-error TS2556 (checkJs): spreading any[] into tuple/rest typed function
-						return baseI18n.t(...args);
+						if (translateFn) {
+							// @ts-expect-error TS2556 (checkJs): spreading any[] into tuple/rest typed function
+							return translateFn(...args);
+						}
+						return String(key);
 					},
 					getTranslatedObject: (...args) => {
 						if (_i18ndebug) {
@@ -341,7 +367,11 @@ class Msghub extends utils.Adapter {
 
 		// a workaround for a current bug
 		const fixTranslatedObject = (text, strings = []) => {
-			let obj = utils.I18n.getTranslatedObject(text, '%s');
+			let obj =
+				typeof getTranslatedObjectFn === 'function' ? getTranslatedObjectFn(text, '%s') : { en: String(text) };
+			if (!obj || typeof obj !== 'object') {
+				obj = { en: String(text) };
+			}
 			for (const lang of Object.keys(obj)) {
 				let s = obj[lang];
 				for (const arg of strings) {

@@ -307,6 +307,22 @@ html, body { background: transparent; }
   transition: transform 120ms ease, filter 120ms ease, box-shadow 120ms ease;
 }
 
+.msghub-root .btn.disabled,
+.msghub-root .btn:disabled {
+  background: color-mix(in srgb, var(--msghub-border), var(--msghub-surface) 35%) !important;
+  color: var(--msghub-muted) !important;
+  box-shadow: none !important;
+  filter: none !important;
+  opacity: 0.75;
+  pointer-events: none;
+}
+
+.msghub-root .btn-flat.disabled,
+.msghub-root .btn-flat:disabled {
+  opacity: 0.65;
+  pointer-events: none;
+}
+
 .msghub-root .btn:hover {
   filter: brightness(1.02);
   box-shadow: 0 8px 18px rgba(0, 0, 0, 0.14);
