@@ -18,5 +18,6 @@ Notes:
 | `NotifyStates` | Notify | Writes notification events to ioBroker states | `true` | `false` | [`./NotifyStates.md`](./NotifyStates.md) |
 | `NotifyDebug` | Notify | Logs notification dispatches (debug/dev only) | `false` | `false` | [`./NotifyDebug.md`](./NotifyDebug.md) |
 | `BridgeAlexaShopping` | Bridge | Sync Alexa (alexa2) list items with MsgHub | `false` | `true` | [`./BridgeAlexaShopping.md`](./BridgeAlexaShopping.md) |
+| `BridgeAlexaTasks` | Bridge | Import Alexa TODO items and mirror MsgHub tasks | `false` | `true` | [`./BridgeAlexaTasks.md`](./BridgeAlexaTasks.md) |
 
 This repo also ships a first `Bridge...` implementation as a bidirectional example.

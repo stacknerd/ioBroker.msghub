@@ -607,6 +607,9 @@ To keep this validation readable and consistent, the repo provides a small helpe
 ## Modules
 
 <!-- AUTO-GENERATED:MODULE-INDEX:START -->
+- `API`: [`./API.md`](./API.md)
+- `BridgeAlexaShopping`: [`./BridgeAlexaShopping.md`](./BridgeAlexaShopping.md)
+- `BridgeAlexaTasks`: [`./BridgeAlexaTasks.md`](./BridgeAlexaTasks.md)
 - `EngageSendTo`: [`./EngageSendTo.md`](./EngageSendTo.md)
 - `IngestHue`: [`./IngestHue.md`](./IngestHue.md)
 - `IngestRandomChaos`: [`./IngestRandomChaos.md`](./IngestRandomChaos.md)
