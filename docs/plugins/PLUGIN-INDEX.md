@@ -17,6 +17,7 @@ Notes:
 | `EngageSendTo` | Engage | Control plane via ioBroker `sendTo` | `true` | `false` | [`./EngageSendTo.md`](./EngageSendTo.md) |
 | `NotifyStates` | Notify | Writes notification events to ioBroker states | `true` | `false` | [`./NotifyStates.md`](./NotifyStates.md) |
 | `NotifyDebug` | Notify | Logs notification dispatches (debug/dev only) | `false` | `false` | [`./NotifyDebug.md`](./NotifyDebug.md) |
+| `NotifyPushover` | Notify | Sends MsgHub due notifications to Pushover (sendTo) | `false` | `true` | [`./NotifyPushover.md`](./NotifyPushover.md) |
 | `BridgeAlexaShopping` | Bridge | Sync Alexa (alexa2) list items with MsgHub | `false` | `true` | [`./BridgeAlexaShopping.md`](./BridgeAlexaShopping.md) |
 | `BridgeAlexaTasks` | Bridge | Import Alexa TODO items and mirror MsgHub tasks | `false` | `true` | [`./BridgeAlexaTasks.md`](./BridgeAlexaTasks.md) |
 
