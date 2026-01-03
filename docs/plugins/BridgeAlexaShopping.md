@@ -218,6 +218,7 @@ The plugin keeps two internal JSON states under the plugin base object id:
 - Mapping state: `msghub.0.BridgeAlexaShopping.<instanceId>.mapping`
   - Stores the stable relationship between Message Hub list item ids and Alexa item ids.
   - Also tracks pending creates (MsgHub → Alexa) until the newly created Alexa item id appears in the JSON list.
+  - Tracks when an item was first observed as `checked=true` (`checkedAt`) so `keepCompleted` retention can work reliably across restarts.
 - Categories state: `msghub.0.BridgeAlexaShopping.<instanceId>.categories`
   - Stores the AI-learned category assignments for normalized item keys.
   - Contains:
@@ -250,7 +251,8 @@ Processing flow:
    - `completed` maps to list item `checked`
 5. Completed-item retention:
    - If `keepCompleted > 0`, completed items are deleted after that duration.
-   - The plugin uses Alexa timestamps (`updatedDateTime`) to decide when an item became completed.
+   - The plugin tracks the first time an item becomes `checked=true` in its mapping state (`checkedAt`) and uses that timestamp.
+   - Deletion is applied during reconciliation (startup full sync + periodic `fullSyncIntervalMs`).
 
 Conflict handling:
 
