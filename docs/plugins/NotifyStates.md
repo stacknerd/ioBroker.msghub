@@ -1,109 +1,159 @@
-# Notifier: NotifyStates
+# NotifyStates
 
-`NotifyStates` is a Message Hub **notifier plugin** (MsgNotify plugin) that writes notification events into ioBroker states.
-This makes Message Hub notifications visible and usable for scripts, visualizations, and automations that can read states.
+`NotifyStates` is a Message Hub **notify (notifier)** plugin that writes notification events into ioBroker states. This makes Message Hub notifications visible and usable for scripts, visualizations, and automations that can read states.
 
-The plugin stores “latest” notifications as JSON strings and also provides optional routing states by **kind** and **level**.
-This is intentionally simple: it is not a history or log, it is only the most recent value per state.
+The plugin stores “latest” notifications as JSON strings and also provides optional routing states by **kind** and **level**. This is intentionally simple: it is not a history or log, it is only the most recent value per state.
+
+This document has two parts:
+
+1) A user-facing guide (setup, configuration, best practices).
+2) A technical description (how it works internally).
 
 ---
 
-## Basics
+## 1) User Guide
 
-- Type: `Notify`
-- Registration ID (as used by `lib/IoPlugins.js`): `NotifyStates:<instanceId>` (example: `NotifyStates:0`)
-- Implementation: `lib/NotifyStates/index.js` (`NotifyStates(options)`)
+### What it does
+
+- Writes the most recent notification payload into ioBroker states, grouped by:
+  - event (`Latest.<event>`)
+  - kind (`byKind.<kindKey>.<event>`)
+  - level (`byLevel.<levelKey>.<event>`)
+- Optionally writes periodic snapshots of the full Message Hub store (`fullJson`).
+- Maintains simple counters (`Stats.*`) so you can build dashboards without parsing large JSON blobs.
+
+What it intentionally does not do:
+
+- It does not keep a history/log (each state is “last write wins”).
+- It does not deduplicate or aggregate notifications.
+
+### Prerequisites
+
+- None beyond a working Message Hub instance. The produced states can be consumed by scripts/visualizations/automations.
+
+### Quick start (recommended setup)
+
+1. Create a `NotifyStates` instance in the Message Hub Plugins tab.
+2. Enable the plugin instance (`...enable` switch).
+3. Inspect the generated states in ioBroker Admin → Objects under:
+   - `msghub.0.NotifyStates.<instanceId>.Latest.*`
+4. Trigger a notification (for example create/update a message) and observe state updates.
+
+### How to configure
+
+Configuration is done in the Message Hub Admin Tab (Plugins) and uses the schema from `lib/NotifyStates/manifest.js`.
+
+Common options:
+
+- `blobIntervalMs` (number, ms, default `300000`)
+  - Interval for writing `*.fullJson` snapshots. Use `0` to disable.
+- `statsMinIntervalMs` (number, ms, default `1000`)
+  - Throttle statistics updates triggered by notifications. Use `0` to disable throttling.
+- `statsMaxIntervalMs` (number, ms, default `300000`)
+  - Force a periodic stats refresh even without notifications. Use `0` to disable.
+- `mapTypeMarker` (string, default `__msghubType`)
+  - Overrides the marker used by `serializeWithMaps` (advanced).
+
+`kindKey` and `levelKey` in the state ids come from the **keys** of `MsgConstants.kind` / `MsgConstants.level`.
+
+### Best practices
+
+- Keep `blobIntervalMs=0` unless you really need full snapshots (it can create large states).
+- Use `Latest.*` / `byKind.*` / `byLevel.*` for automations (small payloads) and dashboards.
+- Use `Stats.*` for fast dashboards and health indicators.
+
+### Troubleshooting
+
+- “No states show up”
+  - Verify the plugin instance is enabled and running.
+  - Check adapter logs for warnings about object creation (`setObjectNotExists`) or state writes.
+
+- “States update but JSON looks strange”
+  - Notifications can contain `Map` values (for example `metrics`); `NotifyStates` serializes those with `serializeWithMaps`.
+
+---
+
+## 2) Software Documentation
+
+### Overview
+
+`NotifyStates` is registered as a **notify** plugin:
+
+- Registration id: `NotifyStates:<instanceId>` (example: `NotifyStates:0`)
+- Implementation: `lib/NotifyStates/index.js`
 - Supported events: values from `MsgConstants.notfication.events` (`added`, `due`, `updated`, `deleted`, `expired`)
-  - The plugin also accepts the event *keys* (e.g. `update`) and maps them to the event *values* (e.g. `updated`) for the state id.
+  - The plugin also accepts the event *keys* (for example `update`) and maps them to the event *values* (for example `updated`) for the state id.
 
----
+### Runtime wiring (IoPlugins)
 
-## Config
+`IoPlugins` creates the instance subtree under `msghub.<instance>.NotifyStates.<instanceId>`:
 
-This plugin is configured by the adapter via `lib/IoPlugins.js`.
+- Base object: `msghub.0.NotifyStates.<instanceId>` (options in `object.native`)
+- Enable state: `msghub.0.NotifyStates.<instanceId>.enable`
+- Status state: `msghub.0.NotifyStates.<instanceId>.status`
 
-- Base object id: `msghub.0.NotifyStates.0`
-- Enable switch: `msghub.0.NotifyStates.0.enable`
-- Status: `msghub.0.NotifyStates.0.status`
-- The plugin writes into fixed subtrees below that base:
-  - `msghub.0.NotifyStates.0.fullJson` (periodic full store dump)
-  - `msghub.0.NotifyStates.0.Stats.total`
-  - `msghub.0.NotifyStates.0.Stats.open`
-  - `msghub.0.NotifyStates.0.Stats.dueNow`
-  - `msghub.0.NotifyStates.0.Stats.deleted`
-  - `msghub.0.NotifyStates.0.Stats.expired`
-  - `msghub.0.NotifyStates.0.Latest.<event>`
-  - `msghub.0.NotifyStates.0.byKind.<kindKey>.<event>`
-  - `msghub.0.NotifyStates.0.byLevel.<levelKey>.<event>`
+The plugin writes into fixed subtrees below that base:
 
-Options (stored in the plugin object `native`):
+- `msghub.0.NotifyStates.<instanceId>.fullJson` (periodic full store dump)
+- `msghub.0.NotifyStates.<instanceId>.Stats.total`
+- `msghub.0.NotifyStates.<instanceId>.Stats.open`
+- `msghub.0.NotifyStates.<instanceId>.Stats.dueNow`
+- `msghub.0.NotifyStates.<instanceId>.Stats.deleted`
+- `msghub.0.NotifyStates.<instanceId>.Stats.expired`
+- `msghub.0.NotifyStates.<instanceId>.Latest.<event>`
+- `msghub.0.NotifyStates.<instanceId>.byKind.<kindKey>.<event>`
+- `msghub.0.NotifyStates.<instanceId>.byLevel.<levelKey>.<event>`
 
-- `mapTypeMarker` (optional): overrides the marker used by `serializeWithMaps` (default: `__msghubType`).
-- `blobIntervalMs` (optional): interval for writing a full JSON snapshot to `*.fullJson` (default: 5 minutes, `0` disables).
-- `statsMinIntervalMs` (optional): throttles stats updates triggered by incoming notifications (default: `1000`, `0` disables throttling).
-- `statsMaxIntervalMs` (optional): ensures stats are refreshed at least this often even if no notifications arrive (default: 5 minutes, `0` disables).
+### Write strategy
 
-`kindKey` and `levelKey` are the **keys** from `MsgConstants.kind` / `MsgConstants.level`.
+- “Last write wins”: each state always contains only the most recent notification for that bucket.
+- States are created with `ctx.api.iobroker.objects.setObjectNotExists(...)` and written via `ctx.api.iobroker.states.setState(..., { ack:true })`.
+- Payload shape:
+  - If the host provides a single notification, the state value is that notification.
+  - If a batch is provided, the state value is an array.
 
-Note: the schema/defaults for these options come from `lib/NotifyStates/manifest.js`. When options are changed via the
-Admin Tab (or `IoPlugins.updateInstanceNative`) for an enabled instance, `IoPlugins` restarts that single instance so
-changes apply immediately. If you edit `native` manually in the Objects view, do a disable+enable toggle to apply.
+### Event normalization
 
----
+- The plugin normalizes `event` to an allowed event value from `MsgConstants.notfication.events`.
+- If the event is unknown, the plugin does nothing.
 
-## Behavior
+### Routing by kind and level
 
-- Input → output
-  - Input: `MsgNotify` calls `onNotifications(event, [notification], ctx)`.
-  - Output: JSON is written to one or more ioBroker states, depending on event/kind/level.
+- Kind routing is based on `notification.kind`.
+  - Accepts the stored kind value (for example `"task"`) and also the kind key.
+- Level routing is based on `notification.level`.
+  - Accepts numeric levels (for example `10`) and also level keys (for example `"warning"`).
 
-- Event normalization
-  - The plugin normalizes `event` to an allowed event value from `MsgConstants.notfication.events`.
-  - If the event is unknown, the plugin does nothing.
+### Stats (`Stats.*`)
 
-- Write strategy
-  - “Last write wins”: each state always contains only the most recent notification for that bucket.
-  - There is no deduplication and no history.
-  - States are created with `ctx.api.iobroker.objects.setObjectNotExists(...)` and written via `ctx.api.iobroker.states.setState(..., { ack:true })`.
-
-- Routing by kind and level
-  - Kind routing is based on `notification.kind`.
-    - It accepts either the stored kind value (e.g. `"task"`) or the kind key.
-  - Level routing is based on `notification.level`.
-    - It accepts numeric levels (e.g. `10`) and also level keys (e.g. `"warning"`).
-
-- Stats (`Stats.*`)
-  - `total`: number of messages in the store (includes deleted/expired).
-  - `open`: messages with `lifecycle.state === "open"`.
-  - `deleted`: messages with `lifecycle.state === "deleted"`.
-  - `expired`: messages with `lifecycle.state === "expired"`.
-  - `dueNow`: **subset of `open` only**: messages with `lifecycle.state === "open"` and `timing.notifyAt <= now` (and not expired by `timing.expiresAt`).
-  - Update behavior:
-    - on notifications: updates are requested and throttled via `statsMinIntervalMs`
-    - idle refresh: forced via `statsMaxIntervalMs` even without new notifications
-
-- Map-safe JSON
-  - Notifications may contain JavaScript `Map` values (for example `metrics`).
-  - The plugin uses `serializeWithMaps()` so these Maps survive JSON serialization.
+- `total`: number of messages in the store (includes deleted/expired).
+- `open`: messages with `lifecycle.state === "open"`.
+- `deleted`: messages with `lifecycle.state === "deleted"`.
+- `expired`: messages with `lifecycle.state === "expired"`.
+- `dueNow`: subset of `open` only: messages with `lifecycle.state === "open"` and `timing.notifyAt <= now` (and not expired by `timing.expiresAt`).
+  - Note: this is “notification due now” (driven by `notifyAt`), not “fällig” in the domain sense (`dueAt`/`startAt`).
+- Update behavior:
+  - on notifications: stats updates are requested and throttled via `statsMinIntervalMs`
+  - idle refresh: forced via `statsMaxIntervalMs` even without new notifications
 
 Note: `MsgStore` can dispatch a `due` event repeatedly while a message stays due. This means the same state may get updated multiple times even when the message did not change.
 
----
+### Map-safe JSON
 
-## Examples
+- Notifications may contain JavaScript `Map` values (for example `metrics`).
+- The plugin uses `serializeWithMaps()` so these Maps survive JSON serialization.
+- `mapTypeMarker` can override the marker used by `serializeWithMaps`.
 
-This plugin is normally wired by `IoPlugins` (no manual registration needed).
+### Examples
 
-Example states you will get (instance `msghub.0`):
+Example states you will get (adapter instance `msghub.0`):
 
 - `msghub.0.NotifyStates.0.fullJson`
 - `msghub.0.NotifyStates.0.Latest.due`
 - `msghub.0.NotifyStates.0.byKind.task.due`
 - `msghub.0.NotifyStates.0.byLevel.notice.due`
 
----
-
-## Related files
+### Related files
 
 - Implementation: `lib/NotifyStates/index.js`
 - Dispatcher: `src/MsgNotify.js`

@@ -125,7 +125,8 @@ and `MsgNotify` fans those out to registered notifier plugins.
 Important semantics:
 
 - There is **no** “already notified” flag in the store.
-- “Due” means: `timing.notifyAt <= now` (and not expired).
+- Naming note: the notification event `"due"` refers to `timing.notifyAt` only and is intentionally independent from domain timing (`timing.dueAt` / `timing.startAt`).
+- “Due” (notification) means: `timing.notifyAt <= now` (and not expired).
 - Due messages are re-sent as `"due"` on every polling tick as long as they remain due.
 
 When does the store dispatch?

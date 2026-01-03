@@ -1,167 +1,162 @@
-# Producer: IngestHue
+# IngestHue
 
-`IngestHue` is a Message Hub **ingest (producer)** plugin that watches the Hue adapter and turns common “device health”
-signals into MsgHub messages:
+`IngestHue` is a Message Hub **ingest (producer)** plugin that watches the Hue adapter and turns common “device health” signals into MsgHub messages:
 
 - low battery → a **task** message (“replace batteries”)
 - device unreachable → a **status** message (“not reachable”)
 
-It is meant as an early-warning system: instead of checking Hue states manually, you get normalized messages that can be
-archived, rendered, and forwarded by notifier plugins.
+This document has two parts:
+
+1) A user-facing guide (setup, configuration, best practices).
+2) A technical description (how it works internally).
 
 ---
 
-## Basics
+## 1) User Guide
 
-- Type: `Ingest` (producer)
-- Registration ID (as used by `lib/IoPlugins.js`): `IngestHue:<instanceId>` (example: `IngestHue:0`)
-- Implementation: `lib/IngestHue/index.js` (`IngestHue(options)`)
-- Hue model catalog (labels/batteries/tools): `lib/IngestHue/models.js`
-- Input source: foreign ioBroker states below `hue.*` (from the Hue adapter)
-- Host contract (MsgIngest): `start(ctx)`, `onStateChange(id, state)`, `stop()` (`onObjectChange` exists but is unused)
+### What it does
 
----
+- Watches Hue states under `hue.*`, primarily:
+  - `*.battery` (numeric percent)
+  - `*.reachable` (boolean-ish)
+- Creates/updates messages with stable `ref`s so you don’t get duplicates across restarts.
+- Completes messages automatically when the underlying condition is OK again (battery recovered / reachable again).
 
-## Enable / runtime wiring (IoPlugins)
+What it intentionally does not do (today):
 
-This plugin is configured and enabled by the adapter via `lib/IoPlugins.js`:
+- It does not control Hue devices or write to Hue states.
+- It does not continuously rescan Hue objects; discovery is snapshot-based at startup.
 
-- Base object id: `msghub.0.IngestHue.<instanceId>`
-- Enable switch: `msghub.0.IngestHue.<instanceId>.enable`
-- Status: `msghub.0.IngestHue.<instanceId>.status`
+### Prerequisites
 
----
+- The ioBroker Hue adapter must be installed and running (states below `hue.*` exist).
+- The Message Hub adapter must be able to read foreign states/objects from the Hue adapter.
+- Optional (for nicer `details.location`): `enum.rooms.*` should be maintained.
 
-## Config
+### Quick start (recommended setup)
 
-Options (stored in the plugin object’s `native` JSON; all optional):
+1. Verify you have Hue states like `hue.0....battery` and/or `hue.0....reachable` in ioBroker Admin → Objects.
+2. Create an `IngestHue` instance in the Message Hub Plugins tab.
+3. Adjust battery thresholds if desired:
+   - `batteryCreateBelow` / `batteryRemoveAbove`
+4. (Optional) tune reachable noise filtering via `reachableAllowRoles`.
+5. Enable the plugin instance (`...enable` switch).
+6. Confirm messages appear when you simulate a low battery / unreachable device.
 
-The option schema is exposed via `lib/IngestHue/manifest.js` (`manifest.options`), so the Admin Tab renders fields automatically.
-When you save options for an enabled instance, MsgHub restarts that instance so changes apply immediately.
+### How to configure
 
-- `monitorBattery` (boolean, default `true`): watch `.battery` states
-- `monitorReachable` (boolean, default `true`): watch `.reachable` states
-- `batteryCreateBelow` (number, default `7`): create/update the battery message when battery is below this value
-- `batteryRemoveAbove` (number, default `30`): remove the battery message when battery is at/above this value
-- `reachableAllowRoles` (string or string array, default `"ZLLSwitch,ZLLPresence"`):
-  - filters reachable states by the **parent channel role** (to avoid noise)
-  - empty / `[]` means “allow all roles” (no filtering)
+Configuration is done in the Message Hub Admin Tab (Plugins) and uses the schema from `lib/IngestHue/manifest.js`.
 
----
+Options (all optional):
 
-## Behavior
+- `monitorBattery` (boolean, default `true`)
+  - Enables monitoring of `*.battery`.
+- `batteryCreateBelow` (number, %, default `7`)
+  - Creates/updates the battery task when `battery < batteryCreateBelow`.
+- `batteryRemoveAbove` (number, %, default `30`)
+  - Completes the battery task when `battery >= batteryRemoveAbove`.
+- `monitorReachable` (boolean, default `true`)
+  - Enables monitoring of `*.reachable`.
+- `reachableAllowRoles` (string CSV, default `ZLLSwitch,ZLLPresence`)
+  - Filters `*.reachable` states by the parent channel role to reduce noise.
+  - Use an empty value to allow all roles.
 
-### Startup flow
+### Best practices
 
-On `start(ctx)` the plugin runs two steps (best-effort, async in the background):
+- Keep `batteryCreateBelow` and `batteryRemoveAbove` separated (hysteresis) to avoid flapping.
+- Start with the default reachable-role filter and expand only if you need broader coverage.
+- Use meaningful Hue object names and room enums so messages contain useful `location` and titles.
 
-1. **Discover Hue states (snapshot-based)**
-   - loads all objects matching `hue.*`
-   - selects:
-     - battery states: ids ending with `.battery`
-     - reachable states: ids ending with `.reachable`
-   - avoids some duplicates:
-     - battery is skipped for parent roles `ZLLLightLevel` and `ZLLTemperature` (common on presence sensors)
-   - builds an in-memory “watched snapshot” (`id -> metadata`) with:
-     - localized name (from ioBroker object `common.name`)
-     - room name (from `enum.rooms.*`, using “longest prefix match”)
-     - parent channel role (for filtering + labels)
-     - Hue `modelid` (battery only; used for battery/tool hints)
-   - subscribes/unsubscribes using `subscribeForeignStates(id)` / `unsubscribeForeignStates(id)`
+### Troubleshooting
 
-2. **Evaluate current values once**
-   - reads each watched state with `getForeignState(id)`
-   - emits messages immediately so you don’t have to wait for the next state change event
+Common symptoms and what to check:
 
-Discovery currently happens only on startup. `onObjectChange` is intentionally a no-op to avoid expensive rescans on frequent object changes.
+- “No messages appear”
+  - Verify the plugin instance is enabled and running.
+  - Verify Hue states exist under `hue.*` and end in `.battery` / `.reachable`.
 
-### Runtime flow (state changes)
+- “Reachable messages are missing for some devices”
+  - Check the Hue parent role; adjust `reachableAllowRoles` (empty = no filtering).
 
-When the Hue adapter updates a watched state:
-
-- `onStateChange(id, state)` checks if `id` is in the `watched` map
-- it applies the matching rule (battery or reachable)
-- it creates/updates/completes a MsgHub message via `ctx.api.factory` + `ctx.api.store`
-
-Unknown ids are ignored (important for safety, because all ingest plugins share the same host).
+- “Locations are empty”
+  - Add/maintain `enum.rooms.*` membership for relevant Hue objects/channels.
 
 ---
 
-## Message identity (dedupe strategy)
+## 2) Software Documentation
 
-Every message uses a stable `ref` so updates don’t create duplicates and messages survive restarts:
+### Overview
 
-- Battery: `hue.0.battery.<stateId>`
-- Reachable: `hue.0.reachable.<stateId>`
+`IngestHue` is registered as an **ingest** plugin:
 
-The plugin writes through `ctx.api.store.addOrUpdateMessage(...)`.
+- Registration id: `IngestHue:<instanceId>` (example: `IngestHue:0`)
+- Implementation: `lib/IngestHue/index.js`
 
-When the underlying condition becomes OK again (battery recovered / device reachable), the plugin marks the message as completed by patching it to `lifecycle.state="closed"` (clears `timing.notifyAt` and sets `progress.percentage=100`).
-In code, this is done via `ctx.api.store.completeAfterCauseEliminated(ref, { actor, finishedAt })`.
+At startup it performs snapshot discovery of Hue objects, subscribes to matching foreign states, and evaluates their current values once.
 
----
+### Runtime wiring (IoPlugins)
 
-## Battery monitoring (hysteresis)
+`IoPlugins` creates the instance subtree under `msghub.<instance>.IngestHue.<instanceId>`:
 
-Battery values are expected as percent numbers.
+- Base object: `msghub.0.IngestHue.<instanceId>` (options in `object.native`)
+- Enable state: `msghub.0.IngestHue.<instanceId>.enable`
+- Status state: `msghub.0.IngestHue.<instanceId>.status`
 
-Rule:
+### Message identity (dedupe strategy)
 
-- create/update when `battery < batteryCreateBelow`
-- complete when `battery >= batteryRemoveAbove` (`lifecycle.state="closed"`)
+Every condition uses a stable `ref` derived from the watched Hue state id:
 
-This “two threshold” setup avoids flapping around one value.
+- Battery: `hue:battery:<stateId>`
+- Reachable: `hue:reachable:<stateId>`
 
-Battery messages:
+This allows `ctx.api.store.addOrUpdateMessage(...)` to update the same message across restarts.
 
-- `kind`: `task`
-- `level`: `warning`
-- `origin.system`: `IngestHue`
-- `details` may include:
-  - `location` (room)
-  - `task` (“Replace batteries in …”)
-  - `reason` (current battery level)
-  - `consumables` (battery type, if known)
-  - `tools` (tool list, if known)
+When a condition becomes OK again, the message is completed via `ctx.api.store.completeAfterCauseEliminated(ref, { actor, finishedAt })`.
 
-Battery type and suggested tools come from `lib/IngestHue/models.js` (based on Hue `modelid`).
+### Startup discovery and evaluation
 
----
+Discovery (`start(ctx)`):
 
-## Reachability monitoring
+1. Loads foreign objects matching `hue.*`.
+2. Selects watched states:
+   - battery: ids ending in `.battery`
+   - reachable: ids ending in `.reachable`
+3. Enriches each watched state with metadata:
+   - display name (`common.name`)
+   - room name from `enum.rooms.*` (longest prefix match)
+   - parent channel role (`common.role`)
+   - Hue `modelid` (for battery/tool hints)
+4. Subscribes to watched ids via `ctx.api.iobroker.subscribe.subscribeForeignStates(id)` (auto-cleaned up by the plugin runtime).
 
-Reachability values are interpreted as booleans.
+Evaluation:
 
-Rule:
+- Reads each watched state once via `getForeignState(id)` and emits messages immediately.
 
-- reachable `false` → create/update the message
-- reachable `true` → complete the message (`lifecycle.state="closed"`)
+`onObjectChange` is intentionally a no-op to avoid frequent rescans.
 
-Reachability messages:
+### Battery monitoring (hysteresis)
 
-- `kind`: `status`
-- `level`: `error`
-- `origin.system`: `IngestHue`
-- `details` may include `location` (room) and a short `reason`
+- Values are interpreted as numeric percent.
+- Rule:
+  - `battery < batteryCreateBelow` → create/update `kind: task`, `level: warning`
+  - `battery >= batteryRemoveAbove` → complete the message
 
-To reduce noise, reachable states can be filtered by the **parent role** (option `reachableAllowRoles`).
+Battery messages may include `details.location`, `details.task`, `details.reason` and optional `details.consumables` / `details.tools` (from `lib/IngestHue/models.js` by Hue `modelid`).
 
----
+### Reachability monitoring
 
-## “Managed” metadata on Hue states
+- Values are interpreted as boolean-ish (`true|false`, `1|0`, `"on"|"off"`, ...).
+- Rule:
+  - reachable `false` → create/update `kind: status`, `level: error`
+  - reachable `true` → complete the message
 
-Besides creating messages, `IngestHue` also reports watched state ids via:
+`reachableAllowRoles` can filter by parent role to reduce noise (default: `ZLLSwitch,ZLLPresence`).
 
-- `await ctx.meta.managedObjects.report(...)`
-- `await ctx.meta.managedObjects.applyReported()`
+### “Managed” metadata on Hue states
 
-MsgHub then uses that information to stamp a small “managed by plugin” meta block onto those Hue state objects.
+The plugin reports watched ids via `ctx.meta.managedObjects.report(...)` so the adapter can stamp “managed by plugin” metadata onto those Hue state objects.
 
-This makes it easier to understand in Admin *why* a `.battery` or `.reachable` state is monitored.
-
----
-
-## Related files
+### Related files
 
 - Implementation: `lib/IngestHue/index.js`
 - Model catalog: `lib/IngestHue/models.js`

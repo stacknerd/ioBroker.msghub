@@ -84,42 +84,75 @@ function makePluginStubDoc({ title, implementationPath }) {
 
 TODO: Add 2–4 sentence summary: what it does, where it hooks in (Ingest/Notify), and why it exists.
 
----
+This document has two parts:
 
-## Basics
-
-TODO:
-- Type: <Ingest || Notify || Bridge>
-- Registration ID: \`< id >\`
+1) A user-facing guide (setup, configuration, best practices).
+2) A technical description (how it works internally).
 
 ---
 
-## Config
+## 1) User Guide
 
-TODO:
-- Where configured (instance config / ioBroker custom / states)
-- Required fields + defaults
+### What it does
+
+- TODO: a
+- TODO: b
+
+What it intentionally does not do:
+
+- TODO: a
+- TODO: b
+
+### Prerequisites
+
+- TODO: a
+- TODO: b
+
+### Quick start (recommended setup)
+
+1. TODO
+2. TODO
+
+### How to configure
+
+Configuration is done in the Message Hub Admin Tab (Plugins) and uses the schema from \`lib/<TODO>/manifest.js\`.
+
+TODO: describe Options/parameters here
+  
+### Troubleshooting
 
 ---
 
-## Behavior
+## 2) Software Documentation
 
-TODO:
-- Input → decision → output (bullets)
-- Dedupe/update strategy (\`ref\` or equivalent)
+### Overview
 
----
+- TODO
+  
+Implementation:
 
-## Examples
+- TODO
+  
 
-TODO: Add a minimal example (registration + a realistic payload/event).
+### Runtime wiring (IoPlugins)
+
+TODO
+
+### Event handling
+
+- TODO
+
+### TODO add other relevant Topics
 
 ---
 
 ## Related files
 
-- Implementation: \`${implementationPath}\`
+- Implementation: TODO
+- Manifest: TODO
+- Dispatcher: TODO
 - Plugin overview: \`docs/plugins/README.md\`
+
 `;
 }
 

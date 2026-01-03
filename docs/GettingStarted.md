@@ -90,4 +90,4 @@ Details: [`docs/plugins/NotifyStates.md`](./plugins/NotifyStates.md)
 
 - `NOT_READY` on `sendTo`: `EngageSendTo` is disabled/not running, or plugin wiring failed at adapter startup.
 - No state output: `NotifyStates` is disabled/not running, or no `added/due/updated/deleted/expired` events are dispatched.
-- Nothing ever becomes “due”: create a message without `timing.notifyAt` (immediate `due`), or set `timing.notifyAt` to a timestamp in the past.
+- Nothing ever triggers a `"due"` notification: create a message without `timing.notifyAt` (immediate `"due"`), or set `timing.notifyAt` to a timestamp in the past.

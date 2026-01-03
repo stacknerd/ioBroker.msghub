@@ -388,12 +388,46 @@
 			return fields;
 		}
 
+		function getInstanceTitleFieldKey(fields) {
+			const list = Array.isArray(fields) ? fields : [];
+			const flagged = list.filter(f => f?.holdsInstanceTitle === true && f?.key);
+			if (flagged.length === 0) {
+				return '';
+			}
+			flagged.sort((a, b) => {
+				const ao = Number.isFinite(a.order) ? a.order : Number.POSITIVE_INFINITY;
+				const bo = Number.isFinite(b.order) ? b.order : Number.POSITIVE_INFINITY;
+				return ao - bo || String(a.key).localeCompare(String(b.key));
+			});
+			return String(flagged[0].key || '');
+		}
+
+		function formatInstanceTitleValue({ inst, fieldKey, plugin }) {
+			if (!fieldKey) {
+				return '';
+			}
+			const spec = plugin?.options?.[fieldKey];
+			const fallback = spec && typeof spec === 'object' ? spec.default : undefined;
+			const raw =
+				inst?.native?.[fieldKey] !== undefined && inst?.native?.[fieldKey] !== null ? inst.native[fieldKey] : fallback;
+			if (raw === undefined || raw === null) {
+				return '';
+			}
+			const s = typeof raw === 'string' ? raw.trim() : String(raw);
+			if (!s) {
+				return '';
+			}
+			const maxLen = 60;
+			return s.length > maxLen ? `${s.slice(0, maxLen - 1)}…` : s;
+		}
+
 		function renderPluginCard({ plugin, instances, refreshAll, refreshPlugin, expandedById }) {
 			const label = formatPluginLabel(plugin);
 			const desc = pickText(plugin?.description) || '';
 
 			const instList = Array.isArray(instances) ? instances : [];
 			const fields = getPluginFields(plugin);
+			const instanceTitleKey = getInstanceTitleFieldKey(fields);
 			const hasOptions = fields.length > 0;
 
 			const safeIdPart = String(plugin.type || 'plugin').replace(/[^A-Za-z0-9_-]/g, '_');
@@ -552,6 +586,7 @@
 				const instIdPart = String(inst.instanceId).replace(/[^0-9]/g, '') || '0';
 				const instAccId = `acc_inst_${safeIdPart}_${instIdPart}_${adapterInstance}`;
 				const instExpanded = expandedById instanceof Map ? expandedById.get(instAccId) : undefined;
+				const instanceTitleValue = formatInstanceTitleValue({ inst, fieldKey: instanceTitleKey, plugin });
 
 				const enabledId = `en_${plugin.type}_${inst.instanceId}`;
 				const enabledInput = h('input', { type: 'checkbox', id: enabledId });
@@ -625,7 +660,10 @@
 					h('div', { class: 'msghub-instance-enabled' }, [enabledWrap]),
 					h('div', {
 						class: 'msghub-instance-status msghub-muted',
-						text: `Status: ${inst.status || 'unknown'}`,
+						text:
+							inst.status === 'running' && instanceTitleValue
+								? `Status: ${inst.status || 'unknown'} · ${instanceTitleValue}`
+								: `Status: ${inst.status || 'unknown'}`,
 					}),
 					headActions,
 				]);

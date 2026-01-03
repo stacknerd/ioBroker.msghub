@@ -81,15 +81,21 @@ Message Hub keeps several time-related fields in `timing` (Unix ms timestamps + 
 
 - `createdAt`: when the message was created
 - `updatedAt`: when a user-visible update happened (not all internal updates bump this)
-- `notifyAt`: when the message should trigger a `due` notification
+- `notifyAt`: when the message should trigger a `due` **notification**
 - `remindEvery`: reminder interval in ms (used to reschedule `notifyAt` after a `due`)
 - `timeBudget`: planned time budget in ms (estimate for planning/scheduling; does not affect due handling)
 - `expiresAt`: when the message becomes expired
 - `dueAt` / `startAt` / `endAt`: kind-specific timestamps (tasks vs. appointments)
 
+Important terminology (common source of confusion):
+
+- `timing.dueAt` / `timing.startAt` / `timing.endAt` describe **domain time** (what humans typically call "due"" / “scheduled”).
+- `notfication.events.due` is a **notification event name** (reminder delivery), driven by `timing.notifyAt`.
+- These are intentionally independent: a message can be “fällig” without any notification being due, and vice versa.
+
 Important behavior:
 
-- If a message has no `timing.notifyAt`, Message Hub treats it as “due now” and may dispatch a `due` notification immediately.
+- If a message has no `timing.notifyAt`, Message Hub treats it as “notification due now” and may dispatch a `due` notification immediately.
 - “Due” is checked by a simple polling mechanism in the store; it is not a full job scheduler.
 
 ---
