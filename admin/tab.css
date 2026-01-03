@@ -380,6 +380,10 @@ html, body { background: transparent; }
 .msghub-root .input-field label {
   color: var(--msghub-muted);
   font-weight: 600;
+  position: static !important;
+  transform: none !important;
+  display: block;
+  margin-top: 8px;
 }
 
 .msghub-root .input-field input[type="number"],
@@ -401,7 +405,7 @@ html, body { background: transparent; }
   box-shadow: var(--msghub-focus) !important;
 }
 
-.msghub-root .input-field input:focus + label {
+.msghub-root .input-field:focus-within label {
   color: var(--msghub-accent) !important;
 }
 
@@ -723,4 +727,191 @@ html:not([data-msghub-theme="dark"]) .msghub-root {
 /* Optional: falls Materialize das Input noch mit eigener Positionierung "sichtbar" macht */
 .msghub-root input[type="checkbox"] + label {
   position: relative;
+}
+
+/* ---------- Plugin sections ---------- */
+
+.msghub-plugin-category-title {
+  margin: 18px 0 0 0;
+  padding: 0 2px;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  color: var(--msghub-muted);
+  text-transform: uppercase;
+}
+
+/* ---------- Instance accordion ---------- */
+
+.msghub-instance {
+  position: relative;
+  margin-top: 12px;
+  border: 1px solid var(--msghub-border);
+  border-radius: var(--msghub-radius-sm);
+  background: var(--msghub-surface-2);
+  overflow: hidden;
+}
+
+.msghub-instance .msghub-acc-input {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+}
+
+.msghub-instance-head {
+  display: grid;
+  grid-template-columns: 70px 190px 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 14px;
+}
+
+.msghub-instance-title {
+  font-weight: 900;
+  letter-spacing: 0.2px;
+}
+
+.msghub-instance-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.msghub-instance .msghub-acc-toggle--instance {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--msghub-border);
+  background: var(--msghub-surface);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.msghub-instance .msghub-acc-toggle--instance:hover {
+  background: linear-gradient(180deg, var(--msghub-accent-weak), transparent);
+  border-color: color-mix(in srgb, var(--msghub-border), var(--msghub-accent) 35%);
+}
+
+.msghub-instance-body {
+  padding: 0 14px 14px 14px;
+  border-top: 1px solid var(--msghub-border);
+}
+
+.msghub-instance .msghub-acc-input:not(:checked) ~ .msghub-instance-body {
+  display: none;
+}
+
+.msghub-instance-save {
+  margin-top: 10px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* Status classes (for custom styling) */
+.msghub-instance.msghub-run-running {
+  border-color: color-mix(in srgb, var(--msghub-border), var(--msghub-accent) 50%);
+}
+
+.msghub-instance.msghub-run-error {
+  border-color: color-mix(in srgb, var(--msghub-border), var(--msghub-danger) 55%);
+}
+
+/* ---------- Units / time fields ---------- */
+
+.msghub-field-number {
+  position: relative;
+}
+
+.msghub-field-number input[type="number"] {
+  padding-right: 64px;
+}
+
+.msghub-unit-suffix {
+  position: absolute;
+  right: 16px;
+  top: 28px;
+  transform: translateY(-50%);
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--msghub-muted);
+  pointer-events: none;
+}
+
+.msghub-field-time-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.msghub-field-time-row input[type="number"] {
+  flex: 1 1 0;
+  width: 0;
+  min-width: 0;
+}
+
+.msghub-root select.msghub-time-unit {
+  width: 90px;
+  flex: 0 0 90px;
+  height: 44px;
+  margin-top: 6px;
+  border: 1px solid var(--msghub-border);
+  border-radius: 12px;
+  background: var(--msghub-surface);
+  color: var(--msghub-text);
+  padding: 0 10px;
+  outline: none;
+}
+
+.msghub-root select.msghub-time-unit:focus {
+  border-color: var(--msghub-accent);
+  box-shadow: var(--msghub-focus);
+}
+
+/* ---------- Dialog (Delete confirm) ---------- */
+
+.msghub-root .msghub-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.msghub-root .msghub-dialog-backdrop.is-open {
+  display: flex;
+}
+
+.msghub-root .msghub-dialog {
+  width: min(520px, 100%);
+  border-radius: var(--msghub-radius);
+  border: 1px solid var(--msghub-border);
+  background: var(--msghub-surface);
+  color: var(--msghub-text);
+  box-shadow: var(--msghub-shadow);
+  padding: 16px;
+}
+
+.msghub-root .msghub-dialog-title {
+  margin: 0 0 10px 0;
+  font-size: 16px;
+  font-weight: 850;
+  letter-spacing: 0.2px;
+}
+
+.msghub-root .msghub-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 14px;
 }
