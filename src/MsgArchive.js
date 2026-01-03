@@ -482,8 +482,8 @@ class MsgArchive {
 	 * - For id-based arrays (array of plain objects with unique `id`), we diff by `id` and only record
 	 *   added/removed/changed entries.
 	 * - For primitive sets (array of unique primitives), we record only added/removed items.
-	 * - For reorders (same items, different order), we fall back to full before/after arrays to avoid
-	 *   silently dropping a meaningful change.
+	 * - For reorders (same items, different order), we treat id-based arrays and primitive sets as order-insensitive
+	 *   and omit diffs (keeps archives small; order is typically not semantically relevant for these fields).
 	 *
 	 * @param {any[]} existing Previous array.
 	 * @param {any[]} updated Updated array.
@@ -508,7 +508,7 @@ class MsgArchive {
 	 *
 	 * @param {any[]} existing Previous array.
 	 * @param {any[]} updated Updated array.
-	 * @returns {{added: any[]|undefined, removed: any[]|undefined}|null} Diff or null when not applicable.
+	 * @returns {{added: any[]|undefined, removed: any[]|undefined}|null} Diff, or null when not applicable.
 	 */
 	_diffArrayById(existing, updated) {
 		const before = this._indexArrayById(existing);
@@ -550,8 +550,8 @@ class MsgArchive {
 		}
 
 		if (removed.length === 0 && added.length === 0) {
-			// Likely a reorder only; preserve information by falling back to full arrays.
-			return { added: updated, removed: existing };
+			// Likely a reorder only; treat id-based arrays as order-insensitive and omit diffs.
+			return { added: undefined, removed: undefined };
 		}
 
 		return {
@@ -618,8 +618,8 @@ class MsgArchive {
 		}
 
 		if (removed.length === 0 && added.length === 0) {
-			// Likely a reorder only; preserve information by falling back to full arrays.
-			return { added: updated, removed: existing };
+			// Likely a reorder only; treat primitive sets as order-insensitive and omit diffs.
+			return { added: undefined, removed: undefined };
 		}
 
 		return {

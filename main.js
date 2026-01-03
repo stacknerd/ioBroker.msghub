@@ -259,12 +259,12 @@ class Msghub extends utils.Adapter {
 			this.msgStore?.msgIngest?.dispatchStateChange?.(id, state, { source: 'iobroker.stateChange' });
 
 			// The state was changed
-			this.log?.info?.(`state ${id} changed: ${state.val} (ack = ${state.ack})`);
+			this.log?.silly?.(`MsgHub main.js: state ${id} changed: ${state.val} (ack = ${state.ack})`);
 
 			if (state.ack === false) {
 				// This is a command from the user (e.g., from the UI or other adapter)
 				// and should be processed by the adapter
-				this.log?.info?.(`User command received for ${id}: ${state.val}`);
+				this.log?.info?.(`MsgHub main.js: User command received for ${id}: ${state.val}`);
 			}
 		} else {
 			// The object was deleted or the state value has expired
@@ -296,7 +296,7 @@ class Msghub extends utils.Adapter {
 		const cmd = obj.command;
 		const payload = obj.message;
 
-		this.log?.debug?.(`onMessage: '${cmd}' ${JSON.stringify(sanitizeForLog(payload), null, 2)}`);
+		this.log?.silly?.(`MsgHub main.js onMessage: '${cmd}' ${JSON.stringify(sanitizeForLog(payload), null, 2)}`);
 		let result;
 
 		try {
@@ -336,7 +336,7 @@ class Msghub extends utils.Adapter {
 		const i18nlocale = i18nSupport.has(lang) ? lang : locale;
 
 		await utils.I18n.init(__dirname, i18nlocale);
-		this.log?.debug?.(`config locale: ${locale} (time and date) / ${i18nlocale} (i18n)`);
+		this.log?.debug?.(`MsgHub main.js config locale: ${locale} (time and date) / ${i18nlocale} (i18n)`);
 
 		const baseI18n = utils.I18n;
 		// Depending on adapter-core/js-controller versions, I18n may be wrapped and expose functions under `.default`.
@@ -368,7 +368,7 @@ class Msghub extends utils.Adapter {
 						const [key, options] = args;
 						if (_i18ndebug) {
 							this.log?.debug?.(
-								`[i18n.t] key=${JSON.stringify(key)} opts=${JSON.stringify(options ?? {})}`,
+								`MsgHub main.js: [i18n.t] key=${JSON.stringify(key)} opts=${JSON.stringify(options ?? {})}`,
 							);
 						}
 						if (translateFn) {
@@ -380,7 +380,7 @@ class Msghub extends utils.Adapter {
 					getTranslatedObject: (...args) => {
 						if (_i18ndebug) {
 							this.log?.debug?.(
-								`[i18n.getTranslatedObject] args=${JSON.stringify(args)} ret=${JSON.stringify(fixTranslatedObject(args[0], args.slice(1)), null, 2)}`,
+								`MsgHub main.js: [i18n.getTranslatedObject] args=${JSON.stringify(args)} ret=${JSON.stringify(fixTranslatedObject(args[0], args.slice(1)), null, 2)}`,
 							);
 						}
 						// the real function as of right now is broken and returns wrong strings

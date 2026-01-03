@@ -389,6 +389,42 @@ describe('MsgArchive', () => {
 		});
 	});
 
+	it('does not emit diffs for id-based reorder-only arrays', async () => {
+		const { adapter, files } = createAdapter();
+		const archive = new MsgArchive(adapter, { baseDir: 'archive', flushIntervalMs: 0 });
+		await archive.init();
+
+		const ref = 'list-reorder-1';
+		const existing = {
+			ref,
+			listItems: [
+				{ id: 'a', name: 'A', checked: false },
+				{ id: 'b', name: 'B', checked: true },
+			],
+		};
+		const updated = {
+			ref,
+			listItems: [
+				{ id: 'b', name: 'B', checked: true },
+				{ id: 'a', name: 'A', checked: false },
+			],
+		};
+		const patch = { listItems: updated.listItems };
+
+		const now = new Date(2025, 0, 6, 12, 0, 0).getTime();
+		await withMockedNow(now, async () => {
+			await archive.appendPatch(ref, patch, existing, updated);
+
+			const segmentKey = segmentKeyForLocalWeek(now);
+			const key = `${adapter.namespace}/archive/list-reorder-1.${segmentKey}.jsonl`;
+			const lines = readJsonl(files, key);
+			expect(lines).to.have.length(1);
+			expect(lines[0].requested.listItems).to.deep.equal(updated.listItems);
+			expect(lines[0]).to.not.have.property('added');
+			expect(lines[0]).to.not.have.property('removed');
+		});
+	});
+
 	it('diffs arrays of unique primitives as sets', async () => {
 		const { adapter, files } = createAdapter();
 		const archive = new MsgArchive(adapter, { baseDir: 'archive', flushIntervalMs: 0 });
@@ -409,6 +445,30 @@ describe('MsgArchive', () => {
 			expect(lines).to.have.length(1);
 			expect(lines[0]).to.not.have.property('added');
 			expect(lines[0].removed.details.tools).to.deep.equal(['b']);
+		});
+	});
+
+	it('does not emit diffs for primitive reorder-only arrays', async () => {
+		const { adapter, files } = createAdapter();
+		const archive = new MsgArchive(adapter, { baseDir: 'archive', flushIntervalMs: 0 });
+		await archive.init();
+
+		const ref = 'prim-reorder-1';
+		const existing = { ref, details: { tools: ['a', 'b'] } };
+		const updated = { ref, details: { tools: ['b', 'a'] } };
+		const patch = { details: { tools: ['b', 'a'] } };
+
+		const now = new Date(2025, 0, 6, 12, 0, 0).getTime();
+		await withMockedNow(now, async () => {
+			await archive.appendPatch(ref, patch, existing, updated);
+
+			const segmentKey = segmentKeyForLocalWeek(now);
+			const key = `${adapter.namespace}/archive/prim-reorder-1.${segmentKey}.jsonl`;
+			const lines = readJsonl(files, key);
+			expect(lines).to.have.length(1);
+			expect(lines[0].requested.details.tools).to.deep.equal(['b', 'a']);
+			expect(lines[0]).to.not.have.property('added');
+			expect(lines[0]).to.not.have.property('removed');
 		});
 	});
 
