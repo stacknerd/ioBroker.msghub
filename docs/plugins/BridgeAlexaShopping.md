@@ -69,8 +69,10 @@ Required / common options:
   - Periodic full reconciliation interval; `0` disables the periodic run.
 - `conflictWindowMs` (number)
   - Conflict debounce window after write-back (see best practices below).
-- `keepCompleted` (boolean)
-  - When disabled, completed items are deleted (in Message Hub and therefore also in Alexa).
+- `keepCompleted` (number, ms)
+  - Retention time for completed items.
+  - After this duration, completed items are deleted (in Message Hub and therefore also in Alexa).
+  - Use `0` to never delete completed items.
 
 AI options:
 
@@ -100,14 +102,14 @@ Write-back uses `setForeignState(...)` to these ids (derived from `jsonStateId`)
 
 Let `base = jsonStateId` without the trailing `.json`.
 
-- Create: `base.#create` (value = item text)
+- Create: `base.#New` or `base.#create` (value = item text; the plugin auto-detects which command state exists)
 - Rename: `base.items.<itemId>.value` (value = new text)
 - Toggle completion: `base.items.<itemId>.completed` (value = `true|false`)
 - Delete: `base.items.<itemId>.#delete` (value = `true`)
 
 Example for `jsonStateId = alexa2.0.Lists.SHOP.json`:
 
-- `alexa2.0.Lists.SHOP.#create`
+- `alexa2.0.Lists.SHOP.#New` (or `alexa2.0.Lists.SHOP.#create`)
 - `alexa2.0.Lists.SHOP.items.<itemId>.value`
 - `alexa2.0.Lists.SHOP.items.<itemId>.completed`
 - `alexa2.0.Lists.SHOP.items.<itemId>.#delete`
@@ -118,7 +120,7 @@ Use ioBroker Admin → Objects:
 
 - Check that the derived command states exist under the same list base (without `.json`).
 - When you add or change an item in Message Hub, you should see writes to:
-  - `...#create` for new items
+  - `...#New` (or `...#create`) for new items
   - `...items.<id>.value` for renames
   - `...items.<id>.completed` for check/uncheck
   - `...items.<id>.#delete` for deletions
@@ -132,9 +134,10 @@ write back to Alexa.
 - Keep `jsonStateId` stable. Changing it changes the message `ref` and resets the mapping for that instance.
 - Use `fullSyncIntervalMs` even when state-change events are working:
   - It acts as a periodic reconciliation and helps recover from missed events or temporary connectivity issues.
-- If you use `keepCompleted=false`, treat “completed” as “delete”:
-  - Checking an item in Alexa will remove it in Message Hub.
-  - Checking an item in Message Hub will remove it in Alexa.
+- Keep completed-item cleanup explicit:
+  - Use `keepCompleted=0` to keep completed items forever.
+  - Use a finite value (example: `12 * 60 * 60 * 1000`) to automatically delete completed items after that time.
+  - Deletion is enforced during reconciliation (`fullSyncIntervalMs`) and on inbound list updates.
 - Avoid manual edits to internal states:
   - `msghub.0.BridgeAlexaShopping.<instanceId>.mapping`
   - `msghub.0.BridgeAlexaShopping.<instanceId>.categories`
@@ -245,8 +248,9 @@ Processing flow:
 4. Apply updates:
    - `value` maps to list item `name`
    - `completed` maps to list item `checked`
-5. If `keepCompleted=false`:
-   - completed Alexa items are deleted in Message Hub (which later triggers delete write-back to Alexa).
+5. Completed-item retention:
+   - If `keepCompleted > 0`, completed items are deleted after that duration.
+   - The plugin uses Alexa timestamps (`updatedDateTime`) to decide when an item became completed.
 
 Conflict handling:
 
@@ -265,13 +269,13 @@ Processing flow:
    - If mapped to an Alexa `extId`, write `base.items.<extId>.#delete = true`.
 2. For each current item:
    - If it has no mapping yet:
-     - write `base.#create = <name>` and record it in `pendingCreates`.
+     - write `base.#New = <name>` (or `base.#create = <name>`) and record it in `pendingCreates`.
      - later “adopt” the created Alexa item id when it shows up in the JSON list.
    - If it has an `extId`:
      - write `base.items.<extId>.value` when the name differs
      - write `base.items.<extId>.completed` when checked differs
-3. If `keepCompleted=false` and the item is checked:
-   - delete it in Alexa.
+3. Completed-item retention:
+   - Completed items are deleted via the same reconciliation mechanism when they exceed `keepCompleted`.
 
 ### AI categories (optional)
 
