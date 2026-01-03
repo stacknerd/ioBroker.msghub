@@ -529,6 +529,27 @@ describe('MsgFactory.applyPatch', () => {
 		expect(updated.title).to.equal('Same ref ok');
 	});
 
+	it('supports listItems id-based partial updates without name', () => {
+		const { factory, logs } = makeFactory();
+		const msg = factory.createMessage(
+			buildBase({
+				kind: MsgConstants.kind.shoppinglist,
+				listItems: [
+					{ id: 'a:1', name: 'Milk', checked: false },
+					{ id: 'a:2', name: 'Eggs', checked: false },
+				],
+			}),
+		);
+
+		const updated = factory.applyPatch(msg, {
+			listItems: { set: { 'a:1': { checked: true } } },
+		});
+
+		expect(logs.warn).to.have.length(0);
+		expect(updated.listItems.find(it => it.id === 'a:1')).to.deep.equal({ id: 'a:1', name: 'Milk', checked: true });
+		expect(updated.listItems.find(it => it.id === 'a:2')).to.deep.equal({ id: 'a:2', name: 'Eggs', checked: false });
+	});
+
 	it('accepts patches that include an already normalized ref', () => {
 		const { factory, logs } = makeFactory();
 		const msg = factory.createMessage(buildBase({ ref: 'ref-\n-1' }));

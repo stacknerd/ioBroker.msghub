@@ -1629,19 +1629,24 @@ class MsgFactory {
 				const normalized = this._normalizeMsgListItems(setVal, kind);
 				base = normalized ? [...normalized] : [];
 			} else if (setVal && typeof setVal === 'object' && !Array.isArray(setVal)) {
-				// Id-addressed upsert: convert { [id]: partialItem } into array entries with explicit ids.
-				const entries = [];
+				// Id-addressed merge/upsert:
+				// - supports partial updates like `{ set: { "<id>": { checked: true } } }`
+				// - supports new items when `name` is provided
+				// - preserves existing items unless overwritten by the patch
+				const byId = new Map(base.map(item => [item.id, item]));
 				Object.entries(setVal).forEach(([id, entry]) => {
 					if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
 						this.adapter?.log?.warn?.(`MsgFactory: 'listItems.set.${id}' must be an object`);
 						return;
 					}
-					entries.push({ ...entry, id });
+					const existing = byId.get(id) || null;
+					const merged = { ...(existing || {}), ...entry, id };
+					const normalized = this._normalizeMsgListItems([merged], kind);
+					if (!normalized || normalized.length === 0) {
+						return;
+					}
+					byId.set(id, normalized[0]);
 				});
-				const normalized = this._normalizeMsgListItems(entries, kind) || [];
-				// Merge by id: existing items are preserved unless overwritten by the patch.
-				const byId = new Map(base.map(item => [item.id, item]));
-				normalized.forEach(item => byId.set(item.id, item));
 				base = Array.from(byId.values());
 			} else {
 				throw new TypeError(`'listItems.set' must be an array or object`);
