@@ -35,5 +35,6 @@
   "Messages (deleted)": "Mensagens (excluídas)",
   "Messages (expired)": "Mensagens (expiradas)",
   "Automatically synchronized shopping list based on the Alexa list \"%s\".": "Automatically synchronized shopping list based on the Alexa list \"%s\".",
-  "Connection to Alexa service lost": "Connection to Alexa service lost"
+  "Connection to Alexa service lost": "Connection to Alexa service lost",
+  "This state is monitored by the BridgeAlexaShopping plugin.\nIt is used as the source for syncing the Alexa list into Message Hub.": "Este estado é monitorizado pelo plug-in BridgeAlexaShopping.\nÉ utilizado como fonte para sincronizar a lista Alexa no Message Hub."
 }
