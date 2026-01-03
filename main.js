@@ -14,14 +14,40 @@ const { MsgStore } = require(`${__dirname}/src/MsgStore`);
 const { MsgAi } = require(`${__dirname}/src/MsgAi`);
 
 function decryptIfPossible(adapter, value) {
-	const v = typeof value === 'string' ? value : '';
-	if (!v || typeof adapter?.decrypt !== 'function') {
-		return v;
+	const raw = typeof value === 'string' ? value.trim() : '';
+	if (!raw || typeof adapter?.decrypt !== 'function') {
+		return raw;
 	}
+
+	const hasControlChars = s => {
+		const str = typeof s === 'string' ? s : '';
+		for (let i = 0; i < str.length; i++) {
+			const code = str.charCodeAt(i);
+			if (code <= 31 || code === 127) {
+				return true;
+			}
+		}
+		return false;
+	};
+
+	// Avoid "double decrypt" when a value is already plain text (this can happen depending on controller/core versions).
+	// Also prevents invalid header values (control chars) from accidentally reaching fetch().
+	const looksLikeOpenAiKey = /^sk-(?:proj-)?[A-Za-z0-9_-]{10,}$/.test(raw);
+	if (looksLikeOpenAiKey) {
+		return raw;
+	}
+
 	try {
-		return adapter.decrypt(v);
+		const decrypted = String(adapter.decrypt(raw) || '').trim();
+		if (!decrypted) {
+			return raw;
+		}
+		if (hasControlChars(decrypted) || /\s/.test(decrypted)) {
+			return raw;
+		}
+		return decrypted;
 	} catch {
-		return v;
+		return raw;
 	}
 }
 

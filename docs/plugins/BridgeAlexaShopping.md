@@ -20,6 +20,7 @@ This plugin is managed by `IoPlugins`:
 - Enable switch: `msghub.0.BridgeAlexaShopping.<instanceId>.enable`
 - Status: `msghub.0.BridgeAlexaShopping.<instanceId>.status`
 - Internal mapping state: `msghub.0.BridgeAlexaShopping.<instanceId>.mapping`
+- Internal categories state: `msghub.0.BridgeAlexaShopping.<instanceId>.categories`
 
 ---
 
@@ -76,4 +77,4 @@ Rules:
 - Allowed categories come from `categoriesCsv` (comma-separated).
 - The last category entry is used as a fallback when AI is unsure or returns an invalid category.
 - AI results are accepted only when `confidence >= aiMinConfidencePct/100`; otherwise the fallback category is used.
-- Learned assignments are persisted in the plugin mapping state to avoid repeated AI calls.
+- Learned assignments are persisted in the plugin categories state to avoid repeated AI calls.
