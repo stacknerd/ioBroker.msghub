@@ -90,12 +90,14 @@ Edge cases are handled on purpose:
 Builds a small ioBroker facade used by plugins. It contains:
 
 - `iobroker.ids` – the same ID helper object as `buildIdsApi()`
+- `iobroker.sendTo(instance, command, message, options?)` – promisified wrapper for `adapter.sendTo(...)` (messagebox)
 - `iobroker.objects.*` – basic object access helpers (promisified)
 - `iobroker.states.*` – basic state access helpers (promisified)
 - `iobroker.subscribe.*` – subscribe/unsubscribe helpers for states and objects
 
 Currently exposed helpers (overview):
 
+- `iobroker.sendTo`: `sendTo(instance, command, message, options?)`
 - `iobroker.objects`: `setObjectNotExists`, `delObject`, `getObjectView`, `getForeignObjects`, `getForeignObject`, `extendForeignObject`
 - `iobroker.states`: `setState`, `setForeignState`, `getForeignState`
 - `iobroker.subscribe`: `subscribeStates/Objects/ForeignStates/ForeignObjects` and matching `unsubscribe...`
@@ -116,6 +118,28 @@ Example (what a plugin sees):
 function onStateChange(id, state, ctx) {
   ctx.api.log.info(`changed: ${id}`);
   return ctx.api.iobroker.objects.getForeignObject(id);
+}
+```
+
+#### `iobroker.sendTo(instance, command, message, options?)`
+
+Promisified wrapper for ioBroker messagebox calls via `adapter.sendTo(...)`.
+
+Behavior:
+
+- Returns a Promise that resolves with the target adapter’s response (whatever the callback receives).
+- Rejects when `adapter.sendTo` is missing.
+- Throws when `instance === ctx.api.iobroker.ids.namespace` (self-send is blocked by design).
+- Best-effort timeout: defaults to `10000`ms; disable by passing `{ timeoutMs: 0 }` (or any `<= 0`).
+
+Example:
+
+```js
+try {
+  const res = await ctx.api.iobroker.sendTo('telegram.0', 'send', { text: 'Hello' }, { timeoutMs: 15000 });
+  ctx.api.log.debug(`sendTo result: ${JSON.stringify(res)}`);
+} catch (e) {
+  ctx.api.log.warn(`sendTo failed: ${e?.message || e}`);
 }
 ```
 

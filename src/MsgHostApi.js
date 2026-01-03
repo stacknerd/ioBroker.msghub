@@ -275,6 +275,77 @@ function buildIoBrokerApi(adapter, { hostName }) {
 
 	return Object.freeze({
 		ids,
+		/**
+		 * Promisified wrapper for ioBroker messagebox calls via `adapter.sendTo(...)`.
+		 *
+		 * @param {string} instance Target adapter instance (e.g. "telegram.0").
+		 * @param {string} command Command name.
+		 * @param {any} [message] Payload passed as `obj.message`.
+		 * @param {{ timeoutMs?: number }|number} [options] Optional timeout (ms). Use `<= 0` to disable timeout.
+		 * @returns {Promise<any>} Promise that resolves with the callback response.
+		 */
+		sendTo: (instance, command, message = undefined, options = undefined) => {
+			const target = typeof instance === 'string' ? instance.trim() : '';
+			const cmd = typeof command === 'string' ? command.trim() : '';
+			if (!target) {
+				throw new TypeError(
+					`${name}: ctx.api.iobroker.sendTo(instance, command, ...) expects instance to be a non-empty string`,
+				);
+			}
+			if (!cmd) {
+				throw new TypeError(
+					`${name}: ctx.api.iobroker.sendTo(instance, command, ...) expects command to be a non-empty string`,
+				);
+			}
+			if (ids.namespace && target === ids.namespace) {
+				throw new Error(
+					`${name}: ctx.api.iobroker.sendTo(...) cannot target own namespace ('${ids.namespace}')`,
+				);
+			}
+
+			const timeoutMsRaw =
+				typeof options === 'number'
+					? options
+					: options && typeof options === 'object' && typeof options.timeoutMs === 'number'
+						? options.timeoutMs
+						: 10000;
+			const timeoutMs =
+				typeof timeoutMsRaw === 'number' && Number.isFinite(timeoutMsRaw) ? Math.trunc(timeoutMsRaw) : 10000;
+
+			const fn = requireFn(adapter?.sendTo, 'sendTo');
+
+			const exec = () =>
+				new Promise((resolve, reject) => {
+					try {
+						fn.call(adapter, target, cmd, message, response => resolve(response));
+					} catch (e) {
+						reject(e);
+					}
+				});
+
+			if (timeoutMs <= 0) {
+				return exec();
+			}
+
+			return new Promise((resolve, reject) => {
+				const timer = setTimeout(() => {
+					reject(
+						new Error(`${name}: adapter.sendTo('${target}', '${cmd}', ...) timed out after ${timeoutMs}ms`),
+					);
+				}, timeoutMs);
+
+				exec().then(
+					result => {
+						clearTimeout(timer);
+						resolve(result);
+					},
+					err => {
+						clearTimeout(timer);
+						reject(err);
+					},
+				);
+			});
+		},
 		objects: Object.freeze({
 			setObjectNotExists: (ownId, obj) => {
 				if (typeof adapter?.setObjectNotExistsAsync === 'function') {

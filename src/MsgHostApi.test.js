@@ -20,6 +20,7 @@ function createAdapterStub(overrides = {}) {
 		objects: [],
 		states: [],
 		subscribe: [],
+		sendTo: [],
 	};
 
 	const adapter = {
@@ -442,6 +443,52 @@ describe('MsgHostApi', () => {
 				['setForeignState', 'some.0.y', { val: 2, ack: false }],
 				['getForeignState', 'id'],
 			]);
+		});
+
+		it('wraps adapter.sendTo into a promise and passes through the response', async () => {
+			const { adapter, calls } = createAdapterStub({
+				sendTo(instance, command, message, cb) {
+					calls.sendTo.push([this === adapter, instance, command, message]);
+					cb({ ok: true, instance, command });
+				},
+			});
+
+			const api = buildIoBrokerApi(adapter, { hostName: 'MyHost' });
+
+			const res = await api.sendTo('target.0', 'do', { a: 1 }, { timeoutMs: 500 });
+			expect(res).to.deep.equal({ ok: true, instance: 'target.0', command: 'do' });
+			expect(calls.sendTo).to.deep.equal([[true, 'target.0', 'do', { a: 1 }]]);
+		});
+
+		it('rejects when adapter.sendTo does not answer before the timeout', async () => {
+			const { adapter } = createAdapterStub({
+				sendTo(_instance, _command, _message, _cb) {
+					// never answers
+				},
+			});
+
+			const api = buildIoBrokerApi(adapter, { hostName: 'MyHost' });
+
+			let err = null;
+			try {
+				await api.sendTo('target.0', 'do', { a: 1 }, { timeoutMs: 10 });
+			} catch (e) {
+				err = e;
+			}
+
+			expect(err).to.be.instanceOf(Error);
+			expect(err.message).to.include("MyHost: adapter.sendTo('target.0', 'do', ...) timed out after 10ms");
+		});
+
+		it('throws on invalid sendTo arguments', () => {
+			const { adapter } = createAdapterStub({
+				sendTo() {},
+			});
+
+			const api = buildIoBrokerApi(adapter, { hostName: 'MyHost' });
+			expect(() => api.sendTo('', 'x', {})).to.throw(TypeError, 'MyHost: ctx.api.iobroker.sendTo');
+			expect(() => api.sendTo('x', '', {})).to.throw(TypeError, 'MyHost: ctx.api.iobroker.sendTo');
+			expect(() => api.sendTo('msghub.0', 'x', {})).to.throw(Error, "cannot target own namespace ('msghub.0')");
 		});
 
 		it('throws when a required adapter method is missing', () => {
