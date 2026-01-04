@@ -75,6 +75,58 @@ describe('MsgRender', () => {
 		expect(out.title).to.equal(df.format(new Date(ts)));
 	});
 
+	it('applies durationSince filter with the expected formatting buckets', () => {
+		const renderer = createRenderer({ locale });
+
+		const originalNow = Date.now;
+		const now = Date.UTC(2025, 0, 10, 12, 0, 0);
+		Date.now = () => now;
+		try {
+			const metrics = buildMetrics([
+				['a', { val: now - 56_000, unit: 'ms', ts: now }],
+				['b', { val: now - 34 * 60_000, unit: 'ms', ts: now }],
+				['c', { val: now - (3 * 60 + 45) * 60_000, unit: 'ms', ts: now }],
+				['d', { val: now - (24 * 60 + 4 * 60) * 60_000, unit: 'ms', ts: now }],
+				['future', { val: now + 10_000, unit: 'ms', ts: now }],
+			]);
+			const msg = createMessage({
+				title: '{{m.a|durationSince}}/{{m.b|durationSince}}/{{m.c|durationSince}}/{{m.d|durationSince}}/{{m.future|durationSince}}',
+				metrics,
+			});
+
+			const out = renderer.renderMessage(msg);
+			expect(out.title).to.equal('56s/34m/3:45h/1d 4h/');
+		} finally {
+			Date.now = originalNow;
+		}
+	});
+
+	it('applies durationUntil filter and hides past timestamps', () => {
+		const renderer = createRenderer({ locale });
+
+		const originalNow = Date.now;
+		const now = Date.UTC(2025, 0, 10, 12, 0, 0);
+		Date.now = () => now;
+		try {
+			const metrics = buildMetrics([
+				['a', { val: now + 56_000, unit: 'ms', ts: now }],
+				['b', { val: now + 34 * 60_000, unit: 'ms', ts: now }],
+				['c', { val: now + (3 * 60 + 45) * 60_000, unit: 'ms', ts: now }],
+				['d', { val: now + (24 * 60 + 4 * 60) * 60_000, unit: 'ms', ts: now }],
+				['past', { val: now - 10_000, unit: 'ms', ts: now }],
+			]);
+			const msg = createMessage({
+				title: '{{m.a|durationUntil}}/{{m.b|durationUntil}}/{{m.c|durationUntil}}/{{m.d|durationUntil}}/{{m.past|durationUntil}}',
+				metrics,
+			});
+
+			const out = renderer.renderMessage(msg);
+			expect(out.title).to.equal('56s/34m/3:45h/1d 4h/');
+		} finally {
+			Date.now = originalNow;
+		}
+	});
+
 	it('renders raw metric values without units', () => {
 		const renderer = createRenderer({ locale });
 		const metrics = buildMetrics([['temperature', { val: 21.75, unit: 'C', ts: Date.UTC(2025, 0, 6) }]]);

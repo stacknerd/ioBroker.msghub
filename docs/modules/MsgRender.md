@@ -158,6 +158,42 @@ Formats a Unix ms timestamp (or a numeric/date string) as a localized date/time:
 {{t.createdAt|datetime}}
 ```
 
+### `durationSince`
+
+Formats the duration since a Unix ms timestamp (relative to server time via `Date.now()`):
+
+- `< 1 min`: `56s`
+- `< 1 h`: `34m` (rounded)
+- `< 1 day`: `3:45h` (rounded)
+- `>= 1 day`: `1d 4h` (rounded)
+
+If the timestamp is in the future, the output is an empty string.
+
+Examples:
+
+```js
+{{m.lastSeenAt|durationSince}}
+{{m.lastSeenAt.val|durationSince}}
+```
+
+Practical note: for metrics, this filter implies `raw` resolution, so `{{m.lastSeenAt|durationSince}}` works even when
+the metric has a unit.
+
+### `durationUntil`
+
+Formats the duration until a Unix ms timestamp (relative to server time via `Date.now()`).
+
+Formatting rules are the same as `durationSince`.
+
+If the timestamp is in the past, the output is an empty string.
+
+Examples:
+
+```js
+{{m.nextRunAt|durationUntil}}
+{{t.notifyAt|durationUntil}}
+```
+
 ### `bool:trueLabel/falseLabel`
 
 Maps common boolean inputs to two strings:

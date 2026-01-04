@@ -36,6 +36,8 @@
  * Supported filters:
  * - {{m.temperature|num:1}}   -> number formatting with max fraction digits
  * - {{m.lastSeen|datetime}}   -> localized date/time output
+ * - {{m.lastSeenAt|durationSince}} -> duration since a timestamp (relative to server time)
+ * - {{m.nextRunAt|durationUntil}}  -> duration until a timestamp (relative to server time)
  * - {{m.temperature|raw}}     -> raw value without unit/locale formatting
  * - {{m.flag|bool:yes/no}}    -> boolean to string mapping
  * - {{m.foo|default:--}}      -> fallback when empty
@@ -203,8 +205,12 @@ class MsgRender {
 		// "raw" is special: it affects base resolution (e.g. m.temp returns raw val instead of "val unit").
 		const rawIndex = parts.findIndex(part => part.split(':')[0].trim() === 'raw');
 		const wantsRaw = rawIndex !== -1;
+		const wantsDuration = parts.some(part => {
+			const n = part.split(':')[0].trim();
+			return n === 'durationSince' || n === 'durationUntil';
+		});
 		const filters = wantsRaw ? parts.filter(part => part.split(':')[0].trim() !== 'raw') : parts;
-		let val = this._resolvePath(base, ctx, { raw: wantsRaw });
+		let val = this._resolvePath(base, ctx, { raw: wantsRaw || wantsDuration });
 
 		// Apply remaining filters left-to-right.
 		for (const raw of filters) {
@@ -359,6 +365,19 @@ class MsgRender {
 			const df = new Intl.DateTimeFormat(ctx.locale, { dateStyle: 'medium', timeStyle: 'short' });
 			return df.format(new Date(ts));
 		}
+		// durationSince/durationUntil: relative durations based on server time (Date.now()).
+		if (name === 'durationSince' || name === 'durationUntil') {
+			const ts = this._toTimestamp(val);
+			if (!Number.isFinite(ts)) {
+				return '';
+			}
+			const now = Date.now();
+			const diffMs = name === 'durationSince' ? now - ts : ts - now;
+			if (!Number.isFinite(diffMs) || diffMs < 0) {
+				return '';
+			}
+			return this._formatDuration(diffMs);
+		}
 		// bool:trueLabel/falseLabel: coerce input to boolean and map to strings.
 		if (name === 'bool') {
 			const [t = 'true', f = 'false'] = String(arg || '').split('/');
@@ -369,6 +388,46 @@ class MsgRender {
 			return b ? t : f;
 		}
 		return val;
+	}
+
+	/**
+	 * Format a duration in ms with compact, human-friendly units.
+	 *
+	 * - < 1 min: "56s"
+	 * - < 1 h: "34m" (rounded)
+	 * - < 1 day: "3:45h" (rounded)
+	 * - >= 1 day: "1d 4h" (rounded)
+	 *
+	 * @param {number} ms Duration in ms (must be >= 0).
+	 * @returns {string} Formatted duration.
+	 */
+	_formatDuration(ms) {
+		const dur = typeof ms === 'number' && Number.isFinite(ms) ? ms : NaN;
+		if (!Number.isFinite(dur) || dur < 0) {
+			return '';
+		}
+
+		if (dur < 60_000) {
+			const s = Math.round(dur / 1000);
+			return `${s}s`;
+		}
+
+		if (dur < 60 * 60_000) {
+			const m = Math.round(dur / 60_000);
+			return `${m}m`;
+		}
+
+		if (dur < 24 * 60 * 60_000) {
+			const totalMinutes = Math.round(dur / 60_000);
+			const h = Math.floor(totalMinutes / 60);
+			const m = totalMinutes % 60;
+			return `${h}:${String(m).padStart(2, '0')}h`;
+		}
+
+		const totalHours = Math.round(dur / (60 * 60_000));
+		const d = Math.floor(totalHours / 24);
+		const h = totalHours % 24;
+		return `${d}d ${h}h`;
 	}
 
 	/**
