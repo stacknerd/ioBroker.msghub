@@ -367,7 +367,7 @@ class MsgStats {
 	/**
 	 * @param {Array<object>} messages Current store list.
 	 * @param {{ startOfToday: number, startOfTomorrow: number, startOfWeek: number, startOfNextWeek: number, startOfMonth: number, startOfNextMonth: number, next7DaysEnd: number }} windows Window boundaries.
-	 * @returns {{ total: number, overdue: number, today: number, tomorrow: number, next7Days: number, thisWeek: number, thisMonth: number, byKind: Record<string, { total: number, overdue: number, today: number, tomorrow: number, next7Days: number, thisWeek: number, thisMonth: number }> }} Due buckets (domain time).
+	 * @returns {{ total: number, overdue: number, today: number, tomorrow: number, next7Days: number, thisWeek: number, thisWeekFromToday: number, thisMonth: number, thisMonthFromToday: number, byKind: Record<string, { total: number, overdue: number, today: number, tomorrow: number, next7Days: number, thisWeek: number, thisWeekFromToday: number, thisMonth: number, thisMonthFromToday: number }> }} Due buckets (domain time).
 	 */
 	_computeSchedule(messages, windows) {
 		const lifecycle = this.msgConstants.lifecycle?.state || {};
@@ -380,7 +380,9 @@ class MsgStats {
 			tomorrow: 0,
 			next7Days: 0,
 			thisWeek: 0,
+			thisWeekFromToday: 0,
 			thisMonth: 0,
+			thisMonthFromToday: 0,
 		});
 		const out = { ...empty };
 		const byKind = Object.create(null);
@@ -436,9 +438,17 @@ class MsgStats {
 				bump(out, 'thisWeek');
 				bump(kindBucket, 'thisWeek');
 			}
+			if (dueTs >= windows.startOfToday && dueTs < windows.startOfNextWeek) {
+				bump(out, 'thisWeekFromToday');
+				bump(kindBucket, 'thisWeekFromToday');
+			}
 			if (dueTs >= windows.startOfMonth && dueTs < windows.startOfNextMonth) {
 				bump(out, 'thisMonth');
 				bump(kindBucket, 'thisMonth');
+			}
+			if (dueTs >= windows.startOfToday && dueTs < windows.startOfNextMonth) {
+				bump(out, 'thisMonthFromToday');
+				bump(kindBucket, 'thisMonthFromToday');
 			}
 		}
 

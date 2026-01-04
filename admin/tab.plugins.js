@@ -226,8 +226,56 @@
 			return map;
 		};
 
-		function buildFieldInput({ type, key, label, value, help, unit, min, max, step }) {
+		function buildFieldInput({ type, key, label, value, help, unit, min, max, step, options }) {
 			const id = `f_${key}_${Math.random().toString(36).slice(2, 8)}`;
+
+			const optionList = Array.isArray(options) ? options.filter(o => o && typeof o === 'object') : [];
+			if ((type === 'string' || type === 'number') && optionList.length > 0) {
+				const input = h('select', { id });
+
+				const normalized = optionList
+					.map(o => ({
+						label: pickText(o.label) || (o.value !== undefined ? String(o.value) : ''),
+						value: o.value,
+					}))
+					.filter(o => o.value !== undefined && o.value !== null);
+
+				const valueSet = new Set(normalized.map(o => String(o.value)));
+
+				if (value === undefined || value === null || value === '') {
+					input.appendChild(h('option', { value: '', text: '' }));
+				} else if (!valueSet.has(String(value))) {
+					input.appendChild(h('option', { value: String(value), text: String(value) }));
+				}
+
+				for (const opt of normalized) {
+					input.appendChild(h('option', { value: String(opt.value), text: opt.label }));
+				}
+
+				const initial =
+					value === undefined || value === null || value === '' ? '' : valueSet.has(String(value)) ? String(value) : String(value);
+				input.value = initial;
+
+				return {
+					input,
+					getValue: () => {
+						const raw = input.value;
+						if (raw === '') {
+							return null;
+						}
+						if (type === 'number') {
+							const n = Number(raw);
+							return Number.isFinite(n) ? n : null;
+						}
+						return raw;
+					},
+					wrapper: h('div', { class: 'input-field msghub-field msghub-field-select' }, [
+						input,
+						h('label', { for: id, text: label || key }),
+						help ? h('div', { class: 'msghub-muted', text: help }) : null,
+					]),
+				};
+			}
 
 			if (type === 'boolean') {
 				const input = h('input', { type: 'checkbox', id });
@@ -722,18 +770,21 @@
 							min: field.min,
 							max: field.max,
 							step: field.step,
+							options: field.options,
 						});
 
 						const valueGetter = typeof getValue === 'function' ? getValue : () => null;
 						inputs[key] = { input, select, field, getValue: valueGetter };
 						initial[key] = normalize(valueGetter());
 
-						if (field.type === 'boolean') {
-							input.addEventListener('change', updateDirtyUi);
-						} else {
-							input.addEventListener('input', updateDirtyUi);
-							input.addEventListener('change', updateDirtyUi);
-						}
+							if (input?.tagName === 'SELECT') {
+								input.addEventListener('change', updateDirtyUi);
+							} else if (field.type === 'boolean') {
+								input.addEventListener('change', updateDirtyUi);
+							} else {
+								input.addEventListener('input', updateDirtyUi);
+								input.addEventListener('change', updateDirtyUi);
+							}
 						if (select) {
 							select.addEventListener('change', updateDirtyUi);
 						}

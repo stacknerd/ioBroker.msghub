@@ -250,11 +250,101 @@
 			popover = null;
 		}
 
+		function openSortPopover(anchorEl, { field, title }) {
+			closePopover();
+
+			const sortableField = typeof field === 'string' && field.trim() ? field.trim() : '';
+			if (!sortableField) {
+				return;
+			}
+
+			const mount = document.querySelector('.msghub-root') || document.body;
+			const rect = anchorEl.getBoundingClientRect();
+			const el = h('div', { class: 'msghub-popover' });
+			el.style.left = `${Math.max(10, Math.min(rect.left, window.innerWidth - 340))}px`;
+			el.style.top = `${rect.bottom + 6}px`;
+
+			const setSort = dir => {
+				sortField = sortableField;
+				sortDir = dir === 'desc' ? 'desc' : 'asc';
+				pageIndex = 1;
+				loadMessages({ keepPopover: true }).catch(() => undefined);
+				updateSortButtons();
+			};
+
+			const updateSortButtons = () => {
+				const isSorted = sortField === sortableField;
+				const btnAsc = el.querySelector('[data-sort="asc"]');
+				const btnDesc = el.querySelector('[data-sort="desc"]');
+				if (btnAsc) {
+					btnAsc.classList.toggle('is-active', isSorted && sortDir === 'asc');
+				}
+				if (btnDesc) {
+					btnDesc.classList.toggle('is-active', isSorted && sortDir === 'desc');
+				}
+			};
+
+			el.appendChild(
+				h('div', { class: 'msghub-popover-head' }, [
+					h('div', { class: 'msghub-popover-title', text: title }),
+					h('a', {
+						href: '#',
+						class: 'btn-flat',
+						onclick: e => {
+							e.preventDefault();
+							closePopover();
+						},
+						text: '×',
+					}),
+				]),
+			);
+
+			el.appendChild(
+				h('div', { class: 'msghub-popover-controls' }, [
+					h('div', { class: 'msghub-popover-sortrow' }, [
+						h('button', {
+							class: 'btn-flat msghub-popover-sort',
+							type: 'button',
+							'data-sort': 'asc',
+							onclick: () => setSort('asc'),
+							text: t('Sort ascending', 'Aufsteigend sortieren'),
+						}),
+						h('button', {
+							class: 'btn-flat msghub-popover-sort',
+							type: 'button',
+							'data-sort': 'desc',
+							onclick: () => setSort('desc'),
+							text: t('Sort descending', 'Absteigend sortieren'),
+						}),
+					]),
+				]),
+			);
+
+			el.appendChild(h('div', { class: 'msghub-popover-body' }));
+
+			mount.appendChild(el);
+			popover = { el };
+			updateSortButtons();
+
+			const onDocClick = ev => {
+				if (!popover?.el) {
+					return;
+				}
+				if (popover.el.contains(ev.target) || anchorEl.contains(ev.target)) {
+					return;
+				}
+				closePopover();
+				document.removeEventListener('click', onDocClick, true);
+			};
+			document.addEventListener('click', onDocClick, true);
+		}
+
 		function openFilterPopover(anchorEl, { key, title, options }) {
 			closePopover();
 
 			const selected = new Set(getFilterSet(key) || []);
-			const sortableField = key === 'kind' || key === 'lifecycle.state' || key === 'level' ? key : null;
+			const sortableField =
+				key === 'kind' || key === 'lifecycle.state' || key === 'level' || key === 'origin.system' ? key : null;
 
 			const mount = document.querySelector('.msghub-root') || document.body;
 			const rect = anchorEl.getBoundingClientRect();
@@ -427,10 +517,20 @@
 			const head = h('thead', null, [
 				h('tr', null, [
 					h('th', { class: 'msghub-th' }, [
-						h('span', { text: 'Ref' }),
+						h('button', {
+							class: `btn-flat msghub-th-sort${sortField === 'ref' ? ' is-active' : ''}`,
+							type: 'button',
+							onclick: e => openSortPopover(e.target, { field: 'ref', title: 'Ref' }),
+							text: '(Ref)',
+						}),
 					]),
 					h('th', { class: 'msghub-th' }, [
-						h('span', { text: 'Title' }),
+						h('button', {
+							class: `btn-flat msghub-th-sort${sortField === 'title' ? ' is-active' : ''}`,
+							type: 'button',
+							onclick: e => openSortPopover(e.target, { field: 'title', title: 'Title' }),
+							text: '(Title)',
+						}),
 					]),
 					h('th', { class: 'msghub-th' }, [
 						h('button', {
@@ -471,11 +571,24 @@
 									title: 'Origin system',
 									options: listDistinctFromItems('origin.system'),
 								}),
-							text: originCount > 0 ? `Origin (${originCount})` : 'Origin',
+							text: originCount > 0 ? `(Origin ${originCount})` : '(Origin)',
 						}),
 					]),
 					h('th', { class: 'msghub-th' }, [
-						h('span', { text: 'Updated' }),
+						h('button', {
+							class: `btn-flat msghub-th-sort${sortField === 'timing.createdAt' ? ' is-active' : ''}`,
+							type: 'button',
+							onclick: e => openSortPopover(e.target, { field: 'timing.createdAt', title: 'Created' }),
+							text: '(Created)',
+						}),
+					]),
+					h('th', { class: 'msghub-th' }, [
+						h('button', {
+							class: `btn-flat msghub-th-sort${sortField === 'timing.updatedAt' ? ' is-active' : ''}`,
+							type: 'button',
+							onclick: e => openSortPopover(e.target, { field: 'timing.updatedAt', title: 'Updated' }),
+							text: '(Updated)',
+						}),
 					]),
 				]),
 			]);
@@ -487,6 +600,7 @@
 				const lifecycle = safeStr(pick(msg, 'lifecycle.state'));
 				const level = pick(msg, 'level');
 				const origin = safeStr(pick(msg, 'origin.system')) || safeStr(pick(msg, 'origin.type'));
+				const createdAt = pick(msg, 'timing.createdAt');
 				const updatedAt = pick(msg, 'timing.updatedAt');
 
 				return h('tr', {
@@ -498,6 +612,7 @@
 					h('td', { text: lifecycle }),
 					h('td', { text: getLevelLabel(level) }),
 					h('td', { text: origin }),
+					h('td', { class: 'msghub-muted', text: formatTs(typeof createdAt === 'number' ? createdAt : NaN) }),
 					h('td', { class: 'msghub-muted', text: formatTs(typeof updatedAt === 'number' ? updatedAt : NaN) }),
 				]);
 			});

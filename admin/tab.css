@@ -513,6 +513,19 @@ html, body { background: transparent; }
   line-height: 28px;
 }
 
+.msghub-th-sort {
+  padding: 0 8px;
+  height: 28px;
+  line-height: 28px;
+  opacity: 0.75;
+}
+
+.msghub-th-sort.is-active {
+  opacity: 1;
+  background: var(--msghub-accent-weak);
+  color: var(--msghub-text);
+}
+
 .msghub-th-filter {
   opacity: 0.75;
 }
@@ -743,6 +756,163 @@ html, body { background: transparent; }
 .msghub-stats-subtitle {
   margin-bottom: 8px;
   font-weight: 700;
+}
+
+.msghub-stats-row {
+  display: flex;
+  gap: 12px;
+  align-items: stretch;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.msghub-stats-col {
+  flex: 1 1 360px;
+  min-width: 0;
+}
+
+.msghub-ring-wrap {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.msghub-ring {
+  width: 150px;
+  height: 150px;
+  border-radius: 50%;
+  position: relative;
+  flex: 0 0 auto;
+  box-shadow: inset 0 0 0 1px var(--msghub-border);
+}
+
+.msghub-ring::after {
+  content: "";
+  position: absolute;
+  inset: 18px;
+  border-radius: 50%;
+  background: var(--msghub-surface);
+  box-shadow: inset 0 0 0 1px var(--msghub-border);
+}
+
+.msghub-ring-center {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  z-index: 1;
+  text-align: center;
+}
+
+.msghub-ring-total {
+  font-size: 28px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.msghub-ring-sub {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.msghub-legend {
+  display: grid;
+  gap: 6px;
+  min-width: 240px;
+  flex: 1 1 240px;
+}
+
+.msghub-legend-item {
+  display: grid;
+  grid-template-columns: 12px 1fr auto;
+  gap: 10px;
+  align-items: center;
+  font-size: 12px;
+}
+
+.msghub-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px var(--msghub-border);
+}
+
+.msghub-legend-label {
+  font-weight: 700;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.msghub-legend-value {
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.msghub-sched-meta {
+  margin-top: 2px;
+  font-size: 12px;
+}
+
+.msghub-sched-wrap {
+  margin-top: 10px;
+}
+
+.msghub-sched {
+  display: grid;
+  gap: 8px;
+}
+
+.msghub-sched-row {
+  display: grid;
+  grid-template-columns: 90px 1fr 56px;
+  gap: 10px;
+  align-items: center;
+}
+
+.msghub-sched-label {
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.msghub-sched-value {
+  text-align: right;
+  font-size: 12px;
+}
+
+.msghub-sched-bar {
+  height: 14px;
+  border-radius: 999px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: inset 0 0 0 1px var(--msghub-border);
+
+  background: linear-gradient(
+    to right,
+    var(--msghub-danger) 0 calc(var(--msghub-marker) * 100%),
+    var(--msghub-bucket-color) calc(var(--msghub-marker) * 100%)
+      calc((var(--msghub-marker) + var(--msghub-bucket)) * 100%),
+    color-mix(in srgb, var(--msghub-border), transparent 70%)
+      calc((var(--msghub-marker) + var(--msghub-bucket)) * 100%) 100%
+  );
+}
+
+.msghub-sched-bar::before {
+  content: "";
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  left: calc(var(--msghub-marker) * 100%);
+  background: color-mix(in srgb, var(--msghub-text), transparent 30%);
+}
+
+.msghub-sched-legend {
+  margin-top: 10px;
+  opacity: 0.92;
 }
 /* ---------- Pure-CSS Accordion (pro Card) ---------- */
 
