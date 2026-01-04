@@ -324,6 +324,7 @@ function pickText(value) {
 const elements = Object.freeze({
 	connection: document.getElementById('msghub-connection'),
 	pluginsRoot: document.getElementById('plugins-root'),
+	statsRoot: document.getElementById('stats-root'),
 });
 
 const ctx = Object.freeze({
@@ -353,15 +354,23 @@ const setConnStatus = isOnline => {
 };
 
 let pluginsSection = null;
+let statsSection = null;
 
 function initSectionsIfAvailable() {
 	const pluginsApi = win.MsghubAdminTabPlugins;
-	if (pluginsSection || !pluginsApi?.init) {
-		return;
+	if (!pluginsSection && pluginsApi?.init) {
+		pluginsSection = pluginsApi.init(ctx);
+		if (socket?.connected) {
+			pluginsSection?.onConnect?.();
+		}
 	}
-	pluginsSection = pluginsApi.init(ctx);
-	if (socket?.connected) {
-		pluginsSection?.onConnect?.();
+
+	const statsApi = win.MsghubAdminTabStats;
+	if (!statsSection && statsApi?.init) {
+		statsSection = statsApi.init(ctx);
+		if (socket?.connected) {
+			statsSection?.onConnect?.();
+		}
 	}
 }
 
@@ -375,6 +384,7 @@ socket.on('connect', () => {
 	setConnStatus(true);
 	initSectionsIfAvailable();
 	pluginsSection?.onConnect?.();
+	statsSection?.onConnect?.();
 });
 
 socket.on('disconnect', () => {

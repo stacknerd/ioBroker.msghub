@@ -172,7 +172,7 @@ html, body { background: transparent; }
 
 /* Tab panels spacing */
 .msghub-root #tab-plugins,
-.msghub-root #tab-dashboard,
+.msghub-root #tab-stats,
 .msghub-root #tab-calendar {
   padding-top: 16px;
 }
@@ -451,6 +451,51 @@ html, body { background: transparent; }
 
 .msghub-root p { margin: 0; }
 .msghub-root p + p { margin-top: 8px; }
+
+/* ---------- Stats ---------- */
+
+.msghub-stats-meta {
+  margin-bottom: 12px;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.msghub-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+}
+
+.msghub-stat-tile {
+  padding: 12px 14px;
+  border-radius: var(--msghub-radius-sm);
+  border: 1px solid var(--msghub-border);
+  background: var(--msghub-surface-2);
+}
+
+.msghub-stat-label {
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--msghub-muted);
+  letter-spacing: 0.2px;
+}
+
+.msghub-stat-value {
+  margin-top: 6px;
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: 0.2px;
+}
+
+.msghub-stats-block {
+  margin-top: 12px;
+}
+
+.msghub-stats-subtitle {
+  margin-bottom: 8px;
+  font-weight: 700;
+}
 /* ---------- Pure-CSS Accordion (pro Card) ---------- */
 
 .msghub-plugin-card {

@@ -67,6 +67,7 @@ const { MsgArchive } = require(`${__dirname}/MsgArchive`);
 const { MsgRender } = require(`${__dirname}/MsgRender`);
 const { MsgNotify } = require(`${__dirname}/MsgNotify`);
 const { MsgIngest } = require(`${__dirname}/MsgIngest`);
+const { MsgStats } = require(`${__dirname}/MsgStats`);
 
 /**
  * MsgStore
@@ -146,6 +147,9 @@ class MsgStore {
 		// Canonical in-memory list (do not store rendered output here).
 		this.fullList = Array.isArray(initialMessages) ? initialMessages : [];
 
+		// Stats (read-only insights + rollups).
+		this.msgStats = new MsgStats(this.adapter, this.msgConstants, this);
+
 		// Pruning and notification timers (timer starts in `init()`).
 		this.lastPruneAt = 0;
 		this.pruneIntervalMs = pruneIntervalMs;
@@ -180,6 +184,7 @@ class MsgStore {
 
 		await this.msgStorage.init();
 		await this.msgArchive.init();
+		await this.msgStats.init();
 
 		if (loadFromStorage) {
 			const loaded = await this.msgStorage.readJson([]);
@@ -350,6 +355,11 @@ class MsgStore {
 			(state === this.msgConstants.lifecycle?.state?.deleted ||
 				state === this.msgConstants.lifecycle?.state?.expired) &&
 			state !== existingState;
+
+		const isClosedTransition = state === this.msgConstants.lifecycle?.state?.closed && state !== existingState;
+		if (isClosedTransition) {
+			this.msgStats?.recordClosed?.(updated);
+		}
 
 		if (hadUpdate && !isSoftDeletedTransition) {
 			this._dispatchNotify(this.msgConstants.notfication.events.update, updated);
@@ -991,6 +1001,21 @@ class MsgStore {
 		// Best-effort flush of buffered writes.
 		this.msgStorage.flushPending();
 		this.msgArchive?.flushPending?.();
+		this.msgStats?.onUnload?.();
+	}
+
+	/**
+	 * Return a JSON-serializable stats snapshot for UI/diagnostics.
+	 *
+	 * @param {object} [options] Options forwarded to MsgStats.
+	 * @returns {Promise<any>} Stats object.
+	 */
+	async getStats(options = {}) {
+		this._pruneOldMessages();
+		if (!this.msgStats || typeof this.msgStats.getStats !== 'function') {
+			return null;
+		}
+		return await this.msgStats.getStats(options);
 	}
 
 	/**

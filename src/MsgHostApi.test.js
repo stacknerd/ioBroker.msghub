@@ -11,6 +11,7 @@ const {
 	buildStoreApi,
 	buildActionApi,
 	buildFactoryApi,
+	buildStatsApi,
 } = require('./MsgHostApi');
 const { MsgConstants } = require('./MsgConstants');
 
@@ -181,6 +182,32 @@ describe('MsgHostApi', () => {
 			expect(Object.isFrozen(api)).to.equal(true);
 			expect(api.createMessage({ a: 1 })).to.deep.equal({ ref: 'created', a: 1 });
 			expect(calls).to.deep.equal([{ a: 1 }]);
+		});
+	});
+
+	describe('buildStatsApi', () => {
+		it('returns null when getStats is unavailable', () => {
+			expect(buildStatsApi(null)).to.equal(null);
+			expect(buildStatsApi({})).to.equal(null);
+		});
+
+		it('exposes getStats when present', async () => {
+			const calls = [];
+			const store = {
+				getStats: async options => {
+					calls.push(options);
+					return { hello: 'world' };
+				},
+			};
+
+			const api = buildStatsApi(store);
+			expect(api).to.not.equal(null);
+			expect(Object.isFrozen(api)).to.equal(true);
+			expect(api).to.have.property('getStats');
+
+			const res = await api.getStats({ include: { archiveSize: true } });
+			expect(res).to.deep.equal({ hello: 'world' });
+			expect(calls).to.deep.equal([{ include: { archiveSize: true } }]);
 		});
 	});
 

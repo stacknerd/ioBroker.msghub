@@ -27,6 +27,7 @@ const {
 	buildLogApi,
 	buildStoreApi,
 	buildFactoryApi,
+	buildStatsApi,
 	buildAiApi,
 } = require('./MsgHostApi');
 
@@ -71,6 +72,7 @@ class MsgIngest {
 		const hostName = this?.constructor?.name || 'MsgIngest';
 		const store = buildStoreApi(this.msgStore, { hostName });
 		const factory = buildFactoryApi(this.msgFactory, { hostName });
+		const stats = buildStatsApi(this.msgStore);
 		const ai = buildAiApi(options?.ai || null);
 
 		const i18n = buildI18nApi(this.adapter);
@@ -83,6 +85,7 @@ class MsgIngest {
 			constants: this.msgConstants,
 			factory,
 			store,
+			stats,
 			ai,
 			i18n,
 			iobroker,

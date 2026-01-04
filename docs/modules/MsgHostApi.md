@@ -37,6 +37,7 @@ This module exports small builder functions. Hosts call them once and then pass 
 - `buildI18nApi(adapter)` → `ctx.api.i18n` (or `null`)
 - `buildIoBrokerApi(adapter, { hostName })` → `ctx.api.iobroker`
 - `buildStoreApi(store, { hostName })` → `ctx.api.store`
+- `buildStatsApi(store)` → `ctx.api.stats` (or `null`)
 - `buildFactoryApi(msgFactory, { hostName })` → `ctx.api.factory` (or `null`)
 - `buildActionApi(adapter, msgConstants, store, { hostName })` → `ctx.api.action` (or `null`)
 - `buildAiApi(msgAi)` → `ctx.api.ai` (or `null`)
@@ -218,6 +219,20 @@ Notes:
   - `lifecycle.state="closed"` (with `stateChangedAt`, and optional `stateChangedBy`)
   - `timing.notifyAt=null`
   - `progress.percentage=100` and `progress.finishedAt` (defaults to `Date.now()` when omitted)
+
+### `buildStatsApi(store)`
+
+Builds a small stats facade for plugins (`ctx.api.stats`).
+
+API:
+
+- `stats.getStats(options?)` → returns the same JSON-serializable stats snapshot as `MsgStore.getStats(...)`.
+
+Notes:
+
+- This is a **read-only** helper.
+- Some fields can be expensive (for example archive size estimation). Callers should use include flags sparingly.
+- This facade returns `null` if the provided store does not expose `getStats(...)`.
 
 ### `buildFactoryApi(msgFactory, { hostName })`
 

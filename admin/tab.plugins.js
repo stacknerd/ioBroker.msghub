@@ -660,10 +660,11 @@
 					h('div', { class: 'msghub-instance-enabled' }, [enabledWrap]),
 					h('div', {
 						class: 'msghub-instance-status msghub-muted',
-						text:
-							inst.status === 'running' && instanceTitleValue
-								? `Status: ${inst.status || 'unknown'} · ${instanceTitleValue}`
-								: `Status: ${inst.status || 'unknown'}`,
+						text: `Status: ${inst.status || 'unknown'}`,
+					}),
+					h('div', {
+						class: 'msghub-instance-detail msghub-muted',
+						text: instanceTitleValue,
 					}),
 					headActions,
 				]);

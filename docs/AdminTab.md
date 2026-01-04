@@ -3,8 +3,8 @@
 Message Hub ships a custom **Admin Tab** (in the ioBroker admin UI) that is meant to be the primary UI for managing
 runtime-managed plugins.
 
-At the moment the tab mainly focuses on **Plugin Config**, but it already reserves placeholders for future features
-(like dashboards/calendars).
+Currently the tab focuses on **Plugin Config** and a small **Stats** view (diagnostics), and it still reserves
+placeholders for future features (like dashboards/calendars).
 
 ---
 
@@ -16,6 +16,22 @@ At the moment the tab mainly focuses on **Plugin Config**, but it already reserv
   - enable/disable a plugin instance
   - create/delete instances (only when `manifest.supportsMultiple === true`)
   - edit instance options (based on `manifest.options`)
+
+---
+
+## Stats (diagnostics)
+
+The **Stats** tab provides a read-only snapshot of:
+
+- current message counts (by kind/lifecycle)
+- due windows (“fällig” by domain time, not notification due)
+- “done” counts based on `lifecycle.state → "closed"` rollups (today / this week / this month)
+- I/O diagnostics for persistence and archive (last persisted/flush timestamps, pending queues)
+
+Notes:
+
+- The archive size estimate is intentionally **opt-in** because it can be expensive depending on file backend and file count.
+- The backend is powered by `MsgStats` (see [`docs/modules/MsgStats.md`](./modules/MsgStats.md)).
 
 ---
 
@@ -36,4 +52,3 @@ Instance ids are numeric and start at `0` (`0`, `1`, `2`, …).
 
 - Enable/disable changes are applied immediately by `IoPlugins` (start/stop single instance).
 - Option changes update `object.native` and restart the **single affected instance** when it is enabled.
-

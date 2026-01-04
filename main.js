@@ -184,7 +184,7 @@ class Msghub extends utils.Adapter {
 			this._msgPlugins = await IoPlugins.create(this, this.msgStore);
 
 			const { IoAdminTab } = require(`${__dirname}/lib/IoAdminTab`);
-			this._adminTab = new IoAdminTab(this, this._msgPlugins, { ai: msgAi });
+			this._adminTab = new IoAdminTab(this, this._msgPlugins, { ai: msgAi, msgStore: this.msgStore });
 		} catch (e) {
 			this.log?.error?.(`Plugin wiring failed: ${e?.message || e}`);
 		}

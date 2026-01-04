@@ -193,6 +193,24 @@ function buildFactoryApi(msgFactory, { hostName = 'Host' } = {}) {
 }
 
 /**
+ * Build the MsgStats facade for plugins.
+ *
+ * @param {object} store MsgStore instance.
+ */
+function buildStatsApi(store) {
+	if (!store || typeof store !== 'object') {
+		return null;
+	}
+	if (typeof store.getStats !== 'function') {
+		return null;
+	}
+
+	return Object.freeze({
+		getStats: options => store.getStats(options),
+	});
+}
+
+/**
  * Build the MsgAi facade for plugins.
  *
  * Derivation rule:
@@ -465,5 +483,6 @@ module.exports = {
 	buildStoreApi,
 	buildActionApi,
 	buildFactoryApi,
+	buildStatsApi,
 	buildAiApi,
 };

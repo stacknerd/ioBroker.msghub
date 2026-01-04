@@ -90,6 +90,12 @@ class MsgArchive {
 		this._ensuredDirs = new Set();
 
 		this._mapTypeMarker = DEFAULT_MAP_TYPE_MARKER;
+
+		// Best-effort runtime status for diagnostics / stats UIs.
+		this._lastFlushedAt = 0;
+		this._sizeEstimateAt = 0;
+		this._sizeEstimateBytes = null;
+		this._sizeEstimateIsComplete = false;
 	}
 
 	/**
@@ -1013,6 +1019,10 @@ class MsgArchive {
 			const combined = existingTrimmed ? `${existingTrimmed}\n${newLines}\n` : `${newLines}\n`;
 
 			await this.adapter.writeFileAsync(this.metaId, filePath, combined);
+			this._lastFlushedAt = Date.now();
+			this._sizeEstimateAt = 0;
+			this._sizeEstimateBytes = null;
+			this._sizeEstimateIsComplete = false;
 
 			this.adapter?.log?.debug?.(
 				`MsgArchive append ${entries.length} event(s) -> ${filePath}, ${Buffer.byteLength(combined, 'utf8')} bytes`,
@@ -1084,6 +1094,116 @@ class MsgArchive {
 			? `${relPath || key || 'unknown'}.${safeSegment}.${this.fileExtension}`
 			: `${relPath || key || 'unknown'}.${this.fileExtension}`;
 		return this.baseDir ? `${this.baseDir}/${fileName}` : fileName;
+	}
+
+	/**
+	 * Return best-effort runtime status for diagnostics / UIs.
+	 *
+	 * @returns {{ baseDir: string, fileExtension: string, flushIntervalMs: number, maxBatchSize: number, keepPreviousWeeks: number, lastFlushedAt: number|null, pending: { refs: number, events: number, flushingRefs: number }, approxSizeBytes: number|null, approxSizeUpdatedAt: number|null, approxSizeIsComplete: boolean }} Status snapshot.
+	 */
+	getStatus() {
+		let pendingRefs = 0;
+		let pendingEvents = 0;
+		let flushingRefs = 0;
+
+		for (const p of this._pending.values()) {
+			if (!p) {
+				continue;
+			}
+			if (p.flushing) {
+				flushingRefs += 1;
+			}
+			if (Array.isArray(p.events) && p.events.length > 0) {
+				pendingRefs += 1;
+				pendingEvents += p.events.length;
+			}
+		}
+
+		return {
+			baseDir: this.baseDir || '',
+			fileExtension: this.fileExtension,
+			flushIntervalMs: this.flushIntervalMs,
+			maxBatchSize: this.maxBatchSize,
+			keepPreviousWeeks: this.keepPreviousWeeks,
+			lastFlushedAt: this._lastFlushedAt || null,
+			pending: { refs: pendingRefs, events: pendingEvents, flushingRefs },
+			approxSizeBytes: typeof this._sizeEstimateBytes === 'number' ? this._sizeEstimateBytes : null,
+			approxSizeUpdatedAt: this._sizeEstimateAt || null,
+			approxSizeIsComplete: this._sizeEstimateIsComplete === true,
+		};
+	}
+
+	/**
+	 * Best-effort estimate of archive size on disk (bytes).
+	 *
+	 * Notes:
+	 * - This may be expensive depending on backend and file count; callers should use caching (maxAgeMs).
+	 * - Some ioBroker backends may not provide file sizes via `readDirAsync(...).stats.size`; in that case this returns null.
+	 *
+	 * @param {{ maxAgeMs?: number }} [options] Cache/maxAge options.
+	 * @returns {Promise<{ bytes: number|null, updatedAt: number, isComplete: boolean }>} Estimate result.
+	 */
+	async estimateSizeBytes({ maxAgeMs = 5 * 60 * 1000 } = {}) {
+		const now = Date.now();
+		const cachedAt = this._sizeEstimateAt;
+		if (cachedAt && now - cachedAt < maxAgeMs) {
+			return {
+				bytes: typeof this._sizeEstimateBytes === 'number' ? this._sizeEstimateBytes : null,
+				updatedAt: cachedAt,
+				isComplete: this._sizeEstimateIsComplete === true,
+			};
+		}
+
+		if (typeof this.adapter.readDirAsync !== 'function') {
+			this._sizeEstimateAt = now;
+			this._sizeEstimateBytes = null;
+			this._sizeEstimateIsComplete = false;
+			return { bytes: null, updatedAt: now, isComplete: false };
+		}
+
+		const startDir = this.baseDir || '';
+		const queue = [startDir];
+		let total = 0;
+		let isComplete = true;
+
+		while (queue.length > 0) {
+			const dir = queue.shift();
+			if (typeof dir !== 'string') {
+				continue;
+			}
+			let entries;
+			try {
+				entries = await this.adapter.readDirAsync(this.metaId, dir);
+			} catch {
+				continue;
+			}
+
+			for (const entry of entries || []) {
+				if (!entry) {
+					continue;
+				}
+				const name = typeof entry.file === 'string' ? entry.file : '';
+				if (!name) {
+					continue;
+				}
+				if (entry.isDir) {
+					queue.push(dir ? `${dir}/${name}` : name);
+					continue;
+				}
+
+				const size = entry?.stats?.size;
+				if (typeof size === 'number' && Number.isFinite(size)) {
+					total += size;
+				} else {
+					isComplete = false;
+				}
+			}
+		}
+
+		this._sizeEstimateAt = now;
+		this._sizeEstimateBytes = total;
+		this._sizeEstimateIsComplete = isComplete;
+		return { bytes: total, updatedAt: now, isComplete };
 	}
 }
 

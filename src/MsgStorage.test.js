@@ -198,4 +198,18 @@ describe('MsgStorage', () => {
 		const key = `${adapter.namespace}/messages.json`;
 		expect(JSON.parse(files.get(key))).to.deep.equal({ a: 2 });
 	});
+
+	it('exposes status with lastPersistedAt after write', async () => {
+		const { adapter } = createAdapter({ withRename: false });
+		const storage = new MsgStorage(adapter, { writeIntervalMs: 0 });
+		await storage.init();
+
+		await storage.writeJson({ a: 1 });
+		const status = storage.getStatus();
+		expect(status).to.have.property('filePath');
+		expect(status).to.have.property('lastPersistedAt');
+		expect(status.lastPersistedAt).to.be.a('number');
+		expect(status.lastPersistedAt).to.be.greaterThan(0);
+		expect(status.pending).to.equal(false);
+	});
 });

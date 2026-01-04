@@ -83,6 +83,12 @@ class MsgStorage {
 		this._flushReject = null;
 
 		this._mapTypeMarker = DEFAULT_MAP_TYPE_MARKER;
+
+		// Best-effort status for diagnostics / stats UIs.
+		this._lastPersistedAt = 0;
+		this._lastPersistedBytes = 0;
+		this._lastPersistedPath = null;
+		this._lastPersistedMode = null;
 	}
 
 	/**
@@ -123,6 +129,10 @@ class MsgStorage {
 		// @ts-expect-error renameFileAsync may not be available
 		if (typeof this.adapter.renameFileAsync !== 'function') {
 			await this.adapter.writeFileAsync(this.metaId, filePath, json);
+			this._lastPersistedAt = Date.now();
+			this._lastPersistedBytes = sizeBytes;
+			this._lastPersistedPath = filePath;
+			this._lastPersistedMode = 'override';
 			this.adapter?.log?.debug?.(`MsgStorage: ${filePath} written, mode=override, ${sizeBytes} bytes`);
 			return;
 		}
@@ -141,11 +151,19 @@ class MsgStorage {
 
 			// @ts-expect-error renameFileAsync may not be available
 			await this.adapter.renameFileAsync(this.metaId, tmpPath, filePath);
+			this._lastPersistedAt = Date.now();
+			this._lastPersistedBytes = sizeBytes;
+			this._lastPersistedPath = filePath;
+			this._lastPersistedMode = 'rename';
 			this.adapter?.log?.debug?.(`MsgStorage: ${filePath} written, mode=rename, ${sizeBytes} bytes`);
 		} catch (e) {
 			// If rename fails, log and fall back to direct write.
 			this.adapter?.log?.warn?.(`Atomic write failed (${e?.message || e}), writing directly to ${filePath}`);
 			await this.adapter.writeFileAsync(this.metaId, filePath, json);
+			this._lastPersistedAt = Date.now();
+			this._lastPersistedBytes = sizeBytes;
+			this._lastPersistedPath = filePath;
+			this._lastPersistedMode = 'fallback';
 			this.adapter?.log?.debug?.(`MsgStorage: ${filePath} written, mode=fallback, ${sizeBytes} bytes`);
 		} finally {
 			// Best-effort cleanup of the tmp file.
@@ -293,6 +311,22 @@ class MsgStorage {
 	 */
 	_filePathFor(fileName) {
 		return this.baseDir ? `${this.baseDir}/${fileName}` : fileName;
+	}
+
+	/**
+	 * Return best-effort runtime status for diagnostics / UIs.
+	 *
+	 * @returns {{ filePath: string, writeIntervalMs: number, lastPersistedAt: number|null, lastPersistedBytes: number|null, lastPersistedMode: string|null, pending: boolean }} Status snapshot.
+	 */
+	getStatus() {
+		return {
+			filePath: this._filePathFor(this.fileName),
+			writeIntervalMs: this.writeIntervalMs,
+			lastPersistedAt: this._lastPersistedAt || null,
+			lastPersistedBytes: this._lastPersistedBytes || null,
+			lastPersistedMode: this._lastPersistedMode || null,
+			pending: !!this._flushPromise,
+		};
 	}
 }
 

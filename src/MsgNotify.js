@@ -24,7 +24,14 @@
  * - Plugin modules follow `Notify*` (e.g. `lib/NotifyStates/index.js`).
  */
 
-const { buildIoBrokerApi, buildI18nApi, buildLogApi, buildStoreApi, buildAiApi } = require('./MsgHostApi');
+const {
+	buildIoBrokerApi,
+	buildI18nApi,
+	buildLogApi,
+	buildStoreApi,
+	buildStatsApi,
+	buildAiApi,
+} = require('./MsgHostApi');
 
 /**
  * MsgNotify
@@ -59,6 +66,7 @@ class MsgNotify {
 
 		const hostName = this?.constructor?.name || 'MsgNotify';
 		const store = buildStoreApi(msgStore, { hostName });
+		const stats = buildStatsApi(msgStore);
 		const ai = buildAiApi(msgAi || null);
 
 		const i18n = buildI18nApi(this.adapter);
@@ -72,6 +80,7 @@ class MsgNotify {
 			iobroker,
 			log,
 			store,
+			stats,
 			ai,
 		});
 	}

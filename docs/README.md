@@ -10,6 +10,7 @@ Naming note: the adapter is called **Message Hub**. In code and ioBroker object 
 
 - Getting started (first steps, what you can do today): [`docs/GettingStarted.md`](./GettingStarted.md)
 - Admin Tab (configure plugins and instances): [`docs/AdminTab.md`](./AdminTab.md)
+- Statistics snapshot (Admin Tab “Stats”, rollups, I/O diagnostics): [`docs/modules/MsgStats.md`](./modules/MsgStats.md)
 - Message model (what a “message” is, lifecycle, timing, actions): [`docs/MessageModel.md`](./MessageModel.md)
 - Control plane API (create/patch/list via `sendTo`): [`docs/plugins/EngageSendTo.md`](./plugins/EngageSendTo.md)
 - Notification output states (what `NotifyStates` writes): [`docs/plugins/NotifyStates.md`](./plugins/NotifyStates.md)
@@ -17,6 +18,7 @@ Naming note: the adapter is called **Message Hub**. In code and ioBroker object 
 ## Developer Docs
 
 - Plugin developer guide (interfaces and `ctx.api`): [`docs/plugins/README.md`](./plugins/README.md)
+- Plugin API reference (details for `ctx.api` / `ctx.meta`): [`docs/plugins/API.md`](./plugins/API.md)
 - Plugin runtime wiring (enable switches, options in `native`): [`docs/plugins/IoPlugins.md`](./plugins/IoPlugins.md)
 - Core modules (store/factory/storage/notify/render): [`docs/modules/README.md`](./modules/README.md)
 - Development notes (repo conventions): [`docs/DevelopmentGuidelines.md`](./DevelopmentGuidelines.md)
