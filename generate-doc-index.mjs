@@ -318,7 +318,7 @@ function buildPluginIndexTable(pluginEntries) {
   const rows = pluginEntries.map((p) => {
     const docs = `[\`./${p.type}.md\`](./${p.type}.md)`;
     const purpose = escapeMarkdownTableCell(p.purpose || '');
-    return `| \`${p.type}\` | ${p.family} | ${purpose} | \`${p.defaultEnabled}\` | \`${p.supportsMultiple}\` | ${docs} |`;
+    return `| \`${p.type}\` | ${p.family} | ${purpose} | ${ p.defaultEnabled ? '✓' : '' } | ${p.supportsMultiple ? '✓' : ''} | ${docs} |`;
   });
 
   return [...header, ...rows].join('\n');
