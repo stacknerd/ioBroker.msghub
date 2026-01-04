@@ -472,6 +472,98 @@ function buildIoBrokerApi(adapter, { hostName }) {
 			unsubscribeForeignObjects: pattern =>
 				requireFn(adapter?.unsubscribeForeignObjects, 'unsubscribeForeignObjects').call(adapter, pattern),
 		}),
+		files: Object.freeze({
+			/**
+			 * Read a file from ioBroker file storage.
+			 *
+			 * Return value is passed through as returned by ioBroker (commonly `{ file, mimeType? }`).
+			 *
+			 * @param {string} metaId File storage root (example: adapter namespace like "msghub.0").
+			 * @param {string} filePath File path below metaId (example: "documents/x.pdf").
+			 * @returns {Promise<any>} ioBroker readFile result.
+			 */
+			readFile: (metaId, filePath) => {
+				if (typeof adapter?.readFileAsync === 'function') {
+					return adapter.readFileAsync(metaId, filePath);
+				}
+				requireFn(adapter?.readFile, 'readFile');
+				return new Promise((resolve, reject) => {
+					adapter.readFile(metaId, filePath, (err, res) => (err ? reject(err) : resolve(res)));
+				});
+			},
+			/**
+			 * Write a file into ioBroker file storage.
+			 *
+			 * @param {string} metaId File storage root (example: adapter namespace like "msghub.0").
+			 * @param {string} filePath File path below metaId (example: "documents/x.pdf").
+			 * @param {Buffer|string} data File content.
+			 * @returns {Promise<void>} Resolves when the write completes.
+			 */
+			writeFile: (metaId, filePath, data) => {
+				if (typeof adapter?.writeFileAsync === 'function') {
+					return adapter.writeFileAsync(metaId, filePath, data).then(() => undefined);
+				}
+				requireFn(adapter?.writeFile, 'writeFile');
+				return new Promise((resolve, reject) => {
+					adapter.writeFile(metaId, filePath, data, err => (err ? reject(err) : resolve(undefined)));
+				});
+			},
+			/**
+			 * Create a folder in ioBroker file storage.
+			 *
+			 * @param {string} metaId File storage root.
+			 * @param {string} dirPath Directory path below metaId.
+			 * @returns {Promise<void>} Resolves when the directory exists.
+			 */
+			mkdir: (metaId, dirPath) => {
+				if (typeof adapter?.mkdirAsync === 'function') {
+					return adapter.mkdirAsync(metaId, dirPath).then(() => undefined);
+				}
+				requireFn(adapter?.mkdir, 'mkdir');
+				return new Promise((resolve, reject) => {
+					adapter.mkdir(metaId, dirPath, err => (err ? reject(err) : resolve(undefined)));
+				});
+			},
+			/**
+			 * Rename/move a file in ioBroker file storage.
+			 *
+			 * @param {string} metaId File storage root.
+			 * @param {string} oldPath Old path below metaId.
+			 * @param {string} newPath New path below metaId.
+			 * @returns {Promise<void>} Resolves when the rename completes.
+			 */
+			renameFile: (metaId, oldPath, newPath) => {
+				// @ts-expect-error renameFileAsync may not be available
+				if (typeof adapter?.renameFileAsync === 'function') {
+					// @ts-expect-error renameFileAsync may not be available
+					return adapter.renameFileAsync(metaId, oldPath, newPath).then(() => undefined);
+				}
+				// @ts-expect-error renameFile may not be available
+				requireFn(adapter?.renameFile, 'renameFile');
+				return new Promise((resolve, reject) => {
+					// @ts-expect-error renameFile may not be available
+					adapter.renameFile(metaId, oldPath, newPath, err => (err ? reject(err) : resolve(undefined)));
+				});
+			},
+			/**
+			 * Delete a file in ioBroker file storage.
+			 *
+			 * Adapter API name is `delFile` / `delFileAsync`; this facade uses `deleteFile` for clarity.
+			 *
+			 * @param {string} metaId File storage root.
+			 * @param {string} filePath Path below metaId.
+			 * @returns {Promise<void>} Resolves when the delete completes.
+			 */
+			deleteFile: (metaId, filePath) => {
+				if (typeof adapter?.delFileAsync === 'function') {
+					return adapter.delFileAsync(metaId, filePath).then(() => undefined);
+				}
+				requireFn(adapter?.delFile, 'delFile');
+				return new Promise((resolve, reject) => {
+					adapter.delFile(metaId, filePath, err => (err ? reject(err) : resolve(undefined)));
+				});
+			},
+		}),
 	});
 }
 

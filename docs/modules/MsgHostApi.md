@@ -95,6 +95,7 @@ Builds a small ioBroker facade used by plugins. It contains:
 - `iobroker.objects.*` – basic object access helpers (promisified)
 - `iobroker.states.*` – basic state access helpers (promisified)
 - `iobroker.subscribe.*` – subscribe/unsubscribe helpers for states and objects
+- `iobroker.files.*` – ioBroker file storage helpers (promisified; supports async + callback adapter APIs)
 
 Currently exposed helpers (overview):
 
@@ -102,6 +103,7 @@ Currently exposed helpers (overview):
 - `iobroker.objects`: `setObjectNotExists`, `delObject`, `getObjectView`, `getForeignObjects`, `getForeignObject`, `extendForeignObject`
 - `iobroker.states`: `setState`, `setForeignState`, `getForeignState`
 - `iobroker.subscribe`: `subscribeStates/Objects/ForeignStates/ForeignObjects` and matching `unsubscribe...`
+- `iobroker.files`: `readFile`, `writeFile`, `mkdir`, `renameFile`, `deleteFile`
 
 Compatibility behavior:
 
@@ -186,6 +188,24 @@ Example:
 
 ```js
 await ctx.api.iobroker.states.setForeignState('some.0.device.switch', { val: true, ack: false });
+```
+
+#### `iobroker.files.writeFile(metaId, filePath, data)`
+
+Promisified wrapper for ioBroker file storage writes.
+
+Notes:
+
+- `metaId` is the ioBroker “file namespace root”, usually the adapter instance namespace (example: `msghub.0`).
+- `filePath` is the path below `metaId` (example: `documents/NotifyShoppingPdf.0.pdf`).
+- `data` can be a `Buffer` (binary PDFs) or a string.
+
+Example:
+
+```js
+const metaId = ctx.api.iobroker.ids.namespace; // "msghub.0"
+await ctx.api.iobroker.files.mkdir(metaId, 'documents');
+await ctx.api.iobroker.files.writeFile(metaId, 'documents/out.pdf', pdfBuffer);
 ```
 
 ### `buildStoreApi(store, { hostName })`

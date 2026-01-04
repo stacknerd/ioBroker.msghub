@@ -20,6 +20,7 @@ function createAdapterStub(overrides = {}) {
 		log: { debug: [], info: [], warn: [], error: [] },
 		objects: [],
 		states: [],
+		files: [],
 		subscribe: [],
 		sendTo: [],
 	};
@@ -289,16 +290,33 @@ describe('MsgHostApi', () => {
 				subscribeForeignObjects(pattern) {
 					calls.subscribe.push(['subscribeForeignObjects', pattern]);
 				},
-				unsubscribeForeignObjects(pattern) {
-					calls.subscribe.push(['unsubscribeForeignObjects', pattern]);
-				},
-			});
+					unsubscribeForeignObjects(pattern) {
+						calls.subscribe.push(['unsubscribeForeignObjects', pattern]);
+					},
+					async readFileAsync(metaId, fileName) {
+						calls.files.push(['readFileAsync', metaId, fileName]);
+						return { file: Buffer.from('x'), mimeType: 'application/pdf' };
+					},
+					async writeFileAsync(metaId, fileName, data) {
+						calls.files.push(['writeFileAsync', metaId, fileName, data]);
+					},
+					async mkdirAsync(metaId, dirName) {
+						calls.files.push(['mkdirAsync', metaId, dirName]);
+					},
+					async delFileAsync(metaId, fileName) {
+						calls.files.push(['delFileAsync', metaId, fileName]);
+					},
+					async renameFileAsync(metaId, oldName, newName) {
+						calls.files.push(['renameFileAsync', metaId, oldName, newName]);
+					},
+				});
 
 			const api = buildIoBrokerApi(adapter, { hostName: 'MyHost' });
-			expect(Object.isFrozen(api)).to.equal(true);
-			expect(Object.isFrozen(api.objects)).to.equal(true);
-			expect(Object.isFrozen(api.states)).to.equal(true);
-			expect(Object.isFrozen(api.subscribe)).to.equal(true);
+				expect(Object.isFrozen(api)).to.equal(true);
+				expect(Object.isFrozen(api.objects)).to.equal(true);
+				expect(Object.isFrozen(api.states)).to.equal(true);
+				expect(Object.isFrozen(api.files)).to.equal(true);
+				expect(Object.isFrozen(api.subscribe)).to.equal(true);
 
 			await api.objects.setObjectNotExists('x', { type: 'state' });
 			await api.objects.delObject('x');
@@ -317,28 +335,43 @@ describe('MsgHostApi', () => {
 			assert.deepStrictEqual(state, { val: 1, ack: true });
 			assert.deepStrictEqual(view, { rows: [{ id: 'x' }], __test: true });
 
-			api.subscribe.subscribeStates('*');
-			api.subscribe.unsubscribeForeignObjects('*');
+				api.subscribe.subscribeStates('*');
+				api.subscribe.unsubscribeForeignObjects('*');
 
-			expect(calls.objects).to.deep.equal([
-				['setObjectNotExistsAsync', 'x', { type: 'state' }],
-				['delObjectAsync', 'x'],
-				['getObjectViewAsync', 'system', 'custom', { startkey: 'a', endkey: 'b' }],
+				const pdf = Buffer.from('%PDF');
+				const read = await api.files.readFile('msghub.0', 'documents/x.pdf');
+				await api.files.mkdir('msghub.0', 'documents');
+				await api.files.writeFile('msghub.0', 'documents/x.pdf', pdf);
+				await api.files.renameFile('msghub.0', 'documents/x.pdf', 'documents/y.pdf');
+				await api.files.deleteFile('msghub.0', 'documents/y.pdf');
+
+				expect(calls.objects).to.deep.equal([
+					['setObjectNotExistsAsync', 'x', { type: 'state' }],
+					['delObjectAsync', 'x'],
+					['getObjectViewAsync', 'system', 'custom', { startkey: 'a', endkey: 'b' }],
 				['getForeignObjectsAsync', 'system.*', undefined],
 				['getForeignObjectsAsync', 'enum.rooms.*', 'enum'],
 				['getForeignObjectAsync', 'system.adapter.test'],
 				['extendForeignObjectAsync', 'system.adapter.test', { common: { name: 'x' } }],
 			]);
-			expect(calls.states).to.deep.equal([
-				['setStateAsync', 'x', { val: 2, ack: true }],
-				['setForeignStateAsync', 'some.0.y', { val: 3, ack: false }],
-				['getForeignStateAsync', 'system.adapter.test.alive'],
-			]);
+				expect(calls.states).to.deep.equal([
+					['setStateAsync', 'x', { val: 2, ack: true }],
+					['setForeignStateAsync', 'some.0.y', { val: 3, ack: false }],
+					['getForeignStateAsync', 'system.adapter.test.alive'],
+				]);
+				expect(calls.files).to.deep.equal([
+					['readFileAsync', 'msghub.0', 'documents/x.pdf'],
+					['mkdirAsync', 'msghub.0', 'documents'],
+					['writeFileAsync', 'msghub.0', 'documents/x.pdf', pdf],
+					['renameFileAsync', 'msghub.0', 'documents/x.pdf', 'documents/y.pdf'],
+					['delFileAsync', 'msghub.0', 'documents/y.pdf'],
+				]);
+				expect(read).to.deep.equal({ file: Buffer.from('x'), mimeType: 'application/pdf' });
 				expect(calls.subscribe).to.deep.equal([
 					['subscribeStates', '*'],
 					['unsubscribeForeignObjects', '*'],
 				]);
-		});
+			});
 
 		it('binds subscribe methods to the adapter instance', () => {
 				const { adapter } = createAdapterStub({
@@ -435,11 +468,31 @@ describe('MsgHostApi', () => {
 					calls.states.push(['setForeignState', id, state]);
 					cb(null);
 				},
-				getForeignState(id, cb) {
-					calls.states.push(['getForeignState', id]);
-					cb(null, { val: 3 });
-				},
-			});
+					getForeignState(id, cb) {
+						calls.states.push(['getForeignState', id]);
+						cb(null, { val: 3 });
+					},
+					readFile(metaId, fileName, cb) {
+						calls.files.push(['readFile', metaId, fileName]);
+						cb(null, { file: Buffer.from('y'), mimeType: 'application/pdf' });
+					},
+					writeFile(metaId, fileName, data, cb) {
+						calls.files.push(['writeFile', metaId, fileName, data]);
+						cb(null);
+					},
+					mkdir(metaId, dirName, cb) {
+						calls.files.push(['mkdir', metaId, dirName]);
+						cb(null);
+					},
+					renameFile(metaId, oldName, newName, cb) {
+						calls.files.push(['renameFile', metaId, oldName, newName]);
+						cb(null);
+					},
+					delFile(metaId, fileName, cb) {
+						calls.files.push(['delFile', metaId, fileName]);
+						cb(null);
+					},
+				});
 
 			const api = buildIoBrokerApi(adapter, { hostName: 'MyHost' });
 
@@ -452,25 +505,40 @@ describe('MsgHostApi', () => {
 			expect(await api.objects.getForeignObjects('enum.rooms.*', 'enum')).to.deep.equal({ x: { _id: 'x' } });
 			expect(await api.objects.getForeignObject('id')).to.deep.equal({ _id: 'id' });
 			await api.objects.extendForeignObject('id', { common: {} });
-			await api.states.setState('x', { val: 1, ack: true });
-			await api.states.setForeignState('some.0.y', { val: 2, ack: false });
-			expect(await api.states.getForeignState('id')).to.deep.equal({ val: 3 });
+				await api.states.setState('x', { val: 1, ack: true });
+				await api.states.setForeignState('some.0.y', { val: 2, ack: false });
+				expect(await api.states.getForeignState('id')).to.deep.equal({ val: 3 });
 
-			expect(calls.objects).to.deep.equal([
-				['setObjectNotExists', 'x', { type: 'state' }],
-				['delObject', 'x'],
-				['getObjectView', 'system', 'custom', { startkey: 'a' }],
+				const pdf = Buffer.from('%PDF');
+				const read = await api.files.readFile('msghub.0', 'documents/x.pdf');
+				await api.files.mkdir('msghub.0', 'documents');
+				await api.files.writeFile('msghub.0', 'documents/x.pdf', pdf);
+				await api.files.renameFile('msghub.0', 'documents/x.pdf', 'documents/y.pdf');
+				await api.files.deleteFile('msghub.0', 'documents/y.pdf');
+
+				expect(calls.objects).to.deep.equal([
+					['setObjectNotExists', 'x', { type: 'state' }],
+					['delObject', 'x'],
+					['getObjectView', 'system', 'custom', { startkey: 'a' }],
 				['getForeignObjects', '*', undefined],
 				['getForeignObjects', 'enum.rooms.*', 'enum'],
 				['getForeignObject', 'id'],
 				['extendForeignObject', 'id', { common: {} }],
 			]);
-			expect(calls.states).to.deep.equal([
-				['setState', 'x', { val: 1, ack: true }],
-				['setForeignState', 'some.0.y', { val: 2, ack: false }],
-				['getForeignState', 'id'],
-			]);
-		});
+				expect(calls.states).to.deep.equal([
+					['setState', 'x', { val: 1, ack: true }],
+					['setForeignState', 'some.0.y', { val: 2, ack: false }],
+					['getForeignState', 'id'],
+				]);
+				expect(calls.files).to.deep.equal([
+					['readFile', 'msghub.0', 'documents/x.pdf'],
+					['mkdir', 'msghub.0', 'documents'],
+					['writeFile', 'msghub.0', 'documents/x.pdf', pdf],
+					['renameFile', 'msghub.0', 'documents/x.pdf', 'documents/y.pdf'],
+					['delFile', 'msghub.0', 'documents/y.pdf'],
+				]);
+				expect(read).to.deep.equal({ file: Buffer.from('y'), mimeType: 'application/pdf' });
+			});
 
 		it('wraps adapter.sendTo into a promise and passes through the response', async () => {
 			const { adapter, calls } = createAdapterStub({
@@ -518,20 +586,23 @@ describe('MsgHostApi', () => {
 			expect(() => api.sendTo('msghub.0', 'x', {})).to.throw(Error, "cannot target own namespace ('msghub.0')");
 		});
 
-		it('throws when a required adapter method is missing', () => {
-			const { adapter } = createAdapterStub({});
-			const api = buildIoBrokerApi(adapter, { hostName: 'MyHost' });
-			expect(() => api.subscribe.subscribeStates('*')).to.throw('MyHost: adapter.subscribeStates is not available');
-			expect(() => api.objects.getObjectView('system', 'custom', {})).to.throw(
-				'MyHost: adapter.getObjectView is not available',
-			);
-			expect(() => api.states.setForeignState('x', { val: 1 })).to.throw(
-				'MyHost: adapter.setForeignState is not available',
-			);
-			expect(() => api.objects.setObjectNotExists('x', {})).to.throw(
-				'MyHost: adapter.setObjectNotExists is not available',
-			);
-		});
+			it('throws when a required adapter method is missing', () => {
+				const { adapter } = createAdapterStub({});
+				const api = buildIoBrokerApi(adapter, { hostName: 'MyHost' });
+				expect(() => api.subscribe.subscribeStates('*')).to.throw('MyHost: adapter.subscribeStates is not available');
+				expect(() => api.objects.getObjectView('system', 'custom', {})).to.throw(
+					'MyHost: adapter.getObjectView is not available',
+				);
+				expect(() => api.states.setForeignState('x', { val: 1 })).to.throw(
+					'MyHost: adapter.setForeignState is not available',
+				);
+				expect(() => api.objects.setObjectNotExists('x', {})).to.throw(
+					'MyHost: adapter.setObjectNotExists is not available',
+				);
+				expect(() => api.files.writeFile('msghub.0', 'x.txt', 'x')).to.throw(
+					'MyHost: adapter.writeFile is not available',
+				);
+			});
 	});
 
 	describe('buildActionApi', () => {
