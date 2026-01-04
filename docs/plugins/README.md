@@ -614,6 +614,7 @@ To keep this validation readable and consistent, the repo provides a small helpe
 - `EngageSendTo`: [`./EngageSendTo.md`](./EngageSendTo.md)
 - `IngestHue`: [`./IngestHue.md`](./IngestHue.md)
 - `IngestRandomChaos`: [`./IngestRandomChaos.md`](./IngestRandomChaos.md)
+- `IngestStates`: [`./IngestStates.md`](./IngestStates.md)
 - `IoPlugins`: [`./IoPlugins.md`](./IoPlugins.md)
 - `NotifyDebug`: [`./NotifyDebug.md`](./NotifyDebug.md)
 - `NotifyPushover`: [`./NotifyPushover.md`](./NotifyPushover.md)

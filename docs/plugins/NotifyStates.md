@@ -136,7 +136,7 @@ The plugin writes into fixed subtrees below that base:
   - on notifications: stats updates are requested and throttled via `statsMinIntervalMs`
   - idle refresh: forced via `statsMaxIntervalMs` even without new notifications
 
-Note: `MsgStore` can dispatch a `due` event repeatedly while a message stays due. This means the same state may get updated multiple times even when the message did not change.
+Note: `MsgStore` uses one-shot `due` semantics: after dispatching `due`, it clears `timing.notifyAt` (or reschedules it to `now + timing.remindEvery`). This means a due message should not spam by default. States can still update multiple times if the message changes (e.g. `updated`) or if `remindEvery` triggers future `due` events.
 
 ### Map-safe JSON
 

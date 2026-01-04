@@ -17,6 +17,7 @@ Notes:
 | `BridgeAlexaTasks` | Bridge | Imports Alexa TODO items into Message Hub tasks and mirrors selected MsgHub tasks back to Alexa. | `false` | `true` | [`./BridgeAlexaTasks.md`](./BridgeAlexaTasks.md) |
 | `EngageSendTo` | Engage | Interact with MessageHub using “sendTo” in JavaScript and Blockly | `true` | `false` | [`./EngageSendTo.md`](./EngageSendTo.md) |
 | `IngestRandomChaos` | Ingest | Demo/load generator that periodically injects messages. | `false` | `true` | [`./IngestRandomChaos.md`](./IngestRandomChaos.md) |
+| `IngestStates` | Ingest | Generates MsgHub messages from ioBroker objects configured via “Custom” (Objects → Custom). | `true` | `false` | [`./IngestStates.md`](./IngestStates.md) |
 | `NotifyDebug` | Notify | Logs notification dispatches (debugging / development only). | `false` | `false` | [`./NotifyDebug.md`](./NotifyDebug.md) |
 | `NotifyPushover` | Notify | Sends MsgHub due notifications to a Pushover adapter instance via sendTo(). | `false` | `true` | [`./NotifyPushover.md`](./NotifyPushover.md) |
 | `NotifyShoppingPdf` | Notify | Renders all allowed shopping lists into a single PDF and stores it in ioBroker file storage. | `false` | `true` | [`./NotifyShoppingPdf.md`](./NotifyShoppingPdf.md) |
