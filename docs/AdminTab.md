@@ -17,13 +17,31 @@ placeholders for future features (like dashboards/calendars).
   - create/delete instances (only when `manifest.supportsMultiple === true`)
   - edit instance options (based on `manifest.options`)
 
+### Plugin “README” (User Guide overlay)
+
+If a plugin has documentation in `docs/plugins/<TypeName>.md`, the Admin Tab can show its **User Guide** section via an
+`(i)` button on the plugin card.
+
+Source of truth is the documentation file; the Admin Tab reads it from an auto-generated bundle:
+
+- Generated file: `admin/plugin-readmes.json`
+- Generator: `npm run docs:generate` (CI checks via `npm run docs:check`)
+
+### Manifest UI separators (`type: "header"`)
+
+`manifest.options` supports a UI-only separator element:
+
+- `type: "header"` renders a horizontal line (`<hr>`)
+- optional `label` renders a small heading below the line
+- the element is **not persisted** into `object.native` (Admin UI does not save it)
+
 ---
 
 ## Stats (diagnostics)
 
 The **Stats** tab provides a read-only snapshot of:
 
-- current message counts (by kind/lifecycle)
+- current message counts (by kind/lifecycle/origin)
 - due windows (“fällig” by domain time, not notification due)
 - “done” counts based on `lifecycle.state → "closed"` rollups (today / this week / this month)
 - I/O diagnostics for persistence and archive (last persisted/flush timestamps, pending queues)

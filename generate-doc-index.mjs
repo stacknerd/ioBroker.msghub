@@ -10,6 +10,8 @@ const SECTION_END = '<!-- AUTO-GENERATED:MODULE-INDEX:END -->';
 const PLUGIN_INDEX_SECTION_START = '<!-- AUTO-GENERATED:PLUGIN-INDEX:START -->';
 const PLUGIN_INDEX_SECTION_END = '<!-- AUTO-GENERATED:PLUGIN-INDEX:END -->';
 
+const ADMIN_PLUGIN_READMES_PATH = 'admin/plugin-readmes.json';
+
 const require = createRequire(import.meta.url);
 
 async function exists(filePath) {
@@ -300,6 +302,7 @@ async function loadPluginManifests({ pluginsDir }) {
       defaultEnabled: !!manifest.defaultEnabled,
       supportsMultiple: !!manifest.supportsMultiple,
       purpose: toSingleLine(manifest?.description?.en || manifest?.description?.de || ''),
+      title: manifest?.title || null,
     });
   }
 
@@ -338,6 +341,65 @@ async function updatePluginIndex({ pluginsDir, pluginIndexPath }) {
     await fs.writeFile(pluginIndexPath, next, 'utf8');
   }
 
+  return { changed: false };
+}
+
+function extractUserGuideMarkdown(md) {
+  const text = normalizeNewlines(String(md || ''));
+  const lines = text.split('\n');
+
+  let start = -1;
+  for (let i = 0; i < lines.length; i += 1) {
+    if (/^##\s*1\)\s*User\s+Guide\b/i.test(lines[i])) {
+      start = i + 1;
+      break;
+    }
+  }
+  if (start < 0) return '';
+
+  while (start < lines.length && !lines[start].trim()) start += 1;
+
+  let end = lines.length;
+  for (let i = start; i < lines.length; i += 1) {
+    if (/^##\s*2\)\s*/i.test(lines[i])) {
+      end = i;
+      break;
+    }
+  }
+
+  const out = lines.slice(start, end).join('\n').trim();
+  return out;
+}
+
+async function updateAdminPluginReadmes({ pluginsDir, docsDir, outPath }) {
+  const pluginEntries = await loadPluginManifests({ pluginsDir });
+
+  /** @type {Record<string, { md: string, source: string }>} */
+  const byType = {};
+
+  for (const p of pluginEntries) {
+    const docPath = path.join(docsDir, `${p.dir}.md`);
+    if (!(await exists(docPath))) {
+      continue;
+    }
+    const md = normalizeNewlines(await fs.readFile(docPath, 'utf8'));
+    const userGuide = extractUserGuideMarkdown(md);
+    if (!userGuide) {
+      continue;
+    }
+    byType[p.type] = { md: userGuide, source: docPath.replace(/\\/g, '/') };
+  }
+
+  const sorted = Object.fromEntries(
+    Object.entries(byType).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)),
+  );
+  const next = `${JSON.stringify(sorted, null, 2)}\n`;
+
+  const current = (await exists(outPath)) ? normalizeNewlines(await fs.readFile(outPath, 'utf8')) : '';
+  if (current !== next) {
+    if (CHECK_MODE) return { changed: true };
+    await fs.writeFile(outPath, next, 'utf8');
+  }
   return { changed: false };
 }
 
@@ -463,6 +525,12 @@ async function main() {
     pluginIndexPath: 'docs/plugins/PLUGIN-INDEX.md',
   });
 
+  const adminPluginReadmes = await updateAdminPluginReadmes({
+    pluginsDir: 'lib',
+    docsDir: 'docs/plugins',
+    outPath: ADMIN_PLUGIN_READMES_PATH,
+  });
+
   const readmes = [
     { kind: 'modules', docsDir: 'docs/modules', readmePath: 'docs/modules/README.md' },
     {
@@ -514,6 +582,9 @@ async function main() {
     }
     if (pluginIndex.changed) {
       problems.push(`Outdated plugin index:\n- docs/plugins/PLUGIN-INDEX.md`);
+    }
+    if (adminPluginReadmes.changed) {
+      problems.push(`Outdated admin plugin readmes:\n- ${ADMIN_PLUGIN_READMES_PATH}`);
     }
 
     if (problems.length) {

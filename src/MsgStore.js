@@ -21,7 +21,7 @@
  * - Single source of truth for validation: `MsgFactory.applyPatch()` is responsible for schema/normalization rules during updates.
  *   The store only performs minimal guards (presence of adapter/constants/factory, ref checks, and the integer level guard on add).
  * - External scheduling: this class does not “schedule” notifications beyond polling `notifyAt`. If a message remains due, it will be
- *   re-dispatched on every tick until something else updates/removes it (or moves `notifyAt` into the future).
+ *   dispatched when `notifyAt <= now` and then rescheduled (via `remindEvery`) or cleared (one-shot).
  * - Predictable ordering: when a mutation succeeds, the store updates `fullList` first, then triggers persistence/notifications/archive
  *   so downstream consumers observe the post-mutation state.
  *
@@ -41,9 +41,8 @@
  * Notifications (MsgNotify)
  * - The store does not deliver notifications itself; it only dispatches events to `MsgNotify`, which
  *   forwards them to registered plugins.
- * - The store does not mark messages as "already notified". If a message is due (`notifyAt <= now`),
- *   `_initiateNotifications()` will dispatch it again on every tick until some external actor updates/
- *   removes the message (or moves `notifyAt` into the future).
+ * - Due notifications are one-shot by default: after dispatching `due`, `_initiateNotifications()` clears `timing.notifyAt`
+ *   (or moves it to `now + timing.remindEvery` when configured) using a stealth patch.
  *
  * Ingest (MsgIngest)
  * - The store does not interpret incoming ioBroker events; it provides a host (`MsgIngest`) that

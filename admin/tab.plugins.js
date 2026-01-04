@@ -216,6 +216,251 @@
 			return deleteModalApi;
 		}
 
+		function appendInlineCodeAware(parent, text) {
+			const s = String(text ?? '');
+			const parts = s.split(/(`[^`]+`)/g).filter(Boolean);
+			for (const part of parts) {
+				if (part.startsWith('`') && part.endsWith('`') && part.length >= 2) {
+					parent.appendChild(h('code', { text: part.slice(1, -1) }));
+				} else {
+					parent.appendChild(document.createTextNode(part));
+				}
+			}
+		}
+
+		function renderMarkdownLite(md) {
+			const root = h('div', { class: 'msghub-readme' });
+			const text = String(md || '').replace(/\r\n/g, '\n');
+			const lines = text.split('\n');
+
+			let inCode = false;
+			let codeLines = [];
+			let listEl = null;
+			let paraLines = [];
+
+			const flushPara = () => {
+				if (paraLines.length === 0) {
+					return;
+				}
+				const p = h('p');
+				appendInlineCodeAware(p, paraLines.join(' ').trim());
+				root.appendChild(p);
+				paraLines = [];
+			};
+
+			const flushCode = () => {
+				if (!inCode) {
+					return;
+				}
+				const pre = h('pre', { class: 'msghub-readme-code' });
+				pre.appendChild(h('code', { text: codeLines.join('\n') }));
+				root.appendChild(pre);
+				codeLines = [];
+			};
+
+			const closeList = () => {
+				listEl = null;
+			};
+
+			for (const rawLine of lines) {
+				const line = String(rawLine ?? '');
+				const trimmed = line.trim();
+
+				if (/^```/.test(trimmed)) {
+					flushPara();
+					closeList();
+					if (inCode) {
+						flushCode();
+						inCode = false;
+					} else {
+						inCode = true;
+						codeLines = [];
+					}
+					continue;
+				}
+
+				if (inCode) {
+					codeLines.push(line);
+					continue;
+				}
+
+				if (/^---+$/.test(trimmed)) {
+					flushPara();
+					closeList();
+					root.appendChild(h('hr', { class: 'msghub-readme-hr' }));
+					continue;
+				}
+
+				const headingMatch = trimmed.match(/^(#{1,6})\s+(.*)$/);
+				if (headingMatch) {
+					flushPara();
+					closeList();
+					const level = headingMatch[1].length;
+					const title = headingMatch[2].trim();
+					const el = h('h6', { class: `msghub-readme-h msghub-readme-h${level}`.trim() });
+					appendInlineCodeAware(el, title);
+					root.appendChild(el);
+					continue;
+				}
+
+				const listMatch = trimmed.match(/^[-*]\s+(.*)$/);
+				if (listMatch) {
+					flushPara();
+					if (!listEl) {
+						listEl = h('ul', { class: 'msghub-readme-list' });
+						root.appendChild(listEl);
+					}
+					const li = h('li');
+					appendInlineCodeAware(li, listMatch[1].trim());
+					listEl.appendChild(li);
+					continue;
+				}
+
+				if (!trimmed) {
+					flushPara();
+					closeList();
+					continue;
+				}
+
+				paraLines.push(trimmed);
+			}
+
+			if (inCode) {
+				flushCode();
+			}
+			flushPara();
+
+			return root;
+		}
+
+		let readmeModalApi = null;
+		function ensureReadmeModal() {
+			if (readmeModalApi) {
+				return readmeModalApi;
+			}
+
+			const mount = document.querySelector('.msghub-root') || document.body;
+
+			const titleId = 'msghub-dialog-readme-title';
+			const bodyId = 'msghub-dialog-readme-body';
+
+			const el = h('div', { id: 'msghub-dialog-plugin-readme', class: 'msghub-dialog-backdrop', 'aria-hidden': 'true' }, [
+				h('div', { class: 'msghub-dialog msghub-dialog--readme', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': titleId }, [
+					h('h6', { id: titleId, class: 'msghub-dialog-title', text: 'Plugin guide' }),
+					h('div', { id: bodyId, class: 'msghub-dialog-body' }),
+					h('div', { class: 'msghub-dialog-actions' }, [
+						h('a', { href: '#', class: 'btn-flat', id: 'msghub-dialog-readme-close', text: 'Close' }),
+					]),
+				]),
+			]);
+
+			mount.appendChild(el);
+
+			let prevOverflow = null;
+
+			const setOpen = isOpen => {
+				el.classList.toggle('is-open', isOpen);
+				el.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+				if (isOpen) {
+					try {
+						prevOverflow = document.body.style.overflow;
+						document.body.style.overflow = 'hidden';
+					} catch {
+						// ignore
+					}
+				} else {
+					try {
+						document.body.style.overflow = prevOverflow || '';
+					} catch {
+						// ignore
+					}
+					prevOverflow = null;
+				}
+			};
+
+			const close = () => setOpen(false);
+
+			const btnClose = el.querySelector('#msghub-dialog-readme-close');
+			if (btnClose) {
+				btnClose.addEventListener('click', e => {
+					e.preventDefault();
+					close();
+				});
+			}
+
+			el.addEventListener('click', e => {
+				if (e?.target === el) {
+					close();
+				}
+			});
+
+			document.addEventListener('keydown', e => {
+				if (el.classList.contains('is-open') && (e.key === 'Escape' || e.key === 'Esc')) {
+					e.preventDefault();
+					close();
+				}
+			});
+
+			readmeModalApi = {
+				open: opts => {
+					const title = typeof opts?.title === 'string' ? opts.title : '';
+					const bodyEl = opts?.bodyEl;
+					const t = title && title.trim() ? title.trim() : 'Plugin guide';
+					const titleEl = el.querySelector(`#${titleId}`);
+					if (titleEl) {
+						titleEl.textContent = t;
+					}
+					const body = el.querySelector(`#${bodyId}`);
+					if (body) {
+						body.replaceChildren(bodyEl || h('p', { class: 'msghub-muted', text: 'No guide available.' }));
+					}
+					setOpen(true);
+				},
+			};
+
+			return readmeModalApi;
+		}
+
+		let pluginReadmesByType = new Map();
+		let pluginReadmesLoadPromise = null;
+		async function ensurePluginReadmesLoaded() {
+			if (pluginReadmesLoadPromise) {
+				return pluginReadmesLoadPromise;
+			}
+			pluginReadmesLoadPromise = (async () => {
+				try {
+					const res = await fetch('plugin-readmes.json', { cache: 'no-store' });
+					if (!res?.ok) {
+						return pluginReadmesByType;
+					}
+					const data = await res.json();
+					if (!data || typeof data !== 'object') {
+						return pluginReadmesByType;
+					}
+					const map = new Map();
+					for (const [k, v] of Object.entries(data)) {
+						if (typeof k !== 'string' || !k.trim()) {
+							continue;
+						}
+						if (!v || typeof v !== 'object') {
+							continue;
+						}
+						const md = typeof v.md === 'string' ? v.md : '';
+						const source = typeof v.source === 'string' ? v.source : '';
+						if (!md.trim()) {
+							continue;
+						}
+						map.set(k.trim(), { md, source });
+					}
+					pluginReadmesByType = map;
+					return pluginReadmesByType;
+				} catch {
+					return pluginReadmesByType;
+				}
+			})();
+			return pluginReadmesLoadPromise;
+		}
+
 		const captureAccordionState = () => {
 			const map = new Map();
 			for (const el of elRoot.querySelectorAll('.msghub-acc-input')) {
@@ -228,6 +473,18 @@
 
 		function buildFieldInput({ type, key, label, value, help, unit, min, max, step, options }) {
 			const id = `f_${key}_${Math.random().toString(36).slice(2, 8)}`;
+
+			if (type === 'header') {
+				const labelText = typeof label === 'string' ? label.trim() : '';
+				const hasLabel = !!labelText;
+				return {
+					skipSave: true,
+					wrapper: h('div', { class: 'msghub-field msghub-field--header' }, [
+						h('hr', { class: 'msghub-field-hr' }),
+						hasLabel ? h('p', { class: 'msghub-field-header-label', text: labelText }) : null,
+					]),
+				};
+			}
 
 			const optionList = Array.isArray(options) ? options.filter(o => o && typeof o === 'object') : [];
 			if ((type === 'string' || type === 'number') && optionList.length > 0) {
@@ -469,7 +726,7 @@
 			return s.length > maxLen ? `${s.slice(0, maxLen - 1)}…` : s;
 		}
 
-		function renderPluginCard({ plugin, instances, refreshAll, refreshPlugin, expandedById }) {
+		function renderPluginCard({ plugin, instances, refreshAll, refreshPlugin, expandedById, readmesByType }) {
 			const label = formatPluginLabel(plugin);
 			const desc = pickText(plugin?.description) || '';
 
@@ -477,6 +734,9 @@
 			const fields = getPluginFields(plugin);
 			const instanceTitleKey = getInstanceTitleFieldKey(fields);
 			const hasOptions = fields.length > 0;
+
+			const readme = readmesByType instanceof Map ? readmesByType.get(String(plugin?.type || '')) : null;
+			const hasReadme = !!readme?.md?.trim?.();
 
 			const safeIdPart = String(plugin.type || 'plugin').replace(/[^A-Za-z0-9_-]/g, '_');
 			const accId = `acc_${safeIdPart}_${adapterInstance}`;
@@ -502,6 +762,17 @@
 
 			const statusTitle = `${runningCount} running · ${errorCount} error · ${stoppedCount} stopped`;
 
+			const openReadme = () => {
+				const body = h('div', null, [
+					readme?.source ? h('div', { class: 'msghub-muted msghub-readme-source', text: `Source: ${readme.source}` }) : null,
+					hasReadme ? renderMarkdownLite(readme.md) : h('p', { class: 'msghub-muted', text: 'No guide available.' }),
+				]);
+				ensureReadmeModal().open({
+					title: `${label.primary} · User Guide`,
+					bodyEl: body,
+				});
+			};
+
 			const header = h('div', { class: 'card-content msghub-card-head' }, [
 				h('div', { class: 'msghub-card-headrow' }, [
 					h('div', { class: 'msghub-card-headleft' }, [
@@ -513,7 +784,23 @@
 						}),
 						h('span', { class: 'card-title', text: label.primary }),
 					]),
-					h('label', { class: 'msghub-acc-toggle', for: accId, text: 'Details' }),
+					h('div', { class: 'msghub-card-headright' }, [
+						h('a', {
+							class: `msghub-info-btn${hasReadme ? '' : ' disabled'}`,
+							href: '#',
+							title: hasReadme ? 'User guide' : 'No user guide available',
+							'aria-label': hasReadme ? 'User guide' : 'No user guide available',
+							onclick: e => {
+								e.preventDefault();
+								if (!hasReadme) {
+									return;
+								}
+								openReadme();
+							},
+							text: 'i',
+						}),
+						h('label', { class: 'msghub-acc-toggle', for: accId, text: 'Details' }),
+					]),
 				]),
 				label.secondary ? h('p', { class: 'msghub-muted', text: label.secondary }) : null,
 				desc ? h('p', { class: 'msghub-muted', text: desc }) : null,
@@ -719,11 +1006,11 @@
 
 				instWrap.appendChild(head);
 
-				if (hasOptions) {
-					const bodyWrap = h('div', { class: 'msghub-instance-body' });
-					const fieldsContainer = h('div', { class: 'msghub-instance-fields' });
-					const inputs = {};
-					const initial = {};
+					if (hasOptions) {
+						const bodyWrap = h('div', { class: 'msghub-instance-body' });
+						const fieldsContainer = h('div', { class: 'msghub-instance-fields' });
+						const inputs = {};
+						const initial = {};
 
 					const normalize = v => (v === undefined ? null : v);
 					const isEqual = (a, b) => Object.is(a, b);
@@ -750,46 +1037,51 @@
 
 					const updateDirtyUi = () => setSaveEnabled(isDirtyNow());
 
-					for (const field of fields) {
-						const key = field?.key;
-						if (!key) {
-							continue;
-						}
-						const effectiveValue =
-							inst.native?.[key] !== undefined && inst.native?.[key] !== null
-								? inst.native?.[key]
-								: field.default;
-						const unit = field?.unit;
-						const { input, select, wrapper, getValue } = buildFieldInput({
-							type: field.type,
-							key,
-							label: pickText(field.label) || field.key,
-							help: pickText(field.help) || '',
-							value: effectiveValue,
-							unit,
-							min: field.min,
-							max: field.max,
-							step: field.step,
-							options: field.options,
-						});
+						for (const field of fields) {
+							const key = field?.key;
+							if (!key) {
+								continue;
+							}
+							const effectiveValue =
+								inst.native?.[key] !== undefined && inst.native?.[key] !== null
+									? inst.native?.[key]
+									: field.default;
+							const unit = field?.unit;
+							const { input, select, wrapper, getValue, skipSave } = buildFieldInput({
+								type: field.type,
+								key,
+								label: field.type === 'header' ? pickText(field.label) || '' : pickText(field.label) || field.key,
+								help: pickText(field.help) || '',
+								value: effectiveValue,
+								unit,
+								min: field.min,
+								max: field.max,
+								step: field.step,
+								options: field.options,
+							});
 
-						const valueGetter = typeof getValue === 'function' ? getValue : () => null;
-						inputs[key] = { input, select, field, getValue: valueGetter };
-						initial[key] = normalize(valueGetter());
+							if (skipSave === true) {
+								fieldsContainer.appendChild(wrapper);
+								continue;
+							}
+
+							const valueGetter = typeof getValue === 'function' ? getValue : () => null;
+							inputs[key] = { input, select, field, getValue: valueGetter };
+							initial[key] = normalize(valueGetter());
 
 							if (input?.tagName === 'SELECT') {
 								input.addEventListener('change', updateDirtyUi);
 							} else if (field.type === 'boolean') {
-								input.addEventListener('change', updateDirtyUi);
+								input?.addEventListener?.('change', updateDirtyUi);
 							} else {
-								input.addEventListener('input', updateDirtyUi);
-								input.addEventListener('change', updateDirtyUi);
+								input?.addEventListener?.('input', updateDirtyUi);
+								input?.addEventListener?.('change', updateDirtyUi);
 							}
-						if (select) {
-							select.addEventListener('change', updateDirtyUi);
-						}
+							if (select) {
+								select.addEventListener('change', updateDirtyUi);
+							}
 
-						fieldsContainer.appendChild(wrapper);
+							fieldsContainer.appendChild(wrapper);
 					}
 
 					saveBtn = h('a', {
@@ -872,6 +1164,8 @@
 				const { plugins } = await sendTo('admin.plugins.getCatalog', {});
 				const { instances } = await sendTo('admin.plugins.listInstances', {});
 
+				const readmesByType = await ensurePluginReadmesLoaded();
+
 				const byType = buildInstancesByType(instances);
 
 				const withUi = (plugins || []).filter(p => p && p.options && typeof p.options === 'object');
@@ -936,6 +1230,7 @@
 									refreshAll,
 									refreshPlugin,
 									expandedById,
+									readmesByType,
 								}),
 							);
 						}
@@ -969,6 +1264,7 @@
 				const expandedById = captureAccordionState();
 				const { instances } = await sendTo('admin.plugins.listInstances', {});
 				const byType = buildInstancesByType(instances);
+				const readmesByType = await ensurePluginReadmesLoaded();
 
 				const nextCard = renderPluginCard({
 					plugin,
@@ -976,6 +1272,7 @@
 					refreshAll,
 					refreshPlugin,
 					expandedById,
+					readmesByType,
 				});
 
 				const existing = getExistingCardForType(type);

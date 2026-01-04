@@ -18,7 +18,7 @@
  *
  * Conventions
  * - Producer plugins live in `lib/` and are loaded via `lib/index.js`.
- * - Plugin entry files typically live at `lib/Ingest<System>/index.js` (e.g. `lib/IngestIoBrokerStates/index.js`).
+ * - Plugin entry files typically live at `lib/Ingest<System>/index.js` (e.g. `lib/IngestStates/index.js`).
  */
 
 const {

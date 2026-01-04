@@ -1,4 +1,4 @@
-/* global window */
+/* global window, document */
 'use strict';
 
 (function () {
@@ -258,7 +258,14 @@
 			throw new Error('MsghubAdminTabStats: missing statsRoot element');
 		}
 
+		const AUTO_REFRESH_MS = 15000;
+
 		let loading = false;
+		let silentLoading = false;
+		let autoRefresh = true;
+		let autoTimer = null;
+		let archiveSizeLoading = false;
+
 		let lastError = null;
 		let lastStats = null;
 
@@ -270,149 +277,175 @@
 			}
 		};
 
-		function render() {
-			root.innerHTML = '';
+		const actions = h('div', { class: 'msghub-actions' });
+		const refreshBtn = h('button', { class: 'btn', type: 'button', text: 'Refresh' });
+		const autoBtn = h('button', { class: 'btn-flat', type: 'button', text: 'Auto: on' });
+		actions.appendChild(refreshBtn);
+		actions.appendChild(autoBtn);
 
-			const actions = h('div', { class: 'msghub-actions' }, [
-				h('button', {
-					class: 'btn',
-					type: 'button',
-					disabled: loading ? 'true' : null,
-					onclick: () => loadStats({ archiveSize: false }).catch(() => undefined),
-					text: 'Refresh',
-				}),
-			]);
+		const progress = h(
+			'div',
+			{ class: 'msghub-progress is-hidden' },
+			h('div', { class: 'progress' }, h('div', { class: 'indeterminate' })),
+		);
+		const errorEl = h('div', { class: 'msghub-error' });
+		const metaEl = h('div', { class: 'msghub-muted msghub-stats-meta' });
+		const contentEl = h('div', { class: 'msghub-stats-content' });
 
-			root.appendChild(actions);
+		root.replaceChildren(actions, progress, errorEl, metaEl, contentEl);
 
-			if (loading) {
-				root.appendChild(h('div', { class: 'progress' }, h('div', { class: 'indeterminate' })));
-				return;
-			}
+		const isTabVisible = () => {
+			const tab = root.closest('#tab-stats');
+			return !document.hidden && !!tab && tab.offsetParent !== null;
+		};
 
-			if (lastError) {
-				root.appendChild(h('div', { class: 'msghub-error', text: String(lastError) }));
-				return;
-			}
+		const setProgressVisible = isVisible => {
+			progress.classList.toggle('is-hidden', !isVisible);
+		};
 
-			if (!lastStats) {
-				root.appendChild(h('div', { class: 'msghub-muted', text: 'No stats loaded yet.' }));
-				return;
-			}
+		const updateButtons = () => {
+			refreshBtn.disabled = loading && !silentLoading;
+			autoBtn.textContent = autoRefresh ? 'Auto: on' : 'Auto: off';
+			refreshBtn.classList.toggle('msghub-btn-loading', loading && silentLoading);
+		};
 
-			const meta = isObject(lastStats.meta) ? lastStats.meta : {};
-			root.appendChild(
-				h('div', { class: 'msghub-muted msghub-stats-meta' }, [
+			function buildContent(stats) {
+				const meta = isObject(stats?.meta) ? stats.meta : {};
+				metaEl.replaceChildren(
 					h('div', { text: `generatedAt: ${formatTs(meta.generatedAt)}` }),
-					h('div', { text: meta.tz ? `tz: ${meta.tz}` : 'tz: n/a' }),
-				]),
+				h('div', { text: meta.tz ? `tz: ${meta.tz}` : 'tz: n/a' }),
 			);
 
-			const current = isObject(lastStats.current) ? lastStats.current : {};
-			const schedule = isObject(lastStats.schedule) ? lastStats.schedule : {};
-			const done = isObject(lastStats.done) ? lastStats.done : {};
-			const io = isObject(lastStats.io) ? lastStats.io : {};
+			const current = isObject(stats?.current) ? stats.current : {};
+			const schedule = isObject(stats?.schedule) ? stats.schedule : {};
+			const done = isObject(stats?.done) ? stats.done : {};
+			const io = isObject(stats?.io) ? stats.io : {};
 
-			root.appendChild(
-				h('div', { class: 'card' }, [
-					h('div', { class: 'card-content' }, [
-						h('div', { class: 'card-title', text: 'Current' }),
-						h('div', { class: 'msghub-stats-grid' }, [
-							renderTile(h, 'total', String(current.total ?? 0)),
-						]),
-					]),
+			const nodes = [];
+
+			nodes.push(
+				h('div', { class: 'msghub-stats-row' }, [
+					h('div', { class: 'msghub-stats-col' }, [renderRingCard(h, 'Current by kind', current.byKind)]),
+					h('div', { class: 'msghub-stats-col' }, [renderRingCard(h, 'Current by lifecycle', current.byLifecycle)]),
+					h('div', { class: 'msghub-stats-col' }, [renderRingCard(h, 'Current by origin', current.byOriginSystem)]),
 				]),
 			);
-
-			const ringRow = h('div', { class: 'msghub-stats-row' }, [
-				h('div', { class: 'msghub-stats-col' }, [renderRingCard(h, 'Current by kind', current.byKind)]),
-				h('div', { class: 'msghub-stats-col' }, [renderRingCard(h, 'Current by lifecycle', current.byLifecycle)]),
-			]);
-			root.appendChild(ringRow);
 
 			const scheduleDomain = renderScheduleChart(h, 'Schedule (domain “fällig”)', schedule);
 			if (scheduleDomain) {
-				root.appendChild(scheduleDomain);
+				nodes.push(scheduleDomain);
 			}
 
-			const scheduleByKind = renderScheduleByKind(h, schedule);
-			if (scheduleByKind) {
-				root.appendChild(scheduleByKind);
+				const scheduleByKind = renderScheduleByKind(h, schedule);
+				if (scheduleByKind) {
+					nodes.push(scheduleByKind);
+				}
+
+				nodes.push(
+					h('div', { class: 'card' }, [
+						h('div', { class: 'card-content' }, [
+							h('div', { class: 'card-title', text: 'Done (transition → closed)' }),
+							h('div', { class: 'msghub-stats-grid' }, [
+								renderTile(h, 'today', String(done?.today?.total ?? 0)),
+								renderTile(h, 'thisWeek', String(done?.thisWeek?.total ?? 0)),
+								renderTile(h, 'thisMonth', String(done?.thisMonth?.total ?? 0)),
+							]),
+							done?.lastClosedAt
+								? h('div', { class: 'msghub-muted msghub-stats-meta', text: `lastClosedAt: ${formatTs(done.lastClosedAt)}` })
+								: null,
+							h('div', { class: 'msghub-stats-block' }, [
+								h('div', { class: 'msghub-muted msghub-stats-subtitle', text: 'today by kind' }),
+								renderDoneByKind(h, done?.today),
+							]),
+						]),
+					]),
+				);
+
+				const storage = isObject(io.storage) ? io.storage : {};
+				const archive = isObject(io.archive) ? io.archive : {};
+				const pending = isObject(archive.pending) ? archive.pending : {};
+
+				nodes.push(
+					h('div', { class: 'card' }, [
+						h('div', { class: 'card-content' }, [
+							h('div', { class: 'card-title', text: 'Persistent Storage' }),
+							h('div', { class: 'msghub-stats-grid' }, [
+								renderTile(h, 'lastPersistedAt', formatTs(storage.lastPersistedAt)),
+								renderTile(h, 'lastPersistedBytes', formatBytes(storage.lastPersistedBytes)),
+								renderTile(h, 'pending', storage.pending === true ? 'yes' : 'no'),
+							]),
+						]),
+					]),
+				);
+
+				const computeBtn = h('button', { class: 'btn-flat', type: 'button', text: 'Compute archive size' });
+				if (archiveSizeLoading) {
+					computeBtn.classList.add('msghub-btn-loading');
+				}
+				computeBtn.addEventListener('click', e => {
+					e.preventDefault();
+					computeBtn.classList.add('msghub-btn-loading');
+					loadStats({ archiveSize: true, silent: false, source: 'archive' }).catch(() => undefined);
+				});
+
+				nodes.push(
+					h('div', { class: 'card' }, [
+						h('div', { class: 'card-content' }, [
+							h('div', { class: 'card-title', text: 'Archive' }),
+							h('div', { class: 'msghub-actions' }, [computeBtn]),
+							h('div', { class: 'msghub-stats-grid' }, [
+								renderTile(h, 'keepPreviousWeeks', String(archive.keepPreviousWeeks ?? 0)),
+								renderTile(h, 'lastFlushedAt', formatTs(archive.lastFlushedAt)),
+								renderTile(h, 'pending.events', String(pending.events ?? 0)),
+								renderTile(h, 'pending.refs', String(pending.refs ?? 0)),
+								renderTile(h, 'size', formatBytes(archive.approxSizeBytes)),
+							]),
+							archive.approxSizeUpdatedAt
+								? h('div', { class: 'msghub-muted msghub-stats-meta', text: `sizeUpdatedAt: ${formatTs(archive.approxSizeUpdatedAt)}` })
+								: null,
+							archive.approxSizeIsComplete === false && archive.approxSizeBytes != null
+								? h('div', { class: 'msghub-muted msghub-stats-meta', text: 'archive.size is incomplete (backend does not provide file sizes for all entries)' })
+								: null,
+						]),
+					]),
+				);
+
+				return nodes;
 			}
 
-			root.appendChild(
-				h('div', { class: 'card' }, [
-					h('div', { class: 'card-content' }, [
-						h('div', { class: 'card-title', text: 'Done (transition → closed)' }),
-						h('div', { class: 'msghub-stats-grid' }, [
-							renderTile(h, 'today', String(done?.today?.total ?? 0)),
-							renderTile(h, 'thisWeek', String(done?.thisWeek?.total ?? 0)),
-							renderTile(h, 'thisMonth', String(done?.thisMonth?.total ?? 0)),
-						]),
-						done?.lastClosedAt ? h('div', { class: 'msghub-muted msghub-stats-meta', text: `lastClosedAt: ${formatTs(done.lastClosedAt)}` }) : null,
-						h('div', { class: 'msghub-stats-block' }, [
-							h('div', { class: 'msghub-muted msghub-stats-subtitle', text: 'today by kind' }),
-							renderDoneByKind(h, done?.today),
-						]),
-					]),
-				]),
-			);
+		function render() {
+			updateButtons();
+			setProgressVisible(loading && !silentLoading);
 
-			const storage = isObject(io.storage) ? io.storage : {};
-			const archive = isObject(io.archive) ? io.archive : {};
-			const pending = isObject(archive.pending) ? archive.pending : {};
+			errorEl.textContent = lastError ? String(lastError) : '';
+			errorEl.style.display = lastError ? 'block' : 'none';
 
-			root.appendChild(
-				h('div', { class: 'card' }, [
-					h('div', { class: 'card-content' }, [
-						h('div', { class: 'card-title', text: 'Persistent Storage' }),
-						h('div', { class: 'msghub-stats-grid' }, [
-							renderTile(h, 'lastPersistedAt', formatTs(storage.lastPersistedAt)),
-							renderTile(h, 'lastPersistedBytes', formatBytes(storage.lastPersistedBytes)),
-							renderTile(h, 'pending', storage.pending === true ? 'yes' : 'no'),
-						]),
-					]),
-				]),
-			);
+			if (!lastStats) {
+				metaEl.replaceChildren();
+				contentEl.replaceChildren(h('div', { class: 'msghub-muted', text: 'No stats loaded yet.' }));
+				return;
+			}
 
-			root.appendChild(
-				h('div', { class: 'card' }, [
-					h('div', { class: 'card-content' }, [
-						h('div', { class: 'card-title', text: 'Archive' }),
-						h('div', { class: 'msghub-actions' }, [
-							h('button', {
-								class: 'btn-flat',
-								type: 'button',
-								disabled: loading ? 'true' : null,
-								onclick: () => loadStats({ archiveSize: true }).catch(() => undefined),
-								text: 'Compute archive size',
-							}),
-						]),
-						h('div', { class: 'msghub-stats-grid' }, [
-							renderTile(h, 'keepPreviousWeeks', String(archive.keepPreviousWeeks ?? 0)),
-							renderTile(h, 'lastFlushedAt', formatTs(archive.lastFlushedAt)),
-							renderTile(h, 'pending.events', String(pending.events ?? 0)),
-							renderTile(h, 'pending.refs', String(pending.refs ?? 0)),
-							renderTile(h, 'size', formatBytes(archive.approxSizeBytes)),
-						]),
-						archive.approxSizeUpdatedAt
-							? h('div', { class: 'msghub-muted msghub-stats-meta', text: `sizeUpdatedAt: ${formatTs(archive.approxSizeUpdatedAt)}` })
-							: null,
-						archive.approxSizeIsComplete === false && archive.approxSizeBytes != null
-							? h('div', { class: 'msghub-muted msghub-stats-meta', text: 'archive.size is incomplete (backend does not provide file sizes for all entries)' })
-							: null,
-					]),
-				]),
-			);
+			// Replace content in one go (reduces flicker vs. clearing first).
+			const fragment = document.createDocumentFragment();
+			for (const node of buildContent(lastStats)) {
+				fragment.appendChild(node);
+			}
+			contentEl.replaceChildren(fragment);
 		}
 
-		async function loadStats({ archiveSize }) {
+		async function loadStats({ archiveSize, silent = false, source = 'refresh' }) {
 			if (loading) {
 				return;
 			}
 			loading = true;
+			silentLoading = silent === true;
 			lastError = null;
-			render();
+			if (source === 'archive') {
+				archiveSizeLoading = true;
+			}
+			updateButtons();
+			setProgressVisible(loading && !silentLoading);
 
 			try {
 				lastStats = await sendTo('admin.stats.get', {
@@ -423,17 +456,58 @@
 				});
 			} catch (e) {
 				lastError = String(e?.message || e);
-				toast(lastError);
+				if (!silentLoading) {
+					toast(lastError);
+				}
 			} finally {
 				loading = false;
+				silentLoading = false;
+				archiveSizeLoading = false;
 				render();
 			}
 		}
 
+		const scheduleAuto = () => {
+			if (autoTimer) {
+				clearTimeout(autoTimer);
+				autoTimer = null;
+			}
+			if (!autoRefresh) {
+				return;
+			}
+			autoTimer = setTimeout(() => {
+				autoTimer = null;
+				if (autoRefresh && isTabVisible() && !loading) {
+					loadStats({ archiveSize: false, silent: true, source: 'auto' }).catch(() => undefined);
+				}
+				scheduleAuto();
+			}, AUTO_REFRESH_MS + Math.trunc(Math.random() * 1200));
+		};
+
+		refreshBtn.addEventListener('click', e => {
+			e.preventDefault();
+			loadStats({ archiveSize: false, silent: false, source: 'refresh' }).catch(() => undefined);
+		});
+		autoBtn.addEventListener('click', e => {
+			e.preventDefault();
+			autoRefresh = !autoRefresh;
+			updateButtons();
+			scheduleAuto();
+		});
+
+		document.addEventListener('visibilitychange', () => {
+			if (autoRefresh && isTabVisible() && !loading) {
+				loadStats({ archiveSize: false, silent: true, source: 'auto' }).catch(() => undefined);
+			}
+		});
+
 		render();
 
 		return {
-			onConnect: () => loadStats({ archiveSize: false }),
+			onConnect: async () => {
+				await loadStats({ archiveSize: false, silent: false, source: 'connect' });
+				scheduleAuto();
+			},
 		};
 	}
 

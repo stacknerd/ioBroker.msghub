@@ -35,11 +35,12 @@ Primary consumers today:
 
 1. **Current snapshot**
    - totals and breakdowns over the current in-memory list (`fullList`)
-   - buckets: by kind, by lifecycle state, by level
+   - buckets: by kind, by lifecycle state, by level, by origin system (`origin.system`)
 
 2. **Schedule buckets (“fällig”, domain time)**
    - counts of messages that have a domain due timestamp
    - windows: overdue, today, tomorrow, next 7 days, this week, this month
+   - additional “from today” windows (exclude overdue): this week (from today), this month (from today)
    - grouped by kind
 
 3. **Done rollup (persistent)**
@@ -100,6 +101,13 @@ Returns a JSON object shaped like:
 - `done`: rollup buckets (today/thisWeek/thisMonth) + lastClosedAt
 - `io`: storage + archive status
 
+Notes on shape:
+
+- `current.byOriginSystem` is derived from `message.origin.system` and is useful to understand which integration/system
+  currently “owns” most messages (falls back to `"unknown"` when missing).
+- `schedule.thisWeekFromToday` and `schedule.thisMonthFromToday` are “UI-friendly” counterparts to `thisWeek`/`thisMonth`:
+  they count due timestamps **from start of today**, which means they exclude the overdue portion.
+
 Options are used for opt-in / expensive fields:
 
 - `options.include.archiveSize === true` triggers `MsgArchive.estimateSizeBytes(...)` before returning `io.archive`.
@@ -136,6 +144,17 @@ All window boundaries are computed in **local time**:
 - day start: local midnight
 - week start: Monday 00:00 local time
 - month start: first day of month 00:00 local time
+
+Schedule windows recap:
+
+- `overdue`: due timestamp < start of today
+- `today`: start of today ≤ due < start of tomorrow
+- `tomorrow`: start of tomorrow ≤ due < start of day after tomorrow
+- `next7Days`: start of today ≤ due < start of today + 7 days
+- `thisWeek`: start of local week ≤ due < start of next local week (calendar week window)
+- `thisWeekFromToday`: start of today ≤ due < start of next local week (calendar week window, excluding overdue)
+- `thisMonth`: start of local month ≤ due < start of next local month (calendar month window)
+- `thisMonthFromToday`: start of today ≤ due < start of next local month (calendar month window, excluding overdue)
 
 ### 4) Expensive fields must be opt-in
 

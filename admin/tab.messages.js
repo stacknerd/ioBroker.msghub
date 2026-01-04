@@ -25,10 +25,10 @@
 		return cur;
 	}
 
-	function formatTs(ts) {
-		if (typeof ts !== 'number' || !Number.isFinite(ts)) {
-			return '';
-		}
+		function formatTs(ts) {
+			if (typeof ts !== 'number' || !Number.isFinite(ts)) {
+				return '';
+			}
 		try {
 			return new Date(ts).toLocaleString();
 		} catch (_err) {
@@ -36,24 +36,32 @@
 		}
 	}
 
-	function initMessagesSection(ctx) {
-		const { sendTo, h, M, elements } = ctx;
-		const root = elements.messagesRoot;
-		if (!root) {
-			throw new Error('MsghubAdminTabMessages: missing messagesRoot element');
-		}
+		function initMessagesSection(ctx) {
+			const { sendTo, h, M, elements } = ctx;
+			const root = elements.messagesRoot;
+			if (!root) {
+				throw new Error('MsghubAdminTabMessages: missing messagesRoot element');
+			}
 
-		const t = (en, de) => {
-			const lang = typeof ctx?.lang === 'string' ? ctx.lang : '';
-			return lang.toLowerCase().startsWith('de') ? de : en;
-		};
+			const AUTO_REFRESH_MS = 15000;
 
-		let loading = false;
-		let lastError = null;
-		let constants = null;
-		let items = [];
-		let total = 0;
-		let pages = 1;
+			const t = (en, de) => {
+				const lang = typeof ctx?.lang === 'string' ? ctx.lang : '';
+				return lang.toLowerCase().startsWith('de') ? de : en;
+			};
+
+			let loading = false;
+			let silentLoading = false;
+			let autoRefresh = true;
+			let autoTimer = null;
+			let requestSeq = 0;
+			let hasLoadedOnce = false;
+			let lastError = null;
+			let constants = null;
+			let items = [];
+			let total = 0;
+			let pages = 1;
+			let lastMeta = null;
 
 		let pageIndex = 1;
 		let pageSize = 50;
@@ -242,10 +250,10 @@
 			return where;
 		}
 
-		let popover = null;
-		function closePopover() {
-			if (popover?.el) {
-				popover.el.remove();
+			let popover = null;
+			function closePopover() {
+				if (popover?.el) {
+					popover.el.remove();
 			}
 			popover = null;
 		}
@@ -508,95 +516,11 @@
 			document.addEventListener('click', onDocClick, true);
 		}
 
-		function renderTable(itemsToRender) {
-			const kindCount = getFilterSet('kind')?.size || 0;
-			const lifecycleCount = getFilterSet('lifecycle.state')?.size || 0;
-			const levelCount = getFilterSet('level')?.size || 0;
-			const originCount = getFilterSet('origin.system')?.size || 0;
-
-			const head = h('thead', null, [
-				h('tr', null, [
-					h('th', { class: 'msghub-th' }, [
-						h('button', {
-							class: `btn-flat msghub-th-sort${sortField === 'ref' ? ' is-active' : ''}`,
-							type: 'button',
-							onclick: e => openSortPopover(e.target, { field: 'ref', title: 'Ref' }),
-							text: '(Ref)',
-						}),
-					]),
-					h('th', { class: 'msghub-th' }, [
-						h('button', {
-							class: `btn-flat msghub-th-sort${sortField === 'title' ? ' is-active' : ''}`,
-							type: 'button',
-							onclick: e => openSortPopover(e.target, { field: 'title', title: 'Title' }),
-							text: '(Title)',
-						}),
-					]),
-					h('th', { class: 'msghub-th' }, [
-						h('button', {
-							class: `btn-flat msghub-th-filter${kindCount > 0 ? ' is-active' : ''}`,
-							type: 'button',
-							onclick: e => openFilterPopover(e.target, { key: 'kind', title: 'Kind', options: listEnumValues(getConstantsEnum('kind')) }),
-							text: kindCount > 0 ? `Kind (${kindCount})` : 'Kind',
-						}),
-					]),
-					h('th', { class: 'msghub-th' }, [
-						h('button', {
-							class: `btn-flat msghub-th-filter${lifecycleCount > 0 ? ' is-active' : ''}`,
-							type: 'button',
-							onclick: e =>
-								openFilterPopover(e.target, {
-									key: 'lifecycle.state',
-									title: 'Lifecycle state',
-									options: listEnumValues(getConstantsEnum('lifecycle.state')),
-								}),
-							text: lifecycleCount > 0 ? `Lifecycle (${lifecycleCount})` : 'Lifecycle',
-						}),
-					]),
-					h('th', { class: 'msghub-th' }, [
-						h('button', {
-							class: `btn-flat msghub-th-filter${levelCount > 0 ? ' is-active' : ''}`,
-							type: 'button',
-							onclick: e => openFilterPopover(e.target, { key: 'level', title: 'Level', options: listEnumKeys(getConstantsEnum('level')) }),
-							text: levelCount > 0 ? `Level (${levelCount})` : 'Level',
-						}),
-					]),
-					h('th', { class: 'msghub-th' }, [
-						h('button', {
-							class: `btn-flat msghub-th-filter${originCount > 0 ? ' is-active' : ''}`,
-							type: 'button',
-							onclick: e =>
-								openFilterPopover(e.target, {
-									key: 'origin.system',
-									title: 'Origin system',
-									options: listDistinctFromItems('origin.system'),
-								}),
-							text: originCount > 0 ? `(Origin ${originCount})` : '(Origin)',
-						}),
-					]),
-					h('th', { class: 'msghub-th' }, [
-						h('button', {
-							class: `btn-flat msghub-th-sort${sortField === 'timing.createdAt' ? ' is-active' : ''}`,
-							type: 'button',
-							onclick: e => openSortPopover(e.target, { field: 'timing.createdAt', title: 'Created' }),
-							text: '(Created)',
-						}),
-					]),
-					h('th', { class: 'msghub-th' }, [
-						h('button', {
-							class: `btn-flat msghub-th-sort${sortField === 'timing.updatedAt' ? ' is-active' : ''}`,
-							type: 'button',
-							onclick: e => openSortPopover(e.target, { field: 'timing.updatedAt', title: 'Updated' }),
-							text: '(Updated)',
-						}),
-					]),
-				]),
-			]);
-
-			const rows = itemsToRender.map(msg => {
-				const ref = safeStr(pick(msg, 'ref'));
-				const title = safeStr(pick(msg, 'title'));
-				const kind = safeStr(pick(msg, 'kind'));
+			function renderTable(itemsToRender) {
+				const rows = itemsToRender.map(msg => {
+					const ref = safeStr(pick(msg, 'ref'));
+					const title = safeStr(pick(msg, 'title'));
+					const kind = safeStr(pick(msg, 'kind'));
 				const lifecycle = safeStr(pick(msg, 'lifecycle.state'));
 				const level = pick(msg, 'level');
 				const origin = safeStr(pick(msg, 'origin.system')) || safeStr(pick(msg, 'origin.type'));
@@ -614,88 +538,247 @@
 					h('td', { text: origin }),
 					h('td', { class: 'msghub-muted', text: formatTs(typeof createdAt === 'number' ? createdAt : NaN) }),
 					h('td', { class: 'msghub-muted', text: formatTs(typeof updatedAt === 'number' ? updatedAt : NaN) }),
-				]);
-			});
+					]);
+				});
 
-			return h('table', { class: 'striped highlight msghub-table' }, [head, h('tbody', null, rows)]);
-		}
+				return rows;
+			}
 
-		function render() {
-			root.innerHTML = '';
+			const actions = h('div', { class: 'msghub-actions' });
+			const refreshBtn = h('button', { class: 'btn', type: 'button', text: 'Refresh' });
+			const autoBtn = h('button', { class: 'btn-flat', type: 'button', text: 'Auto: on' });
+			actions.appendChild(refreshBtn);
+			actions.appendChild(autoBtn);
 
 			const sizeOptions = [10, 25, 50, 100, 250];
+			const prevBtn = h('button', { class: 'btn-flat', type: 'button', text: 'Prev' });
+			const nextBtn = h('button', { class: 'btn-flat', type: 'button', text: 'Next' });
+			const pageInfoEl = h('div', { class: 'msghub-muted', text: 'Page 1 / 1' });
+			const pageSizeSelect = h(
+				'select',
+				{
+					onchange: e => {
+						const n = Number(e?.target?.value);
+						pageSize = Number.isFinite(n) ? Math.max(0, Math.trunc(n)) : 50;
+						pageIndex = 1;
+						loadMessages({ silent: false }).catch(() => undefined);
+					},
+				},
+				sizeOptions.map(n => h('option', { value: String(n), text: String(n) })),
+			);
+
 			const paging = h('div', { class: 'msghub-messages-paging' }, [
-				h('button', {
-					class: 'btn-flat',
-					type: 'button',
-					disabled: loading || pageIndex <= 1 ? 'true' : null,
-					onclick: () => (pageIndex = Math.max(1, pageIndex - 1), loadMessages().catch(() => undefined)),
-					text: 'Prev',
-				}),
-				h('div', { class: 'msghub-muted', text: `Page ${pageIndex} / ${pages || 1}` }),
-				h('button', {
-					class: 'btn-flat',
-					type: 'button',
-					disabled: loading || pageIndex >= (pages || 1) ? 'true' : null,
-					onclick: () => (pageIndex = Math.min(pages || 1, pageIndex + 1), loadMessages().catch(() => undefined)),
-					text: 'Next',
-				}),
+				prevBtn,
+				pageInfoEl,
+				nextBtn,
 				h('div', { class: 'msghub-field msghub-messages-pagesize' }, [
 					h('label', { class: 'msghub-muted', text: 'Items / page' }),
-					h('select', {
-						onchange: e => {
-							const n = Number(e?.target?.value);
-							pageSize = Number.isFinite(n) ? Math.max(0, Math.trunc(n)) : 50;
-							pageIndex = 1;
-							loadMessages().catch(() => undefined);
-						},
-					}, sizeOptions.map(n =>
-						h('option', { value: String(n), selected: pageSize === n ? 'true' : null, text: String(n) }),
-					)),
+					pageSizeSelect,
 				]),
 			]);
 
-			const actions = h('div', { class: 'msghub-actions' }, [
-				h('button', {
-					class: 'btn',
+			const head = h('div', { class: 'msghub-messages-head' }, [actions, paging]);
+			const progress = h(
+				'div',
+				{ class: 'msghub-progress is-hidden' },
+				h('div', { class: 'progress' }, h('div', { class: 'indeterminate' })),
+			);
+			const errorEl = h('div', { class: 'msghub-error' });
+			const metaEl = h('div', { class: 'msghub-muted msghub-messages-meta' });
+			const emptyEl = h('div', { class: 'msghub-muted', text: t('No messages.', 'Keine Messages.') });
+			emptyEl.style.display = 'none';
+
+			const tableWrap = h('div', { class: 'msghub-table-wrap' });
+			const tableEl = h('table', { class: 'striped highlight msghub-table' });
+			const theadEl = h('thead');
+			const tbodyEl = h('tbody');
+			tableEl.appendChild(theadEl);
+			tableEl.appendChild(tbodyEl);
+			tableWrap.appendChild(tableEl);
+
+			/** @type {Record<string, HTMLButtonElement>} */
+			const headerBtns = Object.create(null);
+
+			const makeSortBtn = (field, title, label) => {
+				const btn = h('button', {
+					class: 'btn-flat msghub-th-sort',
 					type: 'button',
-					disabled: loading ? 'true' : null,
-					onclick: () => loadMessages().catch(() => undefined),
-					text: 'Refresh',
-				}),
-			]);
+					onclick: e => {
+						e.preventDefault();
+						openSortPopover(e.currentTarget || e.target, { field, title });
+					},
+					text: label,
+				});
+				headerBtns[`sort:${field}`] = btn;
+				return btn;
+			};
 
-			root.appendChild(h('div', { class: 'msghub-messages-head' }, [actions, paging]));
+			const makeFilterBtn = (key, title, label, getOptions) => {
+				const btn = h('button', {
+					class: 'btn-flat msghub-th-filter',
+					type: 'button',
+					onclick: e => {
+						e.preventDefault();
+						const options = typeof getOptions === 'function' ? getOptions() : [];
+						openFilterPopover(e.currentTarget || e.target, { key, title, options });
+					},
+					text: label,
+				});
+				headerBtns[`filter:${key}`] = btn;
+				return btn;
+			};
 
-			if (loading) {
-				root.appendChild(h('div', { class: 'progress' }, h('div', { class: 'indeterminate' })));
-				return;
-			}
-
-			if (lastError) {
-				root.appendChild(h('div', { class: 'msghub-error', text: String(lastError) }));
-				return;
-			}
-
-			root.appendChild(
-				h('div', {
-					class: 'msghub-muted msghub-messages-meta',
-					text: `messages: ${items.length} / ${total}`,
-				}),
+			theadEl.replaceChildren(
+				h('tr', null, [
+					h('th', { class: 'msghub-th' }, [makeSortBtn('ref', 'Ref', '(Ref)')]),
+					h('th', { class: 'msghub-th' }, [makeSortBtn('title', 'Title', '(Title)')]),
+					h('th', { class: 'msghub-th' }, [
+						makeFilterBtn('kind', 'Kind', 'Kind', () => listEnumValues(getConstantsEnum('kind'))),
+					]),
+					h('th', { class: 'msghub-th' }, [
+						makeFilterBtn('lifecycle.state', 'Lifecycle state', 'Lifecycle', () =>
+							listEnumValues(getConstantsEnum('lifecycle.state')),
+						),
+					]),
+					h('th', { class: 'msghub-th' }, [
+						makeFilterBtn('level', 'Level', 'Level', () => listEnumKeys(getConstantsEnum('level'))),
+					]),
+					h('th', { class: 'msghub-th' }, [
+						makeFilterBtn('origin.system', 'Origin system', '(Origin)', () => listDistinctFromItems('origin.system')),
+					]),
+					h('th', { class: 'msghub-th' }, [makeSortBtn('timing.createdAt', 'Created', '(Created)')]),
+					h('th', { class: 'msghub-th' }, [makeSortBtn('timing.updatedAt', 'Updated', '(Updated)')]),
+				]),
 			);
 
-			if (items.length === 0) {
-				root.appendChild(h('div', { class: 'msghub-table-wrap' }, renderTable([])));
-				root.appendChild(h('div', { class: 'msghub-muted', text: t('No messages.', 'Keine Messages.') }));
-				return;
+			root.replaceChildren(head, progress, errorEl, metaEl, tableWrap, emptyEl);
+
+			const isTabVisible = () => {
+				const tab = root.closest('#tab-messages');
+				return !document.hidden && !!tab && tab.offsetParent !== null;
+			};
+
+			const canAutoRefresh = () => {
+				if (!isTabVisible()) {
+					return false;
+				}
+				if (popover?.el) {
+					return false;
+				}
+				const overlayEl = document.querySelector('.msghub-overlay');
+				if (overlayEl && overlayEl.classList.contains('is-open')) {
+					return false;
+				}
+				return true;
+			};
+
+			const setProgressVisible = isVisible => {
+				progress.classList.toggle('is-hidden', !isVisible);
+			};
+
+			const updateHeaderButtons = () => {
+				const kindCount = getFilterSet('kind')?.size || 0;
+				const lifecycleCount = getFilterSet('lifecycle.state')?.size || 0;
+				const levelCount = getFilterSet('level')?.size || 0;
+				const originCount = getFilterSet('origin.system')?.size || 0;
+
+				const btnKind = headerBtns['filter:kind'];
+				if (btnKind) {
+					btnKind.classList.toggle('is-active', kindCount > 0);
+					btnKind.textContent = kindCount > 0 ? `Kind (${kindCount})` : 'Kind';
+				}
+				const btnLifecycle = headerBtns['filter:lifecycle.state'];
+				if (btnLifecycle) {
+					btnLifecycle.classList.toggle('is-active', lifecycleCount > 0);
+					btnLifecycle.textContent = lifecycleCount > 0 ? `Lifecycle (${lifecycleCount})` : 'Lifecycle';
+				}
+				const btnLevel = headerBtns['filter:level'];
+				if (btnLevel) {
+					btnLevel.classList.toggle('is-active', levelCount > 0);
+					btnLevel.textContent = levelCount > 0 ? `Level (${levelCount})` : 'Level';
+				}
+				const btnOrigin = headerBtns['filter:origin.system'];
+				if (btnOrigin) {
+					btnOrigin.classList.toggle('is-active', originCount > 0);
+					btnOrigin.textContent = originCount > 0 ? `(Origin ${originCount})` : '(Origin)';
+				}
+
+				for (const field of ['ref', 'title', 'timing.createdAt', 'timing.updatedAt']) {
+					const btn = headerBtns[`sort:${field}`];
+					if (btn) {
+						btn.classList.toggle('is-active', sortField === field);
+					}
+				}
+			};
+
+			const updatePaging = () => {
+				const p = pages || 1;
+				const idx = Math.min(Math.max(1, pageIndex), p);
+				pageInfoEl.textContent = `Page ${idx} / ${p}`;
+				prevBtn.disabled = idx <= 1;
+				nextBtn.disabled = idx >= p;
+				pageSizeSelect.value = String(pageSize);
+			};
+
+			const updateButtons = () => {
+				refreshBtn.disabled = loading && !silentLoading;
+				refreshBtn.classList.toggle('msghub-btn-loading', loading && silentLoading);
+				autoBtn.textContent = autoRefresh ? 'Auto: on' : 'Auto: off';
+			};
+
+			const updateTbody = (rows, { showLoadingRow = false } = {}) => {
+				const fragment = document.createDocumentFragment();
+				if (showLoadingRow) {
+					fragment.appendChild(
+						h('tr', null, [
+							h('td', { class: 'msghub-muted', text: t('Loading…', 'Lade…'), colspan: '8' }),
+						]),
+					);
+				} else {
+					for (const r of rows || []) {
+						fragment.appendChild(r);
+					}
+				}
+				tbodyEl.replaceChildren(fragment);
+			};
+
+				function render({ forceRows = false } = {}) {
+					updateButtons();
+					updateHeaderButtons();
+					updatePaging();
+
+					setProgressVisible(loading && !silentLoading);
+
+					errorEl.textContent = lastError ? String(lastError) : '';
+					errorEl.style.display = lastError ? 'block' : 'none';
+
+					const meta = isObject(lastMeta) ? lastMeta : {};
+					const generatedAt = formatTs(meta.generatedAt) || 'n/a';
+					const tz = typeof meta.tz === 'string' && meta.tz.trim() ? meta.tz.trim() : null;
+					metaEl.replaceChildren(
+						h('div', { text: `generatedAt: ${generatedAt}` }),
+						h('div', { text: tz ? `tz: ${tz}` : 'tz: n/a' }),
+						h('div', { text: `messages: ${items.length} / ${total}` }),
+					);
+
+					const showEmpty = !loading && !lastError && items.length === 0;
+					emptyEl.style.display = showEmpty ? 'block' : 'none';
+
+				if (!hasLoadedOnce && loading) {
+					updateTbody([], { showLoadingRow: true });
+					return;
+				}
+
+				if (loading && !forceRows) {
+					return;
+				}
+
+				updateTbody(renderTable(items));
 			}
 
-			root.appendChild(h('div', { class: 'msghub-table-wrap' }, renderTable(items)));
-		}
-
-		async function loadConstants() {
-			try {
-				constants = await sendTo('admin.constants.get', {});
+			async function loadConstants() {
+				try {
+					constants = await sendTo('admin.constants.get', {});
 				// Canonicalize default lifecycle filter to enum values (if available)
 				const enumStates = getConstantsEnum('lifecycle.state');
 				if (enumStates) {
@@ -709,49 +792,107 @@
 			} catch (_e) {
 				constants = null;
 			}
-		}
+			}
 
-		async function loadMessages({ keepPopover = false } = {}) {
-			if (loading) {
-				return;
-			}
-			loading = true;
-			lastError = null;
-			if (!keepPopover) {
-				closePopover();
-			}
+			async function loadMessages({ keepPopover = false, silent = false } = {}) {
+				const reqId = ++requestSeq;
+				loading = true;
+				silentLoading = silent === true;
+				lastError = null;
+				if (!keepPopover) {
+					closePopover();
+				}
+				render({ forceRows: !hasLoadedOnce });
+
+					try {
+						const res = await sendTo('admin.messages.query', {
+							query: {
+								where: buildWhereFromFilters(),
+								page: { index: pageIndex, size: pageSize },
+								sort: [{ field: sortField, dir: sortDir }],
+							},
+						});
+						if (reqId !== requestSeq) {
+							return;
+						}
+						lastMeta = isObject(res?.meta) ? res.meta : null;
+						items = Array.isArray(res?.items) ? res.items : [];
+						total = typeof res?.total === 'number' && Number.isFinite(res.total) ? Math.max(0, Math.trunc(res.total)) : items.length;
+						pages = typeof res?.pages === 'number' && Number.isFinite(res.pages) ? Math.max(1, Math.trunc(res.pages)) : 1;
+						pageIndex = Math.min(Math.max(1, pageIndex), pages);
+					} catch (e) {
+					if (reqId !== requestSeq) {
+						return;
+					}
+					lastError = String(e?.message || e);
+					if (!silentLoading) {
+						toast(lastError);
+					}
+				} finally {
+					if (reqId !== requestSeq) {
+						return;
+					}
+					loading = false;
+					silentLoading = false;
+					hasLoadedOnce = true;
+					render({ forceRows: true });
+					}
+				}
+
+			const scheduleAuto = () => {
+				if (autoTimer) {
+					clearTimeout(autoTimer);
+					autoTimer = null;
+				}
+				if (!autoRefresh) {
+					return;
+				}
+				autoTimer = setTimeout(() => {
+					autoTimer = null;
+					if (autoRefresh && canAutoRefresh()) {
+						loadMessages({ keepPopover: true, silent: true }).catch(() => undefined);
+					}
+					scheduleAuto();
+				}, AUTO_REFRESH_MS + Math.trunc(Math.random() * 1200));
+			};
+
+			refreshBtn.addEventListener('click', e => {
+				e.preventDefault();
+				loadMessages({ silent: false }).catch(() => undefined);
+			});
+			autoBtn.addEventListener('click', e => {
+				e.preventDefault();
+				autoRefresh = !autoRefresh;
+				updateButtons();
+				scheduleAuto();
+			});
+			prevBtn.addEventListener('click', e => {
+				e.preventDefault();
+				pageIndex = Math.max(1, pageIndex - 1);
+				loadMessages({ silent: false }).catch(() => undefined);
+			});
+			nextBtn.addEventListener('click', e => {
+				e.preventDefault();
+				pageIndex = Math.min(pages || 1, pageIndex + 1);
+				loadMessages({ silent: false }).catch(() => undefined);
+			});
+			document.addEventListener('visibilitychange', () => {
+				if (autoRefresh && canAutoRefresh()) {
+					loadMessages({ keepPopover: true, silent: true }).catch(() => undefined);
+				}
+			});
+
 			render();
 
-			try {
-				const res = await sendTo('admin.messages.query', {
-					query: {
-						where: buildWhereFromFilters(),
-						page: { index: pageIndex, size: pageSize },
-						sort: [{ field: sortField, dir: sortDir }],
-					},
-				});
-				items = Array.isArray(res?.items) ? res.items : [];
-				total = typeof res?.total === 'number' && Number.isFinite(res.total) ? Math.max(0, Math.trunc(res.total)) : items.length;
-				pages = typeof res?.pages === 'number' && Number.isFinite(res.pages) ? Math.max(1, Math.trunc(res.pages)) : 1;
-				pageIndex = Math.min(Math.max(1, pageIndex), pages);
-			} catch (e) {
-				lastError = String(e?.message || e);
-				toast(lastError);
-			} finally {
-				loading = false;
-				render();
-			}
+			return {
+				onConnect: async () => {
+					await loadConstants();
+					await loadMessages({ silent: false });
+					scheduleAuto();
+					return undefined;
+				},
+			};
 		}
-
-		render();
-
-		return {
-			onConnect: async () => {
-				await loadConstants();
-				return await loadMessages();
-			},
-		};
-	}
 
 	win.MsghubAdminTabMessages = Object.freeze({
 		init: initMessagesSection,

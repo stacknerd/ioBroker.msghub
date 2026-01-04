@@ -233,6 +233,38 @@ html, body { background: transparent; }
   gap: 12px;
 }
 
+.msghub-card-headright {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.msghub-info-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  border: 1px solid var(--msghub-border);
+  color: var(--msghub-muted);
+  background: var(--msghub-surface);
+  text-decoration: none;
+  font-weight: 800;
+  line-height: 1;
+  user-select: none;
+}
+
+.msghub-info-btn:hover {
+  color: var(--msghub-text);
+  border-color: var(--msghub-muted);
+}
+
+.msghub-info-btn.disabled {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
 .msghub-card-headleft {
   display: flex;
   align-items: center;
@@ -448,6 +480,39 @@ html, body { background: transparent; }
 .msghub-error {
   color: var(--msghub-danger);
   white-space: pre-wrap;
+}
+
+.msghub-progress {
+  margin-top: 8px;
+}
+
+.msghub-progress.is-hidden {
+  display: none;
+}
+
+@keyframes msghub-spin {
+  to { transform: rotate(360deg); }
+}
+
+.msghub-btn-loading {
+  position: relative;
+  padding-left: 34px !important;
+  pointer-events: none;
+  opacity: 0.85;
+}
+
+.msghub-btn-loading::before {
+  content: "";
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  margin-top: -7px;
+  border-radius: 999px;
+  border: 2px solid color-mix(in srgb, var(--msghub-text), transparent 70%);
+  border-top-color: var(--msghub-text);
+  animation: msghub-spin 700ms linear infinite;
 }
 
 .msghub-root p { margin: 0; }
@@ -767,7 +832,7 @@ html, body { background: transparent; }
 }
 
 .msghub-stats-col {
-  flex: 1 1 360px;
+  flex: 1 1 300px;
   min-width: 0;
 }
 
@@ -1379,6 +1444,77 @@ html:not([data-msghub-theme="dark"]) .msghub-root {
   color: var(--msghub-text);
   box-shadow: var(--msghub-shadow);
   padding: 16px;
+}
+
+.msghub-root .msghub-dialog.msghub-dialog--readme {
+  width: min(860px, 100%);
+  max-height: min(78vh, 840px);
+  display: flex;
+  flex-direction: column;
+}
+
+.msghub-root .msghub-dialog-body {
+  overflow: auto;
+  padding-right: 6px;
+  margin-top: 6px;
+}
+
+.msghub-root .msghub-dialog.msghub-dialog--readme .msghub-dialog-actions {
+  margin-top: 10px;
+}
+
+.msghub-root .msghub-readme-source {
+  margin-bottom: 10px;
+}
+
+.msghub-root .msghub-readme-hr {
+  border: 0;
+  border-top: 1px solid var(--msghub-border);
+  margin: 14px 0;
+}
+
+.msghub-root .msghub-readme-h {
+  margin: 14px 0 10px 0;
+  font-size: 14px;
+  font-weight: 850;
+  letter-spacing: 0.2px;
+}
+
+.msghub-root .msghub-readme-list {
+  margin: 8px 0 12px 18px;
+}
+
+.msghub-root .msghub-readme-code {
+  margin: 10px 0 12px 0;
+  padding: 10px;
+  border-radius: var(--msghub-radius);
+  border: 1px solid var(--msghub-border);
+  background: rgba(127, 127, 127, 0.10);
+  overflow: auto;
+}
+
+.msghub-root .msghub-readme-code code {
+  white-space: pre;
+}
+
+.msghub-root .msghub-field--header {
+  grid-column: 1 / -1;
+  min-width: 0;
+  padding: 2px 0 12px 0;
+}
+
+.msghub-root .msghub-field-hr {
+  width: 100%;
+  border: 0;
+  border-top: 1px solid var(--msghub-border);
+  margin: 12px 0 10px 0;
+}
+
+.msghub-root .msghub-field-header-label {
+  margin: 0;
+  color: var(--msghub-muted);
+  font-weight: 800;
+  letter-spacing: 0.2px;
 }
 
 .msghub-root .msghub-dialog-title {

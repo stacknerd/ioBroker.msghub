@@ -309,12 +309,13 @@ class MsgStats {
 
 	/**
 	 * @param {Array<object>} messages Current store list.
-	 * @returns {{ total: number, byKind: Record<string, number>, byLifecycle: Record<string, number>, byLevel: Record<string, number> }} Snapshot counters for the current list.
+	 * @returns {{ total: number, byKind: Record<string, number>, byLifecycle: Record<string, number>, byLevel: Record<string, number>, byOriginSystem: Record<string, number> }} Snapshot counters for the current list.
 	 */
 	_computeCurrent(messages) {
 		const byKind = Object.create(null);
 		const byLifecycle = Object.create(null);
 		const byLevel = Object.create(null);
+		const byOriginSystem = Object.create(null);
 
 		for (const msg of messages) {
 			if (!msg || typeof msg !== 'object') {
@@ -331,6 +332,12 @@ class MsgStats {
 
 			const levelKey = MsgStats._isFiniteNumber(msg.level) ? String(msg.level) : 'unknown';
 			byLevel[levelKey] = (byLevel[levelKey] || 0) + 1;
+
+			const originSystem =
+				typeof msg?.origin?.system === 'string' && msg.origin.system.trim()
+					? msg.origin.system.trim()
+					: 'unknown';
+			byOriginSystem[originSystem] = (byOriginSystem[originSystem] || 0) + 1;
 		}
 
 		return {
@@ -338,6 +345,7 @@ class MsgStats {
 			byKind,
 			byLifecycle,
 			byLevel,
+			byOriginSystem,
 		};
 	}
 
