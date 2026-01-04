@@ -1,0 +1,126 @@
+# NotifyShoppingPdf
+
+`NotifyShoppingPdf` is a Message Hub **notify plugin** that renders all allowed MsgHub shopping lists into a **single PDF**
+and stores it in ioBroker’s file storage.
+
+This document has two parts:
+
+1) A user-facing guide (setup, configuration, best practices).
+2) A technical description (how it works internally).
+
+---
+
+## 1) User Guide
+
+### What it does
+
+- Listens to MsgHub notifications for `shoppinglist` messages (`added`, `updated`, `deleted`, `expired`).
+- Regenerates a single combined PDF (debounced/throttled via `renderDebounceMs`).
+- Stores the PDF in ioBroker file storage under `msghub.0/documents/NotifyShoppingPdf.<instanceId>.pdf`.
+
+### What it intentionally does not do
+
+- No fallbacks outside the MsgHub runtime (`IoPlugins`): it expects `ctx.api.*` capabilities and the adapter environment.
+- No PDF rendering without LaTeX: `pdflatex` must be available.
+- No sorting: shopping lists and items are rendered “as delivered” by MsgHub.
+
+### Prerequisites
+
+- `pdflatex` must be installed and available on `PATH` (for example via `texlive` / `texlive-latex-base`).
+- The Message Hub adapter must be running and have shopping list messages (`kind: shoppinglist`) in the store.
+
+If `pdflatex` is missing, the plugin fails to start and the instance stays in `error`.
+
+### Output location (ioBroker file storage)
+
+The plugin writes one PDF per plugin instance:
+
+- `msghub.0/documents/NotifyShoppingPdf.<instanceId>.pdf`
+
+Example:
+
+- `msghub.0/documents/NotifyShoppingPdf.0.pdf`
+
+You can view/download it via ioBroker Admin → Files (or any integration that can read adapter file storage).
+
+### States written by the plugin
+
+After every successful generation, the plugin writes two states below its instance subtree:
+
+- `msghub.0.NotifyShoppingPdf.<instanceId>.pdfPath`
+  - Value: `msghub.0/documents/NotifyShoppingPdf.<instanceId>.pdf`
+- `msghub.0.NotifyShoppingPdf.<instanceId>.pdfUrl`
+  - Best-effort URL to the PDF:
+    - If `web.0` is detected: `http(s)://<host>:<port>/files/msghub.0/documents/...`
+    - Otherwise: `/files/msghub.0/documents/...` (relative path)
+
+### Configuration
+
+Configuration is done in the Message Hub Admin Tab (Plugins) and uses the schema from `lib/NotifyShoppingPdf/manifest.js`.
+
+Common options:
+
+- `includeChecked` (boolean; default `true`)
+  - When enabled, checked items are included (rendered greyed out).
+- `refsWhitelistCsv` (string CSV; default empty)
+  - Comma-separated message refs to include.
+  - Empty means “include all shopping lists”.
+- `refsBlacklistCsv` (string CSV; default empty)
+  - Comma-separated message refs to exclude.
+  - Blacklist wins over whitelist.
+- `renderDebounceMs` (number; default `1000`)
+  - Debounce window for regenerating the PDF when notifications arrive.
+- `design` (string; default `screen`)
+  - `screen` uses lighter lines; `print` uses stronger lines.
+- `notesLines` (number; default `5`)
+  - Adds a “NOTIZEN” block at the end of the PDF (`0` disables it).
+
+### How the PDF layout maps to MsgHub data
+
+- **Category cards** in the PDF correspond to shopping list messages.
+  - `category` label = `message.title` (fallback: `message.ref`).
+- Inside each card, **rooms/sections** correspond to list item categories:
+  - `room.label` = `listItem.category` (fallback: `uncategorizedLabel`).
+- Each printed line corresponds to one `listItems[]` entry and shows a checkbox:
+  - `checked=false` → empty box
+  - `checked=true` → filled box (and greyed out text if `includeChecked=true`)
+
+---
+
+## 2) Technical Description
+
+### Triggering / throttling
+
+The plugin runs on notify-side events:
+
+- `added`
+- `updated`
+- `deleted`
+- `expired`
+
+It filters for:
+
+- `msg.kind === "shoppinglist"`
+- `msg.ref` allowed by `refsWhitelistCsv` / `refsBlacklistCsv`
+
+When a relevant notification is received, the plugin schedules a PDF render using a debounce timer
+(`ctx.meta.resources.setTimeout`).
+
+### Data source
+
+Rendering reads the current store snapshot:
+
+- `ctx.api.store.getMessages()`
+
+The PDF content is derived from all **allowed** `shoppinglist` messages that are not in lifecycle states
+`deleted` or `expired`.
+
+### File writing
+
+The plugin compiles LaTeX via `pdflatex` in a temporary folder and then writes the resulting PDF into ioBroker file storage
+via the MsgHub plugin API:
+
+- `ctx.api.iobroker.files.mkdir(metaId, 'documents')`
+- `ctx.api.iobroker.files.writeFile(metaId, 'documents/NotifyShoppingPdf.<instanceId>.pdf', pdfBuffer)`
+
+The `metaId` is the adapter namespace (`ctx.api.iobroker.ids.namespace`, typically `msghub.0`).

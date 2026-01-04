@@ -617,6 +617,7 @@ To keep this validation readable and consistent, the repo provides a small helpe
 - `IoPlugins`: [`./IoPlugins.md`](./IoPlugins.md)
 - `NotifyDebug`: [`./NotifyDebug.md`](./NotifyDebug.md)
 - `NotifyPushover`: [`./NotifyPushover.md`](./NotifyPushover.md)
+- `NotifyShoppingPdf`: [`./NotifyShoppingPdf.md`](./NotifyShoppingPdf.md)
 - `NotifyStates`: [`./NotifyStates.md`](./NotifyStates.md)
 - `PLUGIN-INDEX`: [`./PLUGIN-INDEX.md`](./PLUGIN-INDEX.md)
 <!-- AUTO-GENERATED:MODULE-INDEX:END -->

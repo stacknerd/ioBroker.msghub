@@ -23,9 +23,10 @@
 			<div class="row">
 				<div class="col s12">
 					<ul class="tabs">
-						<li class="tab col s4"><a class="active" href="#tab-plugins">Plugin Config</a></li>
-						<li class="tab col s4"><a href="#tab-stats">Stats</a></li>
-						<li class="tab col s4"><a href="#tab-calendar">(empty)</a></li>
+						<li class="tab col s3"><a class="active" href="#tab-plugins">Plugin Config</a></li>
+						<li class="tab col s3"><a href="#tab-stats">Stats</a></li>
+						<li class="tab col s3"><a href="#tab-messages">Messages</a></li>
+						<li class="tab col s3"><a href="#tab-calendar">(empty)</a></li>
 					</ul>
 				</div>
 
@@ -37,6 +38,10 @@
 					<div id="stats-root"></div>
 				</div>
 
+				<div id="tab-messages" class="col s12">
+					<div id="messages-root"></div>
+				</div>
+
 				<div id="tab-calendar" class="col s12">
 					<p class="msghub-muted">Placeholder (coming later).</p>
 				</div>
@@ -46,5 +51,6 @@
 		<script src="tab.js"></script>
 		<script src="tab.plugins.js"></script>
 		<script src="tab.stats.js"></script>
+		<script src="tab.messages.js"></script>
 	</body>
 </html>

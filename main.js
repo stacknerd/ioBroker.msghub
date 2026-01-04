@@ -176,18 +176,22 @@ class Msghub extends utils.Adapter {
 		// Message Hub Plugins
 		/////////////////////////////////////////
 
+		const { IoAdminTab } = require(`${__dirname}/lib/IoAdminTab`);
+
 		try {
 			const { IoPlugins } = require(`${__dirname}/lib/IoPlugins`);
 			if (typeof IoPlugins?.create !== 'function') {
 				throw new Error('IoPlugins.create is not a function');
 			}
 			this._msgPlugins = await IoPlugins.create(this, this.msgStore);
-
-			const { IoAdminTab } = require(`${__dirname}/lib/IoAdminTab`);
-			this._adminTab = new IoAdminTab(this, this._msgPlugins, { ai: msgAi, msgStore: this.msgStore });
 		} catch (e) {
 			this.log?.error?.(`Plugin wiring failed: ${e?.message || e}`);
 		}
+
+		// Keep AdminTab operational even if plugin wiring fails,
+		// so Stats/Messages diagnostics remain available.
+		this._adminTab = new IoAdminTab(this, this._msgPlugins, { ai: msgAi, msgStore: this.msgStore });
+
 		// Always start ingestion (even when some plugins failed to wire),
 		// otherwise timer-based producers (e.g. IngestRandomChaos) never run.
 		const ingestMeta = this._msgPlugins?.getIngestMeta?.() || {};

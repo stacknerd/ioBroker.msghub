@@ -325,6 +325,7 @@ const elements = Object.freeze({
 	connection: document.getElementById('msghub-connection'),
 	pluginsRoot: document.getElementById('plugins-root'),
 	statsRoot: document.getElementById('stats-root'),
+	messagesRoot: document.getElementById('messages-root'),
 });
 
 const ctx = Object.freeze({
@@ -355,6 +356,7 @@ const setConnStatus = isOnline => {
 
 let pluginsSection = null;
 let statsSection = null;
+let messagesSection = null;
 
 function initSectionsIfAvailable() {
 	const pluginsApi = win.MsghubAdminTabPlugins;
@@ -372,6 +374,14 @@ function initSectionsIfAvailable() {
 			statsSection?.onConnect?.();
 		}
 	}
+
+	const messagesApi = win.MsghubAdminTabMessages;
+	if (!messagesSection && messagesApi?.init) {
+		messagesSection = messagesApi.init(ctx);
+		if (socket?.connected) {
+			messagesSection?.onConnect?.();
+		}
+	}
 }
 
 window.addEventListener('DOMContentLoaded', () => {
@@ -385,6 +395,7 @@ socket.on('connect', () => {
 	initSectionsIfAvailable();
 	pluginsSection?.onConnect?.();
 	statsSection?.onConnect?.();
+	messagesSection?.onConnect?.();
 });
 
 socket.on('disconnect', () => {

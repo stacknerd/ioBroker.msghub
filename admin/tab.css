@@ -173,6 +173,7 @@ html, body { background: transparent; }
 /* Tab panels spacing */
 .msghub-root #tab-plugins,
 .msghub-root #tab-stats,
+.msghub-root #tab-messages,
 .msghub-root #tab-calendar {
   padding-top: 16px;
 }
@@ -451,6 +452,253 @@ html, body { background: transparent; }
 
 .msghub-root p { margin: 0; }
 .msghub-root p + p { margin-top: 8px; }
+
+/* ---------- Messages ---------- */
+
+.msghub-messages-head {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.msghub-messages-search {
+  min-width: 280px;
+  flex: 1 1 360px;
+}
+
+.msghub-messages-meta {
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+.msghub-table-wrap {
+  margin-top: 10px;
+  overflow: auto;
+  border: 1px solid var(--msghub-border);
+  border-radius: var(--msghub-radius);
+  background: var(--msghub-surface);
+  box-shadow: var(--msghub-shadow-sm);
+}
+
+.msghub-table {
+  margin: 0;
+  width: 100%;
+}
+
+.msghub-table th {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--msghub-muted);
+  background: var(--msghub-surface);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.msghub-table td {
+  vertical-align: top;
+  font-size: 13px;
+}
+
+.msghub-th {
+  white-space: nowrap;
+}
+
+.msghub-th-btn,
+.msghub-th-filter {
+  padding: 0 8px;
+  height: 28px;
+  line-height: 28px;
+}
+
+.msghub-th-filter {
+  opacity: 0.75;
+}
+
+.msghub-th-filter.is-active {
+  opacity: 1;
+  background: var(--msghub-accent-weak);
+  color: var(--msghub-text);
+}
+
+.msghub-messages-paging {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.msghub-messages-pagesize select {
+  display: block;
+  height: 44px;
+  margin-top: 6px;
+  border: 1px solid var(--msghub-border);
+  border-radius: 12px;
+  background: var(--msghub-surface);
+  color: var(--msghub-text);
+  padding: 0 10px;
+}
+
+.msghub-popover {
+  position: fixed;
+  width: 320px;
+  max-width: calc(100vw - 20px);
+  max-height: min(70vh, 520px);
+  overflow: hidden;
+  border-radius: var(--msghub-radius);
+  border: 1px solid var(--msghub-border);
+  background: var(--msghub-surface);
+  box-shadow: var(--msghub-shadow);
+  z-index: 10000;
+}
+
+.msghub-popover-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--msghub-border);
+}
+
+.msghub-popover-title {
+  font-weight: 800;
+  font-size: 13px;
+}
+
+.msghub-popover-controls {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--msghub-border);
+  display: grid;
+  gap: 10px;
+}
+
+.msghub-popover-controls input[type="text"] {
+  height: 38px;
+  margin: 0;
+  padding: 0 10px;
+  border: 1px solid var(--msghub-border) !important;
+  border-radius: 12px;
+  background: var(--msghub-surface);
+  color: var(--msghub-text);
+  box-shadow: none !important;
+}
+
+.msghub-popover-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.msghub-popover-sortrow,
+.msghub-popover-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.msghub-popover-footer {
+  justify-content: space-between;
+}
+
+.msghub-popover-sort.is-active {
+  background: var(--msghub-accent-weak);
+  color: var(--msghub-text);
+}
+
+.msghub-popover-body {
+  overflow: auto;
+  padding: 10px 12px;
+}
+
+.msghub-popover-item label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.msghub-popover-item input[type="checkbox"] {
+  position: static !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  margin: 0 !important;
+}
+
+.msghub-popover-item label span::before,
+.msghub-popover-item label span::after {
+  content: none !important;
+}
+
+.msghub-popover-item label span {
+  padding-left: 0 !important;
+}
+
+.msghub-popover-item + .msghub-popover-item {
+  margin-top: 6px;
+}
+
+.msghub-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 12px;
+}
+
+.msghub-overlay {
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 9999;
+}
+
+.msghub-overlay.is-open {
+  display: flex;
+}
+
+.msghub-overlay-card {
+  width: min(980px, 100%);
+  max-height: min(84vh, 900px);
+  overflow: hidden;
+  border-radius: var(--msghub-radius);
+  background: var(--msghub-surface);
+  border: 1px solid var(--msghub-border);
+  box-shadow: var(--msghub-shadow);
+  display: flex;
+  flex-direction: column;
+}
+
+.msghub-overlay-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--msghub-border);
+}
+
+.msghub-overlay-title {
+  font-weight: 800;
+  letter-spacing: 0.2px;
+}
+
+.msghub-overlay-pre {
+  margin: 0;
+  padding: 14px;
+  overflow: auto;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--msghub-text);
+  background: var(--msghub-surface-2);
+}
 
 /* ---------- Stats ---------- */
 
@@ -771,7 +1019,7 @@ html:not([data-msghub-theme="dark"]) .msghub-root {
   }
 }
 /* Checkbox selbst ausblenden (zugänglich bleiben) */
-.msghub-root input[type="checkbox"] {
+.msghub-root p:has(> input[type="checkbox"] + label) > input[type="checkbox"] {
   position: absolute !important;
   inline-size: 1px !important;
   block-size: 1px !important;
