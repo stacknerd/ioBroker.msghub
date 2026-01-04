@@ -26,20 +26,27 @@ This document has two parts:
 
 ### Prerequisites
 
-- `pdflatex` must be installed and available on `PATH` (for example via `texlive` / `texlive-latex-base`).
+- `pdflatex` must be installed and available on `PATH`.
+- The LaTeX template uses packages like `tcolorbox`, `multicol`, `tabularx`, `fancyhdr`, `lastpage` (Debian often needs `texlive-latex-extra`).
 - The Message Hub adapter must be running and have shopping list messages (`kind: shoppinglist`) in the store.
 
 If `pdflatex` is missing, the plugin fails to start and the instance stays in `error`.
+
+Example (Debian):
+
+```sh
+sudo apt-get install texlive-latex-base texlive-latex-extra
+```
 
 ### Output location (ioBroker file storage)
 
 The plugin writes one PDF per plugin instance:
 
-- `msghub.0/documents/NotifyShoppingPdf.<instanceId>.pdf`
+- `msghub.0/documents/NotifyShoppingPdf.<instanceId>/<pdfTitle>.pdf`
 
 Example:
 
-- `msghub.0/documents/NotifyShoppingPdf.0.pdf`
+- `msghub.0/documents/NotifyShoppingPdf.0/Einkaufsliste.pdf`
 
 You can view/download it via ioBroker Admin → Files (or any integration that can read adapter file storage).
 
@@ -48,7 +55,7 @@ You can view/download it via ioBroker Admin → Files (or any integration that c
 After every successful generation, the plugin writes two states below its instance subtree:
 
 - `msghub.0.NotifyShoppingPdf.<instanceId>.pdfPath`
-  - Value: `msghub.0/documents/NotifyShoppingPdf.<instanceId>.pdf`
+  - Value: `msghub.0/documents/NotifyShoppingPdf.<instanceId>/<pdfTitle>.pdf`
 - `msghub.0.NotifyShoppingPdf.<instanceId>.pdfUrl`
   - Best-effort URL to the PDF:
     - If `web.0` is detected: `http(s)://<host>:<port>/files/msghub.0/documents/...`
@@ -70,10 +77,14 @@ Common options:
   - Blacklist wins over whitelist.
 - `renderDebounceMs` (number; default `1000`)
   - Debounce window for regenerating the PDF when notifications arrive.
-- `design` (string; default `screen`)
+- `printRoomLabelsFromItems` (number; default `6`)
+  - Prints `listItem.category` section headings only when the list has more than this number of printed items.
+- `includeEmptyCategories` (boolean; default `true`)
+  - If disabled, lists with 0 printed items are omitted from the PDF.
+- `design` (string; default `print`)
   - `screen` uses lighter lines; `print` uses stronger lines.
 - `notesLines` (number; default `5`)
-  - Adds a “NOTIZEN” block at the end of the PDF (`0` disables it).
+  - Adds a localized “NOTES/NOTIZEN” block at the end of the PDF (`0` disables it).
 
 ### How the PDF layout maps to MsgHub data
 
@@ -83,7 +94,10 @@ Common options:
   - `room.label` = `listItem.category` (fallback: `uncategorizedLabel`).
 - Each printed line corresponds to one `listItems[]` entry and shows a checkbox:
   - `checked=false` → empty box
-  - `checked=true` → filled box (and greyed out text if `includeChecked=true`)
+  - `checked=true` → checkmark (and greyed out text if `includeChecked=true`)
+
+The PDF subtitle is a localized “generated at” timestamp derived from `system.config.common.language`
+(example: `Sonntag, 04.01.2026 02:10`).
 
 ---
 
@@ -110,10 +124,10 @@ When a relevant notification is received, the plugin schedules a PDF render usin
 
 Rendering reads the current store snapshot:
 
-- `ctx.api.store.getMessages()`
+- `ctx.api.store.queryMessages({ where: { kind: 'shoppinglist' } })`
 
-The PDF content is derived from all **allowed** `shoppinglist` messages that are not in lifecycle states
-`deleted` or `expired`.
+The PDF content is derived from all **allowed** `shoppinglist` messages. By default, MsgHub queries exclude
+`deleted` and `expired` messages unless explicitly requested via `where.lifecycle.state`.
 
 ### File writing
 
