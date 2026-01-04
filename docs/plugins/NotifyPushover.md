@@ -78,6 +78,9 @@ Gate (optional):
 - `gateValue` (string)
   - Comparison value for `>`, `<`, `=` (numeric or string).
   - Ignored for `true` / `false`.
+- `gateBypassFromLevel` (number)
+  - If `message.level >= gateBypassFromLevel`, the gate is bypassed and the notification is always sent.
+  - Default: `99` (effectively disabled for built-in levels 0/10/20/30).
 
 ### How to find the correct `pushoverInstance`
 
@@ -167,6 +170,10 @@ If both `gateStateId` and `gateOp` are set, the plugin reads the foreign state a
 - `=`: numeric comparison when both sides are numeric, otherwise string comparison (`String(state.val).trim() === gateValue`)
 
 If the gate is not configured (empty `gateStateId` or empty `gateOp`), delivery is not gated.
+
+Gate bypass:
+
+- If `message.level >= gateBypassFromLevel`, the gate result is ignored for that message.
 
 ### Payload mapping
 
