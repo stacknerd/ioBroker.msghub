@@ -190,7 +190,7 @@ function EngageMyChannel(options) {
       // inbound user intents may translate into:
       // - ctx.api.store.addMessage/updateMessage/removeMessage(...)
       // - ctx.api.store.completeAfterCauseEliminated(ref, { actor })
-      // - ctx.api.action.execute({ ref, actionId, actor, payload })
+      // - ctx.api.action.execute({ ref, actionId, actor, payload, snoozeForMs })
     },
     stop(ctx) {
       // cleanup timers/subscriptions/connections
@@ -534,7 +534,7 @@ What you can do (functional contract):
   - `ctx.api.store.addMessage(...)`, `updateMessage(...)`, `addOrUpdateMessage(...)`, `removeMessage(...)`, `completeAfterCauseEliminated(...)`
   - `ctx.api.store.getMessageByRef(...)`, `getMessages()`, `queryMessages(...)`
 - Plus execute whitelisted actions via MsgAction:
-  - `ctx.api.action.execute({ ref, actionId, actor?, payload? })`
+  - `ctx.api.action.execute({ ref, actionId, actor?, payload?, snoozeForMs? })`
 
 How inbound interaction usually works:
 

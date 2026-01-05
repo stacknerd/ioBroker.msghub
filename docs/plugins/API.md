@@ -50,7 +50,7 @@ Columns:
 | API | `store` | `completeAfterCauseEliminated(ref, options?)` | ✓ |  | ✓ | ✓ | Shortcut: close message + set progress to finished (inbound ctx only). | `buildStoreApi()` (`src/MsgHostApi.js`) | `../modules/MsgHostApi.md` |
 | API | `stats` | `getStats(options?)` | ✓ | ✓ | ✓ | ✓ | Returns a JSON-serializable stats snapshot (current/schedule/done/io). | `buildStatsApi()` (`src/MsgHostApi.js`) + `MsgStats` | `../modules/MsgStats.md` |
 | API | `factory` | `createMessage(data)` | ✓ |  | ✓ | ✓ | Normalization gate for “create” paths (inbound ctx only). | `buildFactoryApi()` (`src/MsgHostApi.js`) | `../modules/MsgFactory.md` |
-| API | `action` | `execute({ ref, actionId, actor?, payload? })` |  |  |  | ✓ | Execute whitelisted actions from `message.actions[]` (mutates store). | `MsgEngage` + `buildActionApi()` (`src/MsgHostApi.js`) | `../modules/MsgEngage.md`<br>`../modules/MsgAction.md` |
+| API | `action` | `execute({ ref, actionId, actor?, payload?, snoozeForMs? })` |  |  |  | ✓ | Execute whitelisted actions from `message.actions[]` (mutates store). | `MsgEngage` + `buildActionApi()` (`src/MsgHostApi.js`) | `../modules/MsgEngage.md`<br>`../modules/MsgAction.md` |
 | API | `iobroker.ids` | `namespace` | ✓ | ✓ | ✓ | ✓ | Adapter namespace (example: `msghub.0`). | `buildIdsApi()` (`src/MsgHostApi.js`) | `../modules/MsgHostApi.md` |
 | API | `iobroker.ids` | `toOwnId(fullId)` | ✓ | ✓ | ✓ | ✓ | Strip namespace prefix if present. | `buildIdsApi()` (`src/MsgHostApi.js`) | `../modules/MsgHostApi.md` |
 | API | `iobroker.ids` | `toFullId(ownId)` | ✓ | ✓ | ✓ | ✓ | Add namespace prefix if missing. | `buildIdsApi()` (`src/MsgHostApi.js`) | `../modules/MsgHostApi.md` |

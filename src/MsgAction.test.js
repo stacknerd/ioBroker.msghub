@@ -169,6 +169,56 @@ describe('MsgAction', () => {
 			});
 	});
 
+	it('snooze: allows overriding forMs via snoozeForMs', () => {
+		const { adapter } = createAdapter();
+		let patched = null;
+		const store = {
+			getMessageByRef: () => ({
+				ref: 'r1',
+				actions: [{ id: 's1', type: MsgConstants.actions.type.snooze, payload: { forMs: 5000 } }],
+				lifecycle: { state: MsgConstants.lifecycle.state.open },
+				timing: { notifyAt: 123 },
+			}),
+			updateMessage: (_ref, patch) => {
+				patched = patch;
+				return true;
+			},
+		};
+		const msgAction = new MsgAction(adapter, MsgConstants, store);
+
+		withFixedNow(1000, () => {
+			expect(msgAction.execute({ ref: 'r1', actionId: 's1', actor: 'UI', snoozeForMs: 10000 })).to.equal(true);
+		});
+
+		expect(patched).to.deep.equal({
+			lifecycle: { state: 'snoozed', stateChangedBy: 'UI' },
+			timing: { notifyAt: 11000 },
+		});
+	});
+
+	it('snooze: rejects invalid snoozeForMs even when action.payload.forMs is valid', () => {
+		const { adapter } = createAdapter();
+		let patched = null;
+		const store = {
+			getMessageByRef: () => ({
+				ref: 'r1',
+				actions: [{ id: 's1', type: MsgConstants.actions.type.snooze, payload: { forMs: 5000 } }],
+				lifecycle: { state: MsgConstants.lifecycle.state.open },
+				timing: { notifyAt: 123 },
+			}),
+			updateMessage: (_ref, patch) => {
+				patched = patch;
+				return true;
+			},
+		};
+		const msgAction = new MsgAction(adapter, MsgConstants, store);
+
+		withFixedNow(1000, () => {
+			expect(msgAction.execute({ ref: 'r1', actionId: 's1', snoozeForMs: 0 })).to.equal(false);
+		});
+		expect(patched).to.equal(null);
+	});
+
 	it('snooze: rejects missing/invalid forMs', () => {
 		const { adapter } = createAdapter();
 		const store = {

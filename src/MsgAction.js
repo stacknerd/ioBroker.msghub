@@ -90,7 +90,7 @@ class MsgAction {
 	 * - `delete` -> soft delete via `MsgStore.removeMessage()` (lifecycle.state="deleted", timing.notifyAt cleared)
 	 * - `snooze` -> lifecycle.state = "snoozed", timing.notifyAt = now + forMs
 	 *
-	 * @param {{ ref?: string, actionId?: string, actor?: string|null, payload?: Record<string, unknown>|null }} [options] Options (ref and actionId are required for execution).
+	 * @param {{ ref?: string, actionId?: string, actor?: string|null, payload?: Record<string, unknown>|null, snoozeForMs?: number }} [options] Options (ref and actionId are required for execution).
 	 * @returns {boolean} True when executed, false when rejected or patch failed.
 	 */
 	execute(options = {}) {
@@ -99,6 +99,7 @@ class MsgAction {
 			actionId,
 			actor = undefined,
 			payload = undefined,
+			snoozeForMs = undefined,
 		} = options && typeof options === 'object' && !Array.isArray(options) ? options : {};
 		try {
 			const msgRef = typeof ref === 'string' ? ref.trim() : '';
@@ -228,15 +229,31 @@ class MsgAction {
 			}
 
 			if (type === this.msgConstants.actions.type.snooze) {
-				const forMs = this._normalizeSnoozeForMs(effectivePayload);
+				const snoozeOverrideProvided = snoozeForMs !== undefined;
+				const overrideForMs = snoozeOverrideProvided ? this._normalizeSnoozeForMsValue(snoozeForMs) : NaN;
+
+				const forMs = snoozeOverrideProvided ? overrideForMs : this._normalizeSnoozeForMs(effectivePayload);
+				const payloadForAudit = snoozeOverrideProvided
+					? Object.freeze({
+							...(effectivePayload &&
+							typeof effectivePayload === 'object' &&
+							!Array.isArray(effectivePayload)
+								? effectivePayload
+								: {}),
+							forMs,
+						})
+					: effectivePayload;
+
 				if (!Number.isFinite(forMs)) {
 					record({
 						ok: false,
 						type,
 						reason: 'invalid_payload',
-						payload: effectivePayload !== undefined ? effectivePayload : null,
+						payload: payloadForAudit !== undefined ? payloadForAudit : null,
 					});
-					this.adapter?.log?.warn?.(`MsgAction.execute('${msgRef}'): snooze.forMs missing/invalid`);
+					this.adapter?.log?.warn?.(
+						`MsgAction.execute('${msgRef}'): snooze.forMs missing/invalid${snoozeOverrideProvided ? ' (snoozeForMs override)' : ''}`,
+					);
 					return false;
 				}
 				const notifyAt = now + forMs;
@@ -247,7 +264,7 @@ class MsgAction {
 				record({
 					ok,
 					type,
-					payload: effectivePayload !== undefined ? effectivePayload : null,
+					payload: payloadForAudit !== undefined ? payloadForAudit : null,
 					forMs,
 					notifyAt,
 					...(ok ? {} : { reason: 'patch_failed' }),
@@ -322,6 +339,20 @@ class MsgAction {
 			return NaN;
 		}
 		const ms = Math.trunc(v);
+		return ms > 0 ? ms : NaN;
+	}
+
+	/**
+	 * Normalize a snooze duration from a raw numeric value.
+	 *
+	 * @param {unknown} value Raw input value.
+	 * @returns {number} Duration in ms, or `NaN` when invalid.
+	 */
+	_normalizeSnoozeForMsValue(value) {
+		if (typeof value !== 'number' || !Number.isFinite(value)) {
+			return NaN;
+		}
+		const ms = Math.trunc(value);
 		return ms > 0 ? ms : NaN;
 	}
 }

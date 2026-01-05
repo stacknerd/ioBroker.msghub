@@ -269,7 +269,7 @@ Builds a small `MsgAction` facade for plugins (`ctx.api.action`).
 
 Derivation rule:
 
-- For engage hosts (`hostName` contains `"Engage"`): exposes `execute({ ref, actionId, actor?, payload? })`.
+- For engage hosts (`hostName` contains `"Engage"`): exposes `execute({ ref, actionId, actor?, payload?, snoozeForMs? })`.
 - For other hosts: returns `null` (actions are reserved for Engage).
 
 `execute(...)` runs through `src/MsgAction.js` and mutates messages via `MsgStore.updateMessage(...)` (whitelist semantics:

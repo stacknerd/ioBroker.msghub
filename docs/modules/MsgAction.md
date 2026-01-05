@@ -32,7 +32,7 @@ Dependencies:
 - `msgConstants` provides the canonical action/state identifiers.
 - `msgStore` is used to patch messages (`updateMessage`).
 
-### `execute({ ref, actionId, actor?, payload? }): boolean`
+### `execute({ ref, actionId, actor?, payload?, snoozeForMs? }): boolean`
 
 Execute exactly **one** action by `actionId` for the given message `ref`.
 
@@ -45,6 +45,7 @@ Parameters:
 - `actionId` (string, required): action identifier (must exist in `message.actions[]`)
 - `actor` (string|null, optional): stored as `lifecycle.stateChangedBy` (best-effort attribution)
 - `payload` (object|null, optional): payload override (only used for `snooze`)
+- `snoozeForMs` (number, optional): overrides the snooze duration (ms, `> 0`)
 
 ---
 
@@ -64,7 +65,10 @@ Parameters:
 - `snooze`:
   - `lifecycle.state = "snoozed"`
   - `timing.notifyAt = now + forMs`
-  - payload schema: `{ forMs: number }` (duration in ms, `> 0`)
+  - duration resolution (highest priority wins):
+    - `snoozeForMs` (number, `> 0`)
+    - `payload.forMs` (number, `> 0`)
+    - `action.payload.forMs` (number, `> 0`)
 
 Notes:
 
