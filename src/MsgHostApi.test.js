@@ -87,13 +87,14 @@ describe('MsgHostApi', () => {
 	});
 
 	describe('buildStoreApi', () => {
-		function createStoreStub() {
-			const calls = { add: 0, update: 0, addOrUpdate: 0, remove: 0, getByRef: 0, get: 0, query: 0 };
-			const store = {
-				addMessage: msg => {
-					calls.add += 1;
-					return { ok: true, op: 'add', msg };
-				},
+			function createStoreStub() {
+				const calls = { add: 0, update: 0, addOrUpdate: 0, remove: 0, getByRef: 0, get: 0, query: 0 };
+				const byRef = {};
+				const store = {
+					addMessage: msg => {
+						calls.add += 1;
+						return { ok: true, op: 'add', msg };
+					},
 				updateMessage: (refOrMsg, patch) => {
 					calls.update += 1;
 					return { ok: true, op: 'update', refOrMsg, patch };
@@ -102,25 +103,29 @@ describe('MsgHostApi', () => {
 					calls.addOrUpdate += 1;
 					return { ok: true, op: 'addOrUpdate', msg };
 				},
-				removeMessage: ref => {
-					calls.remove += 1;
-					return { ok: true, op: 'remove', ref };
-				},
-				getMessageByRef: ref => {
-					calls.getByRef += 1;
-					return { ok: true, op: 'getByRef', ref };
-				},
-				getMessages: () => {
-					calls.get += 1;
-					return [{ ref: 'm1' }];
-				},
-				queryMessages: options => {
-					calls.query += 1;
-					return [{ ref: 'q1', options }];
-				},
-			};
-			return { store, calls };
-		}
+					removeMessage: ref => {
+						calls.remove += 1;
+						return { ok: true, op: 'remove', ref };
+					},
+					getMessageByRef: ref => {
+						calls.getByRef += 1;
+						return byRef[ref] || { ok: true, op: 'getByRef', ref };
+					},
+					getMessages: () => {
+						calls.get += 1;
+						return [{ ref: 'm1' }];
+					},
+					queryMessages: options => {
+						calls.query += 1;
+						return [{ ref: 'q1', options }];
+					},
+					msgConstants: {
+						kind: { task: 'task', status: 'status' },
+						lifecycle: { state: { deleted: 'deleted' } },
+					},
+				};
+				return { store, calls, byRef };
+			}
 
 		it('returns null for invalid store', () => {
 			expect(buildStoreApi(null, { hostName: 'MsgIngest' })).to.equal(null);
@@ -144,9 +149,9 @@ describe('MsgHostApi', () => {
 			expect(calls.query).to.equal(1);
 		});
 
-		it('exposes read+write store api for Ingest hosts', () => {
-			const { store, calls } = createStoreStub();
-			const api = buildStoreApi(store, { hostName: 'MsgIngest' });
+			it('exposes read+write store api for Ingest hosts', () => {
+				const { store, calls, byRef } = createStoreStub();
+				const api = buildStoreApi(store, { hostName: 'MsgIngest' });
 
 			expect(api).to.not.equal(null);
 			expect(Object.isFrozen(api)).to.equal(true);
@@ -156,18 +161,35 @@ describe('MsgHostApi', () => {
 			expect(api).to.have.property('removeMessage');
 			expect(api).to.have.property('completeAfterCauseEliminated');
 
-				api.addMessage({ ref: 'x' });
-				api.updateMessage('x', { title: 't' });
-				api.addOrUpdateMessage({ ref: 'x' });
-				api.removeMessage('x');
-				api.completeAfterCauseEliminated('x', { actor: 'tester' });
+					byRef.x = { ref: 'x', kind: 'task' };
+					api.addMessage({ ref: 'x' });
+					api.updateMessage('x', { title: 't' });
+					api.addOrUpdateMessage({ ref: 'x' });
+					api.removeMessage('x');
+					api.completeAfterCauseEliminated('x', { actor: 'tester' });
 
 				expect(calls.add).to.equal(1);
 				expect(calls.update).to.equal(2);
 				expect(calls.addOrUpdate).to.equal(1);
-			expect(calls.remove).to.equal(1);
+				expect(calls.remove).to.equal(1);
+			});
+
+			it('completeAfterCauseEliminated: closes tasks and deletes statuses', () => {
+				const { store, calls, byRef } = createStoreStub();
+				const api = buildStoreApi(store, { hostName: 'MsgIngest' });
+
+				byRef.t1 = { ref: 't1', kind: 'task' };
+				byRef.s1 = { ref: 's1', kind: 'status', lifecycle: { state: 'open' } };
+				byRef.other = { ref: 'other', kind: 'appointment' };
+
+				api.completeAfterCauseEliminated('t1', { actor: 'tester' });
+				api.completeAfterCauseEliminated('s1', { actor: 'tester' });
+				api.completeAfterCauseEliminated('other', { actor: 'tester' });
+
+				expect(calls.update).to.equal(1);
+				expect(calls.remove).to.equal(1);
+			});
 		});
-	});
 
 	describe('buildFactoryApi', () => {
 		it('returns null when not Ingest host', () => {

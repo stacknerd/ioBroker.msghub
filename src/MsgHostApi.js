@@ -113,14 +113,30 @@ function buildStoreApi(store, { hostName = 'Host' } = {}) {
 			}
 			const actor = typeof options?.actor === 'string' && options.actor.trim() ? options.actor.trim() : null;
 
-			return store.updateMessage(msgRef, {
-				lifecycle: {
-					state: 'closed',
-					...(actor ? { stateChangedBy: actor } : {}),
-				},
-				timing: { notifyAt: null },
-				progress: { percentage: 100 },
-			});
+			const msg = store.getMessageByRef(msgRef);
+			if (!msg) {
+				return false;
+			}
+
+			if (msg?.kind === store?.msgConstants?.kind?.status) {
+				if (msg?.lifecycle?.state === store?.msgConstants?.lifecycle?.state?.deleted) {
+					return true;
+				}
+				return store.removeMessage(msgRef, actor ? { actor } : undefined);
+			}
+
+			if (msg?.kind === store?.msgConstants?.kind?.task) {
+				return store.updateMessage(msgRef, {
+					lifecycle: {
+						state: 'closed',
+						...(actor ? { stateChangedBy: actor } : {}),
+					},
+					timing: { notifyAt: null },
+					progress: { percentage: 100 },
+				});
+			}
+
+			return true;
 		};
 	}
 
