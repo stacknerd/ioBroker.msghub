@@ -71,6 +71,9 @@ These settings apply to all rule types:
 - **Kind / Level**
   - Kind: usually “status” (a condition) or “task” (something to do).
   - Level: notice / warning / error (how important is it).
+- **Task planning (only for Kind = “task”)**
+  - **Estimated time**: stores an estimate for how long the task will take.
+  - **Due in**: sets a due date relative to “now” when the message is created.
 - **Title / Text (optional)**
   - If you leave them empty, the rule provides a helpful default text.
   - If you provide your own text, it is used as-is.
@@ -91,6 +94,11 @@ Practical recommendation (good defaults to start with):
 - Keep **Auto-remove** enabled for most rules.
 - Use a small **Delay** (e.g. 1–5 minutes) if your source flaps.
 - Use **Cooldown** if you see a lot of “close → reopen” noise.
+
+### Location (room) auto-detection
+
+If your datapoint is assigned to an ioBroker room (`enum.rooms.*`), IngestStates stores the room name as
+`Location` in the message details. This can help notification integrations and UI grouping.
 
 ### Writing your own text (optional, advanced)
 
@@ -476,6 +484,10 @@ The writer provides:
 - audience parsing (CSV tags/channels)
 - reminder scheduling via `timing.remindEvery`
 - cooldown logic on reopen (delay/avoid notifications but keep store truthful)
+- task timing mappings (only for `kind="task"`):
+  - `msg.taskTimeBudget*` → `timing.timeBudget` (duration in ms)
+  - `msg.taskDueIn*` → `timing.dueAt` (timestamp = now + duration)
+  - `dueAt` is set when a message is created/reopened and is not shifted on updates (filled if missing)
 - delayed auto-close (`resetOnNormal` + `resetDelay*`) with persistence:
   - schedule stored in `message.metrics` under an internal key
   - `tryCloseScheduled()` checks that key and performs the close when due
@@ -498,6 +510,11 @@ Lifecycle “active” semantics:
 Actions:
 
 - If `resetOnNormal=false`, the writer injects a `close` action (so the message is always dismissible).
+
+Details / location:
+
+- `details.location` is set best-effort from `enum.rooms.*` memberships (prefix match on the target id).
+- The writer merges `details` patches with existing details so it does not drop other fields.
 
 Cooldown semantics (reopen shortly after close):
 
