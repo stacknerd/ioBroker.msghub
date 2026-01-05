@@ -124,10 +124,16 @@ When a relevant notification is received, the plugin schedules a PDF render usin
 
 Rendering reads the current store snapshot:
 
-- `ctx.api.store.queryMessages({ where: { kind: 'shoppinglist' } })`
+- `ctx.api.store.queryMessages({ where: { kind: 'shoppinglist', audience: { channels: { routeTo: ctx.meta.plugin.channel } } } })`
 
 The PDF content is derived from all **allowed** `shoppinglist` messages. By default, MsgHub queries exclude
 `deleted` and `expired` messages unless explicitly requested via `where.lifecycle.state`.
+
+Note: channel routing uses the same semantics as `IoPlugins` notification routing:
+
+- `audience.channels.include` scopes messages to specific plugin channels.
+- `audience.channels.exclude` blocks specific channels (exclude wins).
+- If the plugin channel is empty, only unscoped messages (`include` empty) are included.
 
 ### File writing
 
