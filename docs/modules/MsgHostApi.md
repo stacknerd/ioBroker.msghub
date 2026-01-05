@@ -228,12 +228,12 @@ Write APIs (ingest only):
 - `addMessage(msg)`
 - `updateMessage(msgOrRef, patch)`
 - `addOrUpdateMessage(msg)`
-- `removeMessage(ref)`
+- `removeMessage(ref, { actor? })`
 - `completeAfterCauseEliminated(ref, { actor? })`
 
 Notes:
 
-- `removeMessage(ref)` performs a soft delete (`lifecycle.state="deleted"`). This is meant for explicit deletion semantics.
+- `removeMessage(ref, { actor? })` performs a soft delete (`lifecycle.state="deleted"`, clears `timing.notifyAt`). `actor` is stored as `lifecycle.stateChangedBy`.
 - `completeAfterCauseEliminated(...)` is meant for condition-based ingest plugins: when the external cause becomes OK again,
   the plugin can mark the message as completed by patching it to:
   - `lifecycle.state="closed"` (with optional `stateChangedBy`; `stateChangedAt` is set by core)

@@ -59,8 +59,8 @@ Parameters:
   - `lifecycle.state = "closed"`
   - `timing.notifyAt` is cleared
 - `delete` (soft delete):
-  - `lifecycle.state = "deleted"`
-  - `timing.notifyAt` is cleared
+  - soft delete via `MsgStore.removeMessage(ref, { actor })`
+  - results in `lifecycle.state = "deleted"` and `timing.notifyAt` cleared
 - `snooze`:
   - `lifecycle.state = "snoozed"`
   - `timing.notifyAt = now + forMs`

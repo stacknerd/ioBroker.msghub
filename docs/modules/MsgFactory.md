@@ -184,6 +184,7 @@ only provided keys are applied; `null` clears keys (or the whole object, dependi
 Notes:
 
 - `lifecycle.stateChangedAt` is a core-owned timestamp. Patch attempts are ignored; it is updated by the core when `lifecycle.state` changes.
+- `lifecycle.state="deleted"` and `"expired"` are core-managed. Patch attempts are rejected; use `MsgStore.removeMessage(ref, { actor? })` and time-based expiration (`timing.expiresAt`) instead.
 - `progress.startedAt` / `progress.finishedAt` are core-owned timestamps. Patch attempts are ignored.
   - `startedAt` is set when `progress.percentage > 0` for the first time and then never changes.
   - `finishedAt` is set when `progress.percentage == 100` and removed when `progress.percentage < 100`.

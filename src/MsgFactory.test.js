@@ -38,9 +38,9 @@ function buildBase(overrides = {}) {
 }
 
 	describe('MsgFactory.createMessage', () => {
-		it('creates a minimal valid message', () => {
-			const { factory } = makeFactory();
-			const msg = factory.createMessage(buildBase());
+			it('creates a minimal valid message', () => {
+				const { factory } = makeFactory();
+				const msg = factory.createMessage(buildBase());
 
 			expect(msg).to.be.an('object');
 			expect(msg.ref).to.equal('ref-1');
@@ -48,14 +48,22 @@ function buildBase(overrides = {}) {
 			expect(msg.kind).to.equal(MsgConstants.kind.task);
 			expect(msg.origin).to.deep.equal({ type: MsgConstants.origin.type.manual, system: 'unit', id: '1' });
 			expect(msg.lifecycle).to.deep.equal({ state: MsgConstants.lifecycle.state.open });
-			expect(msg.timing).to.be.an('object');
-			expect(msg.timing.createdAt).to.be.a('number');
-		});
+				expect(msg.timing).to.be.an('object');
+				expect(msg.timing.createdAt).to.be.a('number');
+			});
 
-	describe('required fields', () => {
-		it('normalizes ref by URL-encoding unsafe characters', () => {
-			const { factory } = makeFactory();
-			const msg = factory.createMessage(buildBase({ ref: 'ref-\n-1' }));
+			it('ignores core-managed lifecycle states on create', () => {
+				const { factory } = makeFactory();
+				const deleted = factory.createMessage(buildBase({ lifecycle: { state: MsgConstants.lifecycle.state.deleted } }));
+				expect(deleted.lifecycle.state).to.equal(MsgConstants.lifecycle.state.open);
+				const expired = factory.createMessage(buildBase({ lifecycle: { state: MsgConstants.lifecycle.state.expired } }));
+				expect(expired.lifecycle.state).to.equal(MsgConstants.lifecycle.state.open);
+			});
+
+		describe('required fields', () => {
+			it('normalizes ref by URL-encoding unsafe characters', () => {
+				const { factory } = makeFactory();
+				const msg = factory.createMessage(buildBase({ ref: 'ref-\n-1' }));
 			expect(msg.ref).to.equal('ref-%0A-1');
 		});
 
@@ -787,10 +795,10 @@ describe('MsgFactory.applyPatch', () => {
 				expect(reopened.progress).to.deep.equal({ percentage: 80, startedAt: t0 + 1000 });
 			});
 
-			it('core-owns lifecycle.stateChangedAt and bumps it on state changes', () => {
-				const { factory } = makeFactory();
-				const t0 = Date.UTC(2025, 0, 1, 0, 0, 0);
-				const msg = withFixedNow(t0, () => factory.createMessage(buildBase()));
+				it('core-owns lifecycle.stateChangedAt and bumps it on state changes', () => {
+					const { factory } = makeFactory();
+					const t0 = Date.UTC(2025, 0, 1, 0, 0, 0);
+					const msg = withFixedNow(t0, () => factory.createMessage(buildBase()));
 
 				const updated = withFixedNow(t0 + 1000, () =>
 					factory.applyPatch(msg, {
@@ -805,9 +813,35 @@ describe('MsgFactory.applyPatch', () => {
 				const noop = withFixedNow(t0 + 2000, () =>
 					factory.applyPatch(updated, { lifecycle: { stateChangedAt: 9999 } }),
 				);
-				expect(noop.lifecycle.stateChangedAt).to.equal(t0 + 1000);
-				expect(noop.timing.updatedAt).to.equal(t0 + 1000);
-			});
+					expect(noop.lifecycle.stateChangedAt).to.equal(t0 + 1000);
+					expect(noop.timing.updatedAt).to.equal(t0 + 1000);
+				});
+
+				it('rejects patching core-managed lifecycle states (deleted/expired)', () => {
+					const { factory, logs } = makeFactory();
+					const msg = factory.createMessage(buildBase());
+					const updated = factory.applyPatch(msg, { lifecycle: { state: MsgConstants.lifecycle.state.deleted } });
+					expect(updated).to.equal(null);
+					expect(logs.error.length).to.be.greaterThan(0);
+				});
+
+				it('allows core to patch lifecycle.state to deleted/expired', () => {
+					const { factory } = makeFactory();
+					const t0 = Date.UTC(2025, 0, 1, 0, 0, 0);
+					const msg = withFixedNow(t0, () => factory.createMessage(buildBase()));
+
+					const deleted = withFixedNow(t0 + 1000, () =>
+						factory.applyPatch(
+							msg,
+							{ lifecycle: { state: MsgConstants.lifecycle.state.deleted, stateChangedBy: 'core' } },
+							false,
+							{ allowCoreLifecycleStates: true },
+						),
+					);
+					expect(deleted.lifecycle.state).to.equal(MsgConstants.lifecycle.state.deleted);
+					expect(deleted.lifecycle.stateChangedAt).to.equal(t0 + 1000);
+					expect(deleted.lifecycle.stateChangedBy).to.equal('core');
+				});
 
 	it('rejects non-object patch input', () => {
 		const { factory, logs } = makeFactory();

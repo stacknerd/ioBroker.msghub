@@ -95,7 +95,14 @@ function buildStoreApi(store, { hostName = 'Host' } = {}) {
 		// api.updateMessage = (msgOrRef, patch, stealthMode = false) => store.updateMessage(msgOrRef, patch, stealthMode);
 		api.updateMessage = (msgOrRef, patch) => store.updateMessage(msgOrRef, patch);
 		api.addOrUpdateMessage = msg => store.addOrUpdateMessage(msg);
-		api.removeMessage = ref => store.removeMessage(ref);
+		api.removeMessage = (ref, options = {}) => {
+			const msgRef = typeof ref === 'string' ? ref.trim() : '';
+			if (!msgRef) {
+				return false;
+			}
+			const actor = Object.prototype.hasOwnProperty.call(options || {}, 'actor') ? options.actor : undefined;
+			return store.removeMessage(msgRef, actor === undefined ? undefined : { actor });
+		};
 
 		// "Shortcut" for Ingest-Plugins to remove Messages that have been "resoved by taking action"
 		// on a easy and standardized way.

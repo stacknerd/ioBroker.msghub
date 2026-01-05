@@ -71,7 +71,7 @@ Messages have a lifecycle state so UIs and automations can reason about “open 
 - `deleted`: soft-deleted (hidden; retention/purge may hard-delete later)
 - `expired`: expired by time-based pruning
 
-Lifecycle transitions can be applied either by patches (`patch` command) or by executing whitelisted actions (`action` command).
+Lifecycle transitions can be applied either by patches (for normal states like `open`/`acked`/`closed`/`snoozed`) or by executing whitelisted actions (`action` command). `deleted`/`expired` are store-managed states.
 
 Notes:
 

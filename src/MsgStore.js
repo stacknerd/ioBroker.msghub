@@ -68,6 +68,8 @@ const { MsgNotify } = require(`${__dirname}/MsgNotify`);
 const { MsgIngest } = require(`${__dirname}/MsgIngest`);
 const { MsgStats } = require(`${__dirname}/MsgStats`);
 
+const _CORE_LIFECYCLE_TOKEN = Symbol('MsgStore.coreLifecycle');
+
 /**
  * MsgStore
  */
@@ -300,9 +302,10 @@ class MsgStore {
 	 * @param {object|string} msgOrRef Patch object that includes a ref, or a ref string.
 	 * @param {object} [patch] Patch object when ref is provided separately.
 	 * @param {boolean} [stealthMode] When true, applies a "silent" patch (no `timing.updatedAt` bump). As a result, the store will not dispatch `"updated"` (and also not trigger the immediate-due-on-update rule); the change is still persisted and archived.
+	 * @param {any} [_coreToken] Internal token (core only).
 	 * @returns {boolean} True when updated, false when rejected by guards or validation.
 	 */
-	updateMessage(msgOrRef, patch = undefined, stealthMode = false) {
+	updateMessage(msgOrRef, patch = undefined, stealthMode = false, _coreToken = undefined) {
 		// Ensure consumers don't update already-expired entries.
 		this._pruneOldMessages();
 
@@ -332,7 +335,9 @@ class MsgStore {
 		}
 
 		// Delegate validation + normalization to the factory (single source of truth).
-		const updated = factory.applyPatch(existing, msg, stealthMode);
+		const updated = factory.applyPatch(existing, msg, stealthMode, {
+			allowCoreLifecycleStates: _coreToken === _CORE_LIFECYCLE_TOKEN,
+		});
 		if (!updated) {
 			this.adapter?.log?.warn?.(`MsgStore: '${msg.ref}' could not be updated (validation failed)`);
 			return false;
@@ -944,9 +949,10 @@ class MsgStore {
 	 * - A later hard-delete pass physically removes the message and appends an archive delete snapshot.
 	 *
 	 * @param {string} reference Message ref.
-	 * @returns {void}
+	 * @param {{ actor?: string|null }} [options] Optional attribution.
+	 * @returns {boolean} True when a message existed and was removed.
 	 */
-	removeMessage(reference) {
+	removeMessage(reference, options = {}) {
 		this._pruneOldMessages();
 
 		// Find the message to remove; if missing, do nothing.
@@ -954,17 +960,32 @@ class MsgStore {
 			return obj.ref === reference;
 		})[0];
 		if (remove == null) {
-			return;
+			return false;
 		}
 
+		const actorProvided =
+			options && typeof options === 'object' && !Array.isArray(options)
+				? Object.prototype.hasOwnProperty.call(options, 'actor')
+				: false;
+		const actor = actorProvided
+			? typeof options.actor === 'string' && options.actor.trim()
+				? options.actor.trim()
+				: null
+			: 'MsgStore';
+
 		// Soft delete Message (do not remove from list yet).
-		const ok = this.updateMessage(remove.ref, {
-			lifecycle: {
-				state: this.msgConstants.lifecycle.state.deleted,
-				stateChangedBy: 'MsgStore',
+		const ok = this.updateMessage(
+			remove.ref,
+			{
+				lifecycle: {
+					state: this.msgConstants.lifecycle.state.deleted,
+					stateChangedBy: actor,
+				},
+				timing: { notifyAt: null },
 			},
-			timing: { notifyAt: null },
-		});
+			false,
+			_CORE_LIFECYCLE_TOKEN,
+		);
 		const deleted = ok ? this.fullList.find(item => item.ref === remove.ref) || remove : remove;
 
 		// Notify plugins (semantic delete).
@@ -972,6 +993,7 @@ class MsgStore {
 
 		this.adapter?.log?.debug?.(`MsgStore: removed Message '${reference}'`);
 		this.adapter?.log?.silly?.(`MsgStore: removed Message '${serializeWithMaps(deleted)}'`);
+		return true;
 	}
 
 	/**
@@ -1058,13 +1080,18 @@ class MsgStore {
 
 		const expiredNow = [];
 		for (const msg of removals) {
-			const ok = this.updateMessage(msg.ref, {
-				lifecycle: {
-					state: expiredState,
-					stateChangedBy: 'MsgStore',
+			const ok = this.updateMessage(
+				msg.ref,
+				{
+					lifecycle: {
+						state: expiredState,
+						stateChangedBy: 'MsgStore',
+					},
+					timing: { notifyAt: null },
 				},
-				timing: { notifyAt: null },
-			});
+				false,
+				_CORE_LIFECYCLE_TOKEN,
+			);
 			expiredNow.push(ok ? this.fullList.find(item => item.ref === msg.ref) || msg : msg);
 		}
 

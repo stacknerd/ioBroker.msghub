@@ -87,7 +87,7 @@ class MsgAction {
 	 * Supported types in core:
 	 * - `ack`    -> lifecycle.state = "acked", timing.notifyAt cleared
 	 * - `close`  -> lifecycle.state = "closed", timing.notifyAt cleared
-	 * - `delete` -> lifecycle.state = "deleted" (soft), timing.notifyAt cleared
+	 * - `delete` -> soft delete via `MsgStore.removeMessage()` (lifecycle.state="deleted", timing.notifyAt cleared)
 	 * - `snooze` -> lifecycle.state = "snoozed", timing.notifyAt = now + forMs
 	 *
 	 * @param {{ ref?: string, actionId?: string, actor?: string|null, payload?: Record<string, unknown>|null }} [options] Options (ref and actionId are required for execution).
@@ -214,10 +214,10 @@ class MsgAction {
 					});
 					return true;
 				}
-				const ok = this._patchMessage(msgRef, {
-					lifecycle: buildLifecyclePatch(this.msgConstants.lifecycle.state.deleted),
-					timing: { notifyAt: null },
-				});
+				const ok = this.msgStore?.removeMessage?.(
+					msgRef,
+					actorProvided ? { actor: normalizedActor } : undefined,
+				);
 				record({
 					ok,
 					type,

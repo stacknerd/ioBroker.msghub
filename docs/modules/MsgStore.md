@@ -206,10 +206,10 @@ Updates an existing message by delegating to `MsgFactory.applyPatch()`.
 ### `addOrUpdateMessage(msg): boolean`
 Convenience upsert: updates when `ref` exists, otherwise `addMessage`.
 
-### `removeMessage(ref): void`
+### `removeMessage(ref, { actor? }): boolean`
 Removes a message when it exists.
 
-- Semantics: soft-delete (`lifecycle.state = "deleted"`, clears `timing.notifyAt`) and dispatches `"deleted"`.
+- Semantics: soft-delete (`lifecycle.state = "deleted"`, clears `timing.notifyAt`), stores `actor` as `lifecycle.stateChangedBy`, and dispatches `"deleted"`.
 - Hard-delete (purge) happens later after a retention window and appends an archive delete snapshot.
 
 ### Read APIs

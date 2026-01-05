@@ -46,7 +46,7 @@ Columns:
 | API | `store` | `addMessage(msg)` | ✓ |  | ✓ | ✓ | Add a normalized message into the store (inbound ctx only). | `buildStoreApi()` (`src/MsgHostApi.js`) | `../modules/MsgHostApi.md` |
 | API | `store` | `updateMessage(msgOrRef, patch)` | ✓ |  | ✓ | ✓ | Patch a message by ref/object (inbound ctx only). | `buildStoreApi()` (`src/MsgHostApi.js`) | `../modules/MsgHostApi.md` |
 | API | `store` | `addOrUpdateMessage(msg)` | ✓ |  | ✓ | ✓ | Upsert by `ref` (inbound ctx only). | `buildStoreApi()` (`src/MsgHostApi.js`) | `../modules/MsgHostApi.md` |
-| API | `store` | `removeMessage(ref)` | ✓ |  | ✓ | ✓ | Soft-delete a message (`lifecycle.state="deleted"`) (inbound ctx only). | `buildStoreApi()` (`src/MsgHostApi.js`) | `../modules/MsgHostApi.md` |
+| API | `store` | `removeMessage(ref, { actor? })` | ✓ |  | ✓ | ✓ | Soft-delete a message (`lifecycle.state="deleted"`) (inbound ctx only). | `buildStoreApi()` (`src/MsgHostApi.js`) | `../modules/MsgHostApi.md` |
 | API | `store` | `completeAfterCauseEliminated(ref, options?)` | ✓ |  | ✓ | ✓ | Shortcut: close message + set progress to finished (inbound ctx only). | `buildStoreApi()` (`src/MsgHostApi.js`) | `../modules/MsgHostApi.md` |
 | API | `stats` | `getStats(options?)` | ✓ | ✓ | ✓ | ✓ | Returns a JSON-serializable stats snapshot (current/schedule/done/io). | `buildStatsApi()` (`src/MsgHostApi.js`) + `MsgStats` | `../modules/MsgStats.md` |
 | API | `factory` | `createMessage(data)` | ✓ |  | ✓ | ✓ | Normalization gate for “create” paths (inbound ctx only). | `buildFactoryApi()` (`src/MsgHostApi.js`) | `../modules/MsgFactory.md` |

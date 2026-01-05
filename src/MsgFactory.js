@@ -243,6 +243,13 @@ class MsgFactory {
 				lifecycle && typeof lifecycle === 'object' && !Array.isArray(lifecycle) ? { ...lifecycle } : lifecycle;
 			if (safeLifecycle && typeof safeLifecycle === 'object' && !Array.isArray(safeLifecycle)) {
 				delete safeLifecycle.stateChangedAt;
+				// Core-owned lifecycle states: deleted/expired are only set by the store.
+				const deletedState = this.msgConstants.lifecycle?.state?.deleted;
+				const expiredState = this.msgConstants.lifecycle?.state?.expired;
+				const state = typeof safeLifecycle.state === 'string' ? safeLifecycle.state.trim() : '';
+				if (state && (state === deletedState || state === expiredState)) {
+					delete safeLifecycle.state;
+				}
 			}
 			const safeProgress =
 				progress && typeof progress === 'object' && !Array.isArray(progress) ? { ...progress } : progress;
@@ -416,9 +423,10 @@ class MsgFactory {
 	 * @param {object|{set?: object, delete?: string[]}|null} [patch.progress] Progress patch or null to clear.
 	 * @param {string[]|string|{set?: string[]|string, delete?: string[]}|null} [patch.dependencies] Dependencies patch or null to clear.
 	 * @param {boolean} [stealthMode] When true, applies a "silent" patch by suppressing the `timing.updatedAt` bump. This is intended for housekeeping (e.g. rescheduling `notifyAt`) where consumers should not treat the message as "new".
+	 * @param {object} [options] Internal options (core only).
 	 * @returns {object|null} Updated message or null when validation fails.
 	 */
-	applyPatch(existing, patch = {}, stealthMode = false) {
+	applyPatch(existing, patch = {}, stealthMode = false, options = {}) {
 		try {
 			if (!this.isValidMessage(existing)) {
 				throw new TypeError('applyPatch: existing message must be a valid message object');
@@ -427,6 +435,7 @@ class MsgFactory {
 			// Start with a shallow copy; nested objects are replaced/merged by the individual
 			// patch handlers below (timing/details/progress/audience/...).
 			const updated = { ...existing };
+			const patchOptions = options && typeof options === 'object' && !Array.isArray(options) ? options : {};
 			let refreshUpdatedAt = false;
 			const has = key => Object.prototype.hasOwnProperty.call(patch, key);
 			const isEqual = (a, b) => {
@@ -535,7 +544,7 @@ class MsgFactory {
 				updated.details = value;
 			}
 			if (has('lifecycle')) {
-				const value = this._applyLifecyclePatch(existing.lifecycle, patch.lifecycle);
+				const value = this._applyLifecyclePatch(existing.lifecycle, patch.lifecycle, patchOptions);
 				markUserVisibleChange(existing.lifecycle, value);
 				updated.lifecycle = value;
 			}
@@ -1199,8 +1208,14 @@ class MsgFactory {
 	 *
 	 * @param {any} existing Existing lifecycle (may be missing on older stored messages).
 	 * @param {any} patch Patch object or null.
+	 * @param {object} [options] Internal options (core only).
 	 */
-	_applyLifecyclePatch(existing, patch) {
+	_applyLifecyclePatch(existing, patch, options = {}) {
+		const allowCoreLifecycleStates =
+			options &&
+			typeof options === 'object' &&
+			!Array.isArray(options) &&
+			options.allowCoreLifecycleStates === true;
 		const base = this._normalizeMsgLifecycle(existing);
 		if (patch === undefined) {
 			return base;
@@ -1222,7 +1237,15 @@ class MsgFactory {
 		}
 		const merged = { ...base };
 		if (Object.prototype.hasOwnProperty.call(patch, 'state')) {
-			merged.state = this._normalizeMsgLifecycle({ state: patch.state }).state;
+			const nextState = this._normalizeMsgLifecycle({ state: patch.state }).state;
+			if (!allowCoreLifecycleStates) {
+				const deletedState = this.msgConstants.lifecycle?.state?.deleted || 'deleted';
+				const expiredState = this.msgConstants.lifecycle?.state?.expired || 'expired';
+				if (nextState === deletedState || nextState === expiredState) {
+					throw new TypeError(`applyPatch: lifecycle.state '${nextState}' is core-managed`);
+				}
+			}
+			merged.state = nextState;
 		}
 		if (Object.prototype.hasOwnProperty.call(patch, 'stateChangedBy')) {
 			merged.stateChangedBy =
