@@ -15,6 +15,10 @@
 		}
 
 		const adapterInstance = Number.isFinite(ctx?.adapterInstance) ? Math.trunc(ctx.adapterInstance) : 0;
+		const adapterNamespace =
+			typeof ctx?.adapterInstance === 'string' && ctx.adapterInstance.trim()
+				? ctx.adapterInstance.trim()
+				: `msghub.${adapterInstance}`;
 
 		const sendTo = ctx.sendTo;
 		const h = ctx.h;
@@ -726,6 +730,736 @@
 			return s.length > maxLen ? `${s.slice(0, maxLen - 1)}…` : s;
 		}
 
+		let ingestStatesSchemaPromise = null;
+		async function ensureIngestStatesSchema() {
+			if (ingestStatesSchemaPromise) {
+				return ingestStatesSchemaPromise;
+			}
+			ingestStatesSchemaPromise = (async () => {
+				const schema = await sendTo('admin.ingestStates.schema.get', {});
+				if (!schema || typeof schema !== 'object') {
+					throw new Error('Invalid schema response');
+				}
+				return schema;
+			})();
+			return ingestStatesSchemaPromise;
+		}
+
+		function renderIngestStatesBulkApply({ instances, schema }) {
+			const inst = Array.isArray(instances) ? instances.find(x => x?.instanceId === 0) : null;
+			const enabled = inst?.enabled === true;
+
+			const lsKey = `msghub.bulkApply.${adapterNamespace}`;
+			const loadState = () => {
+				try {
+					const raw = window?.localStorage?.getItem?.(lsKey);
+					if (!raw) {
+						return null;
+					}
+					const parsed = JSON.parse(raw);
+					return parsed && typeof parsed === 'object' ? parsed : null;
+				} catch {
+					return null;
+				}
+			};
+			const saveState = next => {
+				try {
+					window?.localStorage?.setItem?.(lsKey, JSON.stringify(next || {}));
+				} catch {
+					// ignore
+				}
+			};
+
+			const initial = loadState() || {};
+
+			function readCfg(cfg, path) {
+				if (!cfg || typeof cfg !== 'object') {
+					return undefined;
+				}
+				if (cfg[path] !== undefined) {
+					return cfg[path];
+				}
+				const parts = String(path || '').split('.').filter(Boolean);
+				if (parts.length === 0) {
+					return undefined;
+				}
+				let cur = cfg;
+				for (const p of parts) {
+					if (!cur || typeof cur !== 'object' || cur[p] === undefined) {
+						return undefined;
+					}
+					cur = cur[p];
+				}
+				return cur;
+			}
+
+			function joinOptions(list) {
+				return (Array.isArray(list) ? list : []).map(v => String(v)).join('|');
+			}
+
+			function collectWarnings(cfg) {
+				const warnings = [];
+
+				const mode = readCfg(cfg, 'mode');
+				const allowedModes = ['threshold', 'freshness', 'triggered', 'nonSettling', 'session'];
+				const modeStr = typeof mode === 'string' ? mode.trim() : '';
+				if (!modeStr) {
+					warnings.push(`WARNING: missing mode detected. valid options are: ${allowedModes.join('|')}`);
+				} else if (!allowedModes.includes(modeStr)) {
+					warnings.push(`WARNING: invalid mode detected ('${modeStr}'). valid options are: ${allowedModes.join('|')}`);
+				}
+
+				if (modeStr === 'triggered') {
+					const trgId = String(readCfg(cfg, 'trg.id') || '').trim();
+					if (!trgId) {
+						warnings.push('WARNING: missing trg.id detected. This field is required for triggered rules.');
+					}
+				}
+
+				const fields = schema?.fields && typeof schema.fields === 'object' ? schema.fields : {};
+				for (const [key, info] of Object.entries(fields)) {
+					if (!info || typeof info !== 'object') {
+						continue;
+					}
+					const val = readCfg(cfg, key);
+					if (val === undefined) {
+						continue;
+					}
+					const type = typeof info.type === 'string' ? info.type : '';
+
+					if (type === 'select') {
+						const opts = Array.isArray(info.options) ? info.options : [];
+						if (opts.length && !opts.includes(val)) {
+							warnings.push(
+								`WARNING: invalid ${key} detected ('${String(val)}'). valid options are: ${joinOptions(opts)}`,
+							);
+						}
+						continue;
+					}
+					if (type === 'checkbox') {
+						if (typeof val !== 'boolean') {
+							warnings.push(`WARNING: invalid ${key} detected. expected a boolean.`);
+						}
+						continue;
+					}
+					if (type === 'number') {
+						if (typeof val !== 'number' || !Number.isFinite(val)) {
+							warnings.push(`WARNING: invalid ${key} detected. expected a number.`);
+							continue;
+						}
+						const min = typeof info.min === 'number' && Number.isFinite(info.min) ? info.min : null;
+						const max = typeof info.max === 'number' && Number.isFinite(info.max) ? info.max : null;
+						if (min !== null && val < min) {
+							warnings.push(`WARNING: invalid ${key} detected. expected >= ${min}.`);
+						}
+						if (max !== null && val > max) {
+							warnings.push(`WARNING: invalid ${key} detected. expected <= ${max}.`);
+						}
+						continue;
+					}
+				}
+
+				return warnings;
+			}
+
+			function formatMs(ms) {
+				const n = typeof ms === 'number' ? ms : Number(ms);
+				if (!Number.isFinite(n) || n <= 0) {
+					return '';
+				}
+				const totalSeconds = Math.round(n / 1000);
+				if (totalSeconds < 60) {
+					return `${totalSeconds}s`;
+				}
+				const totalMinutes = Math.round(totalSeconds / 60);
+				if (totalMinutes < 60) {
+					return `${totalMinutes}m`;
+				}
+				const totalHours = Math.round(totalMinutes / 60);
+				if (totalHours < 24) {
+					const hours = totalHours;
+					const minutes = Math.round((totalMinutes - hours * 60) / 5) * 5;
+					if (!minutes) {
+						return `${hours}h`;
+					}
+					return `${hours}:${String(minutes).padStart(2, '0')}h`;
+				}
+				const days = Math.floor(totalHours / 24);
+				const hours = totalHours - days * 24;
+				if (!hours) {
+					return `${days}d`;
+				}
+				return `${days}d ${hours}h`;
+			}
+
+			function formatDurationValueUnit(value, unitSeconds) {
+				const v = typeof value === 'number' ? value : Number(value);
+				const u = typeof unitSeconds === 'number' ? unitSeconds : Number(unitSeconds);
+				if (!Number.isFinite(v) || !Number.isFinite(u) || v <= 0 || u <= 0) {
+					return '';
+				}
+				return formatMs(v * u * 1000);
+			}
+
+			function describeCustomConfig(custom) {
+				const cfg = custom && typeof custom === 'object' ? custom : null;
+				if (!cfg) {
+					return 'No config loaded.';
+				}
+
+				const lines = [];
+				const warnings = collectWarnings(cfg);
+				if (warnings.length) {
+					lines.push(...warnings);
+					lines.push('');
+				}
+				const isEnabled = readCfg(cfg, 'enabled') === true;
+				const mode = String(readCfg(cfg, 'mode') || '').trim();
+				lines.push(`Status: ${isEnabled ? 'enabled' : 'disabled'}`);
+				lines.push(`Rule type: ${mode || '(not set)'}`);
+				lines.push('');
+
+				const title = String(readCfg(cfg, 'msg.title') || '').trim();
+				const text = String(readCfg(cfg, 'msg.text') || '').trim();
+				lines.push(`Message title: ${title ? `"${title}"` : 'default'}`);
+				lines.push(`Message text: ${text ? `"${text}"` : 'default'}`);
+
+				const tags = String(readCfg(cfg, 'msg.audienceTags') || '').trim();
+				const channels = String(readCfg(cfg, 'msg.audienceChannels') || '').trim();
+				if (tags || channels) {
+					lines.push(`Audience: ${[tags ? `tags=[${tags}]` : null, channels ? `channels=[${channels}]` : null].filter(Boolean).join(' ')}`);
+				} else {
+					lines.push('Audience: default');
+				}
+
+				const resetOnNormal = readCfg(cfg, 'msg.resetOnNormal');
+				lines.push(`Auto-remove on normal: ${resetOnNormal === false ? 'off' : 'on'}`);
+				const resetDelay = formatDurationValueUnit(readCfg(cfg, 'msg.resetDelayValue'), readCfg(cfg, 'msg.resetDelayUnit'));
+				if (resetDelay) {
+					lines.push(`Reset delay: ${resetDelay}`);
+				}
+				const remind = formatDurationValueUnit(readCfg(cfg, 'msg.remindValue'), readCfg(cfg, 'msg.remindUnit'));
+				lines.push(`Reminder: ${remind ? `every ${remind}` : 'off'}`);
+				const cooldown = formatDurationValueUnit(readCfg(cfg, 'msg.cooldownValue'), readCfg(cfg, 'msg.cooldownUnit'));
+				if (cooldown) {
+					lines.push(`Cooldown after close: ${cooldown}`);
+				}
+
+				lines.push('');
+				lines.push('Rule behavior:');
+
+				if (mode === 'threshold') {
+					const thrMode = String(readCfg(cfg, 'thr.mode') || '').trim() || 'lt';
+					const h = readCfg(cfg, 'thr.hysteresis');
+					const minDur = formatDurationValueUnit(readCfg(cfg, 'thr.minDurationValue'), readCfg(cfg, 'thr.minDurationUnit'));
+					const value = readCfg(cfg, 'thr.value');
+					const min = readCfg(cfg, 'thr.min');
+					const max = readCfg(cfg, 'thr.max');
+
+					if (thrMode === 'gt') {
+						lines.push(`- Alerts when the value is greater than ${value}.`);
+					} else if (thrMode === 'lt') {
+						lines.push(`- Alerts when the value is lower than ${value}.`);
+					} else if (thrMode === 'outside') {
+						lines.push(`- Alerts when the value is outside ${min}–${max}.`);
+					} else if (thrMode === 'inside') {
+						lines.push(`- Alerts when the value is inside ${min}–${max}.`);
+					} else if (thrMode === 'truthy') {
+						lines.push('- Alerts when the value is TRUE.');
+					} else if (thrMode === 'falsy') {
+						lines.push('- Alerts when the value is FALSE.');
+					} else {
+						lines.push(`- Alerts based on threshold mode '${thrMode}'.`);
+					}
+					if (typeof h === 'number' && Number.isFinite(h) && h > 0) {
+						lines.push(`- Uses hysteresis (${h}) to avoid flapping.`);
+					}
+					if (minDur) {
+						lines.push(`- Creates the message only if the condition stays true for ${minDur}.`);
+					}
+					lines.push('- Actions: ack, snooze (4h), close (only when auto-remove is off).');
+				} else if (mode === 'freshness') {
+					const evaluateBy = readCfg(cfg, 'fresh.evaluateBy') === 'lc' ? 'change (lc)' : 'update (ts)';
+					const thr = formatDurationValueUnit(readCfg(cfg, 'fresh.everyValue'), readCfg(cfg, 'fresh.everyUnit'));
+					lines.push(`- Alerts when the state has no ${evaluateBy} for longer than ${thr || '(not set)'}.`);
+					lines.push('- Actions: ack, snooze (4h), close (only when auto-remove is off).');
+				} else if (mode === 'triggered') {
+					const windowDur = formatDurationValueUnit(readCfg(cfg, 'trg.windowValue'), readCfg(cfg, 'trg.windowUnit'));
+					const exp = String(readCfg(cfg, 'trg.expectation') || '').trim();
+					lines.push('- Starts a time window when the trigger becomes active.');
+					lines.push(`- If the expectation is not met within ${windowDur || '(not set)'}, it creates a message.`);
+					if (exp) {
+						lines.push(`- Expectation: ${exp}.`);
+					}
+					lines.push('- Actions: ack, snooze (4h), close (only when auto-remove is off).');
+				} else if (mode === 'nonSettling') {
+					const profile = String(readCfg(cfg, 'ns.profile') || '').trim();
+					lines.push(`- Non-settling profile: ${profile || '(not set)'}.`);
+					lines.push('- Creates a message when the value is not stable/trending as configured, and closes on recovery.');
+					lines.push('- Actions: ack, snooze (4h), close (only when auto-remove is off).');
+				} else if (mode === 'session') {
+					lines.push('- Tracks a start and an end message (two refs).');
+					lines.push('- The start message is soft-deleted when the end message is created.');
+					lines.push('- Actions: start=ack+snooze(4h)+delete, end=ack+snooze(4h).');
+				} else {
+					lines.push('- Select a rule type to see a detailed description.');
+				}
+
+				lines.push('');
+				lines.push('Note: Bulk Apply never reads/writes managedMeta.');
+				return lines.join('\n');
+			}
+
+			const elPattern = h('input', {
+				type: 'text',
+				placeholder: 'e.g. linkeddevices.0.*.CO2',
+				value: typeof initial.pattern === 'string' ? initial.pattern : '',
+				disabled: enabled ? undefined : '',
+			});
+
+			const elSource = h('input', {
+				type: 'text',
+				placeholder: 'e.g. linkeddevices.0.room.sensor.CO2',
+				value: typeof initial.sourceId === 'string' ? initial.sourceId : '',
+				disabled: enabled ? undefined : '',
+			});
+
+			const defaultCustom =
+				schema?.defaults && typeof schema.defaults === 'object'
+					? schema.defaults
+					: {
+							enabled: true,
+							mode: 'threshold',
+
+							// Threshold (thr.*)
+							'thr.mode': 'lt',
+							'thr.value': 10,
+							'thr.min': 0,
+							'thr.max': 100,
+							'thr.hysteresis': 0,
+							'thr.minDurationValue': 0,
+							'thr.minDurationUnit': 60,
+
+							// Freshness (fresh.*)
+							'fresh.everyValue': 60,
+							'fresh.everyUnit': 60,
+							'fresh.evaluateBy': 'ts',
+
+							// Triggered / dependency (trg.*)
+							'trg.id': '',
+							'trg.operator': 'eq',
+							'trg.valueType': 'boolean',
+							'trg.valueBool': true,
+							'trg.valueNumber': 0,
+							'trg.valueString': '',
+							'trg.windowValue': 5,
+							'trg.windowUnit': 60,
+							'trg.expectation': 'changed',
+							'trg.minDelta': 0,
+							'trg.threshold': 0,
+
+							// Non-settling (ns.*)
+							'ns.profile': 'activity',
+							'ns.minDelta': 0,
+							'ns.maxContinuousValue': 180,
+							'ns.maxContinuousUnit': 60,
+							'ns.quietGapValue': 15,
+							'ns.quietGapUnit': 60,
+							'ns.direction': 'up',
+							'ns.trendWindowValue': 6,
+							'ns.trendWindowUnit': 3600,
+							'ns.minTotalDelta': 0,
+
+							// Session (sess.*)
+							'sess.onOffId': '',
+							'sess.onOffActive': 'truthy',
+							'sess.onOffValue': 'true',
+							'sess.startThreshold': 50,
+							'sess.startMinHoldValue': 0,
+							'sess.startMinHoldUnit': 1,
+							'sess.stopThreshold': 15,
+							'sess.stopDelayValue': 5,
+							'sess.stopDelayUnit': 60,
+							'sess.cancelStopIfAboveStopThreshold': true,
+							'sess.energyCounterId': '',
+							'sess.pricePerKwhId': '',
+
+							// Message (msg.*)
+							'msg.kind': 'status',
+							'msg.level': 10,
+							'msg.title': '',
+							'msg.text': '',
+							'msg.audienceTags': '',
+							'msg.audienceChannels': '',
+							'msg.cooldownValue': 60,
+							'msg.cooldownUnit': 60,
+							'msg.remindValue': 0,
+							'msg.remindUnit': 3600,
+							'msg.resetOnNormal': true,
+							'msg.resetDelayValue': 0,
+							'msg.resetDelayUnit': 60,
+
+							// Session start message (msg.sessionStart*)
+							'msg.sessionStartEnabled': false,
+							'msg.sessionStartKind': 'status',
+							'msg.sessionStartLevel': 10,
+							'msg.sessionStartTitle': '',
+							'msg.sessionStartText': '',
+							'msg.sessionStartAudienceTags': '',
+							'msg.sessionStartAudienceChannels': '',
+						};
+
+			const elCustom = h('textarea', {
+				class: 'msghub-bulk-apply-textarea',
+				rows: '24',
+				disabled: enabled ? undefined : '',
+			});
+			elCustom.value = typeof initial.customJson === 'string' ? initial.customJson : JSON.stringify(defaultCustom, null, 2);
+
+			const elDescription = h('textarea', {
+				class: 'msghub-bulk-apply-textarea msghub-bulk-apply-textarea--desc',
+				rows: '24',
+				readonly: '',
+				disabled: enabled ? undefined : '',
+			});
+
+			const elReplace = h('input', { type: 'checkbox', disabled: enabled ? undefined : '' });
+			elReplace.checked = initial.replace === true;
+			const elReplaceLabel = h('label', { text: 'Replace config (danger)' });
+
+			const elStatus = h('div', { class: 'msghub-muted msghub-bulk-apply-status', text: '' });
+			const elPreview = h('pre', { class: 'msghub-bulk-apply-preview', text: '' });
+
+			let lastPreview = null;
+
+			const updateLs = () =>
+				saveState({
+					pattern: elPattern.value,
+					sourceId: elSource.value,
+					customJson: elCustom.value,
+					replace: elReplace.checked === true,
+				});
+
+			const updateDescription = () => {
+				try {
+					const parsed = parseCustom();
+					elDescription.value = describeCustomConfig(parsed);
+				} catch (err) {
+					elDescription.value = `Invalid JSON: ${String(err?.message || err)}`;
+				}
+			};
+
+			elPattern.addEventListener('input', () => {
+				updateLs();
+				invalidatePreview();
+			});
+			elSource.addEventListener('input', () => {
+				updateLs();
+				invalidatePreview();
+			});
+			elCustom.addEventListener('input', () => {
+				updateLs();
+				updateDescription();
+				invalidatePreview();
+			});
+			elReplace.addEventListener('change', () => {
+				updateLs();
+				invalidatePreview();
+			});
+
+			const parseCustom = () => {
+				const raw = String(elCustom.value || '').trim();
+				if (!raw) {
+					throw new Error('Custom config JSON is empty');
+				}
+				const parsed = JSON.parse(raw);
+				if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+					throw new Error('Custom config JSON must be an object');
+				}
+				return parsed;
+			};
+
+			const setBusy = (busy, btns) => {
+				for (const b of btns) {
+					b.classList.toggle('disabled', busy === true);
+				}
+			};
+
+			const btnLoad = h('a', {
+				class: 'btn-flat',
+				href: '#',
+				text: 'Load from object',
+			});
+
+			const btnGenerateEmpty = h('a', {
+				class: 'btn-flat',
+				href: '#',
+				text: 'Generate empty',
+			});
+
+			const btnPreview = h('a', {
+				class: 'btn',
+				href: '#',
+				text: 'Generate preview',
+			});
+
+			const btnApply = h('a', {
+				class: 'btn disabled',
+				href: '#',
+				text: 'Apply settings',
+			});
+
+			const setApplyEnabled = ok => {
+				btnApply.classList.toggle('disabled', ok !== true);
+				btnApply.setAttribute('aria-disabled', ok === true ? 'false' : 'true');
+			};
+
+			const setStatus = msg => {
+				elStatus.textContent = String(msg || '');
+			};
+
+			const setPreviewText = msg => {
+				elPreview.textContent = String(msg || '');
+			};
+
+			const setPreview = res => {
+				lastPreview = res || null;
+				if (!res) {
+					setPreviewText('');
+					setApplyEnabled(false);
+					return;
+				}
+
+				const lines = [];
+				lines.push(`Pattern: ${res.pattern}`);
+				lines.push(`Matched states: ${res.matchedStates}`);
+				lines.push(`Will change: ${res.willChange}`);
+				lines.push(`Unchanged: ${res.unchanged}`);
+				lines.push('');
+				lines.push('Sample:');
+				for (const s of res.sample || []) {
+					lines.push(`- ${s.changed ? '✓' : '·'} ${s.id}`);
+				}
+				setPreviewText(lines.join('\n'));
+				setApplyEnabled(res.willChange > 0);
+			};
+
+			const invalidatePreview = () => {
+				lastPreview = null;
+				setPreview(null);
+			};
+
+			const ensureEnabledOrWarn = () => {
+				if (enabled) {
+					return true;
+				}
+				setStatus('IngestStates is disabled. Enable the plugin to use Bulk Apply.');
+				try {
+					M.toast({ html: 'IngestStates is disabled. Enable the plugin to use Bulk Apply.' });
+				} catch {
+					// ignore
+				}
+				return false;
+			};
+
+			btnLoad.addEventListener('click', async e => {
+				e.preventDefault();
+				if (!ensureEnabledOrWarn()) {
+					return;
+				}
+				const id = String(elSource.value || '').trim();
+				if (!id) {
+					setStatus('Enter a source object id first.');
+					return;
+				}
+				setBusy(true, [btnLoad, btnPreview, btnApply]);
+				setStatus('Loading…');
+				try {
+					const res = await sendTo('admin.ingestStates.custom.read', { id });
+					if (!res?.custom) {
+						setStatus('No MsgHub Custom config found on that object.');
+						return;
+					}
+					elCustom.value = JSON.stringify(res.custom, null, 2);
+					updateLs();
+					updateDescription();
+					invalidatePreview();
+					setStatus('Loaded.');
+				} catch (err) {
+					setStatus(`Load failed: ${String(err?.message || err)}`);
+				} finally {
+					setBusy(false, [btnLoad, btnPreview, btnApply]);
+				}
+			});
+
+			btnGenerateEmpty.addEventListener('click', e => {
+				e.preventDefault();
+				if (!ensureEnabledOrWarn()) {
+					return;
+				}
+				elCustom.value = JSON.stringify(defaultCustom, null, 2);
+				updateLs();
+				updateDescription();
+				invalidatePreview();
+				setStatus('Generated.');
+			});
+
+			btnPreview.addEventListener('click', async e => {
+				e.preventDefault();
+				if (!ensureEnabledOrWarn()) {
+					return;
+				}
+				const pattern = String(elPattern.value || '').trim();
+				if (!pattern) {
+					setStatus('Enter an object id pattern first.');
+					return;
+				}
+				let custom;
+				try {
+					custom = parseCustom();
+				} catch (err) {
+					setStatus(`Invalid JSON: ${String(err?.message || err)}`);
+					return;
+				}
+
+				setBusy(true, [btnLoad, btnPreview, btnApply]);
+				setStatus('Previewing…');
+				invalidatePreview();
+				try {
+					const res = await sendTo('admin.ingestStates.bulkApply.preview', {
+						pattern,
+						custom,
+						replace: elReplace.checked === true,
+						limit: 50,
+					});
+					setStatus('Preview ready.');
+					setPreview(res);
+					updateDescription();
+				} catch (err) {
+					setStatus(`Preview failed: ${String(err?.message || err)}`);
+					setPreview(null);
+				} finally {
+					setBusy(false, [btnLoad, btnPreview, btnApply]);
+				}
+			});
+
+			btnApply.addEventListener('click', async e => {
+				e.preventDefault();
+				if (!ensureEnabledOrWarn()) {
+					return;
+				}
+				if (btnApply.classList.contains('disabled')) {
+					return;
+				}
+				const pattern = String(elPattern.value || '').trim();
+				if (!pattern) {
+					setStatus('Enter an object id pattern first.');
+					return;
+				}
+				let custom;
+				try {
+					custom = parseCustom();
+				} catch (err) {
+					setStatus(`Invalid JSON: ${String(err?.message || err)}`);
+					return;
+				}
+				const count = Number(lastPreview?.willChange) || 0;
+				if (!window.confirm(`Apply MsgHub Custom config to ${count} object(s) as previewed?`)) {
+					return;
+				}
+
+				setBusy(true, [btnLoad, btnPreview, btnApply]);
+				setStatus('Applying…');
+				try {
+					const res = await sendTo('admin.ingestStates.bulkApply.apply', {
+						pattern,
+						custom,
+						replace: elReplace.checked === true,
+					});
+					setStatus(`Done: updated=${res.updated}, unchanged=${res.unchanged}, errors=${(res.errors || []).length}`);
+					setPreview(null);
+					try {
+						M.toast({ html: `Bulk apply done: updated=${res.updated}` });
+					} catch {
+						// ignore
+					}
+				} catch (err) {
+					setStatus(`Apply failed: ${String(err?.message || err)}`);
+				} finally {
+					setBusy(false, [btnLoad, btnPreview, btnApply]);
+				}
+			});
+
+			if (!enabled) {
+				setStatus('IngestStates is disabled. Enable the plugin to use Bulk Apply.');
+			}
+
+			updateDescription();
+
+			return h('div', { class: 'msghub-bulk-apply' }, [
+				h('h6', { text: 'Bulk Apply (IngestStates rules)' }),
+				h('p', {
+					class: 'msghub-muted',
+					text: 'Apply the same MsgHub Custom config to many objects by pattern. Tip: configure one object manually, then import it and apply to a whole group.',
+				}),
+				h('div', { class: 'msghub-bulk-step' }, [
+					h('div', { class: 'msghub-bulk-step-title', text: 'Step 1: get the base config' }),
+					h('div', { class: 'row' }, [
+						h('div', { class: 'input-field col s12 m8' }, [
+							elSource,
+							h('label', { class: 'active', text: 'Import from existing config (object id)' }),
+						]),
+						h('div', { class: 'col s12 m4 msghub-actions msghub-actions--inline' }, [btnLoad, btnGenerateEmpty]),
+					]),
+				]),
+				h('div', { class: 'msghub-bulk-step' }, [
+					h('div', { class: 'msghub-bulk-step-title', text: 'Step 2: define target' }),
+					h('div', { class: 'row' }, [
+						h('div', { class: 'input-field col s12' }, [
+							elPattern,
+							h('label', { class: 'active', text: 'Export to ids matching the following target pattern' }),
+						]),
+					]),
+				]),
+				h('div', { class: 'msghub-bulk-step' }, [
+					h('div', { class: 'msghub-bulk-step-title', text: 'Step 3: review / modify settings' }),
+					h('div', { class: 'row' }, [
+						h('div', { class: 'col s12' }, [
+							h('div', { class: 'msghub-bulk-apply-cols' }, [
+								h('div', { class: 'msghub-bulk-apply-col' }, [
+									h('div', { class: 'input-field' }, [
+										elCustom,
+										h('label', { class: 'active', text: `Custom config JSON (${adapterNamespace})` }),
+									]),
+								]),
+								h('div', { class: 'msghub-bulk-apply-col' }, [
+									h('div', { class: 'input-field' }, [
+										elDescription,
+										h('label', { class: 'active', text: 'Output of rule description' }),
+									]),
+								]),
+							]),
+						]),
+						h('div', { class: 'col s12' }, [h('label', null, [elReplace, h('span', { text: ' ' }), elReplaceLabel])]),
+					]),
+				]),
+				h('div', { class: 'msghub-bulk-step' }, [
+					h('div', { class: 'msghub-bulk-step-title', text: 'Step 4: generate preview' }),
+					h('div', { class: 'row' }, [
+						h('div', { class: 'col s12 msghub-actions msghub-actions--inline' }, [btnPreview]),
+						h('div', { class: 'col s12' }, [elStatus]),
+						h('div', { class: 'col s12' }, [elPreview]),
+					]),
+				]),
+				h('div', { class: 'msghub-bulk-step' }, [
+					h('div', { class: 'msghub-bulk-step-title', text: 'Step 5: apply settings' }),
+					h('div', { class: 'row' }, [
+						h('div', { class: 'col s12 msghub-actions msghub-actions--inline' }, [btnApply]),
+					]),
+				]),
+			]);
+		}
+
 		function renderPluginCard({ plugin, instances, refreshAll, refreshPlugin, expandedById, readmesByType }) {
 			const label = formatPluginLabel(plugin);
 			const desc = pickText(plugin?.description) || '';
@@ -773,6 +1507,44 @@
 				});
 			};
 
+			const openTools = () => {
+				const hasInst0 = instList.some(i => i?.type === 'IngestStates' && i?.instanceId === 0);
+				const inst0 = instList.find(i => i?.type === 'IngestStates' && i?.instanceId === 0) || null;
+				if (!hasInst0) {
+					try {
+						M.toast({ html: 'IngestStates has no instance yet. Create and enable it first.' });
+					} catch {
+						// ignore
+					}
+					return;
+				}
+				if (inst0?.enabled !== true) {
+					try {
+						M.toast({ html: 'IngestStates is disabled. Enable the plugin to use Tools.' });
+					} catch {
+						// ignore
+					}
+					return;
+				}
+
+				const body = h('div', null, [h('p', { class: 'msghub-muted', text: 'Loading tools…' })]);
+				ensureReadmeModal().open({
+					title: `${label.primary} · Tools`,
+					bodyEl: body,
+				});
+
+				Promise.resolve()
+					.then(() => ensureIngestStatesSchema())
+					.then(schema => {
+						body.replaceChildren(renderIngestStatesBulkApply({ instances: instList, schema }));
+					})
+					.catch(err => {
+						body.replaceChildren(
+							h('div', { class: 'msghub-error', text: `Failed to load tools.\n${String(err?.message || err)}` }),
+						);
+					});
+			};
+
 			const header = h('div', { class: 'card-content msghub-card-head' }, [
 				h('div', { class: 'msghub-card-headrow' }, [
 					h('div', { class: 'msghub-card-headleft' }, [
@@ -799,6 +1571,19 @@
 							},
 							text: 'i',
 						}),
+						plugin?.type === 'IngestStates'
+							? h('a', {
+									class: 'msghub-tools-btn',
+									href: '#',
+									title: 'Tools',
+									'aria-label': 'Tools',
+									onclick: e => {
+										e.preventDefault();
+										openTools();
+									},
+									text: 'Tools',
+								})
+							: null,
 						h('label', { class: 'msghub-acc-toggle', for: accId, text: 'Details' }),
 					]),
 				]),

@@ -36,5 +36,9 @@
   "Messages (expired)": "Berichten (verlopen)",
   "Automatically synchronized shopping list based on the Alexa list \"%s\".": "Automatically synchronized shopping list based on the Alexa list \"%s\".",
   "Connection to Alexa service lost": "Connection to Alexa service lost",
-  "This state is monitored by the BridgeAlexaShopping plugin.\nIt is used as the source for syncing the Alexa list into Message Hub.": "Deze status wordt bewaakt door de BridgeAlexaShopping plugin. Deze wordt gebruikt als bron voor het synchroniseren van de Alexa-lijst in Message Hub."
+  "This state is monitored by the BridgeAlexaShopping plugin.\nIt is used as the source for syncing the Alexa list into Message Hub.": "Deze status wordt bewaakt door de BridgeAlexaShopping plugin. Deze wordt gebruikt als bron voor het synchroniseren van de Alexa-lijst in Message Hub.",
+  "Total items: %s / printed: %s": "Totaal items: %s / afgedrukt: %s",
+  "Page %s of %s": "Pagina %s van %s",
+  "NOTES": "NOTITIES",
+  "Space for additions:": "Ruimte voor aanvullingen:"
 }

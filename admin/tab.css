@@ -265,6 +265,27 @@ html, body { background: transparent; }
   pointer-events: none;
 }
 
+.msghub-tools-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 22px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--msghub-border);
+  color: var(--msghub-muted);
+  background: var(--msghub-surface);
+  text-decoration: none;
+  font-weight: 700;
+  line-height: 1;
+  user-select: none;
+}
+
+.msghub-tools-btn:hover {
+  color: var(--msghub-text);
+  border-color: var(--msghub-muted);
+}
+
 .msghub-card-headleft {
   display: flex;
   align-items: center;
@@ -1529,4 +1550,63 @@ html:not([data-msghub-theme="dark"]) .msghub-root {
   justify-content: flex-end;
   gap: 10px;
   margin-top: 14px;
+}
+
+.msghub-root .msghub-bulk-apply {
+  border-top: 1px solid var(--msghub-border);
+  margin-top: 1.25rem;
+  padding-top: 0.75rem;
+}
+
+.msghub-root .msghub-bulk-apply-textarea {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  white-space: pre;
+  min-height: 24rem;
+}
+
+.msghub-root .msghub-bulk-apply-cols {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+}
+
+.msghub-root .msghub-bulk-apply-col {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.msghub-root .msghub-bulk-apply-preview {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  font-size: 0.9rem;
+  white-space: pre-wrap;
+  background: rgba(127, 127, 127, 0.10);
+  border: 1px solid var(--msghub-border);
+  border-radius: var(--msghub-radius);
+  padding: 0.75rem;
+  max-height: 18rem;
+  overflow: auto;
+}
+
+.msghub-root .msghub-bulk-step {
+  border-top: 1px solid var(--msghub-border);
+  padding-top: 12px;
+  margin-top: 14px;
+}
+
+.msghub-root .msghub-bulk-step-title {
+  font-weight: 800;
+  letter-spacing: 0.2px;
+  color: var(--msghub-muted);
+  margin-bottom: 8px;
+}
+
+.msghub-root .msghub-actions--inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.msghub-root .msghub-bulk-apply-textarea--desc {
+  background: rgba(127, 127, 127, 0.06);
 }
