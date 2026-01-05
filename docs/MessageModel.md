@@ -60,6 +60,36 @@ Practical tips:
 
 ---
 
+## Audience: tags and channels (`audience`)
+
+`audience` helps route messages to the right outputs and recipients.
+
+It contains two independent concepts:
+
+- `audience.tags: string[]` are free-form labels. Their meaning is integration-specific (plugins may use them to target users/groups).
+- `audience.channels` is MsgHub-internal routing for plugin instances:
+
+  ```js
+  audience: {
+    channels: {
+      include: string[], // only these output channels (optional)
+      exclude: string[], // never these output channels (optional; wins)
+    }
+  }
+  ```
+
+Output plugins (`Notify...`, `Bridge...`, `Engage...`) can be configured with an optional channel name (`native.channel`).
+`audience.channels` then filters which plugin instances receive a message notification.
+
+Semantics (implemented by `IoPlugins`):
+
+- If the plugin channel is empty, only unscoped messages (`include` empty) are delivered (“to all”).
+- If the plugin channel is set, `exclude` blocks and `include` restricts.
+
+Note: channel routing is applied only for plugins with `manifest.supportsChannelRouting === true`.
+
+---
+
 ## Lifecycle: current state (`lifecycle.state`)
 
 Messages have a lifecycle state so UIs and automations can reason about “open vs. done vs. hidden”:

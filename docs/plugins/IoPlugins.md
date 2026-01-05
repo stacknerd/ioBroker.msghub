@@ -38,6 +38,7 @@ For each plugin instance, `IoPlugins` creates a small subtree below the adapter 
 
 - Base object (type `channel`): `msghub.0.<Type>.<instanceId>`
   - stores raw plugin options in `object.native`
+  - optional: `native.channel` can be used as a routing channel for `audience.channels` filtering (only when `manifest.supportsChannelRouting === true`, see below)
 - Enable switch (type `state`, boolean, rw): `msghub.0.<Type>.<instanceId>.enable`
   - user intent is written with `ack:false`
   - `IoPlugins` commits the persisted value with `ack:true` after start/stop
@@ -62,6 +63,24 @@ Applying option changes:
 - When `native` is updated via `IoPlugins` (Admin Tab / `admin.plugins.updateInstance`) for an **enabled** instance,
   `IoPlugins` restarts that **single instance** so changes apply immediately (no adapter restart).
 - If you edit `native` manually in the Objects view, do a disable+enable toggle to apply the new config.
+
+---
+
+## Audience routing via `native.channel`
+
+For plugin instances with `manifest.supportsChannelRouting === true`, you can optionally set a `native.channel` string.
+
+When a message has `message.audience.channels`, `IoPlugins` filters notification dispatches per instance (only for routing-enabled plugins):
+
+- If the plugin channel is **empty**: dispatch only when `audience.channels.include` is empty (unscoped / “to all”).
+  - `audience.channels.exclude` is ignored for empty plugin channels.
+- If the plugin channel is **set**:
+  - `exclude` wins (no dispatch when the channel is excluded).
+  - `include` restricts when non-empty (dispatch only when included).
+
+Matching is case-insensitive (trim + lower-case).
+
+This is routing only: `audience.tags` is still plugin-defined and may be used by plugins to implement user/group fanout.
 
 ---
 

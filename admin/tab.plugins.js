@@ -1755,9 +1755,9 @@
 						h('label', { class: 'msghub-acc-toggle msghub-acc-toggle--instance', for: instAccId, text: 'Options' }),
 					);
 				}
-				headActions.appendChild(
-					h('a', {
-						class: 'btn-flat red-text',
+					headActions.appendChild(
+						h('a', {
+							class: 'btn-flat red-text',
 						href: '#',
 						onclick: async e => {
 							e.preventDefault();
@@ -1772,22 +1772,71 @@
 							await refreshPlugin(plugin.type);
 						},
 						text: 'Delete',
-					}),
-				);
+						}),
+					);
 
-				const head = h('div', { class: 'msghub-instance-head' }, [
-					h('div', { class: 'msghub-instance-title', text: `#${inst.instanceId}` }),
-					h('div', { class: 'msghub-instance-enabled' }, [enabledWrap]),
-					h('div', {
-						class: 'msghub-instance-status msghub-muted',
-						text: `Status: ${inst.status || 'unknown'}`,
-					}),
-					h('div', {
-						class: 'msghub-instance-detail msghub-muted',
-						text: instanceTitleValue,
-					}),
-					headActions,
-				]);
+					const wantsChannel = plugin.supportsChannelRouting === true;
+					let channelRow = null;
+					if (wantsChannel) {
+						const channelId = `ch_${plugin.type}_${inst.instanceId}_${adapterInstance}`;
+						const initialChannel = typeof inst.native?.channel === 'string' ? inst.native.channel : '';
+						const channelInput = h('input', {
+							type: 'text',
+							id: channelId,
+							class: 'msghub-instance-channel-input',
+							placeholder: 'all',
+						});
+						channelInput.value = initialChannel;
+						channelInput.setAttribute('data-prev', initialChannel);
+
+						const saveChannel = async () => {
+							const prev = channelInput.getAttribute('data-prev') || '';
+							const next = String(channelInput.value || '').trim();
+							if (next === prev) {
+								return;
+							}
+							try {
+								channelInput.setAttribute('data-prev', next);
+								await sendTo('admin.plugins.updateInstance', {
+									type: plugin.type,
+									instanceId: inst.instanceId,
+									nativePatch: { channel: next || null },
+								});
+								await refreshPlugin(plugin.type);
+							} catch (e) {
+								channelInput.value = prev;
+								channelInput.setAttribute('data-prev', prev);
+								M.toast({ html: `Failed to save channel: ${String(e?.message || e)}` });
+							}
+						};
+
+						channelInput.addEventListener('keydown', e => {
+							if (e.key === 'Enter') {
+								e.preventDefault();
+								channelInput.blur();
+							}
+						});
+						channelInput.addEventListener('blur', () => saveChannel());
+						channelInput.addEventListener('change', () => saveChannel());
+
+						channelRow = h('div', { class: 'msghub-instance-channel' }, [
+							h('span', { class: 'msghub-instance-channel-label', text: 'Channel:' }),
+							channelInput,
+						]);
+					}
+
+					const metaChildren = [
+						h('div', { text: `Status: ${inst.status || 'unknown'}` }),
+						instanceTitleValue ? h('div', { text: instanceTitleValue }) : null,
+						channelRow,
+					].filter(Boolean);
+
+					const head = h('div', { class: 'msghub-instance-head' }, [
+						h('div', { class: 'msghub-instance-title', text: `#${inst.instanceId}` }),
+						h('div', { class: 'msghub-instance-enabled' }, [enabledWrap]),
+						h('div', { class: 'msghub-instance-meta msghub-muted' }, metaChildren),
+						headActions,
+					]);
 
 				instWrap.appendChild(head);
 

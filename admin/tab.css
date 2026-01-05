@@ -1343,6 +1343,34 @@ html:not([data-msghub-theme="dark"]) .msghub-root {
   letter-spacing: 0.2px;
 }
 
+.msghub-instance-channel {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.msghub-instance-channel-label {
+  color: var(--msghub-muted);
+  font-weight: 650;
+  font-size: 12px;
+}
+
+.msghub-instance-channel-input {
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--msghub-border) !important;
+  border-radius: 10px;
+  background: var(--msghub-surface);
+  color: var(--msghub-text);
+  box-shadow: none !important;
+  max-width: 220px;
+}
+
+.msghub-instance-channel-input::placeholder {
+  color: var(--msghub-muted);
+  opacity: 0.9;
+}
+
 .msghub-instance-actions {
   display: inline-flex;
   align-items: center;
