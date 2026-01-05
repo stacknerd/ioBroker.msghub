@@ -43,6 +43,16 @@ What it intentionally does not do:
 
 Configuration is done in the Message Hub Admin Tab (Plugins) and uses the schema from `lib/NotifyStates/manifest.js`.
 
+Channel routing:
+
+- `NotifyStates` supports channel routing (`audience.channels`).
+- If the instance `Channel` is empty, it only sees **unscoped** messages (messages without `audience.channels.include`).
+- If the instance `Channel` is set (example: `Family`), it sees:
+  - unscoped messages, and
+  - messages that include that channel,
+  - but it does not see messages that exclude that channel.
+- This applies to incoming notifications *and* to `fullJson` and `Stats.*`.
+
 Common options:
 
 - `blobIntervalMs` (number, ms, default `300000`)
