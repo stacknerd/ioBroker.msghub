@@ -64,7 +64,9 @@ Required / common options:
 - `location` (string)
   - Written to `details.location` of the message.
 - `audienceTagsCsv` (string, CSV)
-  - Comma-separated tags copied to `audience.tags`.
+  - Inbound (Alexa → MsgHub): comma-separated tags copied to `audience.tags`.
+- `audienceChannelsIncludeCsv` / `audienceChannelsExcludeCsv` (string, CSV)
+  - Inbound (Alexa → MsgHub): copied to `audience.channels.include` / `audience.channels.exclude`.
 - `fullSyncIntervalMs` (number)
   - Periodic full reconciliation interval; `0` disables the periodic run.
 - `conflictWindowMs` (number)
