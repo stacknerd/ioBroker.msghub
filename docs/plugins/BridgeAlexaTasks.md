@@ -59,7 +59,9 @@ Common options:
 - `fullSyncIntervalMs` (number)
   - Periodic full reconciliation interval; `0` disables the periodic run.
 - `audienceTagsCsv` (string, CSV)
-  - Comma-separated tags copied to `audience.tags` for imported tasks.
+  - Inbound (Alexa → MsgHub): comma-separated tags copied to `audience.tags` for imported tasks.
+- `audienceChannelsIncludeCsv` / `audienceChannelsExcludeCsv` (string, CSV)
+  - Inbound (Alexa → MsgHub): copied to `audience.channels.include` / `audience.channels.exclude` for imported tasks.
 - `aiEnhancedTitle` (boolean)
   - When enabled and AI is available, the plugin generates a concise title for imported tasks.
 
@@ -182,6 +184,8 @@ For inbound items (Alexa → Message Hub), the plugin creates one Message Hub me
 - `details.task`: the raw Alexa value
 - `origin`: `{ type: "automation", system: "Amazon Alexa", id: <jsonStateId> }`
 - `audience.tags`: copied from `audienceTagsCsv` (optional)
+- `audience.channels`: copied from `audienceChannelsIncludeCsv` / `audienceChannelsExcludeCsv` (optional)
+- `actions`: auto-provided (`ack`, `snooze (4h)`, `close`)
 
 The task is kept “non-due” by setting a far-future `timing.notifyAt` (Message Hub treats missing `notifyAt` as “due now”).
 
@@ -226,6 +230,7 @@ Output signals:
 Processing flow:
 
 1. Compute the desired projection: all messages that match the outbound filter.
+   - Note: the plugin channel (`native.channel`) participates in MsgHub channel routing. Outbound projection uses the same routing semantics by querying with `audience.channels.routeTo = <plugin channel>` (so the “pull” selection matches the notify-side filtering).
 2. For messages that are no longer desired:
    - delete the corresponding Alexa item (`...items.<id>.#delete = true`)
    - remove it from the mapping.
