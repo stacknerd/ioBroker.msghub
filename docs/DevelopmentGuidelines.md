@@ -71,3 +71,10 @@ Distribute a `{lang: text}` object into `i18n/*.json`:
 From a file (will be cleared after successful import; use `--keep-file` to disable):
 
 `npm run i18n:push -- i18n-input.js`
+
+## i18n audit / sync checks
+
+Keep language files in sync and get a best-effort usage report:
+
+- Report: `npm run i18n:report`
+- Check (non-zero exit on sync/usage problems): `npm run i18n:check`
