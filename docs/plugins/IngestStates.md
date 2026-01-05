@@ -410,7 +410,7 @@ Example (washing machine):
 - `rescanIntervalMs`: polling interval for `system/custom` discovery (`0` disables polling).
 - `evaluateIntervalMs`: rule tick interval (`0` means event-only, where possible).
 - `metricsMaxIntervalMs`: throttling for silent metrics patches while a message is active (`0` disables metrics patching).
-- `traceEvents`: verbose routing/config debug logging.
+- `traceEvents`: verbose debug logging (rule discovery/creation, bootstrap state snapshots, timer scheduling, MessageWriter store operations).
 
 ### Custom config discovery and normalization (Engine)
 

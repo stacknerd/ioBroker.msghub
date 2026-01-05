@@ -481,6 +481,7 @@ class MsgStore {
 	 * 1) Enum-like filters (`string` or `{ in }` / `{ notIn }`)
 	 * - `where.kind`
 	 * - `where.origin.type`
+	 * - `where.origin.system`
 	 * - `where.lifecycle.state`
 	 *
 	 * Shapes:
@@ -860,6 +861,9 @@ class MsgStore {
 				return false;
 			}
 			if (!matchEnum(msg?.origin?.type, filter?.origin?.type)) {
+				return false;
+			}
+			if (!matchEnum(msg?.origin?.system, filter?.origin?.system)) {
 				return false;
 			}
 			if (!matchEnum(lifecycleState, filter?.lifecycle?.state)) {

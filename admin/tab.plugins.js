@@ -770,7 +770,7 @@
 				}
 			};
 
-			const initial = loadState() || {};
+				const initial = loadState() || {};
 
 				function readCfg(cfg, path) {
 					if (!cfg || typeof cfg !== 'object') {
@@ -788,6 +788,50 @@
 						cur = cur[p];
 					}
 					return cur;
+				}
+
+				function isPlainObject(value) {
+					return !!value && typeof value === 'object' && !Array.isArray(value);
+				}
+
+				function canonicalizeIngestStatesCustom(custom) {
+					const out = JSON.parse(JSON.stringify(custom || {}));
+					if (!isPlainObject(out)) {
+						return {};
+					}
+
+					const prefixes = ['thr', 'fresh', 'trg', 'ns', 'sess', 'msg'];
+					const hasPrefix = key => prefixes.some(p => key.startsWith(`${p}.`));
+
+					for (const [key, value] of Object.entries(out)) {
+						if (typeof key !== 'string' || !key.includes('.') || !hasPrefix(key)) {
+							continue;
+						}
+
+						const parts = key.split('.').filter(Boolean);
+						if (parts.length < 2) {
+							delete out[key];
+							continue;
+						}
+
+						let cur = out;
+						for (let i = 0; i < parts.length - 1; i += 1) {
+							const p = parts[i];
+							if (!isPlainObject(cur[p])) {
+								cur[p] = {};
+							}
+							cur = cur[p];
+						}
+
+						const leaf = parts[parts.length - 1];
+						if (!Object.prototype.hasOwnProperty.call(cur, leaf)) {
+							cur[leaf] = value;
+						}
+
+						delete out[key];
+					}
+
+					return out;
 				}
 
 			function joinOptions(list) {
@@ -1106,12 +1150,23 @@
 							'msg.sessionStartAudienceChannels': '',
 						};
 
-			const elCustom = h('textarea', {
-				class: 'msghub-bulk-apply-textarea',
-				rows: '24',
-				disabled: enabled ? undefined : '',
-			});
-			elCustom.value = typeof initial.customJson === 'string' ? initial.customJson : JSON.stringify(defaultCustom, null, 2);
+				const elCustom = h('textarea', {
+					class: 'msghub-bulk-apply-textarea',
+					rows: '24',
+					disabled: enabled ? undefined : '',
+				});
+				{
+					const raw = typeof initial.customJson === 'string' ? initial.customJson : '';
+					if (raw && raw.trim()) {
+						try {
+							elCustom.value = JSON.stringify(canonicalizeIngestStatesCustom(JSON.parse(raw)), null, 2);
+						} catch {
+							elCustom.value = raw;
+						}
+					} else {
+						elCustom.value = JSON.stringify(canonicalizeIngestStatesCustom(defaultCustom), null, 2);
+					}
+				}
 
 			const elDescription = h('textarea', {
 				class: 'msghub-bulk-apply-textarea msghub-bulk-apply-textarea--desc',
@@ -1273,16 +1328,16 @@
 				setStatus('Loading…');
 				try {
 					const res = await sendTo('admin.ingestStates.custom.read', { id });
-					if (!res?.custom) {
-						setStatus('No MsgHub Custom config found on that object.');
-						return;
-					}
-					elCustom.value = JSON.stringify(res.custom, null, 2);
-					updateLs();
-					updateDescription();
-					invalidatePreview();
-					setStatus('Loaded.');
-				} catch (err) {
+						if (!res?.custom) {
+							setStatus('No MsgHub Custom config found on that object.');
+							return;
+						}
+						elCustom.value = JSON.stringify(canonicalizeIngestStatesCustom(res.custom), null, 2);
+						updateLs();
+						updateDescription();
+						invalidatePreview();
+						setStatus('Loaded.');
+					} catch (err) {
 					setStatus(`Load failed: ${String(err?.message || err)}`);
 				} finally {
 					setBusy(false, [btnLoad, btnPreview, btnApply]);
@@ -1291,15 +1346,15 @@
 
 			btnGenerateEmpty.addEventListener('click', e => {
 				e.preventDefault();
-				if (!ensureEnabledOrWarn()) {
-					return;
-				}
-				elCustom.value = JSON.stringify(defaultCustom, null, 2);
-				updateLs();
-				updateDescription();
-				invalidatePreview();
-				setStatus('Generated.');
-			});
+					if (!ensureEnabledOrWarn()) {
+						return;
+					}
+					elCustom.value = JSON.stringify(canonicalizeIngestStatesCustom(defaultCustom), null, 2);
+					updateLs();
+					updateDescription();
+					invalidatePreview();
+					setStatus('Generated.');
+				});
 
 			btnPreview.addEventListener('click', async e => {
 				e.preventDefault();
@@ -1311,13 +1366,16 @@
 					setStatus('Enter an object id pattern first.');
 					return;
 				}
-				let custom;
-				try {
-					custom = parseCustom();
-				} catch (err) {
-					setStatus(`Invalid JSON: ${String(err?.message || err)}`);
-					return;
-				}
+					let custom;
+					try {
+						custom = canonicalizeIngestStatesCustom(parseCustom());
+						elCustom.value = JSON.stringify(custom, null, 2);
+						updateLs();
+						updateDescription();
+					} catch (err) {
+						setStatus(`Invalid JSON: ${String(err?.message || err)}`);
+						return;
+					}
 
 				setBusy(true, [btnLoad, btnPreview, btnApply]);
 				setStatus('Previewing…');
@@ -1353,13 +1411,16 @@
 					setStatus('Enter an object id pattern first.');
 					return;
 				}
-				let custom;
-				try {
-					custom = parseCustom();
-				} catch (err) {
-					setStatus(`Invalid JSON: ${String(err?.message || err)}`);
-					return;
-				}
+					let custom;
+					try {
+						custom = canonicalizeIngestStatesCustom(parseCustom());
+						elCustom.value = JSON.stringify(custom, null, 2);
+						updateLs();
+						updateDescription();
+					} catch (err) {
+						setStatus(`Invalid JSON: ${String(err?.message || err)}`);
+						return;
+					}
 				const count = Number(lastPreview?.willChange) || 0;
 				if (!window.confirm(`Apply MsgHub Custom config to ${count} object(s) as previewed?`)) {
 					return;

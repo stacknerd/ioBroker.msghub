@@ -606,7 +606,7 @@ describe('MsgStore', () => {
 		});
 	});
 
-	describe('queryMessages', () => {
+		describe('queryMessages', () => {
 		it('excludes deleted and expired by default', () => {
 			const messages = [
 				{ ref: 'r1', level: 10, lifecycle: { state: MsgConstants.lifecycle.state.open } },
@@ -639,7 +639,7 @@ describe('MsgStore', () => {
 			expect(result.items.map(msg => msg.ref)).to.deep.equal(['r2', 'r3']);
 		});
 
-		it('supports level filtering', () => {
+			it('supports level filtering', () => {
 			const messages = [
 				{ ref: 'r1', level: 10, lifecycle: { state: MsgConstants.lifecycle.state.open } },
 				{ ref: 'r2', level: 20, lifecycle: { state: MsgConstants.lifecycle.state.open } },
@@ -647,13 +647,24 @@ describe('MsgStore', () => {
 			];
 			const { store } = createStore({ messages });
 			const result = store.queryMessages({ where: { level: 10 } });
-			expect(result.items.map(msg => msg.ref)).to.deep.equal(['r1', 'r3']);
-		});
+				expect(result.items.map(msg => msg.ref)).to.deep.equal(['r1', 'r3']);
+			});
 
-		it('supports timing range filters (range implies existence)', () => {
-			const messages = [
-				{ ref: 'r1', level: 10, timing: { startAt: 1000 } },
-				{ ref: 'r2', level: 10, timing: { startAt: 2000 } },
+			it('supports origin.system filtering', () => {
+				const messages = [
+					{ ref: 'r1', level: 10, origin: { system: 'msghub.0', type: 'IngestStates' } },
+					{ ref: 'r2', level: 10, origin: { system: 'msghub.1', type: 'IngestStates' } },
+					{ ref: 'r3', level: 10, origin: { system: 'msghub.0', type: 'BridgeAlexaTasks' } },
+				];
+				const { store } = createStore({ messages });
+				const result = store.queryMessages({ where: { origin: { system: 'msghub.0' } } });
+				expect(result.items.map(msg => msg.ref)).to.deep.equal(['r1', 'r3']);
+			});
+
+			it('supports timing range filters (range implies existence)', () => {
+				const messages = [
+					{ ref: 'r1', level: 10, timing: { startAt: 1000 } },
+					{ ref: 'r2', level: 10, timing: { startAt: 2000 } },
 				{ ref: 'r3', level: 10, timing: {} },
 			];
 			const { store } = createStore({ messages });
