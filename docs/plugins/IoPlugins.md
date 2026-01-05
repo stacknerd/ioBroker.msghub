@@ -72,6 +72,7 @@ For plugin instances with `manifest.supportsChannelRouting === true`, you can op
 
 When a message has `message.audience.channels`, `IoPlugins` filters notification dispatches per instance (only for routing-enabled plugins):
 
+- If the plugin channel is `*` or `all`: dispatch everything (match-all, like `supportsChannelRouting === false`).
 - If the plugin channel is **empty**: dispatch only when `audience.channels.include` is empty (unscoped / “to all”).
   - `audience.channels.exclude` is ignored for empty plugin channels.
 - If the plugin channel is **set**:

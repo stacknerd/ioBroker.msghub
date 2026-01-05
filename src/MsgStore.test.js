@@ -704,6 +704,12 @@ describe('MsgStore', () => {
 			const push = store.queryMessages({ where: { audience: { channels: { routeTo: 'push' } } } });
 			expect(push.items.map(msg => msg.ref)).to.deep.equal(['r1', 'r3']);
 
+			const all = store.queryMessages({ where: { audience: { channels: { routeTo: 'all' } } } });
+			expect(all.items.map(msg => msg.ref)).to.deep.equal(['r1', 'r2', 'r3', 'r4', 'r5']);
+
+			const wildcard = store.queryMessages({ where: { audience: { channels: { routeTo: '*' } } } });
+			expect(wildcard.items.map(msg => msg.ref)).to.deep.equal(['r1', 'r2', 'r3', 'r4', 'r5']);
+
 			const unscoped = store.queryMessages({ where: { audience: { channels: { routeTo: '' } } } });
 			expect(unscoped.items.map(msg => msg.ref)).to.deep.equal(['r2', 'r3']);
 

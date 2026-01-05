@@ -161,6 +161,9 @@ function normalizeRoutingList(list) {
  */
 function shouldDispatchByAudienceChannels(message, pluginChannel) {
 	const channel = normalizeRoutingChannel(pluginChannel);
+	if (channel === '*' || channel === 'all') {
+		return true;
+	}
 
 	const audience = message && typeof message === 'object' ? message.audience : null;
 	const channels = audience && typeof audience === 'object' ? audience.channels : null;

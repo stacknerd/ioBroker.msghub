@@ -233,6 +233,7 @@ Frequently used filters:
   - `{ routeTo: string }` (or shorthand `string`): “would this message be dispatched to this plugin channel?”
   - `string[]`: matches when it would dispatch to **any** of the given channels
   - `routeTo: ""`: matches only “unscoped” messages (where `audience.channels.include` is empty)
+  - `routeTo: "all"` (or `routeTo: "*"`): matches all messages (match-all)
 
 ---
 

@@ -46,6 +46,7 @@ Configuration is done in the Message Hub Admin Tab (Plugins) and uses the schema
 Channel routing:
 
 - `NotifyStates` supports channel routing (`audience.channels`).
+- If the instance `Channel` is `*` or `all`, routing is disabled (match-all): it sees all messages.
 - If the instance `Channel` is empty, it only sees **unscoped** messages (messages without `audience.channels.include`).
 - If the instance `Channel` is set (example: `Family`), it sees:
   - unscoped messages, and
