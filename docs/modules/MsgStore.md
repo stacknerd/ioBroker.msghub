@@ -221,6 +221,18 @@ All read methods:
 - run throttled pruning
 - return rendered views when `MsgRender` is available
 
+#### `queryMessages` filters (selected)
+
+`where` is a partial message-like object that supports a small set of filter operators.
+
+Frequently used filters:
+
+- `where.audience.tags`: includes filter (`string | string[] | { any } | { all }`)
+- `where.audience.channels`: routing filter (same semantics as channel dispatch in `IoPlugins`)
+  - `{ routeTo: string }` (or shorthand `string`): “would this message be dispatched to this plugin channel?”
+  - `string[]`: matches when it would dispatch to **any** of the given channels
+  - `routeTo: ""`: matches only “unscoped” messages (where `audience.channels.include` is empty)
+
 ---
 
 ## Configuration (constructor options)

@@ -691,6 +691,29 @@ describe('MsgStore', () => {
 			expect(anyDeps.items.map(msg => msg.ref)).to.deep.equal(['r2', 'r3']);
 		});
 
+		it('supports audience.channels routing filter (routeTo)', () => {
+			const messages = [
+				{ ref: 'r1', level: 10, audience: { channels: { include: ['push'] } } },
+				{ ref: 'r2', level: 10, audience: { channels: { exclude: ['push'] } } },
+				{ ref: 'r3', level: 10 }, // unscoped
+				{ ref: 'r4', level: 10, audience: { channels: { include: ['other'] } } },
+				{ ref: 'r5', level: 10, audience: { channels: { include: ['push'], exclude: ['push'] } } },
+			];
+			const { store } = createStore({ messages });
+
+			const push = store.queryMessages({ where: { audience: { channels: { routeTo: 'push' } } } });
+			expect(push.items.map(msg => msg.ref)).to.deep.equal(['r1', 'r3']);
+
+			const unscoped = store.queryMessages({ where: { audience: { channels: { routeTo: '' } } } });
+			expect(unscoped.items.map(msg => msg.ref)).to.deep.equal(['r2', 'r3']);
+
+			const shorthand = store.queryMessages({ where: { audience: { channels: 'push' } } });
+			expect(shorthand.items.map(msg => msg.ref)).to.deep.equal(['r1', 'r3']);
+
+			const any = store.queryMessages({ where: { audience: { channels: ['push', 'other'] } } });
+			expect(any.items.map(msg => msg.ref)).to.deep.equal(['r1', 'r2', 'r3', 'r4']);
+		});
+
 		it('supports sorting by timing.timeBudget', () => {
 			const messages = [
 				{ ref: 'r1', level: 10, timing: { timeBudget: 200 } },

@@ -60,7 +60,7 @@
  * - The canonical data is always `this.fullList`; rendered output is view-only.
  */
 
-const { serializeWithMaps } = require(`${__dirname}/MsgUtils`);
+const { serializeWithMaps, shouldDispatchByAudienceChannels } = require(`${__dirname}/MsgUtils`);
 const { MsgStorage } = require(`${__dirname}/MsgStorage`);
 const { MsgArchive } = require(`${__dirname}/MsgArchive`);
 const { MsgRender } = require(`${__dirname}/MsgRender`);
@@ -739,6 +739,31 @@ class MsgStore {
 			return true;
 		};
 
+		const matchAudienceChannels = (message, spec) => {
+			if (spec === undefined) {
+				return true;
+			}
+			if (spec === null) {
+				return shouldDispatchByAudienceChannels(message, '');
+			}
+			if (typeof spec === 'string') {
+				return shouldDispatchByAudienceChannels(message, spec);
+			}
+			if (Array.isArray(spec)) {
+				const channels = toStringList(spec);
+				return channels.length === 0
+					? true
+					: channels.some(ch => shouldDispatchByAudienceChannels(message, ch));
+			}
+			if (!isPlainObject(spec)) {
+				return true;
+			}
+			if (!Object.prototype.hasOwnProperty.call(spec, 'routeTo')) {
+				return true;
+			}
+			return matchAudienceChannels(message, spec.routeTo);
+		};
+
 		const timingKeys = new Set([
 			'createdAt',
 			'updatedAt',
@@ -826,6 +851,9 @@ class MsgStore {
 				return false;
 			}
 			if (!matchIncludes(msg?.audience?.tags, filter?.audience?.tags)) {
+				return false;
+			}
+			if (!matchAudienceChannels(msg, filter?.audience?.channels)) {
 				return false;
 			}
 			if (!matchIncludes(msg?.dependencies, filter?.dependencies)) {
