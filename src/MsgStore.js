@@ -961,7 +961,6 @@ class MsgStore {
 		const ok = this.updateMessage(remove.ref, {
 			lifecycle: {
 				state: this.msgConstants.lifecycle.state.deleted,
-				stateChangedAt: Date.now(),
 				stateChangedBy: 'MsgStore',
 			},
 			timing: { notifyAt: null },
@@ -1062,7 +1061,6 @@ class MsgStore {
 			const ok = this.updateMessage(msg.ref, {
 				lifecycle: {
 					state: expiredState,
-					stateChangedAt: now,
 					stateChangedBy: 'MsgStore',
 				},
 				timing: { notifyAt: null },

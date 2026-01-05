@@ -178,8 +178,15 @@ only provided keys are applied; `null` clears keys (or the whole object, dependi
 
 `lifecycle` is also patchable (state + attribution):
 
-- partial update: `lifecycle: { state: "acked", stateChangedAt: 123, stateChangedBy: "UI" }`
+- partial update: `lifecycle: { state: "acked", stateChangedBy: "UI" }`
 - reset: `lifecycle: null` (resets to `state: "open"` and clears attribution)
+
+Notes:
+
+- `lifecycle.stateChangedAt` is a core-owned timestamp. Patch attempts are ignored; it is updated by the core when `lifecycle.state` changes.
+- `progress.startedAt` / `progress.finishedAt` are core-owned timestamps. Patch attempts are ignored.
+  - `startedAt` is set when `progress.percentage > 0` for the first time and then never changes.
+  - `finishedAt` is set when `progress.percentage == 100` and removed when `progress.percentage < 100`.
 
 ### `metrics` (Map)
 Metrics are stored as a `Map` in memory and support:

@@ -189,7 +189,7 @@ function EngageMyChannel(options) {
       // optional: connect, poll, webhook registration, etc.
       // inbound user intents may translate into:
       // - ctx.api.store.addMessage/updateMessage/removeMessage(...)
-      // - ctx.api.store.completeAfterCauseEliminated(ref, { actor, finishedAt })
+      // - ctx.api.store.completeAfterCauseEliminated(ref, { actor })
       // - ctx.api.action.execute({ ref, actionId, actor, payload })
     },
     stop(ctx) {
@@ -453,7 +453,7 @@ What you receive:
     - `updateMessage(msgOrRef, patch)`
     - `addOrUpdateMessage(msg)`
     - `removeMessage(ref)`
-    - `completeAfterCauseEliminated(ref, { actor?, finishedAt? })`
+	    - `completeAfterCauseEliminated(ref, { actor? })`
   - read API (views)
     - `getMessageByRef(ref)`
     - `getMessages()`

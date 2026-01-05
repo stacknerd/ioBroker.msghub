@@ -152,7 +152,6 @@ class MsgAction {
 			const effectivePayload = payload !== undefined ? payload : action.payload;
 			const buildLifecyclePatch = state => ({
 				state,
-				stateChangedAt: now,
 				...(actorProvided ? { stateChangedBy: normalizedActor } : {}),
 			});
 

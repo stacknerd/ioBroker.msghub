@@ -50,11 +50,29 @@ function createRenderer() {
 	return { msgRender, calls };
 }
 
-function createFactory({ applyPatch } = {}) {
-	return {
-		applyPatch: applyPatch || ((existing, patch) => ({ ...existing, ...patch })),
-	};
-}
+	function createFactory({ applyPatch } = {}) {
+		return {
+			applyPatch:
+				applyPatch ||
+				((existing, patch) => {
+					const updated = { ...existing, ...patch };
+					if (patch?.lifecycle && typeof patch.lifecycle === 'object' && !Array.isArray(patch.lifecycle)) {
+						const existingState = existing?.lifecycle?.state || MsgConstants.lifecycle.state.open;
+						const patchState = patch.lifecycle.state;
+						const lifecycle = { ...(existing?.lifecycle || { state: existingState }), ...patch.lifecycle };
+						// Core-owned timestamp: ignore patch attempts and bump on state changes.
+						delete lifecycle.stateChangedAt;
+						if (typeof patchState === 'string' && patchState !== existingState) {
+							lifecycle.stateChangedAt = Date.now();
+						} else if (existing?.lifecycle && Object.prototype.hasOwnProperty.call(existing.lifecycle, 'stateChangedAt')) {
+							lifecycle.stateChangedAt = existing.lifecycle.stateChangedAt;
+						}
+						updated.lifecycle = lifecycle;
+					}
+					return updated;
+				}),
+		};
+	}
 
 function createFactoryWithUpdatedAt() {
 	return {

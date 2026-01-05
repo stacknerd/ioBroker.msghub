@@ -97,10 +97,10 @@ describe('MsgAction', () => {
 			expect(msgAction.execute({ ref: 'r1', actionId: 'ack1', actor: 'UI' })).to.equal(true);
 		});
 
-		expect(patched).to.deep.equal({
-			lifecycle: { state: 'acked', stateChangedAt: 1000, stateChangedBy: 'UI' },
-			timing: { notifyAt: null },
-		});
+			expect(patched).to.deep.equal({
+				lifecycle: { state: 'acked', stateChangedBy: 'UI' },
+				timing: { notifyAt: null },
+			});
 		expect(recorded).to.have.length(1);
 		expect(recorded[0].ref).to.equal('r1');
 			expect(recorded[0].payload.actionId).to.equal('ack1');
@@ -163,10 +163,10 @@ describe('MsgAction', () => {
 			expect(msgAction.execute({ ref: 'r1', actionId: 's1', actor: null })).to.equal(true);
 		});
 
-		expect(patched).to.deep.equal({
-			lifecycle: { state: 'snoozed', stateChangedAt: 1000, stateChangedBy: null },
-			timing: { notifyAt: 6000 },
-		});
+			expect(patched).to.deep.equal({
+				lifecycle: { state: 'snoozed', stateChangedBy: null },
+				timing: { notifyAt: 6000 },
+			});
 	});
 
 	it('snooze: rejects missing/invalid forMs', () => {

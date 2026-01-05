@@ -156,15 +156,15 @@ describe('MsgHostApi', () => {
 			expect(api).to.have.property('removeMessage');
 			expect(api).to.have.property('completeAfterCauseEliminated');
 
-			api.addMessage({ ref: 'x' });
-			api.updateMessage('x', { title: 't' });
-			api.addOrUpdateMessage({ ref: 'x' });
-			api.removeMessage('x');
-			api.completeAfterCauseEliminated('x', { actor: 'tester', finishedAt: 123 });
+				api.addMessage({ ref: 'x' });
+				api.updateMessage('x', { title: 't' });
+				api.addOrUpdateMessage({ ref: 'x' });
+				api.removeMessage('x');
+				api.completeAfterCauseEliminated('x', { actor: 'tester' });
 
-			expect(calls.add).to.equal(1);
-			expect(calls.update).to.equal(2);
-			expect(calls.addOrUpdate).to.equal(1);
+				expect(calls.add).to.equal(1);
+				expect(calls.update).to.equal(2);
+				expect(calls.addOrUpdate).to.equal(1);
 			expect(calls.remove).to.equal(1);
 		});
 	});

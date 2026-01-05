@@ -49,7 +49,7 @@
  *
  *   lifecycle: {
  *     state: "open"|"acked"|"closed"|"snoozed"|"deleted"|"expired"
- *     stateChangedAt?: number | null
+ *     stateChangedAt?: number
  *     stateChangedBy?: string | null
  *   }
  *
@@ -111,8 +111,8 @@
  *
  *   // Progress (optional; mainly for task)
  *   progress: {
- *     startedAt?: number | null
- *     finishedAt?: number | null
+ *     startedAt?: number
+ *     finishedAt?: number
  *     percentage: number
  *   }
  *
@@ -238,6 +238,24 @@ class MsgFactory {
 		dependencies = [],
 	} = {}) {
 		try {
+			// Core-owned timestamps: ignore producer-provided values. These are derived/enforced by the core.
+			const safeLifecycle =
+				lifecycle && typeof lifecycle === 'object' && !Array.isArray(lifecycle) ? { ...lifecycle } : lifecycle;
+			if (safeLifecycle && typeof safeLifecycle === 'object' && !Array.isArray(safeLifecycle)) {
+				delete safeLifecycle.stateChangedAt;
+			}
+			const safeProgress =
+				progress && typeof progress === 'object' && !Array.isArray(progress) ? { ...progress } : progress;
+			if (safeProgress && typeof safeProgress === 'object' && !Array.isArray(safeProgress)) {
+				delete safeProgress.startedAt;
+				delete safeProgress.finishedAt;
+			}
+			const safeTiming = timing && typeof timing === 'object' && !Array.isArray(timing) ? { ...timing } : timing;
+			if (safeTiming && typeof safeTiming === 'object' && !Array.isArray(safeTiming)) {
+				delete safeTiming.createdAt;
+				delete safeTiming.updatedAt;
+			}
+
 			// Normalize `kind` first because it drives kind-specific validation rules later
 			// (e.g., timing fields like dueAt/startAt/endAt and whether listItems are allowed).
 			const normkind = this._normalizeMsgEnum(kind, this.kindValueSet, 'kind', { required: true });
@@ -258,15 +276,15 @@ class MsgFactory {
 				level: normLevel,
 				kind: normkind,
 				origin: normOrigin,
-				lifecycle: this._normalizeMsgLifecycle(lifecycle),
-				timing: this._normalineMsgTiming(timing, normkind),
+				lifecycle: this._normalizeMsgLifecycle(safeLifecycle),
+				timing: this._normalineMsgTiming(safeTiming, normkind),
 				details: normDetails,
 				audience: this._normalizeMsgAudience(audience),
 				metrics: this._normalizeMsgMetrics(metrics),
 				attachments: this._normalizeMsgAttachments(attachments),
 				listItems: this._normalizeMsgListItems(listItems, normkind),
 				actions: this._normalizeMsgActions(actions),
-				progress: this._normalineMsgProgress(progress),
+				progress: this._normalineMsgProgress(safeProgress),
 				dependencies: this._normalizeMsgArray(dependencies, 'dependencies'),
 			};
 
@@ -308,9 +326,8 @@ class MsgFactory {
 	 *   - applyPatch(existing, { timing: { timeBudget: 900000 } })
 	 *     => sets/updates the planning duration (ms).
 	 *   - applyPatch(existing, { progress: { percentage: 60 } })
-	 *     => updates progress.percentage to 60, keeps startedAt/finishedAt unchanged.
-	 *   - applyPatch(existing, { progress: { delete: ['finishedAt'] } })
-	 *     => removes progress.finishedAt (percentage is preserved).
+	 *     => updates progress.percentage to 60, sets startedAt on first start (percentage > 0),
+	 *        clears finishedAt when percentage < 100, and sets finishedAt when percentage == 100.
 	 *
 	 * - audience (object):
 	 *   - Partial updates:
@@ -1132,7 +1149,8 @@ class MsgFactory {
 	 *
 	 * Rules:
 	 * - Always returns an object with a valid `state` (fallback: 'open').
-	 * - `stateChangedAt` / `stateChangedBy` are optional and may be `null` to clear.
+	 * - `stateChangedAt` is a core-owned timestamp and should be treated as read-only by producers.
+	 * - `stateChangedBy` is optional and may be `null` to clear.
 	 *
 	 * @param {any} value Lifecycle input.
 	 * @returns {{state: string, stateChangedAt?: number|null, stateChangedBy?: string|null}} Normalized lifecycle.
@@ -1188,11 +1206,16 @@ class MsgFactory {
 			return base;
 		}
 		if (patch === null) {
-			return {
-				state: this.msgConstants.lifecycle.state.open,
-				stateChangedAt: null,
+			const resetState = this.msgConstants.lifecycle.state.open;
+			const merged = {
+				...base,
+				state: resetState,
 				stateChangedBy: null,
 			};
+			if (merged.state !== base.state) {
+				merged.stateChangedAt = Date.now();
+			}
+			return this._removeUndefinedKeys(merged);
 		}
 		if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
 			throw new TypeError("'lifecycle' must be an object or null");
@@ -1201,17 +1224,16 @@ class MsgFactory {
 		if (Object.prototype.hasOwnProperty.call(patch, 'state')) {
 			merged.state = this._normalizeMsgLifecycle({ state: patch.state }).state;
 		}
-		if (Object.prototype.hasOwnProperty.call(patch, 'stateChangedAt')) {
-			merged.stateChangedAt =
-				patch.stateChangedAt === null
-					? null
-					: this._normalizeMsgTime(patch.stateChangedAt, 'lifecycle.stateChangedAt');
-		}
 		if (Object.prototype.hasOwnProperty.call(patch, 'stateChangedBy')) {
 			merged.stateChangedBy =
 				patch.stateChangedBy === null
 					? null
 					: this._normalizeMsgString(patch.stateChangedBy, 'lifecycle.stateChangedBy');
+		}
+
+		// Core-owned timestamp: bump only when the lifecycle state changes.
+		if (merged.state !== base.state) {
+			merged.stateChangedAt = Date.now();
 		}
 		return this._removeUndefinedKeys(merged);
 	}
@@ -1802,7 +1824,12 @@ class MsgFactory {
 	 */
 	_applyProgressPatch(existingProgress, patch) {
 		if (patch === null) {
-			return undefined;
+			// Progress is a required core object. Treat `null` as a reset of percentage (but keep first-start timestamp).
+			const base = this._normalineMsgProgress(existingProgress || {});
+			return this._normalineMsgProgress({
+				percentage: 0,
+				...(base.startedAt ? { startedAt: base.startedAt } : {}),
+			});
 		}
 		if (patch === undefined) {
 			return this._normalineMsgProgress(existingProgress || {});
@@ -1825,6 +1852,10 @@ class MsgFactory {
 
 		const merged = { ...(existingProgress || {}) };
 		Object.entries(partial).forEach(([key, val]) => {
+			// Core-owned timestamps: ignore patch attempts (same principle as `timing.updatedAt`).
+			if (key === 'startedAt' || key === 'finishedAt') {
+				return;
+			}
 			if (val === null) {
 				delete merged[key];
 			} else {
@@ -1839,6 +1870,10 @@ class MsgFactory {
 			patch.delete.forEach((key, index) => {
 				const normKey = this._normalizeMsgString(key, `progress.delete[${index}]`);
 				if (!normKey) {
+					return;
+				}
+				// Core-owned timestamps: ignore patch attempts.
+				if (normKey === 'startedAt' || normKey === 'finishedAt') {
 					return;
 				}
 				if (normKey === 'percentage') {
@@ -2023,15 +2058,34 @@ class MsgFactory {
 		if (!value || typeof value !== 'object') {
 			throw new TypeError(`'progress' must be an object`);
 		}
+
+		let percentage = 0;
+		if (Object.prototype.hasOwnProperty.call(value, 'percentage')) {
+			const norm = this._normalizeMsgNumber(value.percentage, 'progress.percentage');
+			if (typeof norm === 'number') {
+				percentage = norm;
+			}
+		}
+
 		const progress = {
 			// `percentage` is the only mandatory progress field in MsgHub.
 			// - It defaults to 0 (not started).
-			// - We only run numeric normalization when a truthy value is provided so that an explicit `0`
-			//   does not trigger the "must be > 0" warning of `_normalizeMsgNumber`.
-			percentage: value.percentage ? this._normalizeMsgNumber(value.percentage, 'progress.percentage') : 0,
+			percentage,
 			startedAt: value.startedAt ? this._normalizeMsgTime(value.startedAt, 'progress.startedAt') : undefined,
 			finishedAt: value.finishedAt ? this._normalizeMsgTime(value.finishedAt, 'progress.finishedAt') : undefined,
 		};
+
+		// Core-owned timestamps:
+		// - startedAt is set on first start and never cleared/updated afterwards.
+		// - finishedAt is set when percentage == 100 and removed when percentage < 100.
+		if (progress.percentage > 0 && !Number.isFinite(progress.startedAt)) {
+			progress.startedAt = Date.now();
+		}
+		if (progress.percentage < 100) {
+			delete progress.finishedAt;
+		} else if (progress.percentage === 100 && !Number.isFinite(progress.finishedAt)) {
+			progress.finishedAt = Date.now();
+		}
 
 		return this._removeUndefinedKeys(progress);
 	}

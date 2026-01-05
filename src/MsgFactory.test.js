@@ -15,6 +15,16 @@ function makeFactory() {
 	return { factory: new MsgFactory(adapter, MsgConstants), logs };
 }
 
+function withFixedNow(now, fn) {
+	const original = Date.now;
+	Date.now = () => now;
+	try {
+		return fn();
+	} finally {
+		Date.now = original;
+	}
+}
+
 function buildBase(overrides = {}) {
 	return {
 		ref: 'ref-1',
@@ -278,13 +288,16 @@ function buildBase(overrides = {}) {
 		});
 	});
 
-	describe('progress', () => {
-		it('normalizes progress percentage and startedAt', () => {
-			const { factory } = makeFactory();
-			const startedAt = Date.UTC(2025, 0, 1);
-			const msg = factory.createMessage(buildBase({ progress: { percentage: 5.9, startedAt } }));
-			expect(msg.progress).to.deep.equal({ percentage: 5, startedAt });
-		});
+		describe('progress', () => {
+			it('normalizes progress percentage and sets startedAt on first start', () => {
+				const { factory } = makeFactory();
+				const now = Date.UTC(2025, 0, 1);
+				const providedStartedAt = Date.UTC(2024, 0, 1);
+				const msg = withFixedNow(now, () =>
+					factory.createMessage(buildBase({ progress: { percentage: 5.9, startedAt: providedStartedAt } })),
+				);
+				expect(msg.progress).to.deep.equal({ percentage: 5, startedAt: now });
+			});
 
 		it('rejects non-object progress', () => {
 			const { factory, logs } = makeFactory();
@@ -749,14 +762,52 @@ describe('MsgFactory.applyPatch', () => {
 		expect(updated.dependencies).to.deep.equal(['a', 'c']);
 	});
 
-	it('patches progress with set/delete', () => {
-		const { factory } = makeFactory();
-		const msg = factory.createMessage(buildBase({ progress: { percentage: 10, finishedAt: Date.UTC(2025, 0, 1) } }));
+			it('patches progress with set/delete', () => {
+				const { factory } = makeFactory();
+				const t0 = Date.UTC(2025, 0, 1, 0, 0, 0);
+				const msg = withFixedNow(t0, () => factory.createMessage(buildBase({ progress: { percentage: 0 } })));
 
-		const updated = factory.applyPatch(msg, { progress: { set: { percentage: 50 }, delete: ['finishedAt'] } });
-		expect(updated.progress.percentage).to.equal(50);
-		expect(updated.progress).to.not.have.property('finishedAt');
-	});
+				const started = withFixedNow(t0 + 1000, () =>
+					factory.applyPatch(msg, {
+						progress: { set: { percentage: 50, startedAt: 123 }, delete: ['finishedAt', 'startedAt'] },
+					}),
+				);
+				expect(started.progress).to.deep.equal({ percentage: 50, startedAt: t0 + 1000 });
+
+				const finished = withFixedNow(t0 + 2000, () =>
+					factory.applyPatch(started, { progress: { percentage: 100, finishedAt: 1 } }),
+				);
+				expect(finished.progress).to.deep.equal({
+					percentage: 100,
+					startedAt: t0 + 1000,
+					finishedAt: t0 + 2000,
+				});
+
+				const reopened = withFixedNow(t0 + 3000, () => factory.applyPatch(finished, { progress: { percentage: 80 } }));
+				expect(reopened.progress).to.deep.equal({ percentage: 80, startedAt: t0 + 1000 });
+			});
+
+			it('core-owns lifecycle.stateChangedAt and bumps it on state changes', () => {
+				const { factory } = makeFactory();
+				const t0 = Date.UTC(2025, 0, 1, 0, 0, 0);
+				const msg = withFixedNow(t0, () => factory.createMessage(buildBase()));
+
+				const updated = withFixedNow(t0 + 1000, () =>
+					factory.applyPatch(msg, {
+						lifecycle: { state: MsgConstants.lifecycle.state.acked, stateChangedAt: 123, stateChangedBy: 'UI' },
+					}),
+				);
+				expect(updated.lifecycle.state).to.equal(MsgConstants.lifecycle.state.acked);
+				expect(updated.lifecycle.stateChangedAt).to.equal(t0 + 1000);
+				expect(updated.lifecycle.stateChangedBy).to.equal('UI');
+				expect(updated.timing.updatedAt).to.equal(t0 + 1000);
+
+				const noop = withFixedNow(t0 + 2000, () =>
+					factory.applyPatch(updated, { lifecycle: { stateChangedAt: 9999 } }),
+				);
+				expect(noop.lifecycle.stateChangedAt).to.equal(t0 + 1000);
+				expect(noop.timing.updatedAt).to.equal(t0 + 1000);
+			});
 
 	it('rejects non-object patch input', () => {
 		const { factory, logs } = makeFactory();

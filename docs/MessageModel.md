@@ -73,6 +73,11 @@ Messages have a lifecycle state so UIs and automations can reason about “open 
 
 Lifecycle transitions can be applied either by patches (`patch` command) or by executing whitelisted actions (`action` command).
 
+Notes:
+
+- `lifecycle.stateChangedAt` is a core-managed timestamp and is updated automatically when `lifecycle.state` changes.
+- `lifecycle.stateChangedBy` is optional attribution (string or null).
+
 ---
 
 ## Timing: created, updated, due, notify, expire (`timing`)
@@ -97,6 +102,16 @@ Important behavior:
 
 - If a message has no `timing.notifyAt`, Message Hub treats it as “notification due now” and may dispatch a `due` notification immediately.
 - “Due” is checked by a simple polling mechanism in the store; it is not a full job scheduler.
+
+---
+
+## Progress: completion (`progress`)
+
+Messages can track coarse completion state in `progress`:
+
+- `progress.percentage` (`0..100`)
+- `progress.startedAt` is set by core when `percentage > 0` for the first time and then never changes.
+- `progress.finishedAt` is set by core when `percentage == 100` and removed again when `percentage < 100`.
 
 ---
 

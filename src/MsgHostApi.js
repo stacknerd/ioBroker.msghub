@@ -105,19 +105,14 @@ function buildStoreApi(store, { hostName = 'Host' } = {}) {
 				return false;
 			}
 			const actor = typeof options?.actor === 'string' && options.actor.trim() ? options.actor.trim() : null;
-			const finishedAt =
-				typeof options?.finishedAt === 'number' && Number.isFinite(options.finishedAt)
-					? Math.trunc(options.finishedAt)
-					: Date.now();
 
 			return store.updateMessage(msgRef, {
 				lifecycle: {
 					state: 'closed',
-					stateChangedAt: Date.now(),
 					...(actor ? { stateChangedBy: actor } : {}),
 				},
 				timing: { notifyAt: null },
-				progress: { percentage: 100, finishedAt },
+				progress: { percentage: 100 },
 			});
 		};
 	}

@@ -111,7 +111,7 @@ Every condition uses a stable `ref` derived from the watched Hue state id:
 
 This allows `ctx.api.store.addOrUpdateMessage(...)` to update the same message across restarts.
 
-When a condition becomes OK again, the message is completed via `ctx.api.store.completeAfterCauseEliminated(ref, { actor, finishedAt })`.
+When a condition becomes OK again, the message is completed via `ctx.api.store.completeAfterCauseEliminated(ref, { actor })`.
 
 ### Startup discovery and evaluation
 
