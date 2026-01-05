@@ -5,6 +5,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 import { parseArgs } from 'node:util';
+import vm from 'node:vm';
 
 function isPlainObject(value) {
 	return value != null && typeof value === 'object' && !Array.isArray(value);
@@ -98,7 +99,21 @@ function tryParseJson(text) {
 	}
 }
 
-function parseConcatenatedJsonValues(text) {
+function tryParseJsValue(text) {
+	try {
+		const script = new vm.Script(`(${text})`);
+		return {
+			ok: true,
+			value: script.runInNewContext(Object.create(null), {
+				timeout: 1000,
+			}),
+		};
+	} catch (e) {
+		return { ok: false, error: e };
+	}
+}
+
+function parseConcatenatedValues(text, parseValue) {
 	/** @type {any[]} */
 	const values = [];
 	const len = text.length;
@@ -113,28 +128,56 @@ function parseConcatenatedJsonValues(text) {
 		const start = i;
 		const first = text[i];
 		if (first !== '{' && first !== '[') {
-			throw new Error(`Invalid input: expected JSON value at position ${i}`);
+			throw new Error(`Invalid input: expected value at position ${i}`);
 		}
 
 		let depth = 0;
-		let inString = false;
+		/** @type {null | '"' | "'" | '`'} */
+		let inString = null;
 		let escape = false;
+		let inLineComment = false;
+		let inBlockComment = false;
 
 		for (; i < len; i += 1) {
 			const ch = text[i];
+			const next = i + 1 < len ? text[i + 1] : '';
+
+			if (inLineComment) {
+				if (ch === '\n') inLineComment = false;
+				continue;
+			}
+			if (inBlockComment) {
+				if (ch === '*' && next === '/') {
+					inBlockComment = false;
+					i += 1;
+				}
+				continue;
+			}
+
 			if (inString) {
 				if (escape) {
 					escape = false;
 				} else if (ch === '\\') {
 					escape = true;
-				} else if (ch === '"') {
-					inString = false;
+				} else if (ch === inString) {
+					inString = null;
 				}
 				continue;
 			}
 
-			if (ch === '"') {
-				inString = true;
+			if (ch === '/' && next === '/') {
+				inLineComment = true;
+				i += 1;
+				continue;
+			}
+			if (ch === '/' && next === '*') {
+				inBlockComment = true;
+				i += 1;
+				continue;
+			}
+
+			if (ch === '"' || ch === "'" || ch === '`') {
+				inString = /** @type {any} */ (ch);
 				continue;
 			}
 			if (ch === '{' || ch === '[') {
@@ -146,14 +189,14 @@ function parseConcatenatedJsonValues(text) {
 				if (depth === 0) {
 					i += 1;
 					const raw = text.slice(start, i);
-					values.push(JSON.parse(raw));
+					values.push(parseValue(raw));
 					break;
 				}
 			}
 		}
 
 		if (depth !== 0) {
-			throw new Error('Invalid input: unterminated JSON value');
+			throw new Error('Invalid input: unterminated value');
 		}
 	}
 
@@ -167,8 +210,17 @@ function parseInputEntries(inputText) {
 		return [parsed.value];
 	}
 
-	// Fallback: allow concatenated JSON objects (useful for "queue" files).
-	return parseConcatenatedJsonValues(inputText);
+	// Fallback: allow concatenated values in "queue" files.
+	// Supports strict JSON as well as JS-style object literals (single quotes, trailing commas, unquoted keys).
+	return parseConcatenatedValues(inputText, raw => {
+		const asJson = tryParseJson(raw);
+		if (asJson.ok) return asJson.value;
+
+		const asJs = tryParseJsValue(raw);
+		if (asJs.ok) return asJs.value;
+
+		throw asJson.error;
+	});
 }
 
 async function listLangFilesInDir(dirPath) {

@@ -77,7 +77,7 @@ html, body { background: transparent; }
 /* Optional: Centered app frame */
 .msghub-root > .row,
 .msghub-header {
-  max-width: 1120px;
+  max-width: 1600px;
   margin-left: auto;
   margin-right: auto;
 }
@@ -137,11 +137,29 @@ html, body { background: transparent; }
 /* ---------- Tabs (Materialize overrides) ---------- */
 
 .msghub-root .tabs {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  position: relative;
+  margin: 0;
+  padding: 0;
+  list-style: none;
   border-radius: var(--msghub-radius);
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
   background: var(--msghub-surface);
   border: 1px solid var(--msghub-border);
   box-shadow: var(--msghub-shadow-sm);
+}
+
+.msghub-root .tabs .tab {
+  flex: 1 1 0;
+  min-width: 0;
+  float: none;
+}
+
+.msghub-root .tabs .tab + .tab {
+  border-left: 1px solid var(--msghub-border);
 }
 
 .msghub-root .tabs .tab a {
@@ -150,14 +168,23 @@ html, body { background: transparent; }
   font-weight: 600;
   text-transform: none;
   letter-spacing: 0.2px;
+  padding: 0 12px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   height: 48px;
   line-height: 48px;
   transition: background 160ms ease, color 160ms ease;
+  display: block;
+  font-size: large;
+  text-align: center;
+  text-decoration: none;
 }
 
 .msghub-root .tabs .tab a:hover {
   background: var(--msghub-surface-2);
   color: var(--msghub-text);
+  font-weight: bold;
 }
 
 .msghub-root .tabs .tab a.active {
@@ -166,6 +193,9 @@ html, body { background: transparent; }
 }
 
 .msghub-root .tabs .indicator {
+  position: absolute;
+  left: 0;
+  bottom: 0;
   height: 3px;
   background-color: var(--msghub-accent);
 }
