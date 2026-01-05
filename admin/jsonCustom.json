@@ -8,7 +8,7 @@
 		"managedNotice": {
 			"type": "panel",
 			"label": "Notice",
-			"hidden": "!((data.managedMeta && data.managedMeta.managedMessage) || data['managedMeta.managedMessage'] )",
+			"hidden": "!(((data.managedMeta && data.managedMeta.managedMessage) || data['managedMeta.managedMessage']) && (((data.managedMeta && data.managedMeta.managedBy) || data['managedMeta.managedBy'] || '').indexOf('IngestStates.') === -1))",
 			"items": {
 				"_mngH0": {
 					"type": "header",
@@ -87,7 +87,7 @@
 		"mode": {
 			"type": "panel",
 			"label": "Monitoring",
-			"hidden": "!!((data.managedMeta && data.managedMeta.managedMessage) || data['managedMeta.managedMessage'] )",
+			"hidden": "(((data.managedMeta && data.managedMeta.managedMessage) || data['managedMeta.managedMessage']) && (((data.managedMeta && data.managedMeta.managedBy) || data['managedMeta.managedBy'] || '').indexOf('IngestStates.') === -1))",
 			"items": {
 				"_modeH0": {
 					"type": "header",
@@ -143,7 +143,7 @@
 				},
 				"_modeThresholdInfo": {
 					"newLine": true,
-					"hidden": "!!((data.managedMeta && data.managedMeta.managedMessage) || data['managedMeta.managedMessage'] ) || (((data.watch && data.mode) || data['mode']) !== 'threshold')",
+					"hidden": "(((data.managedMeta && data.managedMeta.managedMessage) || data['managedMeta.managedMessage']) && (((data.managedMeta && data.managedMeta.managedBy) || data['managedMeta.managedBy'] || '').indexOf('IngestStates.') === -1)) || (((data.watch && data.mode) || data['mode']) !== 'threshold')",
 					"type": "staticText",
 					"text": "Threshold: You get a message if a numeric value is too low/too high, leaves a defined range, or a boolean stays TRUE/FALSE for too long.\n\nExamples:\n- Battery < 10% → warning/error\n- Humidity < 35% for 30 min → notice (“Please ventilate”)\n- Window contact is open for 12 h (TRUE/FALSE depending on device) → warning\n\nTip: Hysteresis and minimum duration help to avoid flapping and short spikes.",
 					"xs": 12,
@@ -155,7 +155,7 @@
 				},
 				"_modeFreshnessInfo": {
 					"newLine": true,
-					"hidden": "!!((data.managedMeta && data.managedMeta.managedMessage) || data['managedMeta.managedMessage'] ) || (((data.watch && data.mode) || data['mode']) !== 'freshness')",
+					"hidden": "(((data.managedMeta && data.managedMeta.managedMessage) || data['managedMeta.managedMessage']) && (((data.managedMeta && data.managedMeta.managedBy) || data['managedMeta.managedBy'] || '').indexOf('IngestStates.') === -1)) || (((data.watch && data.mode) || data['mode']) !== 'freshness')",
 					"type": "staticText",
 					"text": "Freshness: You get a message if this object has no update (ts) or no actual value change (lc) for too long.\n\nExamples:\n- Temperature sensor: at least one update every 12 h\n- Power/energy meter: at least one update every 30 s\n- Device with keepalive: at least one heartbeat every 5 min\n\nTip: If a device sends keepalives even without changes, use ts; if it only sends on change, use lc.",
 					"xs": 12,
@@ -169,7 +169,7 @@
 				},
 				"_modeTriggeredInfo": {
 					"newLine": true,
-					"hidden": "!!((data.managedMeta && data.managedMeta.managedMessage) || data['managedMeta.managedMessage'] ) || (((data.watch && data.mode) || data['mode']) !== 'triggered')",
+					"hidden": "(((data.managedMeta && data.managedMeta.managedMessage) || data['managedMeta.managedMessage']) && (((data.managedMeta && data.managedMeta.managedBy) || data['managedMeta.managedBy'] || '').indexOf('IngestStates.') === -1)) || (((data.watch && data.mode) || data['mode']) !== 'triggered')",
 					"type": "staticText",
 					"text": "Dependency (Trigger): When another object becomes active, this object must react within a time window as you expect.\n\nExamples:\n- Valve = ON → water meter must increase within 10 min (delta)\n- Plug = ON → power must become >= 5 W within 30 s\n- Heating = ON → flow temperature must rise within 15 min\n\nTip: Choose a generous time window if devices are slow or have latency.",
 					"xs": 12,
@@ -181,7 +181,7 @@
 				},
 				"_modeNonSettlingInfo": {
 					"newLine": true,
-					"hidden": "!!((data.managedMeta && data.managedMeta.managedMessage) || data['managedMeta.managedMessage'] ) || (((data.watch && data.mode) || data['mode']) !== 'nonSettling')",
+					"hidden": "(((data.managedMeta && data.managedMeta.managedMessage) || data['managedMeta.managedMessage']) && (((data.managedMeta && data.managedMeta.managedBy) || data['managedMeta.managedBy'] || '').indexOf('IngestStates.') === -1)) || (((data.watch && data.mode) || data['mode']) !== 'nonSettling')",
 					"type": "staticText",
 					"text": "Non-settling value: You get a message if a value has no quiet phase for a long time or shows a suspicious trend in one direction over a time window.\n\nExamples:\n- Water meter increases for hours without quiet phase → possible leak\n- Sensor value keeps fluctuating without stable phase → RF issues / defective sensor\n- Counter keeps running although it usually has idle phases → consumer stuck\n\nTip: Use “Min. delta” to filter measurement noise.",
 					"xs": 12,
@@ -193,7 +193,7 @@
 				},
 				"_modeSessionInfo": {
 					"newLine": true,
-					"hidden": "!!((data.managedMeta && data.managedMeta.managedMessage) || data['managedMeta.managedMessage'] ) || (((data.watch && data.mode) || data['mode']) !== 'session')",
+					"hidden": "(((data.managedMeta && data.managedMeta.managedMessage) || data['managedMeta.managedMessage']) && (((data.managedMeta && data.managedMeta.managedBy) || data['managedMeta.managedBy'] || '').indexOf('IngestStates.') === -1)) || (((data.watch && data.mode) || data['mode']) !== 'session')",
 					"type": "staticText",
 					"text": "Session (Start/Stop): You get a message when a process starts and later finishes again – usually detected via power thresholds and a stop delay.\n\nExamples:\n- E-bike charging: start >= 50 W, finish < 15 W for 5 min\n- Washing machine: start > 10 W (with min hold), finish after stop delay\n- Dishwasher: start/finish via typical power phases + stop delay\n\nTip: A short minimum hold time prevents false starts caused by brief spikes.",
 					"xs": 12,
@@ -208,7 +208,7 @@
 		"threshold": {
 			"type": "panel",
 			"label": "Threshold",
-			"hidden": "!!((data.managedMeta && data.managedMeta.managedMessage) || data['managedMeta.managedMessage'] ) || (((data.watch && data.mode) || data['mode']) !== 'threshold')",
+			"hidden": "(((data.managedMeta && data.managedMeta.managedMessage) || data['managedMeta.managedMessage']) && (((data.managedMeta && data.managedMeta.managedBy) || data['managedMeta.managedBy'] || '').indexOf('IngestStates.') === -1)) || (((data.watch && data.mode) || data['mode']) !== 'threshold')",
 			"items": {
 				"_thrH0": {
 					"type": "header",
@@ -377,7 +377,7 @@
 		"freshness": {
 			"type": "panel",
 			"label": "Freshness",
-			"hidden": "!!((data.managedMeta && data.managedMeta.managedMessage) || data['managedMeta.managedMessage'] ) || (((data.watch && data.mode) || data['mode']) !== 'freshness')",
+			"hidden": "(((data.managedMeta && data.managedMeta.managedMessage) || data['managedMeta.managedMessage']) && (((data.managedMeta && data.managedMeta.managedBy) || data['managedMeta.managedBy'] || '').indexOf('IngestStates.') === -1)) || (((data.watch && data.mode) || data['mode']) !== 'freshness')",
 			"items": {
 				"_freshH0": {
 					"type": "header",
@@ -492,7 +492,7 @@
 		"triggered": {
 			"type": "panel",
 			"label": "Dependency (Trigger)",
-			"hidden": "!!((data.managedMeta && data.managedMeta.managedMessage) || data['managedMeta.managedMessage'] ) || (((data.watch && data.mode) || data['mode']) !== 'triggered')",
+			"hidden": "(((data.managedMeta && data.managedMeta.managedMessage) || data['managedMeta.managedMessage']) && (((data.managedMeta && data.managedMeta.managedBy) || data['managedMeta.managedBy'] || '').indexOf('IngestStates.') === -1)) || (((data.watch && data.mode) || data['mode']) !== 'triggered')",
 			"items": {
 				"_trgH0": {
 					"type": "header",
@@ -726,7 +726,7 @@
 		"nonSettling": {
 			"type": "panel",
 			"label": "Non-settling value",
-			"hidden": "!!((data.managedMeta && data.managedMeta.managedMessage) || data['managedMeta.managedMessage'] ) || (((data.watch && data.mode) || data['mode']) !== 'nonSettling')",
+			"hidden": "(((data.managedMeta && data.managedMeta.managedMessage) || data['managedMeta.managedMessage']) && (((data.managedMeta && data.managedMeta.managedBy) || data['managedMeta.managedBy'] || '').indexOf('IngestStates.') === -1)) || (((data.watch && data.mode) || data['mode']) !== 'nonSettling')",
 			"items": {
 				"_nsH0": {
 					"type": "header",
@@ -977,7 +977,7 @@
 		"session": {
 			"type": "panel",
 			"label": "Session (Start/Stop)",
-			"hidden": "!!((data.managedMeta && data.managedMeta.managedMessage) || data['managedMeta.managedMessage'] ) || (((data.watch && data.mode) || data['mode']) !== 'session')",
+			"hidden": "(((data.managedMeta && data.managedMeta.managedMessage) || data['managedMeta.managedMessage']) && (((data.managedMeta && data.managedMeta.managedBy) || data['managedMeta.managedBy'] || '').indexOf('IngestStates.') === -1)) || (((data.watch && data.mode) || data['mode']) !== 'session')",
 			"items": {
 				"_sessH0": {
 					"type": "header",
@@ -1236,7 +1236,7 @@
 		"message": {
 			"type": "panel",
 			"label": "Message",
-			"hidden": "!!((data.managedMeta && data.managedMeta.managedMessage) || data['managedMeta.managedMessage'] ) || (((data.mode) || data['mode']) == '')",
+			"hidden": "(((data.managedMeta && data.managedMeta.managedMessage) || data['managedMeta.managedMessage']) && (((data.managedMeta && data.managedMeta.managedBy) || data['managedMeta.managedBy'] || '').indexOf('IngestStates.') === -1)) || (((data.mode) || data['mode']) == '')",
 			"items": {
 				"_msgH0": {
 					"type": "header",
@@ -1338,6 +1338,40 @@
 					"xl": 6,
 					"placeholder": "e.g. No update for 12h – please check sensor."
 				},
+				"_msgH4Audience": {
+					"newLine": true,
+					"type": "header",
+					"size": 4,
+					"text": "Audience (optional)",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12
+				},
+				"msg.audienceTags": {
+					"newLine": true,
+					"type": "text",
+					"label": "Tags (CSV)",
+					"help": "Comma-separated tags. Example: admin,kitchen",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 6,
+					"xl": 6,
+					"default": ""
+				},
+				"msg.audienceChannels": {
+					"type": "text",
+					"label": "Channels (CSV)",
+					"help": "Comma-separated channels. Example: pushover,alexa",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 6,
+					"xl": 6,
+					"default": ""
+				},
 				"_msgH4Spam": {
 					"newLine": true,
 					"type": "header",
@@ -1353,7 +1387,7 @@
 					"newLine": true,
 					"type": "number",
 					"label": "Cooldown",
-					"help": "Suppress repeated messages for this duration (0 = off).",
+					"help": "Suppress repeated notifications for this duration (0 = off). Messages may be re-opened silently.",
 					"xs": 12,
 					"sm": 6,
 					"md": 3,
@@ -1523,7 +1557,7 @@
 					"xl": 6,
 					"default": 10,
 					"options": [
-						{ "label": "not defined / none", "value": 10 },
+						{ "label": "not defined / none", "value": 0 },
 						{ "label": "notice", "value": 10 },
 						{ "label": "warning", "value": 20 },
 						{ "label": "error", "value": 30 }
@@ -1552,13 +1586,50 @@
 					"xl": 6,
 					"placeholder": "e.g. Process has started.",
 					"hidden": "((data.mode) || data['mode']) !== 'session' || !((data.msg && data.msg.sessionStartEnabled) || data['msg.sessionStartEnabled'])"
+				},
+				"_msgH4SessionStartAudience": {
+					"newLine": true,
+					"type": "header",
+					"size": 4,
+					"text": "Audience (Session start, optional)",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12,
+					"hidden": "((data.mode) || data['mode']) !== 'session' || !((data.msg && data.msg.sessionStartEnabled) || data['msg.sessionStartEnabled'])"
+				},
+				"msg.sessionStartAudienceTags": {
+					"newLine": true,
+					"type": "text",
+					"label": "Tags (CSV)",
+					"help": "Comma-separated tags. Example: admin,kitchen",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 6,
+					"xl": 6,
+					"default": "",
+					"hidden": "((data.mode) || data['mode']) !== 'session' || !((data.msg && data.msg.sessionStartEnabled) || data['msg.sessionStartEnabled'])"
+				},
+				"msg.sessionStartAudienceChannels": {
+					"type": "text",
+					"label": "Channels (CSV)",
+					"help": "Comma-separated channels. Example: pushover,alexa",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 6,
+					"xl": 6,
+					"default": "",
+					"hidden": "((data.mode) || data['mode']) !== 'session' || !((data.msg && data.msg.sessionStartEnabled) || data['msg.sessionStartEnabled'])"
 				}
 			}
 		},
 		"expertJson": {
 			"type": "panel",
 			"label": "Expert",
-			"hidden": "!!((data.managedMeta && data.managedMeta.managedMessage) || data['managedMeta.managedMessage'] ) || !(((window.sessionStorage && window.sessionStorage.getItem && window.sessionStorage.getItem('App.expertMode') === 'true')) || (_system && _system.expertMode))",
+			"hidden": "(((data.managedMeta && data.managedMeta.managedMessage) || data['managedMeta.managedMessage']) && (((data.managedMeta && data.managedMeta.managedBy) || data['managedMeta.managedBy'] || '').indexOf('IngestStates.') === -1)) || !(((window.sessionStorage && window.sessionStorage.getItem && window.sessionStorage.getItem('App.expertMode') === 'true')) || (_system && _system.expertMode))",
 			"items": {
 				"_expH0": {
 					"type": "header",
