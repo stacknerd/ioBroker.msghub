@@ -1231,6 +1231,8 @@ class MsgStore {
 	 * - persists the updated `fullList`
 	 * - appends an archive entry with `{ event: "purge" }`
 	 *
+	 * @param {object} [options] Options.
+	 * @param {boolean} [options.force] When true, bypass throttling.
 	 * @returns {void}
 	 */
 	_hardDeleteMessages({ force = false } = {}) {

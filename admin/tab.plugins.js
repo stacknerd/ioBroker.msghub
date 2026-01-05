@@ -772,26 +772,23 @@
 
 			const initial = loadState() || {};
 
-			function readCfg(cfg, path) {
-				if (!cfg || typeof cfg !== 'object') {
-					return undefined;
-				}
-				if (cfg[path] !== undefined) {
-					return cfg[path];
-				}
-				const parts = String(path || '').split('.').filter(Boolean);
-				if (parts.length === 0) {
-					return undefined;
-				}
-				let cur = cfg;
-				for (const p of parts) {
-					if (!cur || typeof cur !== 'object' || cur[p] === undefined) {
+				function readCfg(cfg, path) {
+					if (!cfg || typeof cfg !== 'object') {
 						return undefined;
 					}
-					cur = cur[p];
+					const parts = String(path || '').split('.').filter(Boolean);
+					if (parts.length === 0) {
+						return undefined;
+					}
+					let cur = cfg;
+					for (const p of parts) {
+						if (!cur || typeof cur !== 'object' || !Object.prototype.hasOwnProperty.call(cur, p)) {
+							return cfg[path];
+						}
+						cur = cur[p];
+					}
+					return cur;
 				}
-				return cur;
-			}
 
 			function joinOptions(list) {
 				return (Array.isArray(list) ? list : []).map(v => String(v)).join('|');
