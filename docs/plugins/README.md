@@ -612,6 +612,7 @@ To keep this validation readable and consistent, the repo provides a small helpe
 - `BridgeAlexaShopping`: [`./BridgeAlexaShopping.md`](./BridgeAlexaShopping.md)
 - `BridgeAlexaTasks`: [`./BridgeAlexaTasks.md`](./BridgeAlexaTasks.md)
 - `EngageSendTo`: [`./EngageSendTo.md`](./EngageSendTo.md)
+- `IngestDwd`: [`./IngestDwd.md`](./IngestDwd.md)
 - `IngestHue`: [`./IngestHue.md`](./IngestHue.md)
 - `IngestRandomChaos`: [`./IngestRandomChaos.md`](./IngestRandomChaos.md)
 - `IngestStates`: [`./IngestStates.md`](./IngestStates.md)
