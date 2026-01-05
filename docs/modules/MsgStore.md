@@ -179,6 +179,7 @@ To keep the store bounded over time:
 
 - `_deleteClosedMessages()` periodically soft-deletes them via `removeMessage(ref)` (so they become `lifecycle.state="deleted"`).
 - After `hardDeleteAfterMs` the regular hard-delete pass removes them from the list and archives a `{ event: "purge" }` delete.
+  - To reduce restart spikes, hard-deletes can be delayed during startup and processed in batches (see options below).
 
 ---
 
@@ -244,6 +245,9 @@ When creating `MsgStore`, you can pass options:
 - `notifierIntervalMs` (default `10000`, `0` disables): polling interval for due notifications (`notifyAt`)
 - `hardDeleteAfterMs` (default `259200000` / 3 days): retention window before hard-delete for `deleted`/`expired` messages
 - `hardDeleteIntervalMs` (default `14400000` / 4 hours): how often the store checks for hard-deletes
+- `hardDeleteBatchSize` (default `50`): max number of messages hard-deleted per run (backlogs are processed over multiple runs)
+- `hardDeleteBacklogIntervalMs` (default `5000`): delay between hard-delete runs while a backlog exists
+- `hardDeleteStartupDelayMs` (default `60000`): delay after startup before the first hard-delete run (reduces I/O spikes)
 - `deleteClosedIntervalMs` (default `10000`): how often the store soft-deletes `closed` messages
 - `storage`: options forwarded to `MsgStorage` (e.g. `baseDir`, `fileName`, `writeIntervalMs`)
 - `archive`: options forwarded to `MsgArchive` (e.g. `baseDir`, `fileExtension`, `flushIntervalMs`)

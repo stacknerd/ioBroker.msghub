@@ -835,7 +835,7 @@ describe('MsgStore', () => {
 			const { store } = createStore({
 				messages,
 				msgArchive,
-				options: { hardDeleteAfterMs: 1000, hardDeleteIntervalMs: 0 },
+				options: { hardDeleteAfterMs: 1000, hardDeleteIntervalMs: 0, hardDeleteStartupDelayMs: 0 },
 			});
 			store.lastPruneAt = now - store.pruneIntervalMs - 1;
 
@@ -847,6 +847,86 @@ describe('MsgStore', () => {
 			expect(deletes).to.have.length(1);
 			expect(deletes[0].message.ref).to.equal('r1');
 			expect(deletes[0].options).to.deep.equal({ event: 'purge' });
+		});
+
+		it('delays hard-deletes during startup to reduce I/O spikes', () => {
+			const now = 10_000;
+			const deletes = [];
+			const msgArchive = {
+				appendDelete: (message, options) => deletes.push({ message, options }),
+			};
+			const messages = [
+				{
+					ref: 'r1',
+					level: 10,
+					lifecycle: { state: 'deleted', stateChangedAt: now - 2_000, stateChangedBy: 'test' },
+				},
+			];
+			const { store } = createStore({
+				messages,
+				msgArchive,
+				options: { hardDeleteAfterMs: 1000, hardDeleteIntervalMs: 0, hardDeleteStartupDelayMs: 60_000 },
+			});
+			store.lastPruneAt = now - store.pruneIntervalMs - 1;
+
+			withFixedNow(now, () => {
+				store._pruneOldMessages();
+			});
+
+			expect(store.fullList.map(msg => msg.ref)).to.deep.equal(['r1']);
+			expect(deletes).to.have.length(0);
+			expect(store._hardDeleteTimerDueAt).to.be.greaterThan(0);
+
+			store.onUnload();
+		});
+
+		it('hard-deletes in batches when a backlog exists', () => {
+			const now = 10_000;
+			const deletes = [];
+			const msgArchive = {
+				appendDelete: (message, options) => deletes.push({ message, options }),
+			};
+			const messages = [
+				{
+					ref: 'r1',
+					level: 10,
+					lifecycle: { state: 'deleted', stateChangedAt: now - 2_000, stateChangedBy: 'test' },
+				},
+				{
+					ref: 'r2',
+					level: 10,
+					lifecycle: { state: 'deleted', stateChangedAt: now - 2_000, stateChangedBy: 'test' },
+				},
+			];
+			const { store } = createStore({
+				messages,
+				msgArchive,
+				options: {
+					hardDeleteAfterMs: 1000,
+					hardDeleteIntervalMs: 0,
+					hardDeleteStartupDelayMs: 0,
+					hardDeleteBatchSize: 1,
+					hardDeleteBacklogIntervalMs: 0,
+				},
+			});
+			store.lastPruneAt = now - store.pruneIntervalMs - 1;
+
+			withFixedNow(now, () => {
+				store._pruneOldMessages();
+			});
+
+			expect(store.fullList.map(msg => msg.ref)).to.deep.equal(['r2']);
+			expect(deletes).to.have.length(1);
+			expect(deletes[0].message.ref).to.equal('r1');
+
+			withFixedNow(now, () => {
+				store._hardDeleteMessages({ force: true });
+			});
+
+			expect(store.fullList.map(msg => msg.ref)).to.deep.equal([]);
+			expect(deletes).to.have.length(2);
+			expect(deletes[1].message.ref).to.equal('r2');
+			expect(deletes[1].options).to.deep.equal({ event: 'purge' });
 		});
 	});
 });

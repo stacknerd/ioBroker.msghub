@@ -93,6 +93,9 @@ class MsgStore {
 	 * @param {number} [options.notifierIntervalMs] Due-notification polling interval in ms (default: 10000, 0 disables).
 	 * @param {number} [options.hardDeleteAfterMs] After this time in "deleted"/"expired", messages are hard-deleted (default: 259200000).
 	 * @param {number} [options.hardDeleteIntervalMs] Interval for checking hard-deletes (default: 14400000).
+	 * @param {number} [options.hardDeleteBatchSize] Max messages hard-deleted per run (default: 50).
+	 * @param {number} [options.hardDeleteBacklogIntervalMs] Interval for processing a hard-delete backlog (default: 5000).
+	 * @param {number} [options.hardDeleteStartupDelayMs] Delay hard-deletes after startup to reduce I/O spikes (default: 60000).
 	 * @param {number} [options.deleteClosedIntervalMs] Interval for checking for closed messages (default: 10000).
 	 * @param {object} [options.storage] Options forwarded to `MsgStorage` (e.g. `baseDir`, `fileName`, `writeIntervalMs`).
 	 * @param {object} [options.archive] Options forwarded to `MsgArchive` (e.g. `baseDir`, `fileExtension`, `flushIntervalMs`).
@@ -105,6 +108,9 @@ class MsgStore {
 			notifierIntervalMs = 10000,
 			hardDeleteAfterMs = 1000 * 60 * 60 * 24 * 3,
 			hardDeleteIntervalMs = 1000 * 60 * 60 * 4,
+			hardDeleteBatchSize = 50,
+			hardDeleteBacklogIntervalMs = 1000 * 5,
+			hardDeleteStartupDelayMs = 1000 * 60,
 			deleteClosedIntervalMs = 1000 * 10,
 			storage = {},
 			archive = {},
@@ -160,6 +166,21 @@ class MsgStore {
 		this._keepDeletedAndExpiredFilesMs = hardDeleteAfterMs;
 		this._hardDeleteIntervalMs = hardDeleteIntervalMs;
 		this._lastHardDeleteAt = 0;
+		this._hardDeleteBatchSize =
+			typeof hardDeleteBatchSize === 'number' && Number.isFinite(hardDeleteBatchSize)
+				? Math.max(1, Math.trunc(hardDeleteBatchSize))
+				: 50;
+		this._hardDeleteBacklogIntervalMs =
+			typeof hardDeleteBacklogIntervalMs === 'number' && Number.isFinite(hardDeleteBacklogIntervalMs)
+				? Math.max(0, Math.trunc(hardDeleteBacklogIntervalMs))
+				: 1000 * 5;
+		this._hardDeleteStartupDelayMs =
+			typeof hardDeleteStartupDelayMs === 'number' && Number.isFinite(hardDeleteStartupDelayMs)
+				? Math.max(0, Math.trunc(hardDeleteStartupDelayMs))
+				: 0;
+		this._hardDeleteDisabledUntil = 0;
+		this._hardDeleteTimer = null;
+		this._hardDeleteTimerDueAt = 0;
 		this._deleteClosedIntervalMs = deleteClosedIntervalMs;
 		this._lastDeleteClosedAt = 0;
 
@@ -1048,10 +1069,47 @@ class MsgStore {
 			this._notifyTimer = null;
 		}
 
+		if (this._hardDeleteTimer) {
+			clearTimeout(this._hardDeleteTimer);
+			this._hardDeleteTimer = null;
+			this._hardDeleteTimerDueAt = 0;
+		}
+
 		// Best-effort flush of buffered writes.
 		this.msgStorage.flushPending();
 		this.msgArchive?.flushPending?.();
 		this.msgStats?.onUnload?.();
+	}
+
+	/**
+	 * Schedule a background hard-delete run (best-effort).
+	 *
+	 * @param {number} delayMs Delay in ms.
+	 * @returns {void}
+	 */
+	_scheduleHardDelete(delayMs) {
+		const delay = typeof delayMs === 'number' && Number.isFinite(delayMs) ? Math.max(0, Math.trunc(delayMs)) : 0;
+		const dueAt = Date.now() + delay;
+
+		if (this._hardDeleteTimer && this._hardDeleteTimerDueAt && this._hardDeleteTimerDueAt <= dueAt) {
+			return;
+		}
+
+		if (this._hardDeleteTimer) {
+			clearTimeout(this._hardDeleteTimer);
+			this._hardDeleteTimer = null;
+			this._hardDeleteTimerDueAt = 0;
+		}
+
+		this._hardDeleteTimerDueAt = dueAt;
+		this._hardDeleteTimer = setTimeout(() => {
+			this._hardDeleteTimer = null;
+			this._hardDeleteTimerDueAt = 0;
+			this._hardDeleteMessages({ force: true });
+		}, delay);
+
+		// Do not keep the Node event loop alive (tests / shutdown flows).
+		this._hardDeleteTimer?.unref?.();
 	}
 
 	/**
@@ -1175,12 +1233,11 @@ class MsgStore {
 	 *
 	 * @returns {void}
 	 */
-	_hardDeleteMessages() {
+	_hardDeleteMessages({ force = false } = {}) {
 		const now = Date.now();
-		if (now - this._lastHardDeleteAt < this._hardDeleteIntervalMs) {
+		if (!force && now - this._lastHardDeleteAt < this._hardDeleteIntervalMs) {
 			return;
 		}
-		this._lastHardDeleteAt = now;
 
 		// Determine which entries are due to be deleted.
 		const needsDeletion = item =>
@@ -1189,17 +1246,53 @@ class MsgStore {
 			typeof item?.lifecycle?.stateChangedAt === 'number' &&
 			item.lifecycle.stateChangedAt + this._keepDeletedAndExpiredFilesMs <= now;
 
-		const removals = this.fullList.filter(needsDeletion);
+		if (!this._hardDeleteDisabledUntil && this._hardDeleteStartupDelayMs > 0) {
+			this._hardDeleteDisabledUntil = now + this._hardDeleteStartupDelayMs;
+		}
+
+		const disabledUntil = this._hardDeleteDisabledUntil || 0;
+		if (now < disabledUntil) {
+			const hasCandidates = this.fullList.some(needsDeletion);
+			if (hasCandidates) {
+				this._scheduleHardDelete(disabledUntil - now);
+			}
+			return;
+		}
+
+		this._lastHardDeleteAt = now;
+
+		const removals = [];
+		const keep = [];
+		let hasBacklog = false;
+
+		for (const item of this.fullList) {
+			if (!needsDeletion(item)) {
+				keep.push(item);
+				continue;
+			}
+
+			if (removals.length < this._hardDeleteBatchSize) {
+				removals.push(item);
+				continue;
+			}
+
+			hasBacklog = true;
+			keep.push(item);
+		}
 
 		if (removals.length === 0) {
 			return;
 		}
 
-		this.fullList = this.fullList.filter(item => !needsDeletion(item));
+		this.fullList = keep;
 		this.msgStorage.writeJson(this.fullList);
 
 		for (const msg of removals) {
 			this.msgArchive?.appendDelete?.(msg, { event: 'purge' });
+		}
+
+		if (hasBacklog) {
+			this._scheduleHardDelete(this._hardDeleteBacklogIntervalMs);
 		}
 
 		this.adapter?.log?.debug?.(`MsgStore: hard-deleted Message(s) '${removals.map(msg => msg.ref).join(', ')}'`);
