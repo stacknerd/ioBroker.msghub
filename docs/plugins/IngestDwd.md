@@ -18,7 +18,7 @@ This document has two parts:
   - `dwd.0.warning1.object` … `dwd.0.warning9.object`
 - Creates and maintains one Message Hub message (`kind: status`) per warning.
 - Removes the message again when the warning disappears from the DWD states (cause eliminated).
-- Optional: summarizes `description` and `instruction` via MsgHub AI (cached).
+- Optional: improves `title` / `text` / `details.task` via MsgHub AI (cached).
 
 What it intentionally does not do (today):
 
@@ -62,7 +62,10 @@ Common options:
 - `audienceChannelsIncludeCsv` / `audienceChannelsExcludeCsv` (string, CSV)
   - Copied to `audience.channels.include` / `audience.channels.exclude`.
 - `aiEnhancement` (boolean)
-  - Enables optional AI summaries for description/instruction (cached).
+  - Enables optional AI improvement for title/text/task (cached).
+- `keepCacheHistory` (number)
+  - `0` clears AI cache entries when a message expires/deletes (default).
+  - `> 0` keeps up to N cached entries for auditing (FIFO).
 - `syncDebounceMs` (number, ms)
   - Debounce window for re-reading DWD warning objects after state changes.
 
@@ -157,4 +160,13 @@ When `aiEnhancement=true`, the plugin maintains one internal JSON state:
 
 - `msghub.0.IngestDwd.<instanceId>.aiCache`
 
-It stores cached summaries keyed by the warning hash, and also uses the core AI cache (`ctx.api.ai`) for best-effort reuse.
+It stores cached AI output keyed by message ref (`IngestDwd.<instanceId>.<hash>`), including:
+
+- The exact AI input text block JSON (auditability)
+- A sha1 hash of that text block (change detection)
+- `aiTitle`, `aiText`, `aiTask` outputs
+
+The cache eviction behavior is controlled via `keepCacheHistory`:
+
+- `0`: remove cache entries when the corresponding message is expired/deleted/removed.
+- `> 0`: keep up to N entries in a FIFO/LRU-like order for auditing.
