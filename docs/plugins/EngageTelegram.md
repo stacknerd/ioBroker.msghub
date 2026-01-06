@@ -195,7 +195,8 @@ Cleanup:
 - Before sending a new notification for the same `ref`, the old Telegram message(s) are cleaned up and the mapping is removed.
 - On `deleted` / `expired` notifications, mapped messages are also cleaned up.
 - Cleanup mode is controlled by `deleteOldNotificationOnResend`:
-  - delete message (`deleteMessage`) or remove buttons (`editMessageText`).
+  - The option affects only the “resend” case (before sending a new notification for the same `ref`).
+  - For lifecycle end states (`closed/deleted/expired`) the plugin removes buttons (it does not delete messages).
 
 ### Concurrency / locking
 
