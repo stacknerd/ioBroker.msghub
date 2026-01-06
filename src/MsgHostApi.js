@@ -58,9 +58,19 @@ function buildI18nApi(adapter) {
 	if (!adapter?.i18n || typeof adapter.i18n.t !== 'function') {
 		return null;
 	}
+	// `main.js` wires a patched `adapter.i18n` object that already contains the effective locale fields.
+	// This facade intentionally just forwards those values so plugins have one stable place (`ctx.api.i18n`)
+	// and still get `null` when i18n is not wired at all.
+	const i18n = adapter.i18n;
+	const locale = typeof i18n?.locale === 'string' ? i18n.locale : '';
+	const i18nlocale = typeof i18n?.i18nlocale === 'string' ? i18n.i18nlocale : '';
+	const lang = typeof i18n?.lang === 'string' ? i18n.lang : '';
 	return Object.freeze({
-		t: adapter.i18n.t,
-		getTranslatedObject: adapter.i18n.getTranslatedObject,
+		t: i18n.t,
+		getTranslatedObject: i18n.getTranslatedObject,
+		locale,
+		i18nlocale,
+		lang,
 	});
 }
 

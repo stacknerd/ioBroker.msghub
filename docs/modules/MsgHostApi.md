@@ -63,7 +63,7 @@ Why this exists:
 Builds an optional i18n facade:
 
 - Returns `null` when i18n is not available (for example, when `main.js` did not attach `adapter.i18n`).
-- Otherwise returns `{ t, getTranslatedObject }` from the adapter-scoped i18n instance.
+- Otherwise returns `{ t, getTranslatedObject, locale, i18nlocale, lang }` from the adapter-scoped i18n instance.
 
 This makes translation support opt-in without breaking plugins that do not need it.
 

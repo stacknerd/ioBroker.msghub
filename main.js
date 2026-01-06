@@ -427,6 +427,9 @@ class Msghub extends utils.Adapter {
 						// until this gets fixed, i will use this patch
 						return fixTranslatedObject(args[0], args.slice(1));
 					},
+					locale,
+					i18nlocale,
+					lang,
 				})
 			: null;
 	}

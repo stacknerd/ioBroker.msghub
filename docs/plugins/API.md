@@ -37,6 +37,9 @@ Columns:
 | API | `log` | `error(message)` | ✓ | ✓ | ✓ | ✓ | String-only logger. Throws on non-string. | `buildLogApi()` (`src/MsgHostApi.js`) | `../modules/MsgHostApi.md` |
 | API | `i18n` | `t(key, ...args)` | ✓ | ✓ | ✓ | ✓ | Optional i18n; `ctx.api.i18n` can be `null` if not wired. | `buildI18nApi()` (`src/MsgHostApi.js`) | `../modules/MsgHostApi.md` |
 | API | `i18n` | `getTranslatedObject(obj, lang)` | ✓ | ✓ | ✓ | ✓ | Optional i18n helper; `ctx.api.i18n` can be `null` if not wired. | `buildI18nApi()` (`src/MsgHostApi.js`) | `../modules/MsgHostApi.md` |
+| API | `i18n` | `locale` | ✓ | ✓ | ✓ | ✓ | Adapter locale (for date/number formatting). Falls back to `en-US`. | `buildI18nApi()` (`src/MsgHostApi.js`) | `../modules/MsgHostApi.md` |
+| API | `i18n` | `i18nlocale` | ✓ | ✓ | ✓ | ✓ | Effective i18n locale used by translations. Falls back to `locale`. | `buildI18nApi()` (`src/MsgHostApi.js`) | `../modules/MsgHostApi.md` |
+| API | `i18n` | `lang` | ✓ | ✓ | ✓ | ✓ | Language code (usually `locale.split('-')[0]`). | `buildI18nApi()` (`src/MsgHostApi.js`) | `../modules/MsgHostApi.md` |
 | API | `ai` | `getStatus()*` | ✓ | ✓ | ✓ | ✓ | Returns AI module status; best-effort helper. | `buildAiApi()` (`src/MsgHostApi.js`), bound by `IoPlugins` | `../modules/MsgAi.md` |
 | API | `ai` | `text(request)*` | ✓ | ✓ | ✓ | ✓ | Best-effort text completion helper. | `buildAiApi()` (`src/MsgHostApi.js`), bound by `IoPlugins` | `../modules/MsgAi.md` |
 | API | `ai` | `json(request)*` | ✓ | ✓ | ✓ | ✓ | Best-effort JSON completion helper. | `buildAiApi()` (`src/MsgHostApi.js`), bound by `IoPlugins` | `../modules/MsgAi.md` |
