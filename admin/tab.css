@@ -435,6 +435,14 @@ html, body { background: transparent; }
   background: var(--msghub-danger-weak);
 }
 
+.msghub-root .btn.msghub-danger {
+  background: var(--msghub-danger);
+}
+
+.msghub-root .btn.msghub-danger:disabled {
+  opacity: 0.6;
+}
+
 /* ---------- Instance rows ---------- */
 
 .msghub-instance-row {
@@ -577,6 +585,12 @@ html, body { background: transparent; }
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
+}
+
+.msghub-messages-select {
+  width: 46px;
+  min-width: 46px;
+  text-align: center;
 }
 
 .msghub-messages-search {

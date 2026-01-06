@@ -63,22 +63,44 @@
 			let pages = 1;
 			let lastMeta = null;
 
-		let pageIndex = 1;
-		let pageSize = 50;
+			let pageIndex = 1;
+			let pageSize = 50;
 
-		let sortField = 'timing.updatedAt';
-		let sortDir = 'desc';
+			let sortField = 'timing.createdAt';
+			let sortDir = 'desc';
 
-		/** @type {Record<string, Set<string>>} */
-		const columnFilters = Object.create(null);
-		// Default lifecycle filter:
-		// acked=true, closed=true, deleted=false, expired=false, open=true, snoozed=true
-		setFilterSet('lifecycle.state', new Set(['acked', 'closed', 'open', 'snoozed']));
+			let expertMode = false;
+			const selectedRefs = new Set();
 
-		const toast = message => {
-			try {
-				M.toast({ html: String(message) });
-			} catch (_err) {
+			/** @type {Record<string, Set<string>>} */
+			const columnFilters = Object.create(null);
+			// Default lifecycle filter:
+			// acked=true, closed=true, deleted=false, expired=false, open=true, snoozed=true
+			setFilterSet('lifecycle.state', new Set(['acked', 'closed', 'open', 'snoozed']));
+
+			const detectExpertMode = () => {
+				try {
+					const s = win.sessionStorage;
+					if (s && typeof s.getItem === 'function') {
+						if (s.getItem('App.expertMode') === 'true') {
+							return true;
+						}
+					}
+				} catch (_err) {
+					// ignore
+				}
+				try {
+					const sys = win._system || win.top?._system;
+					return !!sys?.expertMode;
+				} catch (_err) {
+					return false;
+				}
+			};
+
+			const toast = message => {
+				try {
+					M.toast({ html: String(message) });
+				} catch (_err) {
 				// ignore
 			}
 		};
@@ -102,13 +124,109 @@
 
 			mount.appendChild(el);
 
-			const btn = el.querySelector('#msghub-overlay-close');
-			const pre = el.querySelector('#msghub-overlay-pre');
+				const btn = el.querySelector('#msghub-overlay-close');
+				const pre = el.querySelector('#msghub-overlay-pre');
 
-			const setOpen = isOpen => {
-				el.classList.toggle('is-open', isOpen);
-				el.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
-			};
+				function parseTimestampToken(token) {
+					if (typeof token !== 'string' || !token) {
+						return null;
+					}
+					if (token.length < 10 || token.length > 17) {
+						return null;
+					}
+					if (!/^\d+$/.test(token)) {
+						return null;
+					}
+					const n = Number(token);
+					if (!Number.isFinite(n) || n <= 0) {
+						return null;
+					}
+
+					// Heuristic: 10 digits => unix seconds, otherwise treat as unix ms.
+					const ms = token.length === 10 ? n * 1000 : n;
+
+					// Plausibility window: 2000-01-01 .. 2100-01-01 (keeps false positives low).
+					if (ms < 946684800000 || ms > 4102444800000) {
+						return null;
+					}
+
+					const d = new Date(ms);
+					if (Number.isNaN(d.getTime())) {
+						return null;
+					}
+					return { ms, date: d };
+				}
+
+				function getNumberTokenAtPoint(rootEl, x, y) {
+					const doc = rootEl?.ownerDocument || document;
+
+					const pos = doc.caretPositionFromPoint?.(x, y);
+					if (pos && pos.offsetNode && typeof pos.offset === 'number') {
+						const node = pos.offsetNode;
+						if (!node || node.nodeType !== Node.TEXT_NODE || typeof node.textContent !== 'string') {
+							return '';
+						}
+						const text = node.textContent;
+						let i = Math.max(0, Math.min(pos.offset, text.length));
+						if (i > 0 && i === text.length) {
+							i -= 1;
+						}
+
+						const isDigit = ch => ch >= '0' && ch <= '9';
+						if (!isDigit(text[i]) && i > 0 && isDigit(text[i - 1])) {
+							i -= 1;
+						}
+						if (!isDigit(text[i])) {
+							return '';
+						}
+
+						let start = i;
+						let end = i + 1;
+						while (start > 0 && isDigit(text[start - 1])) {
+							start -= 1;
+						}
+						while (end < text.length && isDigit(text[end])) {
+							end += 1;
+						}
+						return text.slice(start, end);
+					}
+
+					const range = doc.caretRangeFromPoint?.(x, y);
+					const node = range?.startContainer;
+					const offset = range?.startOffset;
+					if (!node || node.nodeType !== Node.TEXT_NODE || typeof node.textContent !== 'string') {
+						return '';
+					}
+					if (typeof offset !== 'number') {
+						return '';
+					}
+					const text = node.textContent;
+					let i = Math.max(0, Math.min(offset, text.length));
+					if (i > 0 && i === text.length) {
+						i -= 1;
+					}
+					const isDigit = ch => ch >= '0' && ch <= '9';
+					if (!isDigit(text[i]) && i > 0 && isDigit(text[i - 1])) {
+						i -= 1;
+					}
+					if (!isDigit(text[i])) {
+						return '';
+					}
+					let start = i;
+					let end = i + 1;
+					while (start > 0 && isDigit(text[start - 1])) {
+						start -= 1;
+					}
+					while (end < text.length && isDigit(text[end])) {
+						end += 1;
+					}
+					return text.slice(start, end);
+				}
+
+				const setOpen = isOpen => {
+					el.classList.toggle('is-open', isOpen);
+					el.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+				};
 
 			const close = () => setOpen(false);
 			if (btn) {
@@ -122,17 +240,63 @@
 					close();
 				}
 			});
-			document.addEventListener('keydown', e => {
-				if (el.classList.contains('is-open') && (e.key === 'Escape' || e.key === 'Esc')) {
-					e.preventDefault();
-					close();
-				}
-			});
+				document.addEventListener('keydown', e => {
+					if (el.classList.contains('is-open') && (e.key === 'Escape' || e.key === 'Esc')) {
+						e.preventDefault();
+						close();
+					}
+				});
 
-			overlay = {
-				open: msg => {
-					try {
-						const text = JSON.stringify(msg, null, 2);
+				if (pre) {
+					let lastTooltipToken = '';
+					let rafPending = false;
+					let pendingEvent = null;
+
+					const applyTooltip = e => {
+						rafPending = false;
+						const ev = e || pendingEvent;
+						pendingEvent = null;
+						if (!ev || !el.classList.contains('is-open')) {
+							return;
+						}
+
+						const token = getNumberTokenAtPoint(pre, ev.clientX, ev.clientY);
+						if (token === lastTooltipToken) {
+							return;
+						}
+						lastTooltipToken = token;
+
+						const parsed = parseTimestampToken(token);
+						if (!parsed) {
+							pre.removeAttribute('title');
+							return;
+						}
+
+						const local = parsed.date.toLocaleString();
+						const iso = parsed.date.toISOString();
+						pre.setAttribute('title', `${local}\n${iso}`);
+					};
+
+					pre.addEventListener('mousemove', e => {
+						pendingEvent = e;
+						if (rafPending) {
+							return;
+						}
+						rafPending = true;
+						requestAnimationFrame(() => applyTooltip());
+					});
+					pre.addEventListener('mouseleave', () => {
+						lastTooltipToken = '';
+						pendingEvent = null;
+						rafPending = false;
+						pre.removeAttribute('title');
+					});
+				}
+
+				overlay = {
+					open: msg => {
+						try {
+							const text = JSON.stringify(msg, null, 2);
 						if (pre) {
 							pre.textContent = text;
 						}
@@ -224,31 +388,43 @@
 			columnFilters[key] = nextSet instanceof Set ? nextSet : new Set();
 		}
 
-		function buildWhereFromFilters() {
-			const where = {};
+			function buildWhereFromFilters() {
+				const where = {};
 
-			const kind = getFilterSet('kind');
-			if (kind && kind.size > 0) {
-				where.kind = { in: Array.from(kind) };
+				const kind = getFilterSet('kind');
+				if (kind && kind.size > 0) {
+					where.kind = { in: Array.from(kind) };
+				}
+
+				const lifecycle = getFilterSet('lifecycle.state');
+				if (lifecycle && lifecycle.size > 0) {
+					where.lifecycle = { state: { in: Array.from(lifecycle) } };
+				} else if (lifecycle && lifecycle.size === 0) {
+					const enumStates = getConstantsEnum('lifecycle.state');
+					const all =
+						enumStates && typeof enumStates === 'object'
+							? listEnumValues(enumStates)
+							: ['open', 'acked', 'closed', 'snoozed', 'deleted', 'expired'];
+					where.lifecycle = { state: { in: all } };
+				}
+
+				const level = getFilterSet('level');
+				if (level && level.size > 0) {
+					where.level = { in: Array.from(level).map(x => getLevelNumber(x)).filter(n => Number.isFinite(n)) };
+				}
+
+				const origin = getFilterSet('origin.system');
+				if (origin && origin.size > 0) {
+					where.origin = { system: { in: Array.from(origin) } };
+				}
+
+				const location = getFilterSet('details.location');
+				if (location && location.size > 0) {
+					where.details = { location: { in: Array.from(location) } };
+				}
+
+				return where;
 			}
-
-			const lifecycle = getFilterSet('lifecycle.state');
-			if (lifecycle && lifecycle.size > 0) {
-				where.lifecycle = { state: { in: Array.from(lifecycle) } };
-			}
-
-			const level = getFilterSet('level');
-			if (level && level.size > 0) {
-				where.level = { in: Array.from(level).map(x => getLevelNumber(x)).filter(n => Number.isFinite(n)) };
-			}
-
-			const origin = getFilterSet('origin.system');
-			if (origin && origin.size > 0) {
-				where.origin = { system: { in: Array.from(origin) } };
-			}
-
-			return where;
-		}
 
 			let popover = null;
 			function closePopover() {
@@ -347,12 +523,18 @@
 			document.addEventListener('click', onDocClick, true);
 		}
 
-		function openFilterPopover(anchorEl, { key, title, options }) {
-			closePopover();
+			function openFilterPopover(anchorEl, { key, title, options }) {
+				closePopover();
 
-			const selected = new Set(getFilterSet(key) || []);
-			const sortableField =
-				key === 'kind' || key === 'lifecycle.state' || key === 'level' || key === 'origin.system' ? key : null;
+				const selected = new Set(getFilterSet(key) || []);
+				const sortableField =
+					key === 'kind' ||
+					key === 'lifecycle.state' ||
+					key === 'level' ||
+					key === 'origin.system' ||
+					key === 'details.location'
+						? key
+						: null;
 
 			const mount = document.querySelector('.msghub-root') || document.body;
 			const rect = anchorEl.getBoundingClientRect();
@@ -520,25 +702,53 @@
 				const rows = itemsToRender.map(msg => {
 					const ref = safeStr(pick(msg, 'ref'));
 					const title = safeStr(pick(msg, 'title'));
+					const location = safeStr(pick(msg, 'details.location'));
 					const kind = safeStr(pick(msg, 'kind'));
-				const lifecycle = safeStr(pick(msg, 'lifecycle.state'));
-				const level = pick(msg, 'level');
-				const origin = safeStr(pick(msg, 'origin.system')) || safeStr(pick(msg, 'origin.type'));
-				const createdAt = pick(msg, 'timing.createdAt');
-				const updatedAt = pick(msg, 'timing.updatedAt');
+					const lifecycle = safeStr(pick(msg, 'lifecycle.state'));
+					const level = pick(msg, 'level');
+					const origin = safeStr(pick(msg, 'origin.system')) || safeStr(pick(msg, 'origin.type'));
+					const createdAt = pick(msg, 'timing.createdAt');
+					const updatedAt = pick(msg, 'timing.updatedAt');
 
-				return h('tr', {
-					ondblclick: () => ensureOverlay().open(msg),
-				}, [
-					h('td', { class: 'msghub-mono', text: ref }),
-					h('td', { text: title }),
-					h('td', { text: kind }),
-					h('td', { text: lifecycle }),
-					h('td', { text: getLevelLabel(level) }),
-					h('td', { text: origin }),
-					h('td', { class: 'msghub-muted', text: formatTs(typeof createdAt === 'number' ? createdAt : NaN) }),
-					h('td', { class: 'msghub-muted', text: formatTs(typeof updatedAt === 'number' ? updatedAt : NaN) }),
-					]);
+					const checkboxCell = expertMode
+						? h('td', { class: 'msghub-messages-select' }, [
+								h('label', null, [
+									h('input', {
+										type: 'checkbox',
+										checked: selectedRefs.has(ref) ? 'true' : null,
+										onchange: e => {
+											const on = !!e?.target?.checked;
+											if (on) {
+												selectedRefs.add(ref);
+											} else {
+												selectedRefs.delete(ref);
+											}
+											updateDeleteButton();
+										},
+									}),
+									h('span', { text: '' }),
+								]),
+							])
+						: null;
+
+					return h(
+						'tr',
+						{
+							ondblclick: () => ensureOverlay().open(msg),
+						},
+						[
+							...(checkboxCell ? [checkboxCell] : []),
+							h('td', { class: 'msghub-mono', text: ref }),
+							h('td', { text: title }),
+							h('td', { text: location }),
+							h('td', { text: kind }),
+							h('td', { text: lifecycle }),
+							h('td', { text: getLevelLabel(level) }),
+							h('td', { text: origin }),
+							h('td', { class: 'msghub-muted', text: formatTs(typeof createdAt === 'number' ? createdAt : NaN) }),
+							h('td', { class: 'msghub-muted', text: formatTs(typeof updatedAt === 'number' ? updatedAt : NaN) }),
+						],
+					);
 				});
 
 				return rows;
@@ -546,8 +756,10 @@
 
 			const actions = h('div', { class: 'msghub-actions' });
 			const refreshBtn = h('button', { class: 'btn', type: 'button', text: 'Refresh' });
+			const deleteBtn = h('button', { class: 'btn msghub-danger', type: 'button', text: 'Delete' });
 			const autoBtn = h('button', { class: 'btn-flat', type: 'button', text: 'Auto: on' });
 			actions.appendChild(refreshBtn);
+			actions.appendChild(deleteBtn);
 			actions.appendChild(autoBtn);
 
 			const sizeOptions = [10, 25, 50, 100, 250];
@@ -599,6 +811,17 @@
 			/** @type {Record<string, HTMLButtonElement>} */
 			const headerBtns = Object.create(null);
 
+			const clearHeaderBtns = () => {
+				for (const k of Object.keys(headerBtns)) {
+					delete headerBtns[k];
+				}
+			};
+
+			let tableColCount = 9;
+			const updateTableColCount = () => {
+				tableColCount = expertMode ? 10 : 9;
+			};
+
 			const makeSortBtn = (field, title, label) => {
 				const btn = h('button', {
 					class: 'btn-flat msghub-th-sort',
@@ -628,30 +851,56 @@
 				return btn;
 			};
 
-			theadEl.replaceChildren(
-				h('tr', null, [
-					h('th', { class: 'msghub-th' }, [makeSortBtn('ref', 'Ref', '(Ref)')]),
-					h('th', { class: 'msghub-th' }, [makeSortBtn('title', 'Title', '(Title)')]),
-					h('th', { class: 'msghub-th' }, [
-						makeFilterBtn('kind', 'Kind', 'Kind', () => listEnumValues(getConstantsEnum('kind'))),
+			const renderThead = () => {
+				clearHeaderBtns();
+				updateTableColCount();
+				theadEl.replaceChildren(
+					h('tr', null, [
+						...(expertMode ? [h('th', { class: 'msghub-th msghub-messages-select' }, [])] : []),
+						h('th', { class: 'msghub-th' }, [makeSortBtn('ref', 'Ref', '(Ref)')]),
+						h('th', { class: 'msghub-th' }, [makeSortBtn('title', 'Title', '(Title)')]),
+						h('th', { class: 'msghub-th' }, [
+							makeFilterBtn('details.location', 'Location', 'Location', () =>
+								listDistinctFromItems('details.location'),
+							),
+						]),
+						h('th', { class: 'msghub-th' }, [
+							makeFilterBtn('kind', 'Kind', 'Kind', () => listEnumValues(getConstantsEnum('kind'))),
+						]),
+						h('th', { class: 'msghub-th' }, [
+							makeFilterBtn('lifecycle.state', 'Lifecycle state', 'Lifecycle', () =>
+								listEnumValues(getConstantsEnum('lifecycle.state')),
+							),
+						]),
+						h('th', { class: 'msghub-th' }, [
+							makeFilterBtn('level', 'Level', 'Level', () => listEnumKeys(getConstantsEnum('level'))),
+						]),
+						h('th', { class: 'msghub-th' }, [
+							makeFilterBtn('origin.system', 'Origin system', '(Origin)', () =>
+								listDistinctFromItems('origin.system'),
+							),
+						]),
+						h('th', { class: 'msghub-th' }, [makeSortBtn('timing.createdAt', 'Created', '(Created)')]),
+						h('th', { class: 'msghub-th' }, [makeSortBtn('timing.updatedAt', 'Updated', '(Updated)')]),
 					]),
-					h('th', { class: 'msghub-th' }, [
-						makeFilterBtn('lifecycle.state', 'Lifecycle state', 'Lifecycle', () =>
-							listEnumValues(getConstantsEnum('lifecycle.state')),
-						),
-					]),
-					h('th', { class: 'msghub-th' }, [
-						makeFilterBtn('level', 'Level', 'Level', () => listEnumKeys(getConstantsEnum('level'))),
-					]),
-					h('th', { class: 'msghub-th' }, [
-						makeFilterBtn('origin.system', 'Origin system', '(Origin)', () => listDistinctFromItems('origin.system')),
-					]),
-					h('th', { class: 'msghub-th' }, [makeSortBtn('timing.createdAt', 'Created', '(Created)')]),
-					h('th', { class: 'msghub-th' }, [makeSortBtn('timing.updatedAt', 'Updated', '(Updated)')]),
-				]),
-			);
+				);
+			};
+
+			renderThead();
 
 			root.replaceChildren(head, progress, errorEl, metaEl, tableWrap, emptyEl);
+
+			const updateDeleteButton = () => {
+				deleteBtn.style.display = expertMode ? '' : 'none';
+				if (!expertMode) {
+					deleteBtn.disabled = true;
+					deleteBtn.textContent = 'Delete';
+					return;
+				}
+				const count = selectedRefs.size;
+				deleteBtn.textContent = count > 0 ? `Delete (${count})` : 'Delete';
+				deleteBtn.disabled = count === 0 || (loading && !silentLoading);
+			};
 
 			const isTabVisible = () => {
 				const tab = root.closest('#tab-messages');
@@ -677,11 +926,17 @@
 			};
 
 			const updateHeaderButtons = () => {
+				const locationCount = getFilterSet('details.location')?.size || 0;
 				const kindCount = getFilterSet('kind')?.size || 0;
 				const lifecycleCount = getFilterSet('lifecycle.state')?.size || 0;
 				const levelCount = getFilterSet('level')?.size || 0;
 				const originCount = getFilterSet('origin.system')?.size || 0;
 
+				const btnLocation = headerBtns['filter:details.location'];
+				if (btnLocation) {
+					btnLocation.classList.toggle('is-active', locationCount > 0);
+					btnLocation.textContent = locationCount > 0 ? `Location (${locationCount})` : 'Location';
+				}
 				const btnKind = headerBtns['filter:kind'];
 				if (btnKind) {
 					btnKind.classList.toggle('is-active', kindCount > 0);
@@ -724,6 +979,7 @@
 				refreshBtn.disabled = loading && !silentLoading;
 				refreshBtn.classList.toggle('msghub-btn-loading', loading && silentLoading);
 				autoBtn.textContent = autoRefresh ? 'Auto: on' : 'Auto: off';
+				updateDeleteButton();
 			};
 
 			const updateTbody = (rows, { showLoadingRow = false } = {}) => {
@@ -731,7 +987,7 @@
 				if (showLoadingRow) {
 					fragment.appendChild(
 						h('tr', null, [
-							h('td', { class: 'msghub-muted', text: t('Loading…', 'Lade…'), colspan: '8' }),
+							h('td', { class: 'msghub-muted', text: t('Loading…', 'Lade…'), colspan: String(tableColCount) }),
 						]),
 					);
 				} else {
@@ -789,9 +1045,9 @@
 						setFilterSet('lifecycle.state', new Set(canonical));
 					}
 				}
-			} catch (_e) {
-				constants = null;
-			}
+				} catch (_e) {
+					constants = null;
+				}
 			}
 
 			async function loadMessages({ keepPopover = false, silent = false } = {}) {
@@ -839,6 +1095,52 @@
 					}
 				}
 
+			deleteBtn.addEventListener('click', async e => {
+				e.preventDefault();
+				if (!expertMode) {
+					return;
+				}
+				const refs = Array.from(selectedRefs);
+				if (refs.length === 0) {
+					return;
+				}
+				const ok = win.confirm(
+					t(
+						`Are you sure you want to delete ${refs.length} messages?`,
+						`Sicher, dass du ${refs.length} Nachrichten löschen möchtest?`,
+					),
+				);
+				if (!ok) {
+					return;
+				}
+				try {
+					await sendTo('admin.messages.delete', { refs });
+					selectedRefs.clear();
+					updateDeleteButton();
+					await loadMessages({ silent: false });
+				} catch (err) {
+					toast(String(err?.message || err));
+				}
+			});
+
+			const applyExpertMode = next => {
+				const on = next === true;
+				if (expertMode === on) {
+					return;
+				}
+				expertMode = on;
+				if (!expertMode) {
+					selectedRefs.clear();
+				}
+				closePopover();
+				renderThead();
+				updateDeleteButton();
+				render({ forceRows: true });
+			};
+
+			applyExpertMode(detectExpertMode());
+			win.setInterval(() => applyExpertMode(detectExpertMode()), 1500);
+
 			const scheduleAuto = () => {
 				if (autoTimer) {
 					clearTimeout(autoTimer);
@@ -882,6 +1184,7 @@
 				}
 			});
 
+			updateDeleteButton();
 			render();
 
 			return {

@@ -12,6 +12,7 @@ const { MsgFactory } = require(`${__dirname}/src/MsgFactory`);
 const { MsgConstants } = require(`${__dirname}/src/MsgConstants`);
 const { MsgStore } = require(`${__dirname}/src/MsgStore`);
 const { MsgAi } = require(`${__dirname}/src/MsgAi`);
+const { createI18nReporter } = require(`${__dirname}/i18nReporter`);
 
 function decryptIfPossible(adapter, value) {
 	const raw = typeof value === 'string' ? value.trim() : '';
@@ -137,6 +138,9 @@ class Msghub extends utils.Adapter {
 
 		// AdminTab command facade (initialized in onReady)
 		this._adminTab = null;
+
+		// Optional i18n runtime reporter (initialized in _i18ninit)
+		this._i18nReporter = null;
 	}
 
 	/**
@@ -209,6 +213,12 @@ class Msghub extends utils.Adapter {
 		} catch (error) {
 			this.log?.error?.(`Error during unloading: ${error.message}`);
 		} finally {
+			try {
+				this._i18nReporter?.dispose?.();
+				this._i18nReporter?.flush?.().catch(() => undefined);
+			} catch {
+				// ignore
+			}
 			// Best-effort cleanup (compact mode): drop any direct messagebox handler.
 			try {
 				this._msgPlugins?.clearMessageboxHandler?.();
@@ -366,34 +376,13 @@ class Msghub extends utils.Adapter {
 				'I18n: adapter-core did not provide a translate function (I18n.t/I18n.translate); falling back to identity translation',
 			);
 		}
-		this.i18n = baseI18n //would be the real way, if iobroker would not be broken at this point and return wrong string on getTranslatedObject
-			? Object.freeze({
-					t: (...args) => {
-						const [key, options] = args;
-						if (_i18ndebug) {
-							this.log?.debug?.(
-								`MsgHub main.js: [i18n.t] key=${JSON.stringify(key)} opts=${JSON.stringify(options ?? {})}`,
-							);
-						}
-						if (translateFn) {
-							// @ts-expect-error TS2556 (checkJs): spreading any[] into tuple/rest typed function
-							return translateFn(...args);
-						}
-						return String(key);
-					},
-					getTranslatedObject: (...args) => {
-						if (_i18ndebug) {
-							this.log?.debug?.(
-								`MsgHub main.js: [i18n.getTranslatedObject] args=${JSON.stringify(args)} ret=${JSON.stringify(fixTranslatedObject(args[0], args.slice(1)), null, 2)}`,
-							);
-						}
-						// the real function as of right now is broken and returns wrong strings
-						// return baseI18n.getTranslatedObject?.(...args);
-						// until this gets fixed, i will use this patch
-						return fixTranslatedObject(args[0], args.slice(1));
-					},
-				})
-			: null;
+
+		this._i18nReporter =
+			this.config?.createI18nReport === true
+				? createI18nReporter(this, { enabled: true, lang: i18nlocale, fileName: 'data/i18nReport.json' })
+				: null;
+		const wrappedTranslateFn =
+			translateFn && this._i18nReporter ? this._i18nReporter.wrapTranslate(translateFn) : translateFn;
 
 		// a workaround for a current bug
 		const fixTranslatedObject = (text, strings = []) => {
@@ -411,6 +400,35 @@ class Msghub extends utils.Adapter {
 			}
 			return obj;
 		};
+
+		this.i18n = baseI18n //would be the real way, if iobroker would not be broken at this point and return wrong string on getTranslatedObject
+			? Object.freeze({
+					t: (...args) => {
+						const [key, options] = args;
+						if (_i18ndebug) {
+							this.log?.debug?.(
+								`MsgHub main.js: [i18n.t] key=${JSON.stringify(key)} opts=${JSON.stringify(options ?? {})}`,
+							);
+						}
+						if (wrappedTranslateFn) {
+							// @ts-expect-error TS2556 (checkJs): spreading any[] into tuple/rest typed function
+							return wrappedTranslateFn(...args);
+						}
+						return String(key);
+					},
+					getTranslatedObject: (...args) => {
+						if (_i18ndebug) {
+							this.log?.debug?.(
+								`MsgHub main.js: [i18n.getTranslatedObject] args=${JSON.stringify(args)} ret=${JSON.stringify(fixTranslatedObject(args[0], args.slice(1)), null, 2)}`,
+							);
+						}
+						// the real function as of right now is broken and returns wrong strings
+						// return baseI18n.getTranslatedObject?.(...args);
+						// until this gets fixed, i will use this patch
+						return fixTranslatedObject(args[0], args.slice(1));
+					},
+				})
+			: null;
 	}
 }
 

@@ -78,3 +78,15 @@ Keep language files in sync and get a best-effort usage report:
 
 - Report: `npm run i18n:report`
 - Check (non-zero exit on sync/usage problems): `npm run i18n:check`
+
+## i18n runtime report (optional)
+
+For development/debugging, you can enable a runtime i18n report in the adapter instance config:
+
+- Option: `createI18nReport`
+- Output file (ioBroker file storage): `msghub.0/data/i18nReport.json`
+
+The report contains a best-effort list of:
+
+- `used` keys (what was actually requested at runtime)
+- `missing` keys (heuristic: non-`en` language and the translated output equals the key)

@@ -121,11 +121,12 @@
 		"aiPurposeModelOverrides": "[]",
 		"aiTimeoutMs": 30000,
 		"aiMaxConcurrency": 2,
-		"aiRpm": 0,
-		"aiCacheTtlMs": 0,
-		"keepPreviousWeeks": 3,
-		"locale": "de-DE"
-	},
+			"aiRpm": 0,
+			"aiCacheTtlMs": 0,
+			"createI18nReport": false,
+			"keepPreviousWeeks": 3,
+			"locale": "de-DE"
+		},
 	"objects": [],
 	"instanceObjects": []
 }

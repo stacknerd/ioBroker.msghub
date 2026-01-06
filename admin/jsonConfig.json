@@ -18,6 +18,18 @@
 					"md": 6,
 					"lg": 4,
 					"xl": 4
+				},
+				"createI18nReport": {
+					"type": "checkbox",
+					"label": "Create i18n report file",
+					"help": "Development helper: writes a runtime report of used + missing i18n keys to ioBroker file storage (msghub.0/data/i18nReport.json).",
+					"default": false,
+					"newLine": true,
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12
 				}
 			}
 		},
