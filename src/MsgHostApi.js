@@ -25,7 +25,7 @@ function buildLogApi(adapter, { hostName }) {
 			throw new TypeError(`${name}: ctx.api.log.${method}(message) expects a string`);
 		}
 	};
-	return Object.freeze({
+	const base = Object.freeze({
 		silly: message => {
 			assertString('silly', message);
 			adapter?.log?.silly?.(message);
@@ -45,6 +45,25 @@ function buildLogApi(adapter, { hostName }) {
 		error: message => {
 			assertString('error', message);
 			adapter?.log?.error?.(message);
+		},
+	});
+
+	// Internal hook: IoPlugins binds per-plugin identity into ctx.api.log for consistent prefixes.
+	return Object.freeze({
+		...base,
+		__bindCaller: pluginMeta => {
+			const baseOwnId = typeof pluginMeta?.baseOwnId === 'string' ? pluginMeta.baseOwnId.trim() : '';
+			if (!baseOwnId) {
+				return base;
+			}
+			const prefix = `${baseOwnId}: `;
+			return Object.freeze({
+				silly: message => base.silly(`${prefix}${message}`),
+				debug: message => base.debug(`${prefix}${message}`),
+				info: message => base.info(`${prefix}${message}`),
+				warn: message => base.warn(`${prefix}${message}`),
+				error: message => base.error(`${prefix}${message}`),
+			});
 		},
 	});
 }

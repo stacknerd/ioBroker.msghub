@@ -17,7 +17,7 @@ const { MsgConstants } = require('./MsgConstants');
 
 function createAdapterStub(overrides = {}) {
 	const calls = {
-		log: { debug: [], info: [], warn: [], error: [] },
+		log: { silly: [], debug: [], info: [], warn: [], error: [] },
 		objects: [],
 		states: [],
 		files: [],
@@ -28,6 +28,7 @@ function createAdapterStub(overrides = {}) {
 	const adapter = {
 		namespace: 'msghub.0',
 		log: {
+			silly: msg => calls.log.silly.push(String(msg)),
 			debug: msg => calls.log.debug.push(String(msg)),
 			info: msg => calls.log.info.push(String(msg)),
 			warn: msg => calls.log.warn.push(String(msg)),
@@ -47,11 +48,13 @@ describe('MsgHostApi', () => {
 
 			expect(Object.isFrozen(log)).to.equal(true);
 
+			log.silly('s');
 			log.debug('d');
 			log.info('i');
 			log.warn('w');
 			log.error('e');
 
+			expect(calls.log.silly).to.deep.equal(['s']);
 			expect(calls.log.debug).to.deep.equal(['d']);
 			expect(calls.log.info).to.deep.equal(['i']);
 			expect(calls.log.warn).to.deep.equal(['w']);
@@ -62,6 +65,17 @@ describe('MsgHostApi', () => {
 			const { adapter } = createAdapterStub();
 			const log = buildLogApi(adapter, { hostName: '  Ingest  ' });
 			expect(() => log.info(5)).to.throw(TypeError, 'Ingest: ctx.api.log.info(message) expects a string');
+		});
+
+		it('supports per-plugin prefix binding via __bindCaller', () => {
+			const { adapter, calls } = createAdapterStub();
+			const log = buildLogApi(adapter, { hostName: 'MyHost' });
+			const bound = log.__bindCaller({ baseOwnId: 'NotifyStates.0' });
+
+			expect(Object.isFrozen(bound)).to.equal(true);
+
+			bound.debug('hello');
+			expect(calls.log.debug).to.deep.equal(['NotifyStates.0: hello']);
 		});
 	});
 
