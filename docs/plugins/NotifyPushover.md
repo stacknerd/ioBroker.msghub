@@ -61,12 +61,17 @@ Message filters (all optional; empty = allow all):
 - `audienceTagsAnyCsv` (string, CSV)
   - If set, only messages with at least one matching `audience.tags` entry are sent.
 
-Priority + title icons (per message level):
+Priority + title icons:
 
 - `priorityNone` / `priorityNotice` / `priorityWarning` / `priorityError` (number)
   - Per-level Pushover priority mapping (`-1` low, `0` normal, `1` high).
 - `iconNone` / `iconNotice` / `iconWarning` / `iconError` (string)
-  - Prefix icons used in the Pushover `title` (example defaults: `❔`, `ℹ️`, `⚠️`, `🛑`).
+  - Prefix icons used in the Pushover `title` (example defaults: `''`, `ℹ️`, `⚠️`, `🛑`).
+
+Title icons (per message kind):
+
+- `iconTask` / `iconStatus` / `iconAppointment` / `iconShoppinglist` / `iconInventorylist` (string)
+  - Additional prefix icons used in the Pushover `title`, based on `message.kind`.
 
 Gate (optional):
 
@@ -180,7 +185,7 @@ Gate bypass:
 For each matching message, the plugin sends:
 
 - `message`: `message.text` with HTML tags removed
-- `title`: `<levelIcon> <message.title>` (trimmed)
+- `title`: `<kindIcon><levelIcon> <message.title>` (trimmed; missing/empty icons are omitted)
 - `priority`: mapped per level (`priorityNone/Notice/Warning/Error`)
 - `sound`: hard-coded to `"incoming"`
 
