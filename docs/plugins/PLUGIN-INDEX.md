@@ -16,6 +16,7 @@ Notes:
 | `BridgeAlexaShopping` | Bridge | Bidirectional sync between an Alexa list (alexa2) and a Message Hub shopping list. |  | ✓ | [`./BridgeAlexaShopping.md`](./BridgeAlexaShopping.md) |
 | `BridgeAlexaTasks` | Bridge | Imports Alexa TODO items into Message Hub tasks and mirrors selected MsgHub tasks back to Alexa. |  | ✓ | [`./BridgeAlexaTasks.md`](./BridgeAlexaTasks.md) |
 | `EngageSendTo` | Engage | Interact with MessageHub using “sendTo” in JavaScript and Blockly | ✓ |  | [`./EngageSendTo.md`](./EngageSendTo.md) |
+| `EngageTelegram` | Engage | Sends MsgHub notifications to Telegram via sendTo() and executes actions from inline button clicks. |  | ✓ | [`./EngageTelegram.md`](./EngageTelegram.md) |
 | `IngestDwd` | Ingest | Imports weather warnings from the ioBroker dwd adapter (dwd.X.warning*.object) into Message Hub. |  | ✓ | [`./IngestDwd.md`](./IngestDwd.md) |
 | `IngestRandomChaos` | Ingest | Demo/load generator that periodically injects messages. |  | ✓ | [`./IngestRandomChaos.md`](./IngestRandomChaos.md) |
 | `IngestStates` | Ingest | Generates MsgHub messages from ioBroker objects configured via “Custom” (Objects → Custom). | ✓ |  | [`./IngestStates.md`](./IngestStates.md) |
