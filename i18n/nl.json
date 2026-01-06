@@ -77,5 +77,16 @@
   "to become <= %s": "te worden <= %s",
   "to become >= %s": "te worden >= %s",
   "Trigger '%s' is active, but '%s' did not react within %s (expected: %s). Current value: {{m.state-value}}.": "Trigger '%s' is actief, maar '%s' reageerde niet binnen %s (verwacht: %s). Huidige waarde: {{m.state-value}}.",
-  "TRUE": "WAAR"
+  "TRUE": "WAAR",
+  "Got it": "Ik heb het",
+  "Done": "Gedaan",
+  "Remove": "Verwijder",
+  "Later (%s)": "Later (%s)",
+  "Alright — I'll remind you in %s.": "Oké - ik herinner je eraan in %s.",
+  "Alright — I'll remind you later.": "Goed - ik zal je er later aan herinneren.",
+  "Got it — I won't bother you with this again.": "Begrepen - ik zal je hier niet meer mee lastigvallen.",
+  "Nice — marked as done.": "Mooi - gemarkeerd als klaar.",
+  "Alright — removed.": "Oké - verwijderd.",
+  "Unknown command. Try /start.": "Onbekend commando. Probeer /start.",
+  "Hi! Try /start to see this message again.": "Hallo! Probeer /start om dit bericht opnieuw te zien."
 }

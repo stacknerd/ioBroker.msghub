@@ -77,5 +77,16 @@
   "to become <= %s": "стать <= %s",
   "to become >= %s": "стать >= %s",
   "Trigger '%s' is active, but '%s' did not react within %s (expected: %s). Current value: {{m.state-value}}.": "Триггер '%s' активен, но '%s' не отреагировал в течение %s (ожидалось: %s). Текущее значение: {{m.state-value}}.",
-  "TRUE": "ИСТИНА"
+  "TRUE": "ИСТИНА",
+  "Got it": "Есть",
+  "Done": "Готово",
+  "Remove": "Удалить",
+  "Later (%s)": "Позже (%s)",
+  "Alright — I'll remind you in %s.": "Хорошо - я напомню вам через %s.",
+  "Alright — I'll remind you later.": "Хорошо, я напомню тебе позже.",
+  "Got it — I won't bother you with this again.": "Понял - больше не буду вас беспокоить.",
+  "Nice — marked as done.": "Отлично - отмечено как выполненное.",
+  "Alright — removed.": "Хорошо - удалено.",
+  "Unknown command. Try /start.": "Неизвестная команда. Попробуйте /start.",
+  "Hi! Try /start to see this message again.": "Привет! Попробуйте /start, чтобы снова увидеть это сообщение."
 }

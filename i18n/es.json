@@ -77,5 +77,16 @@
   "to become <= %s": "llegar a ser <= %s",
   "to become >= %s": "llegar a ser >= %s",
   "Trigger '%s' is active, but '%s' did not react within %s (expected: %s). Current value: {{m.state-value}}.": "El disparador '%s' está activo, pero '%s' no reaccionó en %s (esperado: %s). Valor actual: {{m.state-value}}.",
-  "TRUE": "VERDADERO"
+  "TRUE": "VERDADERO",
+  "Got it": "Entendido.",
+  "Done": "Hecho",
+  "Remove": "Eliminar",
+  "Later (%s)": "Más tarde (%s)",
+  "Alright — I'll remind you in %s.": "De acuerdo, te lo recordaré en %s.",
+  "Alright — I'll remind you later.": "De acuerdo, te lo recordaré más tarde.",
+  "Got it — I won't bother you with this again.": "Entendido. No volveré a molestarte con esto.",
+  "Nice — marked as done.": "Bien - marcado como hecho.",
+  "Alright — removed.": "Muy bien - eliminado.",
+  "Unknown command. Try /start.": "Comando desconocido. Prueba con /start.",
+  "Hi! Try /start to see this message again.": "Hola, prueba con /start para volver a ver este mensaje."
 }

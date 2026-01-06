@@ -77,5 +77,16 @@
   "to become <= %s": "变为 <= %s",
   "to become >= %s": "变为 >= %s",
   "Trigger '%s' is active, but '%s' did not react within %s (expected: %s). Current value: {{m.state-value}}.": "触发器 '%s' 处于活动状态，但 '%s' 未在 %s 内作出反应（预期：%s）。当前值：{{m.state-value}}。",
-  "TRUE": "真"
+  "TRUE": "真",
+  "Got it": "Got it",
+  "Done": "Done",
+  "Remove": "Remove",
+  "Later (%s)": "Later (%s)",
+  "Alright — I'll remind you in %s.": "Alright — I'll remind you in %s.",
+  "Alright — I'll remind you later.": "Alright — I'll remind you later.",
+  "Got it — I won't bother you with this again.": "Got it — I won't bother you with this again.",
+  "Nice — marked as done.": "Nice — marked as done.",
+  "Alright — removed.": "Alright — removed.",
+  "Unknown command. Try /start.": "Unknown command. Try /start.",
+  "Hi! Try /start to see this message again.": "Hi! Try /start to see this message again."
 }
