@@ -79,6 +79,10 @@ Outbound mirroring (projection) options:
 - `outAudienceTagsAnyCsv` (string, CSV)
   - Optional tag filter: message must have at least one matching `audience.tags` entry.
 
+Note:
+
+- For `kind=task`, outbound mirroring only includes messages where `timing.startAt` is either missing (unscheduled) **or** set to a timestamp in the past (`startAt < now`).
+
 ### How to find the correct `jsonStateId`
 
 In ioBroker Admin:
@@ -187,7 +191,7 @@ For inbound items (Alexa → Message Hub), the plugin creates one Message Hub me
 - `audience.channels`: copied from `audienceChannelsIncludeCsv` / `audienceChannelsExcludeCsv` (optional)
 - `actions`: auto-provided (`ack`, `snooze (4h)`, `close`)
 
-The task is kept “non-due” by setting a far-future `timing.notifyAt` (Message Hub treats missing `notifyAt` as “due now”).
+The task is created as “active now” by setting `timing.startAt=Date.now()` and leaving `timing.notifyAt` unset (so it may notify immediately).
 
 ### Internal persistence (plugin state)
 
