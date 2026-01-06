@@ -61,6 +61,8 @@ Common options:
   - Comma-separated tags copied to `audience.tags`.
 - `audienceChannelsIncludeCsv` / `audienceChannelsExcludeCsv` (string, CSV)
   - Copied to `audience.channels.include` / `audience.channels.exclude`.
+- `titlePrefix` (string)
+  - Prefix prepended to the warning title (also applied to AI-enhanced titles). Default: `DWD: `.
 - `aiEnhancement` (boolean)
   - Enables optional AI improvement for title/text/task (cached).
 - `keepCacheHistory` (number)
