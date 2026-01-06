@@ -123,9 +123,17 @@
 		"aiMaxConcurrency": 2,
 			"aiRpm": 0,
 			"aiCacheTtlMs": 0,
-			"createI18nReport": false,
-			"keepPreviousWeeks": 3,
-			"locale": "de-DE"
+		"createI18nReport": false,
+		"keepPreviousWeeks": 3,
+		"archiveMaxBatchSize": 200,
+		"archiveFlushIntervalSec": 10,
+		"pruneIntervalSec": 30,
+		"hardDeleteAfterHours": 72,
+		"hardDeleteBatchSize": 50,
+		"hardDeleteStartupDelaySec": 60,
+		"rollupKeepDays": 400,
+		"writeIntervalMs": 10000,
+		"locale": "de-DE"
 		},
 	"objects": [],
 	"instanceObjects": []

@@ -8,7 +8,7 @@
 		"managedNotice": {
 			"type": "panel",
 			"label": "Notice",
-			"hidden": "!(((data.managedMeta && data.managedMeta.managedMessage) || data['managedMeta.managedMessage']) && (((data.managedMeta && data.managedMeta.managedBy) || data['managedMeta.managedBy'] || '').indexOf('IngestStates.') === -1))",
+			"hidden": "!((data['managedMeta-managedMessage']) && ((data['managedMeta-managedBy'] || '').indexOf('IngestStates.') === -1))",
 			"items": {
 				"_mngH0": {
 					"type": "header",
@@ -46,7 +46,7 @@
 					"xl": 12,
 					"style": { "whiteSpace": "pre-wrap" }
 				},
-				"managedMeta.managedBy": {
+				"managedMeta-managedBy": {
 					"newLine": true,
 					"type": "text",
 					"label": "Managed by:",
@@ -57,7 +57,7 @@
 					"xl": 6,
 					"disabled": true
 				},
-				"managedMeta.managedSince": {
+				"managedMeta-managedSince": {
 					"type": "text",
 					"label": "Managed since:",
 					"xs": 12,
@@ -67,7 +67,7 @@
 					"xl": 6,
 					"disabled": true
 				},
-				"managedMeta.managedText": {
+				"managedMeta-managedText": {
 					"type": "text",
 					"multiline": true,
 					"label": "Note (from system)",
@@ -87,7 +87,7 @@
 		"mode": {
 			"type": "panel",
 			"label": "Monitoring",
-			"hidden": "(((data.managedMeta && data.managedMeta.managedMessage) || data['managedMeta.managedMessage']) && (((data.managedMeta && data.managedMeta.managedBy) || data['managedMeta.managedBy'] || '').indexOf('IngestStates.') === -1))",
+			"hidden": "((data['managedMeta-managedMessage']) && ((data['managedMeta-managedBy'] || '').indexOf('IngestStates.') === -1))",
 			"items": {
 				"_modeH0": {
 					"type": "header",
@@ -143,7 +143,7 @@
 				},
 				"_modeThresholdInfo": {
 					"newLine": true,
-					"hidden": "(((data.managedMeta && data.managedMeta.managedMessage) || data['managedMeta.managedMessage']) && (((data.managedMeta && data.managedMeta.managedBy) || data['managedMeta.managedBy'] || '').indexOf('IngestStates.') === -1)) || (((data.watch && data.mode) || data['mode']) !== 'threshold')",
+					"hidden": "((data['managedMeta-managedMessage']) && ((data['managedMeta-managedBy'] || '').indexOf('IngestStates.') === -1)) || ((data.mode || data['mode']) !== 'threshold')",
 					"type": "staticText",
 					"text": "Threshold: You get a message if a numeric value is too low/too high, leaves a defined range, or a boolean stays TRUE/FALSE for too long.\n\nExamples:\n- Battery < 10% → warning/error\n- Humidity < 35% for 30 min → notice (“Please ventilate”)\n- Window contact is open for 12 h (TRUE/FALSE depending on device) → warning\n\nTip: Hysteresis and minimum duration help to avoid flapping and short spikes.",
 					"xs": 12,
@@ -155,7 +155,7 @@
 				},
 				"_modeFreshnessInfo": {
 					"newLine": true,
-					"hidden": "(((data.managedMeta && data.managedMeta.managedMessage) || data['managedMeta.managedMessage']) && (((data.managedMeta && data.managedMeta.managedBy) || data['managedMeta.managedBy'] || '').indexOf('IngestStates.') === -1)) || (((data.watch && data.mode) || data['mode']) !== 'freshness')",
+					"hidden": "((data['managedMeta-managedMessage']) && ((data['managedMeta-managedBy'] || '').indexOf('IngestStates.') === -1)) || ((data.mode || data['mode']) !== 'freshness')",
 					"type": "staticText",
 					"text": "Freshness: You get a message if this object has no update (ts) or no actual value change (lc) for too long.\n\nExamples:\n- Temperature sensor: at least one update every 12 h\n- Power/energy meter: at least one update every 30 s\n- Device with keepalive: at least one heartbeat every 5 min\n\nTip: If a device sends keepalives even without changes, use ts; if it only sends on change, use lc.",
 					"xs": 12,
@@ -169,7 +169,7 @@
 				},
 				"_modeTriggeredInfo": {
 					"newLine": true,
-					"hidden": "(((data.managedMeta && data.managedMeta.managedMessage) || data['managedMeta.managedMessage']) && (((data.managedMeta && data.managedMeta.managedBy) || data['managedMeta.managedBy'] || '').indexOf('IngestStates.') === -1)) || (((data.watch && data.mode) || data['mode']) !== 'triggered')",
+					"hidden": "((data['managedMeta-managedMessage']) && ((data['managedMeta-managedBy'] || '').indexOf('IngestStates.') === -1)) || ((data.mode || data['mode']) !== 'triggered')",
 					"type": "staticText",
 					"text": "Dependency (Trigger): When another object becomes active, this object must react within a time window as you expect.\n\nExamples:\n- Valve = ON → water meter must increase within 10 min (delta)\n- Plug = ON → power must become >= 5 W within 30 s\n- Heating = ON → flow temperature must rise within 15 min\n\nTip: Choose a generous time window if devices are slow or have latency.",
 					"xs": 12,
@@ -181,7 +181,7 @@
 				},
 				"_modeNonSettlingInfo": {
 					"newLine": true,
-					"hidden": "(((data.managedMeta && data.managedMeta.managedMessage) || data['managedMeta.managedMessage']) && (((data.managedMeta && data.managedMeta.managedBy) || data['managedMeta.managedBy'] || '').indexOf('IngestStates.') === -1)) || (((data.watch && data.mode) || data['mode']) !== 'nonSettling')",
+					"hidden": "((data['managedMeta-managedMessage']) && ((data['managedMeta-managedBy'] || '').indexOf('IngestStates.') === -1)) || ((data.mode || data['mode']) !== 'nonSettling')",
 					"type": "staticText",
 					"text": "Non-settling value: You get a message if a value has no quiet phase for a long time or shows a suspicious trend in one direction over a time window.\n\nExamples:\n- Water meter increases for hours without quiet phase → possible leak\n- Sensor value keeps fluctuating without stable phase → RF issues / defective sensor\n- Counter keeps running although it usually has idle phases → consumer stuck\n\nTip: Use “Min. delta” to filter measurement noise.",
 					"xs": 12,
@@ -193,7 +193,7 @@
 				},
 				"_modeSessionInfo": {
 					"newLine": true,
-					"hidden": "(((data.managedMeta && data.managedMeta.managedMessage) || data['managedMeta.managedMessage']) && (((data.managedMeta && data.managedMeta.managedBy) || data['managedMeta.managedBy'] || '').indexOf('IngestStates.') === -1)) || (((data.watch && data.mode) || data['mode']) !== 'session')",
+					"hidden": "((data['managedMeta-managedMessage']) && ((data['managedMeta-managedBy'] || '').indexOf('IngestStates.') === -1)) || ((data.mode || data['mode']) !== 'session')",
 					"type": "staticText",
 					"text": "Session (Start/Stop): You get a message when a process starts and later finishes again – usually detected via power thresholds and a stop delay.\n\nExamples:\n- E-bike charging: start >= 50 W, finish < 15 W for 5 min\n- Washing machine: start > 10 W (with min hold), finish after stop delay\n- Dishwasher: start/finish via typical power phases + stop delay\n\nTip: A short minimum hold time prevents false starts caused by brief spikes.",
 					"xs": 12,
@@ -208,7 +208,7 @@
 		"threshold": {
 			"type": "panel",
 			"label": "Threshold",
-			"hidden": "(((data.managedMeta && data.managedMeta.managedMessage) || data['managedMeta.managedMessage']) && (((data.managedMeta && data.managedMeta.managedBy) || data['managedMeta.managedBy'] || '').indexOf('IngestStates.') === -1)) || (((data.watch && data.mode) || data['mode']) !== 'threshold')",
+			"hidden": "((data['managedMeta-managedMessage']) && ((data['managedMeta-managedBy'] || '').indexOf('IngestStates.') === -1)) || ((data.mode || data['mode']) !== 'threshold')",
 			"items": {
 				"_thrH0": {
 					"type": "header",
@@ -242,7 +242,7 @@
 					"lg": 12,
 					"xl": 12
 				},
-				"thr.mode": {
+				"thr-mode": {
 					"newLine": true,
 					"type": "select",
 					"label": "Check",
@@ -262,7 +262,7 @@
 						{ "label": "is false (FALSE)", "value": "falsy" }
 					]
 				},
-				"thr.value": {
+				"thr-value": {
 					"type": "number",
 					"label": "Limit",
 					"help": "Only for below/above (lt/gt).",
@@ -271,10 +271,10 @@
 					"md": 6,
 					"lg": 6,
 					"xl": 6,
-					"hidden": "(((data.thr && data.thr.mode) || data['thr.mode']) === 'outside') || (((data.thr && data.thr.mode) || data['thr.mode']) === 'inside') || (((data.thr && data.thr.mode) || data['thr.mode']) === 'truthy') || (((data.thr && data.thr.mode) || data['thr.mode']) === 'falsy')",
+					"hidden": "(data['thr-mode'] === 'outside') || (data['thr-mode'] === 'inside') || (data['thr-mode'] === 'truthy') || (data['thr-mode'] === 'falsy')",
 					"default": 10
 				},
-				"thr.min": {
+				"thr-min": {
 					"type": "number",
 					"label": "Minimum",
 					"help": "Only for range (inside/outside).",
@@ -283,10 +283,10 @@
 					"md": 3,
 					"lg": 3,
 					"xl": 3,
-					"hidden": "(((data.thr && data.thr.mode) || data['thr.mode']) !== 'outside') && (((data.thr && data.thr.mode) || data['thr.mode']) !== 'inside')",
+					"hidden": "(data['thr-mode'] !== 'outside') && (data['thr-mode'] !== 'inside')",
 					"default": 0
 				},
-				"thr.max": {
+				"thr-max": {
 					"type": "number",
 					"label": "Maximum",
 					"help": "Only for range (inside/outside).",
@@ -295,7 +295,7 @@
 					"md": 3,
 					"lg": 3,
 					"xl": 3,
-					"hidden": "(((data.thr && data.thr.mode) || data['thr.mode']) !== 'outside') && (((data.thr && data.thr.mode) || data['thr.mode']) !== 'inside')",
+					"hidden": "(data['thr-mode'] !== 'outside') && (data['thr-mode'] !== 'inside')",
 					"default": 100
 				},
 				"_thrH4Stabilize": {
@@ -309,7 +309,7 @@
 					"lg": 12,
 					"xl": 12
 				},
-				"thr.hysteresis": {
+				"thr-hysteresis": {
 					"newLine": true,
 					"type": "number",
 					"label": "Hysteresis",
@@ -319,11 +319,11 @@
 					"md": 3,
 					"lg": 3,
 					"xl": 3,
-					"hidden": "(((data.thr && data.thr.mode) || data['thr.mode']) === 'truthy') || (((data.thr && data.thr.mode) || data['thr.mode']) === 'falsy')",
+					"hidden": "(data['thr-mode'] === 'truthy') || (data['thr-mode'] === 'falsy')",
 					"min": 0,
 					"default": 0
 				},
-				"thr.minDurationValue": {
+				"thr-minDurationValue": {
 					"type": "number",
 					"label": "Minimum duration",
 					"help": "The condition must hold for this duration before alerting (0 = immediate).",
@@ -335,7 +335,7 @@
 					"min": 0,
 					"default": 0
 				},
-				"thr.minDurationUnit": {
+				"thr-minDurationUnit": {
 					"type": "select",
 					"label": "Unit",
 					"xs": 12,
@@ -377,7 +377,7 @@
 		"freshness": {
 			"type": "panel",
 			"label": "Freshness",
-			"hidden": "(((data.managedMeta && data.managedMeta.managedMessage) || data['managedMeta.managedMessage']) && (((data.managedMeta && data.managedMeta.managedBy) || data['managedMeta.managedBy'] || '').indexOf('IngestStates.') === -1)) || (((data.watch && data.mode) || data['mode']) !== 'freshness')",
+			"hidden": "((data['managedMeta-managedMessage']) && ((data['managedMeta-managedBy'] || '').indexOf('IngestStates.') === -1)) || ((data.mode || data['mode']) !== 'freshness')",
 			"items": {
 				"_freshH0": {
 					"type": "header",
@@ -422,7 +422,7 @@
 					"xl": 12,
 					"style": { "whiteSpace": "pre-wrap" }
 				},
-				"fresh.everyValue": {
+				"fresh-everyValue": {
 					"newLine": true,
 					"type": "number",
 					"label": "Maximum gap",
@@ -435,7 +435,7 @@
 					"min": 1,
 					"default": 60
 				},
-				"fresh.everyUnit": {
+				"fresh-everyUnit": {
 					"type": "select",
 					"label": "Unit",
 					"xs": 12,
@@ -450,7 +450,7 @@
 						{ "label": "Days", "value": 86400 }
 					]
 				},
-				"fresh.evaluateBy": {
+				"fresh-evaluateBy": {
 					"type": "select",
 					"label": "Timestamp",
 					"help": "Which timestamp should be checked?\n- ts: counts every update (even if the value stays the same)\n- lc: counts only actual value changes",
@@ -492,7 +492,7 @@
 		"triggered": {
 			"type": "panel",
 			"label": "Dependency (Trigger)",
-			"hidden": "(((data.managedMeta && data.managedMeta.managedMessage) || data['managedMeta.managedMessage']) && (((data.managedMeta && data.managedMeta.managedBy) || data['managedMeta.managedBy'] || '').indexOf('IngestStates.') === -1)) || (((data.watch && data.mode) || data['mode']) !== 'triggered')",
+			"hidden": "((data['managedMeta-managedMessage']) && ((data['managedMeta-managedBy'] || '').indexOf('IngestStates.') === -1)) || ((data.mode || data['mode']) !== 'triggered')",
 			"items": {
 				"_trgH0": {
 					"type": "header",
@@ -526,7 +526,7 @@
 					"lg": 12,
 					"xl": 12
 				},
-				"trg.id": {
+				"trg-id": {
 					"newLine": true,
 					"type": "objectId",
 					"label": "Trigger object (ID)",
@@ -538,7 +538,7 @@
 					"xl": 4,
 					"default": ""
 				},
-				"trg.operator": {
+				"trg-operator": {
 					"type": "select",
 					"label": "Trigger condition",
 					"help": "When is the trigger considered active?",
@@ -557,7 +557,7 @@
 						{ "label": "false (falsy)", "value": "falsy" }
 					]
 				},
-				"trg.valueType": {
+				"trg-valueType": {
 					"type": "select",
 					"label": "Value type",
 					"help": "Makes the comparison explicit. For “true/false” you don’t need a comparison value.",
@@ -567,14 +567,14 @@
 					"lg": 2,
 					"xl": 2,
 					"default": "boolean",
-					"hidden": "(((data.trg && data.trg.operator) || data['trg.operator']) === 'truthy') || (((data.trg && data.trg.operator) || data['trg.operator']) === 'falsy')",
+					"hidden": "(data['trg-operator'] === 'truthy') || (data['trg-operator'] === 'falsy')",
 					"options": [
 						{ "label": "Boolean (true/false)", "value": "boolean" },
 						{ "label": "Number", "value": "number" },
 						{ "label": "Text", "value": "string" }
 					]
 				},
-				"trg.valueBool": {
+				"trg-valueBool": {
 					"type": "checkbox",
 					"label": "Trigger is TRUE",
 					"help": "If disabled, FALSE is expected.",
@@ -584,9 +584,9 @@
 					"lg": 3,
 					"xl": 3,
 					"default": true,
-					"hidden": "(((data.trg && data.trg.operator) || data['trg.operator']) === 'truthy') || (((data.trg && data.trg.operator) || data['trg.operator']) === 'falsy') || (((data.trg && data.trg.valueType) || data['trg.valueType']) !== 'boolean')"
+					"hidden": "(data['trg-operator'] === 'truthy') || (data['trg-operator'] === 'falsy') || (data['trg-valueType'] !== 'boolean')"
 				},
-				"trg.valueNumber": {
+				"trg-valueNumber": {
 					"type": "number",
 					"label": "Comparison value (number)",
 					"xs": 12,
@@ -594,9 +594,9 @@
 					"md": 4,
 					"lg": 3,
 					"xl": 3,
-					"hidden": "(((data.trg && data.trg.operator) || data['trg.operator']) === 'truthy') || (((data.trg && data.trg.operator) || data['trg.operator']) === 'falsy') || (((data.trg && data.trg.valueType) || data['trg.valueType']) !== 'number')"
+					"hidden": "(data['trg-operator'] === 'truthy') || (data['trg-operator'] === 'falsy') || (data['trg-valueType'] !== 'number')"
 				},
-				"trg.valueString": {
+				"trg-valueString": {
 					"type": "text",
 					"label": "Comparison value (text)",
 					"xs": 12,
@@ -604,7 +604,7 @@
 					"md": 4,
 					"lg": 3,
 					"xl": 3,
-					"hidden": "(((data.trg && data.trg.operator) || data['trg.operator']) === 'truthy') || (((data.trg && data.trg.operator) || data['trg.operator']) === 'falsy') || (((data.trg && data.trg.valueType) || data['trg.valueType']) !== 'string')"
+					"hidden": "(data['trg-operator'] === 'truthy') || (data['trg-operator'] === 'falsy') || (data['trg-valueType'] !== 'string')"
 				},
 				"_trgH4Window": {
 					"newLine": true,
@@ -617,7 +617,7 @@
 					"lg": 12,
 					"xl": 12
 				},
-				"trg.windowValue": {
+				"trg-windowValue": {
 					"newLine": true,
 					"type": "number",
 					"label": "Duration",
@@ -630,7 +630,7 @@
 					"min": 1,
 					"default": 5
 				},
-				"trg.windowUnit": {
+				"trg-windowUnit": {
 					"type": "select",
 					"label": "Unit",
 					"xs": 12,
@@ -656,7 +656,7 @@
 					"lg": 12,
 					"xl": 12
 				},
-				"trg.expectation": {
+				"trg-expectation": {
 					"newLine": true,
 					"type": "select",
 					"label": "What must happen?",
@@ -675,7 +675,7 @@
 						{ "label": "Value becomes at most (<= threshold)", "value": "thresholdLte" }
 					]
 				},
-				"trg.minDelta": {
+				"trg-minDelta": {
 					"type": "number",
 					"label": "Minimum delta",
 					"help": "Only for delta rules. Example: counter must increase by at least 1.",
@@ -686,9 +686,9 @@
 					"xl": 6,
 					"min": 0,
 					"default": 0,
-					"hidden": "(((data.trg && data.trg.expectation) || data['trg.expectation']) !== 'deltaUp') && (((data.trg && data.trg.expectation) || data['trg.expectation']) !== 'deltaDown')"
+					"hidden": "(data['trg-expectation'] !== 'deltaUp') && (data['trg-expectation'] !== 'deltaDown')"
 				},
-				"trg.threshold": {
+				"trg-threshold": {
 					"type": "number",
 					"label": "Threshold",
 					"help": "Only for threshold rules (>= / <=).",
@@ -697,7 +697,7 @@
 					"md": 6,
 					"lg": 6,
 					"xl": 6,
-					"hidden": "(((data.trg && data.trg.expectation) || data['trg.expectation']) !== 'thresholdGte') && (((data.trg && data.trg.expectation) || data['trg.expectation']) !== 'thresholdLte')"
+					"hidden": "(data['trg-expectation'] !== 'thresholdGte') && (data['trg-expectation'] !== 'thresholdLte')"
 				},
 				"_trgH4Examples": {
 					"newLine": true,
@@ -726,7 +726,7 @@
 		"nonSettling": {
 			"type": "panel",
 			"label": "Non-settling value",
-			"hidden": "(((data.managedMeta && data.managedMeta.managedMessage) || data['managedMeta.managedMessage']) && (((data.managedMeta && data.managedMeta.managedBy) || data['managedMeta.managedBy'] || '').indexOf('IngestStates.') === -1)) || (((data.watch && data.mode) || data['mode']) !== 'nonSettling')",
+			"hidden": "((data['managedMeta-managedMessage']) && ((data['managedMeta-managedBy'] || '').indexOf('IngestStates.') === -1)) || ((data.mode || data['mode']) !== 'nonSettling')",
 			"items": {
 				"_nsH0": {
 					"type": "header",
@@ -760,7 +760,7 @@
 					"lg": 12,
 					"xl": 12
 				},
-				"ns.profile": {
+				"nonset-profile": {
 					"newLine": true,
 					"type": "select",
 					"label": "Profile",
@@ -776,7 +776,7 @@
 						{ "label": "Leak/trend (rises/falls over long time)", "value": "trend" }
 					]
 				},
-				"ns.minDelta": {
+				"nonset-minDelta": {
 					"type": "number",
 					"label": "Min. delta",
 					"help": "Filters measurement noise. Only changes >= this delta count (0 = every change).",
@@ -798,7 +798,7 @@
 					"md": 12,
 					"lg": 12,
 					"xl": 12,
-					"hidden": "((data.ns && data.ns.profile) || data['ns.profile']) !== 'activity'"
+					"hidden": "data['nonset-profile'] !== 'activity'"
 				},
 				"_nsInfoActivity0": {
 					"newLine": true,
@@ -809,9 +809,9 @@
 					"md": 12,
 					"lg": 12,
 					"xl": 12,
-					"hidden": "((data.ns && data.ns.profile) || data['ns.profile']) !== 'activity'"
+					"hidden": "data['nonset-profile'] !== 'activity'"
 				},
-				"ns.maxContinuousValue": {
+				"nonset-maxContinuousValue": {
 					"newLine": true,
 					"type": "number",
 					"label": "Max. time without quiet",
@@ -823,9 +823,9 @@
 					"xl": 3,
 					"min": 1,
 					"default": 180,
-					"hidden": "((data.ns && data.ns.profile) || data['ns.profile']) !== 'activity'"
+					"hidden": "data['nonset-profile'] !== 'activity'"
 				},
-				"ns.maxContinuousUnit": {
+				"nonset-maxContinuousUnit": {
 					"type": "select",
 					"label": "Unit",
 					"xs": 12,
@@ -834,13 +834,13 @@
 					"lg": 3,
 					"xl": 3,
 					"default": 60,
-					"hidden": "((data.ns && data.ns.profile) || data['ns.profile']) !== 'activity'",
+					"hidden": "data['nonset-profile'] !== 'activity'",
 					"options": [
 						{ "label": "Minutes", "value": 60 },
 						{ "label": "Hours", "value": 3600 }
 					]
 				},
-				"ns.quietGapValue": {
+				"nonset-quietGapValue": {
 					"type": "number",
 					"label": "Quiet phase",
 					"help": "It must be quiet for this long to count as “settled”.",
@@ -851,9 +851,9 @@
 					"xl": 3,
 					"min": 0,
 					"default": 15,
-					"hidden": "((data.ns && data.ns.profile) || data['ns.profile']) !== 'activity'"
+					"hidden": "data['nonset-profile'] !== 'activity'"
 				},
-				"ns.quietGapUnit": {
+				"nonset-quietGapUnit": {
 					"type": "select",
 					"label": "Unit",
 					"xs": 12,
@@ -862,7 +862,7 @@
 					"lg": 3,
 					"xl": 3,
 					"default": 60,
-					"hidden": "((data.ns && data.ns.profile) || data['ns.profile']) !== 'activity'",
+					"hidden": "data['nonset-profile'] !== 'activity'",
 					"options": [
 						{ "label": "Minutes", "value": 60 },
 						{ "label": "Hours", "value": 3600 }
@@ -878,7 +878,7 @@
 					"md": 12,
 					"lg": 12,
 					"xl": 12,
-					"hidden": "((data.ns && data.ns.profile) || data['ns.profile']) !== 'trend'"
+					"hidden": "data['nonset-profile'] !== 'trend'"
 				},
 				"_nsInfoTrend0": {
 					"newLine": true,
@@ -889,9 +889,9 @@
 					"md": 12,
 					"lg": 12,
 					"xl": 12,
-					"hidden": "((data.ns && data.ns.profile) || data['ns.profile']) !== 'trend'"
+					"hidden": "data['nonset-profile'] !== 'trend'"
 				},
-				"ns.direction": {
+				"nonset-direction": {
 					"newLine": true,
 					"type": "select",
 					"label": "Trend direction",
@@ -902,14 +902,14 @@
 					"lg": 3,
 					"xl": 3,
 					"default": "up",
-					"hidden": "((data.ns && data.ns.profile) || data['ns.profile']) !== 'trend'",
+					"hidden": "data['nonset-profile'] !== 'trend'",
 					"options": [
 						{ "label": "rising", "value": "up" },
 						{ "label": "falling", "value": "down" },
 						{ "label": "any", "value": "any" }
 					]
 				},
-				"ns.trendWindowValue": {
+				"nonset-trendWindowValue": {
 					"type": "number",
 					"label": "Trend window",
 					"help": "How long the trend must persist before alerting.",
@@ -920,9 +920,9 @@
 					"xl": 3,
 					"min": 1,
 					"default": 6,
-					"hidden": "((data.ns && data.ns.profile) || data['ns.profile']) !== 'trend'"
+					"hidden": "data['nonset-profile'] !== 'trend'"
 				},
-				"ns.trendWindowUnit": {
+				"nonset-trendWindowUnit": {
 					"type": "select",
 					"label": "Unit",
 					"xs": 12,
@@ -931,13 +931,13 @@
 					"lg": 2,
 					"xl": 2,
 					"default": 3600,
-					"hidden": "((data.ns && data.ns.profile) || data['ns.profile']) !== 'trend'",
+					"hidden": "data['nonset-profile'] !== 'trend'",
 					"options": [
 						{ "label": "Hours", "value": 3600 },
 						{ "label": "Days", "value": 86400 }
 					]
 				},
-				"ns.minTotalDelta": {
+				"nonset-minTotalDelta": {
 					"type": "number",
 					"label": "Min. total change",
 					"help": "Optional: Only alert if the value changes by at least X in total within the trend window (0 = ignore).",
@@ -948,7 +948,7 @@
 					"xl": 4,
 					"min": 0,
 					"default": 0,
-					"hidden": "((data.ns && data.ns.profile) || data['ns.profile']) !== 'trend'"
+					"hidden": "data['nonset-profile'] !== 'trend'"
 				},
 				"_nsH4Examples": {
 					"newLine": true,
@@ -977,7 +977,7 @@
 		"session": {
 			"type": "panel",
 			"label": "Session (Start/Stop)",
-			"hidden": "(((data.managedMeta && data.managedMeta.managedMessage) || data['managedMeta.managedMessage']) && (((data.managedMeta && data.managedMeta.managedBy) || data['managedMeta.managedBy'] || '').indexOf('IngestStates.') === -1)) || (((data.watch && data.mode) || data['mode']) !== 'session')",
+			"hidden": "((data['managedMeta-managedMessage']) && ((data['managedMeta-managedBy'] || '').indexOf('IngestStates.') === -1)) || ((data.mode || data['mode']) !== 'session')",
 			"items": {
 				"_sessH0": {
 					"type": "header",
@@ -1021,7 +1021,7 @@
 					"lg": 12,
 					"xl": 12
 				},
-				"sess.onOffId": {
+				"sess-onOffId": {
 					"newLine": true,
 					"type": "objectId",
 					"label": "Gate (on/off) – optional",
@@ -1033,7 +1033,7 @@
 					"xl": 6,
 					"default": ""
 				},
-				"sess.onOffActive": {
+				"sess-onOffActive": {
 					"newLine": true,
 					"type": "select",
 					"label": "Gate active when",
@@ -1048,9 +1048,9 @@
 						{ "label": "false (falsy)", "value": "falsy" },
 						{ "label": "equals (=) …", "value": "eq" }
 					],
-					"hidden": "!((data.sess && data.sess.onOffId) || data['sess.onOffId'])"
+					"hidden": "!(data['sess-onOffId'])"
 				},
-				"sess.onOffValue": {
+				"sess-onOffValue": {
 					"type": "text",
 					"label": "Comparison value",
 					"help": "Only relevant for “equals”. Examples: true, 1, ON, auto …",
@@ -1060,7 +1060,7 @@
 					"lg": 6,
 					"xl": 6,
 					"default": "true",
-					"hidden": "!((data.sess && data.sess.onOffId) || data['sess.onOffId']) || (((data.sess && data.sess.onOffActive) || data['sess.onOffActive']) !== 'eq')"
+					"hidden": "!(data['sess-onOffId']) || (data['sess-onOffActive'] !== 'eq')"
 				},
 				"_sessH4Start": {
 					"newLine": true,
@@ -1073,7 +1073,7 @@
 					"lg": 12,
 					"xl": 12
 				},
-				"sess.startThreshold": {
+				"sess-startThreshold": {
 					"newLine": true,
 					"type": "number",
 					"label": "Start threshold",
@@ -1086,7 +1086,7 @@
 					"min": 0,
 					"default": 50
 				},
-				"sess.startMinHoldValue": {
+				"sess-startMinHoldValue": {
 					"type": "number",
 					"label": "Min. hold above start",
 					"help": "Filters short peaks (0 = immediate).",
@@ -1098,7 +1098,7 @@
 					"min": 0,
 					"default": 0
 				},
-				"sess.startMinHoldUnit": {
+				"sess-startMinHoldUnit": {
 					"type": "select",
 					"label": "Unit",
 					"xs": 12,
@@ -1123,7 +1123,7 @@
 					"lg": 12,
 					"xl": 12
 				},
-				"sess.stopThreshold": {
+				"sess-stopThreshold": {
 					"newLine": true,
 					"type": "number",
 					"label": "Stop threshold (W)",
@@ -1136,7 +1136,7 @@
 					"min": 0,
 					"default": 15
 				},
-				"sess.stopDelayValue": {
+				"sess-stopDelayValue": {
 					"type": "number",
 					"label": "Finish after",
 					"help": "The session is considered finished only if power stays below the stop threshold for this duration.",
@@ -1148,7 +1148,7 @@
 					"min": 0,
 					"default": 5
 				},
-				"sess.stopDelayUnit": {
+				"sess-stopDelayUnit": {
 					"type": "select",
 					"label": "Unit",
 					"xs": 12,
@@ -1163,7 +1163,7 @@
 						{ "label": "Hours", "value": 3600 }
 					]
 				},
-				"sess.cancelStopIfAboveStopThreshold": {
+				"sess-cancelStopIfAboveStopThreshold": {
 					"newLine": true,
 					"type": "checkbox",
 					"label": "Cancel finish timer if power rises again",
@@ -1186,7 +1186,7 @@
 					"lg": 12,
 					"xl": 12
 				},
-				"sess.energyCounterId": {
+				"sess-energyCounterId": {
 					"newLine": true,
 					"type": "objectId",
 					"label": "Consumption counter (optional)",
@@ -1198,7 +1198,7 @@
 					"xl": 6,
 					"default": ""
 				},
-				"sess.pricePerKwhId": {
+				"sess-pricePerKwhId": {
 					"type": "objectId",
 					"label": "Cost per consumption unit (optional)",
 					"help": "If set, a cost in € is calculated at the end.",
@@ -1236,7 +1236,7 @@
 		"message": {
 			"type": "panel",
 			"label": "Message",
-			"hidden": "(((data.managedMeta && data.managedMeta.managedMessage) || data['managedMeta.managedMessage']) && (((data.managedMeta && data.managedMeta.managedBy) || data['managedMeta.managedBy'] || '').indexOf('IngestStates.') === -1)) || (((data.mode) || data['mode']) == '')",
+			"hidden": "((data['managedMeta-managedMessage']) && ((data['managedMeta-managedBy'] || '').indexOf('IngestStates.') === -1)) || ((data.mode || data['mode']) == '')",
 			"items": {
 				"_msgH0": {
 					"type": "header",
@@ -1282,7 +1282,7 @@
 					"lg": 12,
 					"xl": 12
 				},
-				"msg.kind": {
+				"msg-kind": {
 					"newLine": true,
 					"type": "select",
 					"label": "Kind",
@@ -1298,7 +1298,7 @@
 						{ "label": "task", "value": "task" }
 					]
 				},
-				"msg.level": {
+				"msg-level": {
 					"type": "select",
 					"label": "Level",
 					"help": "How important is the message?",
@@ -1315,7 +1315,7 @@
 						{ "label": "error", "value": 30 }
 					]
 				},
-				"msg.title": {
+				"msg-title": {
 					"newLine": true,
 					"type": "text",
 					"label": "Title (optional)",
@@ -1327,7 +1327,7 @@
 					"xl": 6,
 					"placeholder": "e.g. Sensor offline: Basement temperature"
 				},
-				"msg.text": {
+				"msg-text": {
 					"type": "text",
 					"label": "Text (optional)",
 					"help": "Short description. If empty, msghub may use a default text later.",
@@ -1348,7 +1348,7 @@
 					"md": 12,
 					"lg": 12,
 					"xl": 12,
-					"hidden": "((data.msg && data.msg.kind) || data['msg.kind']) !== 'status'"
+					"hidden": "data['msg-kind'] !== 'status'"
 				},
 				"_msgStatusInfo0": {
 					"newLine": true,
@@ -1359,7 +1359,7 @@
 					"md": 12,
 					"lg": 12,
 					"xl": 12,
-					"hidden": "((data.msg && data.msg.kind) || data['msg.kind']) !== 'status'"
+					"hidden": "data['msg-kind'] !== 'status'"
 				},
 				"_msgH4TaskDetails": {
 					"newLine": true,
@@ -1371,9 +1371,9 @@
 					"md": 12,
 					"lg": 12,
 					"xl": 12,
-					"hidden": "((data.msg && data.msg.kind) || data['msg.kind']) !== 'task'"
+					"hidden": "data['msg-kind'] !== 'task'"
 				},
-				"msg.taskTimeBudget": {
+				"msg-taskTimeBudget": {
 					"type": "number",
 					"label": "Estimated time to complete this task",
 					"help": "Enter an estimate of how long this task will take to complete. 0 = unknown and will not be set.",
@@ -1383,9 +1383,9 @@
 					"lg": 3,
 					"xl": 3,
 					"default": 5,
-					"hidden": "((data.msg && data.msg.kind) || data['msg.kind']) !== 'task'"
+					"hidden": "data['msg-kind'] !== 'task'"
 				},
-				"msg.taskTimeBudgetUnit": {
+				"msg-taskTimeBudgetUnit": {
 					"type": "select",
 					"label": "Unit",
 					"xs": 12,
@@ -1398,9 +1398,9 @@
 						{ "label": "Minutes", "value": 60 },
 						{ "label": "Hours", "value": 3600 }
 					],
-					"hidden": "((data.msg && data.msg.kind) || data['msg.kind']) !== 'task'"
+					"hidden": "data['msg-kind'] !== 'task'"
 				},
-				"msg.taskDueIn": {
+				"msg-taskDueIn": {
 					"type": "number",
 					"label": "Due in",
 					"help": "How long after creating the task should it be completed? 0 = no due time will be set.",
@@ -1410,9 +1410,9 @@
 					"lg": 3,
 					"xl": 3,
 					"default": 24,
-					"hidden": "((data.msg && data.msg.kind) || data['msg.kind']) !== 'task'"
+					"hidden": "data['msg-kind'] !== 'task'"
 				},
-				"msg.taskDueInUnit": {
+				"msg-taskDueInUnit": {
 					"type": "select",
 					"label": "Unit",
 					"xs": 12,
@@ -1426,7 +1426,7 @@
 						{ "label": "Hours", "value": 3600 },
 						{ "label": "Days", "value": 86400 }
 					],
-					"hidden": "((data.msg && data.msg.kind) || data['msg.kind']) !== 'task'"
+					"hidden": "data['msg-kind'] !== 'task'"
 				},
 				"_msgH4Audience": {
 					"newLine": true,
@@ -1439,7 +1439,7 @@
 					"lg": 12,
 					"xl": 12
 				},
-				"msg.audienceTags": {
+				"msg-audienceTags": {
 					"newLine": true,
 					"type": "text",
 					"label": "Tags (CSV)",
@@ -1451,7 +1451,7 @@
 					"xl": 6,
 					"default": ""
 				},
-				"msg.audienceChannels": {
+				"msg-audienceChannels": {
 					"type": "text",
 					"label": "Channels (CSV)",
 					"help": "Comma-separated channels. Example: pushover,alexa",
@@ -1473,7 +1473,7 @@
 					"lg": 12,
 					"xl": 12
 				},
-				"msg.cooldownValue": {
+				"msg-cooldownValue": {
 					"newLine": true,
 					"type": "number",
 					"label": "Cooldown",
@@ -1486,7 +1486,7 @@
 					"min": 0,
 					"default": 60
 				},
-				"msg.cooldownUnit": {
+				"msg-cooldownUnit": {
 					"type": "select",
 					"label": "Unit",
 					"xs": 12,
@@ -1501,7 +1501,7 @@
 						{ "label": "Days", "value": 86400 }
 					]
 				},
-				"msg.remindValue": {
+				"msg-remindValue": {
 					"type": "number",
 					"label": "Reminder",
 					"help": "Repeat while the issue is still active (0 = off).",
@@ -1514,7 +1514,7 @@
 					"default": 0,
 					"hidden": "(['threshold','freshness','triggered','nonSettling','session'].indexOf(((data.mode) || data['mode'])) === -1)"
 				},
-				"msg.remindUnit": {
+				"msg-remindUnit": {
 					"type": "select",
 					"label": "Unit",
 					"xs": 12,
@@ -1542,7 +1542,7 @@
 					"lg": 12,
 					"xl": 12
 				},
-				"msg.resetOnNormal": {
+				"msg-resetOnNormal": {
 					"newLine": true,
 					"type": "checkbox",
 					"label": "Auto-remove message(s)",
@@ -1554,7 +1554,7 @@
 					"xl": 6,
 					"default": true
 				},
-					"msg.resetDelayValue": {
+					"msg-resetDelayValue": {
 						"type": "number",
 						"label": "Delay",
 						"help": "When back to normal: wait this long and then remove the message (0 = immediately).",
@@ -1565,9 +1565,9 @@
 					"xl": 3,
 						"min": 0,
 						"default": 0,
-					"hidden": "((data.msg && data.msg.resetOnNormal !== undefined) ? !data.msg.resetOnNormal : !data['msg.resetOnNormal'])"
+					"hidden": "!data['msg-resetOnNormal']"
 				},
-					"msg.resetDelayUnit": {
+					"msg-resetDelayUnit": {
 						"type": "select",
 						"label": "Unit",
 					"xs": 12,
@@ -1582,7 +1582,7 @@
 							{ "label": "Hours", "value": 3600 },
 							{ "label": "Days", "value": 86400 }
 						],
-					"hidden": "((data.msg && data.msg.resetOnNormal !== undefined) ? !data.msg.resetOnNormal : !data['msg.resetOnNormal'])"
+					"hidden": "!data['msg-resetOnNormal']"
 				},
 				"_msgSessionInfo1": {
 					"newLine": true,
@@ -1608,7 +1608,7 @@
 					"xl": 12,
 					"hidden": "((data.mode) || data['mode']) !== 'session'"
 				},
-				"msg.sessionStartEnabled": {
+				"msg-sessionStartEnabled": {
 					"newLine": true,
 					"type": "checkbox",
 					"label": "Create start message",
@@ -1621,7 +1621,7 @@
 					"default": false,
 					"hidden": "((data.mode) || data['mode']) !== 'session'"
 				},
-				"msg.sessionStartKind": {
+				"msg-sessionStartKind": {
 					"newLine": true,
 					"type": "select",
 					"label": "Kind",
@@ -1635,9 +1635,9 @@
 						{ "label": "status", "value": "status" },
 						{ "label": "task", "value": "task" }
 					],
-					"hidden": "((data.mode) || data['mode']) !== 'session' || !((data.msg && data.msg.sessionStartEnabled) || data['msg.sessionStartEnabled'])"
+					"hidden": "((data.mode) || data['mode']) !== 'session' || !(data['msg-sessionStartEnabled'])"
 				},
-				"msg.sessionStartLevel": {
+				"msg-sessionStartLevel": {
 					"type": "select",
 					"label": "Level",
 					"xs": 12,
@@ -1652,9 +1652,9 @@
 						{ "label": "warning", "value": 20 },
 						{ "label": "error", "value": 30 }
 					],
-					"hidden": "((data.mode) || data['mode']) !== 'session' || !((data.msg && data.msg.sessionStartEnabled) || data['msg.sessionStartEnabled'])"
+					"hidden": "((data.mode) || data['mode']) !== 'session' || !(data['msg-sessionStartEnabled'])"
 				},
-				"msg.sessionStartTitle": {
+				"msg-sessionStartTitle": {
 					"newLine": true,
 					"type": "text",
 					"label": "Title (optional)",
@@ -1664,9 +1664,9 @@
 					"lg": 6,
 					"xl": 6,
 					"placeholder": "e.g. Washing machine started",
-					"hidden": "((data.mode) || data['mode']) !== 'session' || !((data.msg && data.msg.sessionStartEnabled) || data['msg.sessionStartEnabled'])"
+					"hidden": "((data.mode) || data['mode']) !== 'session' || !(data['msg-sessionStartEnabled'])"
 				},
-				"msg.sessionStartText": {
+				"msg-sessionStartText": {
 					"type": "text",
 					"label": "Text (optional)",
 					"xs": 12,
@@ -1675,7 +1675,7 @@
 					"lg": 6,
 					"xl": 6,
 					"placeholder": "e.g. Process has started.",
-					"hidden": "((data.mode) || data['mode']) !== 'session' || !((data.msg && data.msg.sessionStartEnabled) || data['msg.sessionStartEnabled'])"
+					"hidden": "((data.mode) || data['mode']) !== 'session' || !(data['msg-sessionStartEnabled'])"
 				},
 				"_msgH4SessionStartAudience": {
 					"newLine": true,
@@ -1687,9 +1687,9 @@
 					"md": 12,
 					"lg": 12,
 					"xl": 12,
-					"hidden": "((data.mode) || data['mode']) !== 'session' || !((data.msg && data.msg.sessionStartEnabled) || data['msg.sessionStartEnabled'])"
+					"hidden": "((data.mode) || data['mode']) !== 'session' || !(data['msg-sessionStartEnabled'])"
 				},
-				"msg.sessionStartAudienceTags": {
+				"msg-sessionStartAudienceTags": {
 					"newLine": true,
 					"type": "text",
 					"label": "Tags (CSV)",
@@ -1700,9 +1700,9 @@
 					"lg": 6,
 					"xl": 6,
 					"default": "",
-					"hidden": "((data.mode) || data['mode']) !== 'session' || !((data.msg && data.msg.sessionStartEnabled) || data['msg.sessionStartEnabled'])"
+					"hidden": "((data.mode) || data['mode']) !== 'session' || !(data['msg-sessionStartEnabled'])"
 				},
-				"msg.sessionStartAudienceChannels": {
+				"msg-sessionStartAudienceChannels": {
 					"type": "text",
 					"label": "Channels (CSV)",
 					"help": "Comma-separated channels. Example: pushover,alexa",
@@ -1712,14 +1712,14 @@
 					"lg": 6,
 					"xl": 6,
 					"default": "",
-					"hidden": "((data.mode) || data['mode']) !== 'session' || !((data.msg && data.msg.sessionStartEnabled) || data['msg.sessionStartEnabled'])"
+					"hidden": "((data.mode) || data['mode']) !== 'session' || !(data['msg-sessionStartEnabled'])"
 				}
 			}
 		},
 		"expertJson": {
 			"type": "panel",
 			"label": "Expert",
-			"hidden": "(((data.managedMeta && data.managedMeta.managedMessage) || data['managedMeta.managedMessage']) && (((data.managedMeta && data.managedMeta.managedBy) || data['managedMeta.managedBy'] || '').indexOf('IngestStates.') === -1)) || !(((window.sessionStorage && window.sessionStorage.getItem && window.sessionStorage.getItem('App.expertMode') === 'true')) || (_system && _system.expertMode))",
+			"hidden": "((data['managedMeta-managedMessage']) && ((data['managedMeta-managedBy'] || '').indexOf('IngestStates.') === -1)) || !(((window.sessionStorage && window.sessionStorage.getItem && window.sessionStorage.getItem('App.expertMode') === 'true')) || (_system && _system.expertMode))",
 			"items": {
 				"_expH0": {
 					"type": "header",

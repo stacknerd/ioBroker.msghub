@@ -99,6 +99,7 @@ class MsgStore {
 	 * @param {number} [options.deleteClosedIntervalMs] Interval for checking for closed messages (default: 10000).
 	 * @param {object} [options.storage] Options forwarded to `MsgStorage` (e.g. `baseDir`, `fileName`, `writeIntervalMs`).
 	 * @param {object} [options.archive] Options forwarded to `MsgArchive` (e.g. `baseDir`, `fileExtension`, `flushIntervalMs`).
+	 * @param {object} [options.stats] Options forwarded to `MsgStats` (e.g. `rollupKeepDays`).
 	 * @param {any} [options.ai] Optional AI helper instance.
 	 */
 	constructor(adapter, msgConstants, msgFactory, options = {}) {
@@ -114,6 +115,7 @@ class MsgStore {
 			deleteClosedIntervalMs = 1000 * 10,
 			storage = {},
 			archive = {},
+			stats = {},
 			ai = null,
 		} = options || {};
 
@@ -155,7 +157,7 @@ class MsgStore {
 		this.fullList = Array.isArray(initialMessages) ? initialMessages : [];
 
 		// Stats (read-only insights + rollups).
-		this.msgStats = new MsgStats(this.adapter, this.msgConstants, this);
+		this.msgStats = new MsgStats(this.adapter, this.msgConstants, this, stats || {});
 
 		// Pruning and notification timers (timer starts in `init()`).
 		this.lastPruneAt = 0;

@@ -164,19 +164,18 @@ Stored `managedBy` is always the plugin base object id (`options.pluginBaseObjec
 
 Storage:
 
-- The metadata is stored on the target object under `common.custom.<msghubInstance>.managedMeta` (example: `common.custom.msghub.0.managedMeta`).
-- `managedMeta.managedMessage` is set to `true` while the plugin actively manages the object (used by the Admin UI to show/hide the “managed automatically” notice).
+- The metadata is stored as flat keys under `common.custom.<msghubInstance>` (example: `common.custom.msghub.0`):
+  - `managedMeta-managedBy`
+  - `managedMeta-managedText`
+  - `managedMeta-managedSince`
+  - `managedMeta-managedMessage` (set to `true` while the plugin actively manages the object; used by the Admin UI)
 - The watchlist is written as a JSON string array into `<Type>.<instanceId>.watchlist` (example: `IngestHue.0.watchlist`).
   The watchlist state is created lazily on the first `applyReported()` call (plugins that never report managed objects do not create a watchlist).
 
 Cleanup / stale entries:
 
-- When a plugin instance is disabled/unregistered, MsgHub clears its watchlist state immediately and then (in the background) marks all previously listed objects as “no longer managed” (`managedMeta.managedMessage=false`). When `common.custom.<ns>.mode` is empty and `common.custom.<ns>.enabled===true`, MsgHub also flips `enabled` to `false`.
-- Additionally, a slow background janitor periodically scans `common.custom.<ns>.managedMeta` entries and applies the same “no longer managed” policy when objects are not listed in the corresponding watchlist (or the watchlist does not exist).
-
-Storage:
-
-- The metadata is stored on the target object under `common.custom.<msghubInstance>.managedMeta` (example: `common.custom.msghub.0.managedMeta`).
+- When a plugin instance is disabled/unregistered, MsgHub clears its watchlist state immediately and then (in the background) marks all previously listed objects as “no longer managed” (`managedMeta-managedMessage=false`). When `common.custom.<ns>.mode` is empty and `common.custom.<ns>.enabled===true`, MsgHub also flips `enabled` to `false`.
+- Additionally, a slow background janitor periodically scans `common.custom.<ns>` for `managedMeta-managedBy` entries and applies the same “no longer managed” policy when objects are not listed in the corresponding watchlist (or the watchlist does not exist).
 
 ---
 

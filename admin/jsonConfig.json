@@ -48,6 +48,139 @@
 					"md": 6,
 					"lg": 4,
 					"xl": 4
+				},
+				"archiveFlushIntervalSec": {
+					"type": "number",
+					"label": "flushInterval (seconds)",
+					"help": "Archive flush interval in seconds (0 = immediate).",
+					"default": 10,
+					"min": 0,
+					"max": 3600,
+					"step": 1,
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 4,
+					"xl": 4
+				},
+				"archiveMaxBatchSize": {
+					"type": "number",
+					"label": "maxBatchSize (pieces)",
+					"help": "Max queued archive events per message ref before forced flush.",
+					"default": 200,
+					"min": 1,
+					"max": 5000,
+					"step": 1,
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 4,
+					"xl": 4
+				}
+			}
+		},
+		"store": {
+			"type": "panel",
+			"label": "Store",
+			"items": {
+				"pruneIntervalSec": {
+					"type": "number",
+					"label": "pruneInterval (sec)",
+					"help": "Throttle window for pruning expired messages (seconds).",
+					"default": 30,
+					"min": 0,
+					"max": 3600,
+					"step": 1,
+					"newLine": true,
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 4,
+					"xl": 4
+				},
+				"hardDeleteAfterHours": {
+					"type": "number",
+					"label": "hardDeleteAfter (hours)",
+					"help": "Hard-delete retention for messages in lifecycle.state deleted/expired (hours).",
+					"default": 72,
+					"min": 0,
+					"max": 8760,
+					"step": 1,
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 4,
+					"xl": 4
+				},
+				"hardDeleteBatchSize": {
+					"type": "number",
+					"label": "hardDeleteBatchSize (pieces)",
+					"help": "Max messages hard-deleted per run.",
+					"default": 50,
+					"min": 1,
+					"max": 5000,
+					"step": 1,
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 4,
+					"xl": 4
+				},
+				"hardDeleteStartupDelaySec": {
+					"type": "number",
+					"label": "hardDeleteStartupDelay (sec)",
+					"help": "Delay hard-deletes after startup to reduce I/O spikes (seconds).",
+					"default": 60,
+					"min": 0,
+					"max": 3600,
+					"step": 1,
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 4,
+					"xl": 4
+				}
+			}
+		},
+		"storage": {
+			"type": "panel",
+			"label": "Storage",
+			"items": {
+				"writeIntervalMs": {
+					"type": "number",
+					"label": "writeInterval (ms)",
+					"help": "Throttle window for persisting the message list to file storage (0 = immediate).",
+					"default": 10000,
+					"min": 0,
+					"max": 600000,
+					"step": 100,
+					"newLine": true,
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 4,
+					"xl": 4
+				}
+			}
+		},
+		"stats": {
+			"type": "panel",
+			"label": "Stats",
+			"items": {
+				"rollupKeepDays": {
+					"type": "number",
+					"label": "rollupKeepDays (days)",
+					"help": "Retention for stats rollup buckets (days).",
+					"default": 400,
+					"min": 1,
+					"max": 5000,
+					"step": 1,
+					"newLine": true,
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 4,
+					"xl": 4
 				}
 			}
 		},

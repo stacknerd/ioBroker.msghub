@@ -421,8 +421,7 @@ Discovery:
 
 Normalization:
 
-- The engine accepts both nested objects and “dot keys” (e.g. `"msg.title"`).
-- Dot keys are converted into nested objects before rule construction.
+- The engine expects flat keys (e.g. `"msg-title"`, `"thr-mode"`). Nested objects and dot keys are ignored.
 - Invalid configs are ignored rule-by-rule (best-effort) with a warning; there is no global failure.
 
 Subscriptions:
@@ -485,8 +484,8 @@ The writer provides:
 - reminder scheduling via `timing.remindEvery`
 - cooldown logic on reopen (delay/avoid notifications but keep store truthful)
 - task timing mappings (only for `kind="task"`):
-  - `msg.taskTimeBudget*` → `timing.timeBudget` (duration in ms)
-  - `msg.taskDueIn*` → `timing.dueAt` (timestamp = now + duration)
+  - `msg-taskTimeBudget*` → `timing.timeBudget` (duration in ms)
+  - `msg-taskDueIn*` → `timing.dueAt` (timestamp = now + duration)
   - `dueAt` is set when a message is created/reopened and is not shifted on updates (filled if missing)
 - delayed auto-close (`resetOnNormal` + `resetDelay*`) with persistence:
   - schedule stored in `message.metrics` under an internal key
@@ -590,7 +589,7 @@ Metrics patches are intentionally silent and throttled:
 
 ### Rule details (technical)
 
-#### Freshness (`mode=freshness`, config block `fresh.*`)
+#### Freshness (`mode=freshness`, config block `fresh-*`)
 
 - `evaluateBy`: `ts` (update) or `lc` (change)
 - Threshold: `everyValue` × `everyUnit` seconds
@@ -610,12 +609,12 @@ Bootstrap:
 
 Note: Freshness relies on periodic ticks.
 
-#### Threshold (`mode=threshold`, config block `thr.*`)
+#### Threshold (`mode=threshold`, config block `thr-*`)
 
 Modes:
 
-- `lt` / `gt`: single boundary (`thr.value`)
-- `outside` / `inside`: range (`thr.min`, `thr.max`)
+- `lt` / `gt`: single boundary (`thr-value`)
+- `outside` / `inside`: range (`thr-min`, `thr-max`)
 - `truthy` / `falsy`: boolean interpretation of the value
 
 Parsing:
@@ -628,7 +627,7 @@ Hysteresis:
 - Implemented via different “active” and “ok” regions.
 - Some combinations can be nonsensical (e.g. range too small for hysteresis); treated as user error but evaluated safely.
 
-Minimum duration (`thr.minDuration*`):
+Minimum duration (`thr-minDuration*`):
 
 - Delays **message creation** until the condition has been active continuously for the configured duration.
 - Implemented via persistent timers (`TimerService`) so it survives restarts and works with event-only evaluation.
@@ -649,11 +648,11 @@ Actions:
 - The Threshold rule provides `ack` and `snooze (4h)`.
 - If auto-remove is disabled, the MessageWriter injects `close` so the message remains dismissible.
 
-#### Triggered (`mode=triggered`, config block `trg.*`)
+#### Triggered (`mode=triggered`, config block `trg-*`)
 
 Trigger activation:
 
-- Trigger defined by `trg.id` + operator/type/value.
+- Trigger defined by `trg-id` + operator/type/value.
 - Window starts only on rising edge (inactive → active).
 
 Operator/value matching:
@@ -664,8 +663,8 @@ Operator/value matching:
 
 Window and expectation:
 
-- Window duration: `trg.windowValue` × `trg.windowUnit` seconds.
-- Expectation (`trg.expectation`):
+- Window duration: `trg-windowValue` × `trg-windowUnit` seconds.
+- Expectation (`trg-expectation`):
   - `changed`: uses `lc` baseline (value change)
   - `deltaUp` / `deltaDown`: numeric delta vs baseline
   - `thresholdGte` / `thresholdLte`: numeric threshold
@@ -692,7 +691,7 @@ Metrics:
 - `state-value`: target current value (best-effort normalized)
 - `trigger-value`: trigger current value
 
-#### NonSettling (`mode=nonSettling`, config block `ns.*`)
+#### NonSettling (`mode=nonSettling`, config block `nonset-*`)
 
 Profiles:
 
@@ -721,25 +720,25 @@ Metrics (trend and activity reuse the same keys):
 - `state-value`
 - `trendStartedAt`, `trendStartValue`, `trendMin`, `trendMax`, `trendMinToMax`, `trendDir`
 
-#### Session (`mode=session`, config block `sess.*`)
+#### Session (`mode=session`, config block `sess-*`)
 
 Inputs:
 
 - Power datapoint: `targetId`
-- Optional gate: `sess.onOffId` (+ gate logic)
-- Optional energy counter: `sess.energyCounterId`
-- Optional price-per-unit: `sess.pricePerKwhId`
+- Optional gate: `sess-onOffId` (+ gate logic)
+- Optional energy counter: `sess-energyCounterId`
+- Optional price-per-unit: `sess-pricePerKwhId`
 
 Start/stop detection:
 
-- Start: above `sess.startThreshold` (optional hold: `sess.startMinHold*`)
-- Stop: below `sess.stopThreshold` (optional delay: `sess.stopDelay*`)
-- Optional: `sess.cancelStopIfAboveStopThreshold` cancels a pending stop timer when power rises again
+- Start: above `sess-startThreshold` (optional hold: `sess-startMinHold*`)
+- Stop: below `sess-stopThreshold` (optional delay: `sess-stopDelay*`)
+- Optional: `sess-cancelStopIfAboveStopThreshold` cancels a pending stop timer when power rises again
 - Gate off ends the session immediately
 
 Messages:
 
-- Start message ref suffix `_start` (optional via `msg.sessionStartEnabled`)
+- Start message ref suffix `_start` (optional via `msg-sessionStartEnabled`)
 - End message ref (always)
 - Start message is soft-deleted when the end message is created
 - Previous end message is closed when a new session starts
@@ -771,60 +770,60 @@ General:
 - `enabled` (boolean): rule enabled/disabled
 - `mode` (string): `threshold|freshness|triggered|nonSettling|session`
 
-Message settings (`msg.*`):
+Message settings (`msg-*`):
 
-- `msg.kind`: `status|task`
-- `msg.level`: `0|10|20|30` (none/notice/warning/error)
-- `msg.title`, `msg.text`
-- `msg.audienceTags`, `msg.audienceChannels` (CSV strings)
-- `msg.remindValue`, `msg.remindUnit` (seconds per unit)
-- `msg.resetOnNormal`, `msg.resetDelayValue`, `msg.resetDelayUnit` (seconds per unit)
-- `msg.cooldownValue`, `msg.cooldownUnit` (seconds per unit)
+- `msg-kind`: `status|task`
+- `msg-level`: `0|10|20|30` (none/notice/warning/error)
+- `msg-title`, `msg-text`
+- `msg-audienceTags`, `msg-audienceChannels` (CSV strings)
+- `msg-remindValue`, `msg-remindUnit` (seconds per unit)
+- `msg-resetOnNormal`, `msg-resetDelayValue`, `msg-resetDelayUnit` (seconds per unit)
+- `msg-cooldownValue`, `msg-cooldownUnit` (seconds per unit)
 
-Session start message settings (`msg.sessionStart*`):
+Session start message settings (`msg-sessionStart*`):
 
-- `msg.sessionStartEnabled`
-- `msg.sessionStartKind`, `msg.sessionStartLevel`, `msg.sessionStartTitle`, `msg.sessionStartText`
-- `msg.sessionStartAudienceTags`, `msg.sessionStartAudienceChannels`
+- `msg-sessionStartEnabled`
+- `msg-sessionStartKind`, `msg-sessionStartLevel`, `msg-sessionStartTitle`, `msg-sessionStartText`
+- `msg-sessionStartAudienceTags`, `msg-sessionStartAudienceChannels`
 
-Freshness (`fresh.*`):
+Freshness (`fresh-*`):
 
-- `fresh.everyValue`, `fresh.everyUnit` (seconds per unit)
-- `fresh.evaluateBy`: `ts|lc`
+- `fresh-everyValue`, `fresh-everyUnit` (seconds per unit)
+- `fresh-evaluateBy`: `ts|lc`
 
-Threshold (`thr.*`):
+Threshold (`thr-*`):
 
-- `thr.mode`: `lt|gt|outside|inside|truthy|falsy`
-- `thr.value` (for `lt|gt`)
-- `thr.min`, `thr.max` (for `outside|inside`)
-- `thr.hysteresis`
-- `thr.minDurationValue`, `thr.minDurationUnit` (seconds per unit)
+- `thr-mode`: `lt|gt|outside|inside|truthy|falsy`
+- `thr-value` (for `lt|gt`)
+- `thr-min`, `thr-max` (for `outside|inside`)
+- `thr-hysteresis`
+- `thr-minDurationValue`, `thr-minDurationUnit` (seconds per unit)
 
-Triggered (`trg.*`):
+Triggered (`trg-*`):
 
-- `trg.id` (trigger state id)
-- `trg.operator`: `eq|neq|gt|lt|truthy|falsy`
-- `trg.valueType`: `boolean|number|string`
-- compare values (depending on valueType): `trg.valueBool|trg.valueNumber|trg.valueString`
-- `trg.windowValue`, `trg.windowUnit` (seconds per unit)
-- `trg.expectation`: `changed|deltaUp|deltaDown|thresholdGte|thresholdLte`
-- `trg.minDelta` (delta expectations)
-- `trg.threshold` (threshold expectations)
+- `trg-id` (trigger state id)
+- `trg-operator`: `eq|neq|gt|lt|truthy|falsy`
+- `trg-valueType`: `boolean|number|string`
+- compare values (depending on valueType): `trg-valueBool|trg-valueNumber|trg-valueString`
+- `trg-windowValue`, `trg-windowUnit` (seconds per unit)
+- `trg-expectation`: `changed|deltaUp|deltaDown|thresholdGte|thresholdLte`
+- `trg-minDelta` (delta expectations)
+- `trg-threshold` (threshold expectations)
 
-NonSettling (`ns.*`):
+NonSettling (`nonset-*`):
 
-- `ns.profile`: `activity|trend`
-- `ns.minDelta`
-- activity-only: `ns.maxContinuousValue`, `ns.maxContinuousUnit`, `ns.quietGapValue`, `ns.quietGapUnit`
-- trend-only: `ns.direction`, `ns.trendWindowValue`, `ns.trendWindowUnit`, `ns.minTotalDelta`
+- `nonset-profile`: `activity|trend`
+- `nonset-minDelta`
+- activity-only: `nonset-maxContinuousValue`, `nonset-maxContinuousUnit`, `nonset-quietGapValue`, `nonset-quietGapUnit`
+- trend-only: `nonset-direction`, `nonset-trendWindowValue`, `nonset-trendWindowUnit`, `nonset-minTotalDelta`
 
-Session (`sess.*`):
+Session (`sess-*`):
 
-- gate: `sess.onOffId`, `sess.onOffActive` (`truthy|falsy|eq`), `sess.onOffValue` (string compare value for `eq`)
-- power thresholds: `sess.startThreshold`, `sess.stopThreshold`
-- debounce: `sess.startMinHoldValue`, `sess.startMinHoldUnit`, `sess.stopDelayValue`, `sess.stopDelayUnit`
-- stop canceling: `sess.cancelStopIfAboveStopThreshold`
-- optional metrics inputs: `sess.energyCounterId`, `sess.pricePerKwhId`
+- gate: `sess-onOffId`, `sess-onOffActive` (`truthy|falsy|eq`), `sess-onOffValue` (string compare value for `eq`)
+- power thresholds: `sess-startThreshold`, `sess-stopThreshold`
+- debounce: `sess-startMinHoldValue`, `sess-startMinHoldUnit`, `sess-stopDelayValue`, `sess-stopDelayUnit`
+- stop canceling: `sess-cancelStopIfAboveStopThreshold`
+- optional metrics inputs: `sess-energyCounterId`, `sess-pricePerKwhId`
 
 ---
 

@@ -776,59 +776,23 @@
 					if (!cfg || typeof cfg !== 'object') {
 						return undefined;
 					}
-					const parts = String(path || '').split('.').filter(Boolean);
-					if (parts.length === 0) {
-						return undefined;
-					}
-					let cur = cfg;
-					for (const p of parts) {
-						if (!cur || typeof cur !== 'object' || !Object.prototype.hasOwnProperty.call(cur, p)) {
-							return cfg[path];
-						}
-						cur = cur[p];
-					}
-					return cur;
+					return cfg[path];
 				}
 
 				function isPlainObject(value) {
 					return !!value && typeof value === 'object' && !Array.isArray(value);
 				}
 
-				function canonicalizeIngestStatesCustom(custom) {
+				function sanitizeIngestStatesCustom(custom) {
 					const out = JSON.parse(JSON.stringify(custom || {}));
 					if (!isPlainObject(out)) {
 						return {};
 					}
 
-					const prefixes = ['thr', 'fresh', 'trg', 'ns', 'sess', 'msg'];
-					const hasPrefix = key => prefixes.some(p => key.startsWith(`${p}.`));
-
 					for (const [key, value] of Object.entries(out)) {
-						if (typeof key !== 'string' || !key.includes('.') || !hasPrefix(key)) {
-							continue;
-						}
-
-						const parts = key.split('.').filter(Boolean);
-						if (parts.length < 2) {
+						if (typeof key !== 'string' || !key || key.includes('.') || isPlainObject(value)) {
 							delete out[key];
-							continue;
 						}
-
-						let cur = out;
-						for (let i = 0; i < parts.length - 1; i += 1) {
-							const p = parts[i];
-							if (!isPlainObject(cur[p])) {
-								cur[p] = {};
-							}
-							cur = cur[p];
-						}
-
-						const leaf = parts[parts.length - 1];
-						if (!Object.prototype.hasOwnProperty.call(cur, leaf)) {
-							cur[leaf] = value;
-						}
-
-						delete out[key];
 					}
 
 					return out;
@@ -851,9 +815,9 @@
 				}
 
 				if (modeStr === 'triggered') {
-					const trgId = String(readCfg(cfg, 'trg.id') || '').trim();
+					const trgId = String(readCfg(cfg, 'trg-id') || '').trim();
 					if (!trgId) {
-						warnings.push('WARNING: missing trg.id detected. This field is required for triggered rules.');
+						warnings.push('WARNING: missing trg-id detected. This field is required for triggered rules.');
 					}
 				}
 
@@ -960,28 +924,28 @@
 				lines.push(`Rule type: ${mode || '(not set)'}`);
 				lines.push('');
 
-				const title = String(readCfg(cfg, 'msg.title') || '').trim();
-				const text = String(readCfg(cfg, 'msg.text') || '').trim();
+				const title = String(readCfg(cfg, 'msg-title') || '').trim();
+				const text = String(readCfg(cfg, 'msg-text') || '').trim();
 				lines.push(`Message title: ${title ? `"${title}"` : 'default'}`);
 				lines.push(`Message text: ${text ? `"${text}"` : 'default'}`);
 
-				const tags = String(readCfg(cfg, 'msg.audienceTags') || '').trim();
-				const channels = String(readCfg(cfg, 'msg.audienceChannels') || '').trim();
+				const tags = String(readCfg(cfg, 'msg-audienceTags') || '').trim();
+				const channels = String(readCfg(cfg, 'msg-audienceChannels') || '').trim();
 				if (tags || channels) {
 					lines.push(`Audience: ${[tags ? `tags=[${tags}]` : null, channels ? `channels=[${channels}]` : null].filter(Boolean).join(' ')}`);
 				} else {
 					lines.push('Audience: default');
 				}
 
-				const resetOnNormal = readCfg(cfg, 'msg.resetOnNormal');
+				const resetOnNormal = readCfg(cfg, 'msg-resetOnNormal');
 				lines.push(`Auto-remove on normal: ${resetOnNormal === false ? 'off' : 'on'}`);
-				const resetDelay = formatDurationValueUnit(readCfg(cfg, 'msg.resetDelayValue'), readCfg(cfg, 'msg.resetDelayUnit'));
+				const resetDelay = formatDurationValueUnit(readCfg(cfg, 'msg-resetDelayValue'), readCfg(cfg, 'msg-resetDelayUnit'));
 				if (resetDelay) {
 					lines.push(`Reset delay: ${resetDelay}`);
 				}
-				const remind = formatDurationValueUnit(readCfg(cfg, 'msg.remindValue'), readCfg(cfg, 'msg.remindUnit'));
+				const remind = formatDurationValueUnit(readCfg(cfg, 'msg-remindValue'), readCfg(cfg, 'msg-remindUnit'));
 				lines.push(`Reminder: ${remind ? `every ${remind}` : 'off'}`);
-				const cooldown = formatDurationValueUnit(readCfg(cfg, 'msg.cooldownValue'), readCfg(cfg, 'msg.cooldownUnit'));
+				const cooldown = formatDurationValueUnit(readCfg(cfg, 'msg-cooldownValue'), readCfg(cfg, 'msg-cooldownUnit'));
 				if (cooldown) {
 					lines.push(`Cooldown after close: ${cooldown}`);
 				}
@@ -990,12 +954,12 @@
 				lines.push('Rule behavior:');
 
 				if (mode === 'threshold') {
-					const thrMode = String(readCfg(cfg, 'thr.mode') || '').trim() || 'lt';
-					const h = readCfg(cfg, 'thr.hysteresis');
-					const minDur = formatDurationValueUnit(readCfg(cfg, 'thr.minDurationValue'), readCfg(cfg, 'thr.minDurationUnit'));
-					const value = readCfg(cfg, 'thr.value');
-					const min = readCfg(cfg, 'thr.min');
-					const max = readCfg(cfg, 'thr.max');
+					const thrMode = String(readCfg(cfg, 'thr-mode') || '').trim() || 'lt';
+					const h = readCfg(cfg, 'thr-hysteresis');
+					const minDur = formatDurationValueUnit(readCfg(cfg, 'thr-minDurationValue'), readCfg(cfg, 'thr-minDurationUnit'));
+					const value = readCfg(cfg, 'thr-value');
+					const min = readCfg(cfg, 'thr-min');
+					const max = readCfg(cfg, 'thr-max');
 
 					if (thrMode === 'gt') {
 						lines.push(`- Alerts when the value is greater than ${value}.`);
@@ -1020,13 +984,13 @@
 					}
 					lines.push('- Actions: ack, snooze (4h), close (only when auto-remove is off).');
 				} else if (mode === 'freshness') {
-					const evaluateBy = readCfg(cfg, 'fresh.evaluateBy') === 'lc' ? 'change (lc)' : 'update (ts)';
-					const thr = formatDurationValueUnit(readCfg(cfg, 'fresh.everyValue'), readCfg(cfg, 'fresh.everyUnit'));
+					const evaluateBy = readCfg(cfg, 'fresh-evaluateBy') === 'lc' ? 'change (lc)' : 'update (ts)';
+					const thr = formatDurationValueUnit(readCfg(cfg, 'fresh-everyValue'), readCfg(cfg, 'fresh-everyUnit'));
 					lines.push(`- Alerts when the state has no ${evaluateBy} for longer than ${thr || '(not set)'}.`);
 					lines.push('- Actions: ack, snooze (4h), close (only when auto-remove is off).');
 				} else if (mode === 'triggered') {
-					const windowDur = formatDurationValueUnit(readCfg(cfg, 'trg.windowValue'), readCfg(cfg, 'trg.windowUnit'));
-					const exp = String(readCfg(cfg, 'trg.expectation') || '').trim();
+					const windowDur = formatDurationValueUnit(readCfg(cfg, 'trg-windowValue'), readCfg(cfg, 'trg-windowUnit'));
+					const exp = String(readCfg(cfg, 'trg-expectation') || '').trim();
 					lines.push('- Starts a time window when the trigger becomes active.');
 					lines.push(`- If the expectation is not met within ${windowDur || '(not set)'}, it creates a message.`);
 					if (exp) {
@@ -1034,7 +998,7 @@
 					}
 					lines.push('- Actions: ack, snooze (4h), close (only when auto-remove is off).');
 				} else if (mode === 'nonSettling') {
-					const profile = String(readCfg(cfg, 'ns.profile') || '').trim();
+					const profile = String(readCfg(cfg, 'nonset-profile') || '').trim();
 					lines.push(`- Non-settling profile: ${profile || '(not set)'}.`);
 					lines.push('- Creates a message when the value is not stable/trending as configured, and closes on recovery.');
 					lines.push('- Actions: ack, snooze (4h), close (only when auto-remove is off).');
@@ -1047,7 +1011,7 @@
 				}
 
 				lines.push('');
-				lines.push('Note: Bulk Apply never reads/writes managedMeta.');
+				lines.push('Note: Bulk Apply never reads/writes managedMeta-*.');
 				return lines.join('\n');
 			}
 
@@ -1072,82 +1036,82 @@
 							enabled: true,
 							mode: 'threshold',
 
-							// Threshold (thr.*)
-							'thr.mode': 'lt',
-							'thr.value': 10,
-							'thr.min': 0,
-							'thr.max': 100,
-							'thr.hysteresis': 0,
-							'thr.minDurationValue': 0,
-							'thr.minDurationUnit': 60,
+							// Threshold (thr-*)
+							'thr-mode': 'lt',
+							'thr-value': 10,
+							'thr-min': 0,
+							'thr-max': 100,
+							'thr-hysteresis': 0,
+							'thr-minDurationValue': 0,
+							'thr-minDurationUnit': 60,
 
-							// Freshness (fresh.*)
-							'fresh.everyValue': 60,
-							'fresh.everyUnit': 60,
-							'fresh.evaluateBy': 'ts',
+							// Freshness (fresh-*)
+							'fresh-everyValue': 60,
+							'fresh-everyUnit': 60,
+							'fresh-evaluateBy': 'ts',
 
-							// Triggered / dependency (trg.*)
-							'trg.id': '',
-							'trg.operator': 'eq',
-							'trg.valueType': 'boolean',
-							'trg.valueBool': true,
-							'trg.valueNumber': 0,
-							'trg.valueString': '',
-							'trg.windowValue': 5,
-							'trg.windowUnit': 60,
-							'trg.expectation': 'changed',
-							'trg.minDelta': 0,
-							'trg.threshold': 0,
+							// Triggered / dependency (trg-*)
+							'trg-id': '',
+							'trg-operator': 'eq',
+							'trg-valueType': 'boolean',
+							'trg-valueBool': true,
+							'trg-valueNumber': 0,
+							'trg-valueString': '',
+							'trg-windowValue': 5,
+							'trg-windowUnit': 60,
+							'trg-expectation': 'changed',
+							'trg-minDelta': 0,
+							'trg-threshold': 0,
 
-							// Non-settling (ns.*)
-							'ns.profile': 'activity',
-							'ns.minDelta': 0,
-							'ns.maxContinuousValue': 180,
-							'ns.maxContinuousUnit': 60,
-							'ns.quietGapValue': 15,
-							'ns.quietGapUnit': 60,
-							'ns.direction': 'up',
-							'ns.trendWindowValue': 6,
-							'ns.trendWindowUnit': 3600,
-							'ns.minTotalDelta': 0,
+							// Non-settling (nonset-*)
+							'nonset-profile': 'activity',
+							'nonset-minDelta': 0,
+							'nonset-maxContinuousValue': 180,
+							'nonset-maxContinuousUnit': 60,
+							'nonset-quietGapValue': 15,
+							'nonset-quietGapUnit': 60,
+							'nonset-direction': 'up',
+							'nonset-trendWindowValue': 6,
+							'nonset-trendWindowUnit': 3600,
+							'nonset-minTotalDelta': 0,
 
-							// Session (sess.*)
-							'sess.onOffId': '',
-							'sess.onOffActive': 'truthy',
-							'sess.onOffValue': 'true',
-							'sess.startThreshold': 50,
-							'sess.startMinHoldValue': 0,
-							'sess.startMinHoldUnit': 1,
-							'sess.stopThreshold': 15,
-							'sess.stopDelayValue': 5,
-							'sess.stopDelayUnit': 60,
-							'sess.cancelStopIfAboveStopThreshold': true,
-							'sess.energyCounterId': '',
-							'sess.pricePerKwhId': '',
+							// Session (sess-*)
+							'sess-onOffId': '',
+							'sess-onOffActive': 'truthy',
+							'sess-onOffValue': 'true',
+							'sess-startThreshold': 50,
+							'sess-startMinHoldValue': 0,
+							'sess-startMinHoldUnit': 1,
+							'sess-stopThreshold': 15,
+							'sess-stopDelayValue': 5,
+							'sess-stopDelayUnit': 60,
+							'sess-cancelStopIfAboveStopThreshold': true,
+							'sess-energyCounterId': '',
+							'sess-pricePerKwhId': '',
 
-							// Message (msg.*)
-							'msg.kind': 'status',
-							'msg.level': 10,
-							'msg.title': '',
-							'msg.text': '',
-							'msg.audienceTags': '',
-							'msg.audienceChannels': '',
-							'msg.cooldownValue': 60,
-							'msg.cooldownUnit': 60,
-							'msg.remindValue': 0,
-							'msg.remindUnit': 3600,
-							'msg.resetOnNormal': true,
-							'msg.resetDelayValue': 0,
-							'msg.resetDelayUnit': 60,
+							// Message (msg-*)
+							'msg-kind': 'status',
+							'msg-level': 10,
+							'msg-title': '',
+							'msg-text': '',
+							'msg-audienceTags': '',
+							'msg-audienceChannels': '',
+							'msg-cooldownValue': 60,
+							'msg-cooldownUnit': 60,
+							'msg-remindValue': 0,
+							'msg-remindUnit': 3600,
+							'msg-resetOnNormal': true,
+							'msg-resetDelayValue': 0,
+							'msg-resetDelayUnit': 60,
 
-							// Session start message (msg.sessionStart*)
-							'msg.sessionStartEnabled': false,
-							'msg.sessionStartKind': 'status',
-							'msg.sessionStartLevel': 10,
-							'msg.sessionStartTitle': '',
-							'msg.sessionStartText': '',
-							'msg.sessionStartAudienceTags': '',
-							'msg.sessionStartAudienceChannels': '',
+							// Session start message (msg-sessionStart*)
+							'msg-sessionStartEnabled': false,
+							'msg-sessionStartKind': 'status',
+							'msg-sessionStartLevel': 10,
+							'msg-sessionStartTitle': '',
+							'msg-sessionStartText': '',
+							'msg-sessionStartAudienceTags': '',
+							'msg-sessionStartAudienceChannels': '',
 						};
 
 				const elCustom = h('textarea', {
@@ -1159,12 +1123,12 @@
 					const raw = typeof initial.customJson === 'string' ? initial.customJson : '';
 					if (raw && raw.trim()) {
 						try {
-							elCustom.value = JSON.stringify(canonicalizeIngestStatesCustom(JSON.parse(raw)), null, 2);
+							elCustom.value = JSON.stringify(sanitizeIngestStatesCustom(JSON.parse(raw)), null, 2);
 						} catch {
 							elCustom.value = raw;
 						}
 					} else {
-						elCustom.value = JSON.stringify(canonicalizeIngestStatesCustom(defaultCustom), null, 2);
+						elCustom.value = JSON.stringify(sanitizeIngestStatesCustom(defaultCustom), null, 2);
 					}
 				}
 
@@ -1332,7 +1296,7 @@
 							setStatus('No MsgHub Custom config found on that object.');
 							return;
 						}
-						elCustom.value = JSON.stringify(canonicalizeIngestStatesCustom(res.custom), null, 2);
+						elCustom.value = JSON.stringify(sanitizeIngestStatesCustom(res.custom), null, 2);
 						updateLs();
 						updateDescription();
 						invalidatePreview();
@@ -1349,7 +1313,7 @@
 					if (!ensureEnabledOrWarn()) {
 						return;
 					}
-					elCustom.value = JSON.stringify(canonicalizeIngestStatesCustom(defaultCustom), null, 2);
+					elCustom.value = JSON.stringify(sanitizeIngestStatesCustom(defaultCustom), null, 2);
 					updateLs();
 					updateDescription();
 					invalidatePreview();
@@ -1368,7 +1332,7 @@
 				}
 					let custom;
 					try {
-						custom = canonicalizeIngestStatesCustom(parseCustom());
+						custom = sanitizeIngestStatesCustom(parseCustom());
 						elCustom.value = JSON.stringify(custom, null, 2);
 						updateLs();
 						updateDescription();
@@ -1413,7 +1377,7 @@
 				}
 					let custom;
 					try {
-						custom = canonicalizeIngestStatesCustom(parseCustom());
+						custom = sanitizeIngestStatesCustom(parseCustom());
 						elCustom.value = JSON.stringify(custom, null, 2);
 						updateLs();
 						updateDescription();

@@ -354,7 +354,11 @@ This lets ingest plugins report which ioBroker objects they “own”/monitor (t
 
 Where it is stored:
 
-- `obj.common.custom[<adapter namespace>].managedMeta` (example key: `common.custom.msghub.0.managedMeta`)
+- under `obj.common.custom[<adapter namespace>]` as flat keys:
+  - `managedMeta-managedBy`
+  - `managedMeta-managedText`
+  - `managedMeta-managedSince`
+  - `managedMeta-managedMessage`
 
 Signature:
 
@@ -364,11 +368,11 @@ Signature:
 Semantics:
 
 - `report(...)` buffers ids (deduped); it does not write immediately.
-- `applyReported()` performs the writes (managedMeta stamping + watchlist update) and clears the buffer.
+- `applyReported()` performs the writes (managed-meta stamping + watchlist update) and clears the buffer.
 - Stored `managedBy` is always `options.pluginBaseObjectId` (e.g. `"msghub.0.IngestHue.0"`).
 - Best-effort: failures are logged and swallowed.
 - Minimal writes: only updates when content differs or `managedSince` is missing.
-- Cleanup: when a plugin instance is disabled, MsgHub clears the plugin watchlist and marks previously listed objects as “no longer managed” (`managedMessage=false`). If the object has no active IngestStates rule (`mode===""`) and `enabled===true`, MsgHub also sets `enabled=false`.
+- Cleanup: when a plugin instance is disabled, MsgHub clears the plugin watchlist and marks previously listed objects as “no longer managed” (`managedMeta-managedMessage=false`). If the object has no active IngestStates rule (`mode===""`) and `enabled===true`, MsgHub also sets `enabled=false`.
 
 	If a plugin depends on this feature, validate it in `start(ctx)` (throw a clear error when missing).
 

@@ -170,8 +170,74 @@ class Msghub extends utils.Adapter {
 			? Math.max(0, Math.trunc(keepPreviousWeeksParsed))
 			: undefined;
 
+		const pruneIntervalSecRaw = this.config?.pruneIntervalSec;
+		const pruneIntervalSecParsed =
+			typeof pruneIntervalSecRaw === 'number' ? pruneIntervalSecRaw : Number(pruneIntervalSecRaw);
+		const pruneIntervalMs = Number.isFinite(pruneIntervalSecParsed)
+			? Math.max(0, Math.trunc(pruneIntervalSecParsed)) * 1000
+			: undefined;
+
+		const hardDeleteAfterHoursRaw = this.config?.hardDeleteAfterHours;
+		const hardDeleteAfterHoursParsed =
+			typeof hardDeleteAfterHoursRaw === 'number' ? hardDeleteAfterHoursRaw : Number(hardDeleteAfterHoursRaw);
+		const hardDeleteAfterMs = Number.isFinite(hardDeleteAfterHoursParsed)
+			? Math.max(0, Math.trunc(hardDeleteAfterHoursParsed)) * 60 * 60 * 1000
+			: undefined;
+
+		const hardDeleteBatchSizeRaw = this.config?.hardDeleteBatchSize;
+		const hardDeleteBatchSizeParsed =
+			typeof hardDeleteBatchSizeRaw === 'number' ? hardDeleteBatchSizeRaw : Number(hardDeleteBatchSizeRaw);
+		const hardDeleteBatchSize = Number.isFinite(hardDeleteBatchSizeParsed)
+			? Math.max(1, Math.trunc(hardDeleteBatchSizeParsed))
+			: undefined;
+
+		const hardDeleteStartupDelaySecRaw = this.config?.hardDeleteStartupDelaySec;
+		const hardDeleteStartupDelaySecParsed =
+			typeof hardDeleteStartupDelaySecRaw === 'number'
+				? hardDeleteStartupDelaySecRaw
+				: Number(hardDeleteStartupDelaySecRaw);
+		const hardDeleteStartupDelayMs = Number.isFinite(hardDeleteStartupDelaySecParsed)
+			? Math.max(0, Math.trunc(hardDeleteStartupDelaySecParsed)) * 1000
+			: undefined;
+
+		const archiveFlushIntervalSecRaw = this.config?.archiveFlushIntervalSec;
+		const archiveFlushIntervalSecParsed =
+			typeof archiveFlushIntervalSecRaw === 'number'
+				? archiveFlushIntervalSecRaw
+				: Number(archiveFlushIntervalSecRaw);
+		const flushIntervalMs = Number.isFinite(archiveFlushIntervalSecParsed)
+			? Math.max(0, Math.trunc(archiveFlushIntervalSecParsed)) * 1000
+			: undefined;
+
+		const archiveMaxBatchSizeRaw = this.config?.archiveMaxBatchSize;
+		const archiveMaxBatchSizeParsed =
+			typeof archiveMaxBatchSizeRaw === 'number' ? archiveMaxBatchSizeRaw : Number(archiveMaxBatchSizeRaw);
+		const maxBatchSize = Number.isFinite(archiveMaxBatchSizeParsed)
+			? Math.max(1, Math.trunc(archiveMaxBatchSizeParsed))
+			: undefined;
+
+		const rollupKeepDaysRaw = this.config?.rollupKeepDays;
+		const rollupKeepDaysParsed =
+			typeof rollupKeepDaysRaw === 'number' ? rollupKeepDaysRaw : Number(rollupKeepDaysRaw);
+		const rollupKeepDays = Number.isFinite(rollupKeepDaysParsed)
+			? Math.max(1, Math.trunc(rollupKeepDaysParsed))
+			: undefined;
+
+		const writeIntervalMsRaw = this.config?.writeIntervalMs;
+		const writeIntervalMsParsed =
+			typeof writeIntervalMsRaw === 'number' ? writeIntervalMsRaw : Number(writeIntervalMsRaw);
+		const writeIntervalMs = Number.isFinite(writeIntervalMsParsed)
+			? Math.max(0, Math.trunc(writeIntervalMsParsed))
+			: undefined;
+
 		this.msgStore = new MsgStore(this, this.msgConstants, this.msgFactory, {
-			archive: { keepPreviousWeeks },
+			pruneIntervalMs,
+			hardDeleteAfterMs,
+			hardDeleteBatchSize,
+			hardDeleteStartupDelayMs,
+			archive: { keepPreviousWeeks, flushIntervalMs, maxBatchSize },
+			storage: { writeIntervalMs },
+			stats: { rollupKeepDays },
 			ai: msgAi,
 		});
 		await this.msgStore.init();
@@ -411,7 +477,6 @@ class Msghub extends utils.Adapter {
 							);
 						}
 						if (wrappedTranslateFn) {
-							// @ts-expect-error TS2556 (checkJs): spreading any[] into tuple/rest typed function
 							return wrappedTranslateFn(...args);
 						}
 						return String(key);

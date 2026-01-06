@@ -1633,7 +1633,8 @@ html:not([data-msghub-theme="dark"]) .msghub-root {
 .msghub-root .msghub-bulk-apply-textarea {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
   white-space: pre;
-  min-height: 24rem;
+  min-height: 32rem;
+  width: 100%;
 }
 
 .msghub-root .msghub-bulk-apply-cols {

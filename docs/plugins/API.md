@@ -97,7 +97,7 @@ Columns:
 | Meta | `resources` | `clearInterval(handle)` | ✓ | ✓ | ✓ | ✓ | Clears a tracked interval and forgets it. | `IoPluginResources` (`lib/IoPluginResources.js`) | `./IoPlugins.md` |
 | Meta | `resources` | `add(disposer)` | ✓ | ✓ | ✓ | ✓ | Register cleanup disposer (`() => void` or `{ dispose() }`) for stop/unregister. | `IoPluginResources` (`lib/IoPluginResources.js`) | `./IoPlugins.md` |
 | Meta | `managedObjects` | `report(ids, { managedText? })` | ✓ |  | ✓ |  | Buffer “managed” object ids for stamping and watchlist persistence. | `IoManagedMeta.createReporter()` | `./IoPlugins.md` |
-| Meta | `managedObjects` | `applyReported()` | ✓ |  | ✓ |  | Persist watchlist + stamp `common.custom.<ns>.managedMeta` best-effort. | `IoManagedMeta.createReporter()` | `./IoPlugins.md` |
+| Meta | `managedObjects` | `applyReported()` | ✓ |  | ✓ |  | Persist watchlist + stamp `common.custom.<ns>.managedMeta-*` best-effort. | `IoManagedMeta.createReporter()` | `./IoPlugins.md` |
 | Meta (factory option) | `options` | `pluginBaseObjectId` | ✓ | ✓ | ✓ | ✓ | Full base object id passed to `create(options)` for creating plugin-owned states. | `IoPlugins._registerOne()` | `./IoPlugins.md` |
 | Meta (factory option) | `options` | `__messagebox.register(handler)` |  |  |  | ✓ | Register adapter messagebox handler (owned by exactly one Engage plugin). | `IoPlugins.dispatchMessagebox()` + `IoPlugins._adoptMessageboxHandler()` | `./IoPlugins.md` |
 | Meta (factory option) | `options` | `__messagebox.unregister()` |  |  |  | ✓ | Release messagebox handler if owned by this plugin instance. | `IoPlugins._releaseMessageboxHandler()` | `./IoPlugins.md` |
