@@ -194,29 +194,29 @@ function buildBase(overrides = {}) {
 			it('allows dueAt for task kind', () => {
 				const { factory } = makeFactory();
 				const dueAt = Date.UTC(2025, 0, 1);
-			const msg = factory.createMessage(buildBase({ timing: { dueAt } }));
-			expect(msg.timing.dueAt).to.equal(dueAt);
-		});
+				const msg = factory.createMessage(buildBase({ timing: { dueAt } }));
+				expect(msg.timing.dueAt).to.equal(dueAt);
+			});
 
-		it('allows startAt/endAt for appointment kind', () => {
-			const { factory } = makeFactory();
-			const startAt = Date.UTC(2025, 0, 1, 9);
-			const endAt = Date.UTC(2025, 0, 1, 10);
-			const msg = factory.createMessage(
-				buildBase({ kind: MsgConstants.kind.appointment, timing: { startAt, endAt } }),
-			);
-			expect(msg.timing.startAt).to.equal(startAt);
-			expect(msg.timing.endAt).to.equal(endAt);
-		});
+			it('allows startAt/endAt for appointment kind', () => {
+				const { factory } = makeFactory();
+				const startAt = Date.UTC(2025, 0, 1, 9);
+				const endAt = Date.UTC(2025, 0, 1, 10);
+				const msg = factory.createMessage(
+					buildBase({ kind: MsgConstants.kind.appointment, timing: { startAt, endAt } }),
+				);
+				expect(msg.timing.startAt).to.equal(startAt);
+				expect(msg.timing.endAt).to.equal(endAt);
+			});
 
-		it('omits dueAt for non-task kinds', () => {
-			const { factory } = makeFactory();
-			const dueAt = Date.UTC(2025, 0, 1);
-			const msg = factory.createMessage(
-				buildBase({ kind: MsgConstants.kind.appointment, timing: { dueAt } }),
-			);
-			expect(msg.timing).to.not.have.property('dueAt');
-		});
+			it('allows dueAt for non-task kinds', () => {
+				const { factory } = makeFactory();
+				const dueAt = Date.UTC(2025, 0, 1);
+				const msg = factory.createMessage(
+					buildBase({ kind: MsgConstants.kind.appointment, timing: { dueAt } }),
+				);
+				expect(msg.timing.dueAt).to.equal(dueAt);
+			});
 
 		it('rejects implausible timing timestamp', () => {
 			const { factory, logs } = makeFactory();

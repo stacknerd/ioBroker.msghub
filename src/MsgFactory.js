@@ -61,9 +61,10 @@
  *     remindEvery?: number | null
  *     timeBudget?: number | null // planning duration (ms)
  *
- *     dueAt?: number | null       // task
- *     startAt?: number | null     // appointment
- *     endAt?: number | null       // appointment
+ *     // Domain time fields (optional; semantics depend on kind)
+ *     dueAt?: number | null
+ *     startAt?: number | null
+ *     endAt?: number | null
  *   }
  *
  *   // Structured details (optional; mainly for task/status/appointment)
@@ -152,8 +153,7 @@ const crypto = require('crypto');
  * - Stable identity: `ref` is normalized to an ASCII/URL-safe identifier; when missing, an auto-ref is generated
  *   so the message remains addressable (updates/deletes). For recurring items, producers should provide `origin.id`
  *   so auto-generated refs stay stable across updates.
- * - Kind-driven rules: some fields are only meaningful for specific kinds (e.g. `timing.dueAt` for tasks,
- *   `timing.startAt/endAt` for appointments, `listItems` for list kinds).
+ * - Kind-driven rules: some fields are only meaningful for specific kinds (e.g. `listItems` for list kinds).
  * - `undefined` vs `null`: `undefined` means "not present" and is removed before persistence; `null` is used by
  *   patch operations as an explicit signal to clear/remove a field.
  */
@@ -1059,9 +1059,10 @@ class MsgFactory {
 	 * from the existing message and only applies fields explicitly present
 	 * in the provided timing patch.
 	 *
-	 * Kind guards:
-	 * - `dueAt` is only meaningful for tasks.
-	 * - `startAt`/`endAt` are only meaningful for appointments.
+	 * Notes:
+	 * - `dueAt`/`startAt`/`endAt` are optional domain timestamps. They are not restricted by `kind` so
+	 *   producers can model planned windows (e.g. tasks with a planned start date, statuses with a
+	 *   predicted start/end, list kinds with a deadline).
 	 * - `timeBudget` is an optional planning duration in ms (not a timestamp).
 	 *
 	 * Clearing semantics:
@@ -1102,7 +1103,7 @@ class MsgFactory {
 		// Helper for each timing key:
 		// - Only touch keys that are explicitly present in the patch (own properties).
 		// - Treat `null` as "delete this key".
-		// - Enforce kind-specific fields (e.g. dueAt only for tasks).
+		// - (Optional) enforce kind-specific fields.
 		const setTime = (key, kindGuard) => {
 			if (!has(key)) {
 				return;
@@ -1146,9 +1147,9 @@ class MsgFactory {
 				}
 			}
 		}
-		setTime('dueAt', this.msgConstants.kind.task);
-		setTime('startAt', this.msgConstants.kind.appointment);
-		setTime('endAt', this.msgConstants.kind.appointment);
+		setTime('dueAt');
+		setTime('startAt');
+		setTime('endAt');
 
 		return this._removeUndefinedKeys(timing);
 	}

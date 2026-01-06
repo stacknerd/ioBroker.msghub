@@ -120,7 +120,7 @@ Message Hub keeps several time-related fields in `timing` (Unix ms timestamps + 
 - `remindEvery`: reminder interval in ms (used to reschedule `notifyAt` after a `due`)
 - `timeBudget`: planned time budget in ms (estimate for planning/scheduling; does not affect due handling)
 - `expiresAt`: when the message becomes expired
-- `dueAt` / `startAt` / `endAt`: kind-specific timestamps (tasks vs. appointments)
+- `dueAt` / `startAt` / `endAt`: optional **domain timestamps** (scheduling window / deadline)
 
 Important terminology (common source of confusion):
 
@@ -132,6 +132,36 @@ Important behavior:
 
 - If a message has no `timing.notifyAt`, Message Hub treats it as “notification due now” and may dispatch a `due` notification immediately.
 - “Due” is checked by a simple polling mechanism in the store; it is not a full job scheduler.
+
+### Domain timestamps: `dueAt`, `startAt`, `endAt`
+
+These fields are intentionally **not restricted by `kind`**. They model the domain time window and can be used by UIs/filters/sort logic:
+
+- `startAt`: planned/expected start (or actual start, if you only learn it later)
+- `endAt`: planned/expected end (optional)
+- `dueAt`: deadline (“should be done/fixed/bought by then”)
+
+Typical usage patterns:
+
+- `task`
+  - `startAt`: planned start date (before that a UI may choose to hide it from the “active” list)
+  - `dueAt`: hard deadline
+  - `endAt`: optional planned end (not required)
+  - `expiresAt`: store retention/expiry (may be after `dueAt`/`endAt`)
+
+- `status`
+  - `startAt`: when the status is expected to start (forecast) or when it actually started (late report)
+  - `endAt`: expected end (optional)
+  - `dueAt`: “by then the cause should be fixed” (optional)
+  - `expiresAt`: store retention/expiry (may be after `endAt`)
+
+- `appointment`
+  - `startAt` / `endAt`: the scheduled window
+  - `dueAt`: usually not needed, but allowed
+
+- `shoppinglist` / `inventorylist`
+  - `dueAt`: “needs to be bought/checked by then” (optional)
+  - `startAt`: “can be started/checked from then on” (optional)
 
 ---
 

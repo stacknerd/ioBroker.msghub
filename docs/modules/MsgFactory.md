@@ -103,11 +103,10 @@ Practical rule for producers: **If something can repeat, provide `origin.id`.**
 ### 3) Kind-driven rules
 Some fields only make sense for certain message kinds:
 
-- `timing.dueAt` is only meaningful for `kind: "task"`
-- `timing.startAt` / `timing.endAt` are only meaningful for `kind: "appointment"`
+- `timing.dueAt` / `timing.startAt` / `timing.endAt` are optional domain timestamps and are **not restricted by `kind`**
 - `listItems` is only allowed for `kind: "shoppinglist"` and `kind: "inventorylist"`
 
-If a producer sends kind-specific fields on the wrong kind, the factory logs a warning and ignores them.
+If a producer sends `listItems` on the wrong kind, the factory logs a warning and ignores it.
 
 ### 4) `undefined` vs. `null` (especially for patches)
 
