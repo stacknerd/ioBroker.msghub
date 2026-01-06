@@ -149,7 +149,10 @@ For each current warning, the plugin upserts a message:
 - `kind`: `status`
 - `origin.type`: `import`
 - `origin.system`: `<dwdInstance>`
+- `timing.startAt`: `warning.start`
+- `timing.endAt`: `warning.end`
 - `timing.expiresAt`: `warning.end`
+- `timing.notifyAt`: `warning.start` (only when the warning starts in the future; otherwise omitted so the warning is “due now”)
 
 Removal:
 
