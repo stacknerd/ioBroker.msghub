@@ -129,6 +129,9 @@ Rendering reads the current store snapshot:
 The PDF content is derived from all **allowed** `shoppinglist` messages. By default, MsgHub queries exclude
 `deleted` and `expired` messages unless explicitly requested via `where.lifecycle.state`.
 
+Additionally, the plugin only includes shopping lists where `timing.startAt` is either missing (unscheduled) **or**
+set to a timestamp in the past (`startAt < now`). Future scheduled lists (`startAt >= now`) are skipped.
+
 Note: channel routing uses the same semantics as `IoPlugins` notification routing:
 
 - `audience.channels.include` scopes messages to specific plugin channels.
