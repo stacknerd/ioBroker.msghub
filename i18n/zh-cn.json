@@ -88,5 +88,9 @@
   "Nice — marked as done.": "Nice — marked as done.",
   "Alright — removed.": "Alright — removed.",
   "Unknown command. Try /start.": "Unknown command. Try /start.",
-  "Hi! Try /start to see this message again.": "Hi! Try /start to see this message again."
+  "Hi! Try /start to see this message again.": "Hi! Try /start to see this message again.",
+  "Removed buttons because message has been deleted": "由于消息已被删除，因此已移除按钮。",
+  "Removed buttons because message has been expired": "由于消息已过期，按钮已被移除。",
+  "Removed buttons because message has been closed": "由于消息已关闭，按钮已被移除。",
+  "Removed buttons because message has been removed": "由于消息已被删除，因此已移除按钮。"
 }

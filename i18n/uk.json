@@ -88,5 +88,9 @@
   "Nice — marked as done.": "Чудово - відмічено як виконано.",
   "Alright — removed.": "Гаразд - видалено.",
   "Unknown command. Try /start.": "Невідома команда. Спробуй /start.",
-  "Hi! Try /start to see this message again.": "Привіт! Спробуйте переглянути це повідомлення ще раз."
+  "Hi! Try /start to see this message again.": "Привіт! Спробуйте переглянути це повідомлення ще раз.",
+  "Removed buttons because message has been deleted": "Видалено кнопки, оскільки повідомлення було видалено",
+  "Removed buttons because message has been expired": "Видалено кнопки, оскільки термін дії повідомлення минув",
+  "Removed buttons because message has been closed": "Видалено кнопки, оскільки повідомлення закрито",
+  "Removed buttons because message has been removed": "Видалено кнопки, оскільки повідомлення було видалено"
 }

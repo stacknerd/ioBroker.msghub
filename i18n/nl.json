@@ -88,5 +88,9 @@
   "Nice — marked as done.": "Mooi - gemarkeerd als klaar.",
   "Alright — removed.": "Oké - verwijderd.",
   "Unknown command. Try /start.": "Onbekend commando. Probeer /start.",
-  "Hi! Try /start to see this message again.": "Hallo! Probeer /start om dit bericht opnieuw te zien."
+  "Hi! Try /start to see this message again.": "Hallo! Probeer /start om dit bericht opnieuw te zien.",
+  "Removed buttons because message has been deleted": "Knoppen verwijderd omdat het bericht is verwijderd.",
+  "Removed buttons because message has been expired": "Knoppen verwijderd omdat het bericht verlopen is.",
+  "Removed buttons because message has been closed": "Knoppen verwijderd omdat het bericht is afgesloten.",
+  "Removed buttons because message has been removed": "Knoppen verwijderd omdat het bericht is verwijderd."
 }

@@ -446,11 +446,18 @@ describe('MsgStore', () => {
 
 	describe('closed lifecycle cleanup', () => {
 		it('soft-deletes closed messages via _deleteClosedMessages', () => {
+			const now = 60_000;
 			const { store } = createStore({
-				messages: [{ ref: 'r1', level: 10, lifecycle: { state: MsgConstants.lifecycle.state.closed } }],
+				messages: [
+					{
+						ref: 'r1',
+						level: 10,
+						lifecycle: { state: MsgConstants.lifecycle.state.closed, stateChangedAt: now - 31_000 },
+					},
+				],
 				options: { deleteClosedIntervalMs: 0 },
 			});
-			store._deleteClosedMessages();
+			withFixedNow(now, () => store._deleteClosedMessages());
 			expect(store.getMessageByRef('r1').lifecycle.state).to.equal(MsgConstants.lifecycle.state.deleted);
 		});
 	});

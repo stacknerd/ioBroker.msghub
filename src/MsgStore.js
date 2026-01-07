@@ -1240,8 +1240,11 @@ class MsgStore {
 		}
 		this._lastDeleteClosedAt = now;
 
-		// Determine which entries are due to be deleted.
-		const needsDeletion = item => item?.lifecycle?.state === this.msgConstants.lifecycle.state.closed;
+		// Determine which entries are due to be deleted. make sure tey remain at least 30s as "closed" before deleting them
+		const needsDeletion = item =>
+			item?.lifecycle?.state === this.msgConstants.lifecycle.state.closed &&
+			typeof item?.lifecycle?.stateChangedAt === 'number' &&
+			item?.lifecycle?.stateChangedAt < now - 1000 * 30;
 
 		const removals = this.fullList.filter(needsDeletion);
 

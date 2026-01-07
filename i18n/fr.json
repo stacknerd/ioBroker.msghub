@@ -88,5 +88,9 @@
   "Nice — marked as done.": "Bien - marqué comme fait.",
   "Alright — removed.": "D'accord - supprimé.",
   "Unknown command. Try /start.": "Commande inconnue. Essayez /start.",
-  "Hi! Try /start to see this message again.": "Essayez /start pour voir ce message à nouveau."
+  "Hi! Try /start to see this message again.": "Essayez /start pour voir ce message à nouveau.",
+  "Removed buttons because message has been deleted": "Boutons supprimés car le message a été effacé.",
+  "Removed buttons because message has been expired": "Boutons supprimés car le message a expiré.",
+  "Removed buttons because message has been closed": "Boutons supprimés car le message est fermé",
+  "Removed buttons because message has been removed": "Boutons supprimés car le message a été supprimé"
 }

@@ -88,5 +88,9 @@
   "Nice — marked as done.": "Ótimo - marcado como concluído.",
   "Alright — removed.": "Muito bem - removido.",
   "Unknown command. Try /start.": "Comando desconhecido. Tenta /start.",
-  "Hi! Try /start to see this message again.": "Olá! Tente /start para ver esta mensagem novamente."
+  "Hi! Try /start to see this message again.": "Olá! Tente /start para ver esta mensagem novamente.",
+  "Removed buttons because message has been deleted": "Botões removidos porque a mensagem foi apagada.",
+  "Removed buttons because message has been expired": "Botões removidos porque a mensagem expirou.",
+  "Removed buttons because message has been closed": "Botões removidos porque a mensagem foi fechada.",
+  "Removed buttons because message has been removed": "Botões removidos porque a mensagem foi removida."
 }

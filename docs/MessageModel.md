@@ -55,7 +55,7 @@ origin: { type: 'manual' | 'import' | 'automation', system?: string, id?: string
 
 Practical tips:
 
-- Use `origin.system` to record the source (e.g. `javascript.0`, `ical.0`, `rule-engine`, …).
+- Use `origin.system` to record the source (e.g. `javascript.0`, `ical.0`, `alexa2.0`, …).
 - Use `origin.id` for a stable upstream id when available. This helps deduplication.
 
 ---

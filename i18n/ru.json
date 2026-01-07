@@ -88,5 +88,9 @@
   "Nice — marked as done.": "Отлично - отмечено как выполненное.",
   "Alright — removed.": "Хорошо - удалено.",
   "Unknown command. Try /start.": "Неизвестная команда. Попробуйте /start.",
-  "Hi! Try /start to see this message again.": "Привет! Попробуйте /start, чтобы снова увидеть это сообщение."
+  "Hi! Try /start to see this message again.": "Привет! Попробуйте /start, чтобы снова увидеть это сообщение.",
+  "Removed buttons because message has been deleted": "Кнопки удалены, так как сообщение было удалено.",
+  "Removed buttons because message has been expired": "Кнопки удалены, так как срок действия сообщения истек.",
+  "Removed buttons because message has been closed": "Кнопки удалены, так как сообщение закрыто.",
+  "Removed buttons because message has been removed": "Кнопки удалены, так как сообщение удалено."
 }
