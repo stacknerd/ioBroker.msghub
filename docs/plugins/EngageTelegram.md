@@ -190,6 +190,12 @@ Persistent state ids (JSON, read-only for users):
 - `msghub.0.EngageTelegram.<instanceId>.mappingShortToRef`
   - Stores `{ "<shortId>": "<ref>" }`
 
+Additional mapping state:
+
+- `mappingByRef[ref].shouldHaveButtons` (boolean)
+  - `true`: message is expected to have action buttons and may be updated by the button sync.
+  - `false`: buttons have been removed and a confirmation text was shown; further sync/cleanup avoids editing the Telegram message text again (prevents confirmation races).
+
 Cleanup:
 
 - Before sending a new notification for the same `ref`, the old Telegram message(s) are cleaned up and the mapping is removed.

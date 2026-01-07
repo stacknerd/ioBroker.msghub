@@ -225,6 +225,10 @@ Processing flow:
    - if Message Hub add/update succeeds: delete the Alexa item (`...items.<id>.#delete = true`)
    - otherwise: mark the Alexa item as completed (`...items.<id>.completed = true`)
 
+Note:
+
+- Inbound ignores Alexa items whose `value` starts with `~` to avoid feedback loops with outbound mirroring.
+
 ### Outbound sync (Message Hub → Alexa)
 
 Output signals:
@@ -236,10 +240,13 @@ Processing flow:
 
 1. Compute the desired projection: all messages that match the outbound filter.
    - Note: the plugin channel (`native.channel`) participates in MsgHub channel routing. Outbound projection uses the same routing semantics by querying with `audience.channels.routeTo = <plugin channel>` (so the “pull” selection matches the notify-side filtering).
-2. For messages that are no longer desired:
+2. Drop stale mapping entries:
+   - If a mapped Alexa item id no longer exists in the Alexa JSON list (for example because a user deleted it in Alexa), the plugin removes that mapping entry so the item can be recreated.
+   - To avoid churn from temporarily inconsistent Alexa JSON snapshots, the plugin only drops the mapping after the item was missing across multiple Alexa JSON updates.
+3. For messages that are no longer desired:
    - delete the corresponding Alexa item (`...items.<id>.#delete = true`)
    - remove it from the mapping.
-3. For desired messages:
+4. For desired messages:
    - if not mapped yet:
      - create an Alexa item via `base.#New` or `base.#create` and track it as pending
      - later “adopt” the created Alexa item id when it appears in the JSON list
