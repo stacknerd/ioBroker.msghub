@@ -229,11 +229,16 @@ All read methods:
 Frequently used filters:
 
 - `where.audience.tags`: includes filter (`string | string[] | { any } | { all }`)
+- `where.audience.tags` also supports `orMissing` on the object form:
+  - Example: `{ any: ['Tom'], orMissing: true }` matches messages tagged for Tom **or** messages with missing/empty `audience.tags`.
 - `where.audience.channels`: routing filter (same semantics as channel dispatch in `IoPlugins`)
   - `{ routeTo: string }` (or shorthand `string`): “would this message be dispatched to this plugin channel?”
   - `string[]`: matches when it would dispatch to **any** of the given channels
   - `routeTo: ""`: matches only “unscoped” messages (where `audience.channels.include` is empty)
   - `routeTo: "all"` (or `routeTo: "*"`): matches all messages (match-all)
+- `where.timing.*`: range filter (`number` or `{ min/max }`)
+  - Range objects also support `orMissing`:
+    - Example: `{ max: now, orMissing: true }` matches messages where the timing field is missing (`undefined|null`) **or** `<= now`.
 
 ---
 

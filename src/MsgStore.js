@@ -526,6 +526,9 @@ class MsgStore {
 	 * Notes:
 	 * - Range implies existence: if a field is missing/null/not a finite number, the message does NOT match.
 	 *   (Example: filtering on `notifyAt` will naturally exclude messages where `notifyAt` is unset.)
+	 * - `orMissing`: when set on a range object (e.g. `{ max: now, orMissing: true }`), `undefined`/`null` values are treated as a match.
+	 *   (Note: non-finite values do NOT count as missing.)
+	 * - If a range object only specifies `{ orMissing: true }` (no `min/max`), it matches missing values only.
 	 *
 	 * 4) Details location allowlist (`where.details.location`)
 	 * - Intended as a small "dimension" filter for location-based views.
@@ -551,6 +554,9 @@ class MsgStore {
 	 *
 	 * Notes:
 	 * - Includes filters imply existence: if the target array is missing/empty, the message does NOT match.
+	 * - `orMissing`: when set on an includes object (e.g. `{ any: [...], orMissing: true }`), missing/empty arrays are treated as a match.
+	 *   - For `audience.tags`, an empty array (`[]`) is treated as missing.
+	 * - If an includes object only specifies `{ orMissing: true }` (no `any/all`), it matches missing/empty arrays only.
 	 *
 	 * Sort (`sort`)
 	 * - `sort` is optional and must be an array of `{ field, dir? }`.
@@ -629,17 +635,22 @@ class MsgStore {
 
 		const getRange = spec => {
 			if (typeof spec === 'number' && Number.isFinite(spec)) {
-				return { min: spec, max: spec };
+				return { min: spec, max: spec, orMissing: false };
 			}
 			if (!isPlainObject(spec)) {
 				return null;
 			}
 			const min = typeof spec.min === 'number' && Number.isFinite(spec.min) ? spec.min : undefined;
 			const max = typeof spec.max === 'number' && Number.isFinite(spec.max) ? spec.max : undefined;
-			if (min === undefined && max === undefined) {
+			const orMissing = spec.orMissing === true;
+			if (min === undefined && max === undefined && !orMissing) {
 				return null;
 			}
-			return { ...(min !== undefined ? { min } : {}), ...(max !== undefined ? { max } : {}) };
+			return {
+				...(min !== undefined ? { min } : {}),
+				...(max !== undefined ? { max } : {}),
+				orMissing,
+			};
 		};
 
 		const matchEnum = (value, spec) => {
@@ -736,21 +747,31 @@ class MsgStore {
 						.map(x => x.trim())
 						.filter(Boolean)
 				: [];
-			if (list.length === 0) {
-				return false;
-			}
+			const isMissing = list.length === 0;
 			if (typeof spec === 'string') {
-				return list.includes(spec);
+				return !isMissing && list.includes(spec);
 			}
 			if (Array.isArray(spec)) {
 				const any = toStringList(spec);
-				return any.length === 0 ? true : any.some(x => list.includes(x));
+				if (any.length === 0) {
+					return true;
+				}
+				return !isMissing && any.some(x => list.includes(x));
 			}
 			if (!isPlainObject(spec)) {
 				return true;
 			}
+			if (isMissing && spec.orMissing === true) {
+				return true;
+			}
+			if (isMissing) {
+				return false;
+			}
 			const any = toStringList(spec.any);
 			const all = toStringList(spec.all);
+			if (spec.orMissing === true && any.length === 0 && all.length === 0) {
+				return false;
+			}
 			if (any.length > 0 && all.length > 0) {
 				throw new TypeError('queryMessages: includes filter must use either {any} or {all}, not both');
 			}
@@ -813,6 +834,12 @@ class MsgStore {
 				}
 				const raw = timing?.[key];
 				if (raw === undefined || raw === null) {
+					if (range.orMissing === true) {
+						continue;
+					}
+					return false;
+				}
+				if (range.orMissing === true && range.min === undefined && range.max === undefined) {
 					return false;
 				}
 				const v = Number(raw);

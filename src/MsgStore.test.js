@@ -661,15 +661,26 @@ describe('MsgStore', () => {
 				expect(result.items.map(msg => msg.ref)).to.deep.equal(['r1', 'r3']);
 			});
 
-			it('supports timing range filters (range implies existence)', () => {
-				const messages = [
-					{ ref: 'r1', level: 10, timing: { startAt: 1000 } },
-					{ ref: 'r2', level: 10, timing: { startAt: 2000 } },
+		it('supports timing range filters (range implies existence)', () => {
+			const messages = [
+				{ ref: 'r1', level: 10, timing: { startAt: 1000 } },
+				{ ref: 'r2', level: 10, timing: { startAt: 2000 } },
 				{ ref: 'r3', level: 10, timing: {} },
 			];
 			const { store } = createStore({ messages });
 			const result = store.queryMessages({ where: { timing: { startAt: { min: 1500, max: 2500 } } } });
 			expect(result.items.map(msg => msg.ref)).to.deep.equal(['r2']);
+		});
+
+		it('supports timing range filters with orMissing', () => {
+			const messages = [
+				{ ref: 'r1', level: 10, timing: { startAt: 1000 } },
+				{ ref: 'r2', level: 10, timing: { startAt: 2000 } },
+				{ ref: 'r3', level: 10, timing: {} },
+			];
+			const { store } = createStore({ messages });
+			const result = store.queryMessages({ where: { timing: { startAt: { max: 1500, orMissing: true } } } });
+			expect(result.items.map(msg => msg.ref)).to.deep.equal(['r1', 'r3']);
 		});
 
 		it('supports timing range filters for timeBudget (range implies existence)', () => {
@@ -700,6 +711,22 @@ describe('MsgStore', () => {
 
 			const anyDeps = store.queryMessages({ where: { dependencies: { any: ['23'] } } });
 			expect(anyDeps.items.map(msg => msg.ref)).to.deep.equal(['r2', 'r3']);
+		});
+
+		it('supports orMissing for includes filters (audience.tags/dependencies)', () => {
+			const messages = [
+				{ ref: 'r1', level: 10 }, // missing tags + deps
+				{ ref: 'r2', level: 10, audience: { tags: [] }, dependencies: [] },
+				{ ref: 'r3', level: 10, audience: { tags: ['Tom'] }, dependencies: ['23'] },
+				{ ref: 'r4', level: 10, audience: { tags: ['Eva'] }, dependencies: ['12'] },
+			];
+			const { store } = createStore({ messages });
+
+			const tags = store.queryMessages({ where: { audience: { tags: { any: ['Tom'], orMissing: true } } } });
+			expect(tags.items.map(msg => msg.ref)).to.deep.equal(['r1', 'r2', 'r3']);
+
+			const deps = store.queryMessages({ where: { dependencies: { any: ['23'], orMissing: true } } });
+			expect(deps.items.map(msg => msg.ref)).to.deep.equal(['r1', 'r2', 'r3']);
 		});
 
 		it('supports audience.channels routing filter (routeTo)', () => {

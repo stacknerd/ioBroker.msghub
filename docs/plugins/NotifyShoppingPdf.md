@@ -124,13 +124,14 @@ When a relevant notification is received, the plugin schedules a PDF render usin
 
 Rendering reads the current store snapshot:
 
-- `ctx.api.store.queryMessages({ where: { kind: 'shoppinglist', audience: { channels: { routeTo: ctx.meta.plugin.channel } } } })`
+- `ctx.api.store.queryMessages({ where: { kind: 'shoppinglist', timing: { startAt: { max: now, orMissing: true } }, audience: { channels: { routeTo: ctx.meta.plugin.channel } } } })`
 
 The PDF content is derived from all **allowed** `shoppinglist` messages. By default, MsgHub queries exclude
 `deleted` and `expired` messages unless explicitly requested via `where.lifecycle.state`.
 
 Additionally, the plugin only includes shopping lists where `timing.startAt` is either missing (unscheduled) **or**
-set to a timestamp in the past (`startAt < now`). Future scheduled lists (`startAt >= now`) are skipped.
+set to a timestamp in the past (`startAt <= now`). Future scheduled lists (`startAt > now`) are skipped.
+This is implemented directly in the query via `timing.startAt.orMissing` (no local post-filtering).
 
 Note: channel routing uses the same semantics as `IoPlugins` notification routing:
 

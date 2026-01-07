@@ -78,10 +78,11 @@ Outbound mirroring (projection) options:
   - Allowed lifecycle states (default `open`).
 - `outAudienceTagsAnyCsv` (string, CSV)
   - Optional tag filter: message must have at least one matching `audience.tags` entry.
+  - Messages with no tags (missing/empty `audience.tags`) are treated as “public” and are included as well.
 
 Note:
 
-- For `kind=task`, outbound mirroring only includes messages where `timing.startAt` is either missing (unscheduled) **or** set to a timestamp in the past (`startAt < now`).
+- For `kind=task`, outbound mirroring only includes messages where `timing.startAt` is either missing (unscheduled) **or** set to a timestamp in the past (`startAt <= now`).
 
 ### How to find the correct `jsonStateId`
 
