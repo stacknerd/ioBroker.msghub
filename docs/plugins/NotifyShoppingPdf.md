@@ -69,12 +69,9 @@ Common options:
 
 - `includeChecked` (boolean; default `true`)
   - When enabled, checked items are included (rendered greyed out).
-- `refsWhitelistCsv` (string CSV; default empty)
-  - Comma-separated message refs to include.
-  - Empty means “include all shopping lists”.
-- `refsBlacklistCsv` (string CSV; default empty)
-  - Comma-separated message refs to exclude.
-  - Blacklist wins over whitelist.
+- `audienceTagsAnyCsv` (string CSV; default empty)
+  - Comma-separated audience tags to include.
+  - If set, only shopping lists with at least one matching `audience.tags[]` entry are included.
 - `renderDebounceMs` (number; default `1000`)
   - Debounce window for regenerating the PDF when notifications arrive.
 - `printRoomLabelsFromItems` (number; default `6`)
@@ -115,7 +112,7 @@ The plugin runs on notify-side events:
 It filters for:
 
 - `msg.kind === "shoppinglist"`
-- `msg.ref` allowed by `refsWhitelistCsv` / `refsBlacklistCsv`
+- (optional) `msg.audience.tags` matching `audienceTagsAnyCsv` (any)
 
 When a relevant notification is received, the plugin schedules a PDF render using a debounce timer
 (`ctx.meta.resources.setTimeout`).
