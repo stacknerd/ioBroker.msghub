@@ -52,12 +52,14 @@ function toPlainObject(map) {
  * @param {number} [options.writeIntervalMs] Throttle interval for writes.
  * @param {number} [options.maxUsedKeys] Soft limit for stored `used` keys (FIFO).
  * @param {number} [options.maxMissingKeys] Soft limit for stored `missing` keys (FIFO).
- * @returns {{ enabled: boolean, lang: string, fileName: string, wrapTranslate: Function, flush: Function, dispose: Function, getStats: Function }} Reporter.
+ * @returns {{ enabled: boolean, lang: string, fileName: string, wrapTranslate: Function, observe: Function, flush: Function, dispose: Function, getStats: Function }} Reporter.
  */
 function createI18nReporter(adapter, options = {}) {
 	const enabled = options?.enabled === true;
 	const lang = normalizeLang(options?.lang);
-	const fileName = isNonEmptyString(options?.fileName) ? options.fileName.trim() : 'data/i18nReport.json';
+	const fileNameRaw = options?.fileName;
+	const fileName =
+		typeof fileNameRaw === 'string' && fileNameRaw.trim() ? fileNameRaw.trim() : 'data/i18nReport.json';
 	const writeIntervalMs =
 		typeof options?.writeIntervalMs === 'number' && Number.isFinite(options.writeIntervalMs)
 			? Math.max(1000, Math.trunc(options.writeIntervalMs))
@@ -184,6 +186,10 @@ function createI18nReporter(adapter, options = {}) {
 		scheduleWrite();
 	}
 
+	function observe(key, out) {
+		observeTranslation(key, out);
+	}
+
 	function wrapTranslate(translateFn) {
 		return (...args) => {
 			const key = args[0];
@@ -211,6 +217,7 @@ function createI18nReporter(adapter, options = {}) {
 		lang,
 		fileName,
 		wrapTranslate,
+		observe,
 		flush,
 		dispose,
 		getStats: () =>
@@ -225,4 +232,115 @@ function createI18nReporter(adapter, options = {}) {
 	});
 }
 
-module.exports = { createI18nReporter };
+const getI18nFns = baseI18n => {
+	// Depending on adapter-core/js-controller versions, I18n may be wrapped and expose functions under `.default`.
+	const translateFn =
+		typeof baseI18n?.t === 'function'
+			? baseI18n.t
+			: typeof baseI18n?.translate === 'function'
+				? baseI18n.translate
+				: typeof baseI18n?.default?.t === 'function'
+					? baseI18n.default.t
+					: typeof baseI18n?.default?.translate === 'function'
+						? baseI18n.default.translate
+						: null;
+
+	const getTranslatedObjectFn =
+		typeof baseI18n?.getTranslatedObject === 'function'
+			? baseI18n.getTranslatedObject
+			: typeof baseI18n?.default?.getTranslatedObject === 'function'
+				? baseI18n.default.getTranslatedObject
+				: null;
+
+	return { translateFn, getTranslatedObjectFn };
+};
+
+const fixTranslatedObject = (getTranslatedObjectFn, text, strings = []) => {
+	let obj = typeof getTranslatedObjectFn === 'function' ? getTranslatedObjectFn(text, '%s') : { en: String(text) };
+	if (!obj || typeof obj !== 'object') {
+		obj = { en: String(text) };
+	}
+	for (const lang of Object.keys(obj)) {
+		let s = obj[lang];
+		for (const arg of strings) {
+			s = s.replace('%s', String(arg));
+		}
+		obj[lang] = s;
+	}
+	return obj;
+};
+
+/**
+ * Build the adapter-level i18n facade used by plugin APIs (`ctx.api.i18n.*`).
+ *
+ * @param {object} [options] Options.
+ * @param {object} [options.adapter] Adapter instance (for logging).
+ * @param {any} [options.baseI18n] `utils.I18n` instance.
+ * @param {string} [options.locale] Adapter locale (time/date formatting).
+ * @param {string} [options.i18nlocale] Translation locale (typically a language code like `de`/`en`).
+ * @param {string} [options.lang] Language code (`locale.split('-')[0]`).
+ * @param {boolean} [options.createReport] When true, wraps translateFn and writes `data/i18nReport.json`.
+ * @param {Function} [options.createI18nReporter] Reporter factory.
+ * @param {boolean} [options.debug] When true, logs incoming translation calls.
+ * @returns {{ i18n: object|null, reporter: any }} Built i18n facade and optional reporter instance.
+ */
+function buildI18nRuntime(options = {}) {
+	const adapter = options?.adapter;
+	const baseI18n = options?.baseI18n;
+	const locale = options?.locale;
+	const i18nlocale = options?.i18nlocale;
+	const lang = options?.lang;
+	const createReport = options?.createReport;
+	const createI18nReporter = options?.createI18nReporter;
+	const debug = options?.debug === true;
+	const { translateFn, getTranslatedObjectFn } = getI18nFns(baseI18n);
+
+	if (!translateFn) {
+		adapter?.log?.warn?.(
+			'I18n: adapter-core did not provide a translate function (I18n.t/I18n.translate); falling back to identity translation',
+		);
+	}
+
+	const reporter =
+		createReport === true && typeof createI18nReporter === 'function'
+			? createI18nReporter(adapter, { enabled: true, lang: i18nlocale, fileName: 'data/i18nReport.json' })
+			: null;
+
+	const wrappedTranslateFn = translateFn && reporter ? reporter.wrapTranslate(translateFn) : translateFn;
+
+	const i18n = baseI18n
+		? Object.freeze({
+				t: (...args) => {
+					const [key, options] = args;
+					if (debug) {
+						adapter?.log?.debug?.(
+							`MsgHub main.js: [i18n.t] key=${JSON.stringify(key)} opts=${JSON.stringify(options ?? {})}`,
+						);
+					}
+					if (wrappedTranslateFn) {
+						return wrappedTranslateFn(...args);
+					}
+					return String(key);
+				},
+				getTranslatedObject: (...args) => {
+					const ret = fixTranslatedObject(getTranslatedObjectFn, args[0], args.slice(1));
+					if (debug) {
+						adapter?.log?.debug?.(
+							`MsgHub main.js: [i18n.getTranslatedObject] args=${JSON.stringify(args)} ret=${JSON.stringify(ret, null, 2)}`,
+						);
+					}
+
+					// The real function is currently broken and returns wrong strings in some environments.
+					// Until this gets fixed in ioBroker core, we keep using this workaround.
+					return ret;
+				},
+				locale,
+				i18nlocale,
+				lang,
+			})
+		: null;
+
+	return { i18n, reporter };
+}
+
+module.exports = { createI18nReporter, buildI18nRuntime };

@@ -12,7 +12,7 @@ const { MsgFactory } = require(`${__dirname}/src/MsgFactory`);
 const { MsgConstants } = require(`${__dirname}/src/MsgConstants`);
 const { MsgStore } = require(`${__dirname}/src/MsgStore`);
 const { MsgAi } = require(`${__dirname}/src/MsgAi`);
-const { createI18nReporter } = require(`${__dirname}/i18nReporter`);
+const { createI18nReporter, buildI18nRuntime } = require(`${__dirname}/i18nReporter`);
 
 function decryptIfPossible(adapter, value) {
 	const raw = typeof value === 'string' ? value.trim() : '';
@@ -418,85 +418,18 @@ class Msghub extends utils.Adapter {
 		await utils.I18n.init(__dirname, i18nlocale);
 		this.log?.debug?.(`MsgHub main.js config locale: ${locale} (time and date) / ${i18nlocale} (i18n)`);
 
-		const baseI18n = utils.I18n;
-		// Depending on adapter-core/js-controller versions, I18n may be wrapped and expose functions under `.default`.
-		const translateFn =
-			typeof baseI18n?.t === 'function'
-				? baseI18n.t
-				: typeof baseI18n?.translate === 'function'
-					? baseI18n.translate
-					: typeof baseI18n?.default?.t === 'function'
-						? baseI18n.default.t
-						: typeof baseI18n?.default?.translate === 'function'
-							? baseI18n.default.translate
-							: null;
-		const getTranslatedObjectFn =
-			typeof baseI18n?.getTranslatedObject === 'function'
-				? baseI18n.getTranslatedObject
-				: typeof baseI18n?.default?.getTranslatedObject === 'function'
-					? baseI18n.default.getTranslatedObject
-					: null;
-
-		if (!translateFn) {
-			this.log?.warn?.(
-				'I18n: adapter-core did not provide a translate function (I18n.t/I18n.translate); falling back to identity translation',
-			);
-		}
-
-		this._i18nReporter =
-			this.config?.createI18nReport === true
-				? createI18nReporter(this, { enabled: true, lang: i18nlocale, fileName: 'data/i18nReport.json' })
-				: null;
-		const wrappedTranslateFn =
-			translateFn && this._i18nReporter ? this._i18nReporter.wrapTranslate(translateFn) : translateFn;
-
-		// a workaround for a current bug
-		const fixTranslatedObject = (text, strings = []) => {
-			let obj =
-				typeof getTranslatedObjectFn === 'function' ? getTranslatedObjectFn(text, '%s') : { en: String(text) };
-			if (!obj || typeof obj !== 'object') {
-				obj = { en: String(text) };
-			}
-			for (const lang of Object.keys(obj)) {
-				let s = obj[lang];
-				for (const arg of strings) {
-					s = s.replace('%s', String(arg));
-				}
-				obj[lang] = s;
-			}
-			return obj;
-		};
-
-		this.i18n = baseI18n //would be the real way, if iobroker would not be broken at this point and return wrong string on getTranslatedObject
-			? Object.freeze({
-					t: (...args) => {
-						const [key, options] = args;
-						if (_i18ndebug) {
-							this.log?.debug?.(
-								`MsgHub main.js: [i18n.t] key=${JSON.stringify(key)} opts=${JSON.stringify(options ?? {})}`,
-							);
-						}
-						if (wrappedTranslateFn) {
-							return wrappedTranslateFn(...args);
-						}
-						return String(key);
-					},
-					getTranslatedObject: (...args) => {
-						if (_i18ndebug) {
-							this.log?.debug?.(
-								`MsgHub main.js: [i18n.getTranslatedObject] args=${JSON.stringify(args)} ret=${JSON.stringify(fixTranslatedObject(args[0], args.slice(1)), null, 2)}`,
-							);
-						}
-						// the real function as of right now is broken and returns wrong strings
-						// return baseI18n.getTranslatedObject?.(...args);
-						// until this gets fixed, i will use this patch
-						return fixTranslatedObject(args[0], args.slice(1));
-					},
-					locale,
-					i18nlocale,
-					lang,
-				})
-			: null;
+		const { i18n, reporter } = buildI18nRuntime({
+			adapter: this,
+			baseI18n: utils.I18n,
+			locale,
+			i18nlocale,
+			lang,
+			createReport: this.config?.createI18nReport === true,
+			createI18nReporter,
+			debug: _i18ndebug,
+		});
+		this._i18nReporter = reporter;
+		this.i18n = i18n;
 	}
 }
 

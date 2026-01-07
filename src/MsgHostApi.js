@@ -71,7 +71,7 @@ function buildLogApi(adapter, { hostName }) {
 /**
  * Build an optional i18n facade. Returns null when i18n is not wired.
  *
- * @param {import('@iobroker/adapter-core').AdapterInstance & { i18n?: ({ t?: Function, getTranslatedObject?: Function } | null) }} adapter Adapter instance.
+ * @param {import('@iobroker/adapter-core').AdapterInstance & { i18n?: ({ t?: Function, getTranslatedObject?: Function, locale?: string, i18nlocale?: string, lang?: string } | null) }} adapter Adapter instance.
  */
 function buildI18nApi(adapter) {
 	if (!adapter?.i18n || typeof adapter.i18n.t !== 'function') {
