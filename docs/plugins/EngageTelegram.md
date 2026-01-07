@@ -79,6 +79,10 @@ Telegram-specific behavior options:
   - When a new notification for the same `message.ref` is sent:
     - `true`: delete the previous Telegram message via `deleteMessage`
     - `false`: keep the previous message, but remove its buttons via `editMessageText`
+- `deleteOldNotificationOnEnd` (boolean, default `false`)
+  - When a Message Hub message ends with `lifecycle=deleted|expired`:
+    - `true`: delete the Telegram message(s) via `deleteMessage`
+    - `false`: keep the Telegram message(s), but remove its buttons (if there are any)
 
 Icons:
 
@@ -198,11 +202,14 @@ Additional mapping state:
 
 Cleanup:
 
-- Before sending a new notification for the same `ref`, the old Telegram message(s) are cleaned up and the mapping is removed.
-- On `deleted` / `expired` notifications, mapped messages are also cleaned up.
-- Cleanup mode is controlled by `deleteOldNotificationOnResend`:
-  - The option affects only the “resend” case (before sending a new notification for the same `ref`).
-  - For lifecycle end states (`closed/deleted/expired`) the plugin removes buttons (it does not delete messages).
+- Resend (`due` for the same `ref` again):
+  - The old Telegram message(s) are cleaned up first (delete message or remove buttons, controlled by `deleteOldNotificationOnResend`).
+  - Then a new Telegram message is sent and the mapping is updated to point to the new messageId(s).
+- End-of-life (`deleted` / `expired`):
+  - The mapped Telegram messages are cleaned up and the mapping is removed.
+  - Cleanup mode is controlled by `deleteOldNotificationOnEnd` (delete message vs. remove buttons).
+- Retention / GC:
+  - Entries that no longer have buttons (`shouldHaveButtons=false`) may be pruned after a retention window (currently 90 days).
 
 ### Concurrency / locking
 
