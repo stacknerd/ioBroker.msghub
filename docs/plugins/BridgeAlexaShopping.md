@@ -22,7 +22,13 @@ This document has two parts:
 What it intentionally does not do (today):
 
 - It does not aggregate duplicates like “Butter” + “Butter” into a single item with a quantity.
-- It does not parse quantities/units from item text (e.g. “2x”, “500g”).
+- It does not try to be a perfect natural-language parser; it uses a small locale-specific lexicon and a few robust patterns.
+
+What it does do:
+
+- It can parse quantities/units from item text (e.g. “6x Butter 500g”) and stores them as structured fields:
+  - `listItems.quantity` (count/packaging)
+  - `listItems.perUnit` (mass/volume per item)
 
 ### Prerequisites
 

@@ -1528,7 +1528,10 @@ class MsgFactory {
 						`MsgFactory: 'listItems[${index}].quantity' must be an object with { val, unit }`,
 					);
 				} else {
-					const val = this._normalizeMsgPositiveNumber(entry.quantity.val, `listItems[${index}].quantity.val`);
+					const val = this._normalizeMsgPositiveNumber(
+						entry.quantity.val,
+						`listItems[${index}].quantity.val`,
+					);
 					const unit = this._normalizeMsgString(entry.quantity.unit, `listItems[${index}].quantity.unit`);
 					if (val === undefined || unit === undefined) {
 						this.adapter?.log?.warn?.(`MsgFactory: 'listItems[${index}].quantity' requires val and unit`);
