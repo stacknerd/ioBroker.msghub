@@ -91,6 +91,7 @@
  *     name: string
  *     category?: string
  *     quantity?: { val: number; unit: string }
+ *     perUnit?: { val: number; unit: string }
  *     checked: boolean
  *   }>
  *
@@ -213,7 +214,7 @@ class MsgFactory {
 	 * @param {object} [options.lifecycle] Lifecycle state (state + attribution timestamps).
 	 * @param {Map<string, {val: number|string|boolean|null, unit: string, ts: number}>} [options.metrics] Structured metrics.
 	 * @param {Array<{type: "ssml"|"image"|"video"|"file", value: string}>} [options.attachments] Attachment list.
-	 * @param {Array<{id: string, name: string, category?: string, quantity?: { val: number; unit: string }, checked: boolean}>} [options.listItems] List items for shopping or inventory lists.
+	 * @param {Array<{id: string, name: string, category?: string, quantity?: { val: number; unit: string }, perUnit?: { val: number; unit: string }, checked: boolean}>} [options.listItems] List items for shopping or inventory lists.
 	 * @param {Array<{type: "ack"|"delete"|"close"|"open"|"link"|"custom"|"snooze", id: string, payload?: Record<string, unknown>|null}>} [options.actions] Action descriptors.
 	 * @param {object} [options.progress] Progress metadata such as percentage and timestamps.
 	 * @param {string[]|string} [options.dependencies] Related message refs as array or CSV string.
@@ -735,6 +736,41 @@ class MsgFactory {
 			return fallback;
 		}
 		return ts;
+	}
+
+	/**
+	 * Normalizes a numeric field by ensuring it is a finite, positive number.
+	 *
+	 * Unlike `_normalizeMsgNumber()`, this helper preserves fractional values (e.g. `0.33`).
+	 * It is used for domain values like list item quantities.
+	 *
+	 * @param {any} value Input value to validate.
+	 * @param {string} field Field name for error messages.
+	 * @param {object} [options] Normalization options.
+	 * @param {boolean} [options.required] Whether the value must be > 0.
+	 * @param {number} [options.fallback] Returned when the value is optional but invalid.
+	 * @returns {number|undefined} Normalized number or fallback/undefined.
+	 */
+	_normalizeMsgPositiveNumber(value, field, { required = false, fallback = undefined } = {}) {
+		if (typeof value !== 'number') {
+			if (required) {
+				throw new TypeError(`'${field}' must be a number, received '${typeof value}' instead`);
+			}
+
+			this.adapter?.log?.warn?.(`MsgFactory: '${field}' must be a number, received '${typeof value}' instead`);
+			return fallback;
+		}
+
+		const num = Number.isFinite(value) ? value : NaN;
+		if (required && !(num > 0)) {
+			throw new TypeError(`'${field}' is required but not positive`);
+		}
+		if (!(num > 0)) {
+			this.adapter?.log?.warn?.(`MsgFactory: '${field}' is not positive`);
+			return fallback;
+		}
+
+		return num;
 	}
 
 	/**
@@ -1449,10 +1485,11 @@ class MsgFactory {
 	 * - Each item must have a stable `id` (used for patching by id).
 	 * - `checked` is always normalized to a boolean, defaulting to `false`.
 	 * - `quantity` is optional and, when present, uses `{ val, unit }`.
+	 * - `perUnit` is optional and, when present, uses `{ val, unit }`.
 	 *
-	 * @param {Array<{id: string, name: string, category?: string, quantity?: { val: number, unit: string }, checked: boolean}>|undefined|null} value List items input.
+	 * @param {Array<{id: string, name: string, category?: string, quantity?: { val: number, unit: string }, perUnit?: { val: number, unit: string }, checked: boolean}>|undefined|null} value List items input.
 	 * @param {string} kind Message kind.
-	 * @returns {Array<{id: string, name: string, category?: string, quantity?: { val: number, unit: string }, checked: boolean}>|undefined} Normalized list items.
+	 * @returns {Array<{id: string, name: string, category?: string, quantity?: { val: number, unit: string }, perUnit?: { val: number, unit: string }, checked: boolean}>|undefined} Normalized list items.
 	 */
 	_normalizeMsgListItems(value, kind) {
 		if (value === undefined || value === null) {
@@ -1491,12 +1528,29 @@ class MsgFactory {
 						`MsgFactory: 'listItems[${index}].quantity' must be an object with { val, unit }`,
 					);
 				} else {
-					const val = this._normalizeMsgNumber(entry.quantity.val, `listItems[${index}].quantity.val`);
+					const val = this._normalizeMsgPositiveNumber(entry.quantity.val, `listItems[${index}].quantity.val`);
 					const unit = this._normalizeMsgString(entry.quantity.unit, `listItems[${index}].quantity.unit`);
 					if (val === undefined || unit === undefined) {
 						this.adapter?.log?.warn?.(`MsgFactory: 'listItems[${index}].quantity' requires val and unit`);
 					} else {
 						quantity = { val, unit };
+					}
+				}
+			}
+
+			let perUnit;
+			if (entry.perUnit !== undefined && entry.perUnit !== null) {
+				if (!entry.perUnit || typeof entry.perUnit !== 'object' || Array.isArray(entry.perUnit)) {
+					this.adapter?.log?.warn?.(
+						`MsgFactory: 'listItems[${index}].perUnit' must be an object with { val, unit }`,
+					);
+				} else {
+					const val = this._normalizeMsgPositiveNumber(entry.perUnit.val, `listItems[${index}].perUnit.val`);
+					const unit = this._normalizeMsgString(entry.perUnit.unit, `listItems[${index}].perUnit.unit`);
+					if (val === undefined || unit === undefined) {
+						this.adapter?.log?.warn?.(`MsgFactory: 'listItems[${index}].perUnit' requires val and unit`);
+					} else {
+						perUnit = { val, unit };
 					}
 				}
 			}
@@ -1510,7 +1564,7 @@ class MsgFactory {
 				this.adapter?.log?.warn?.(`MsgFactory: 'listItems[${index}].checked' must be boolean`);
 			}
 
-			const item = this._removeUndefinedKeys({ id, name, category, quantity, checked });
+			const item = this._removeUndefinedKeys({ id, name, category, quantity, perUnit, checked });
 			items.push(item);
 		});
 
@@ -1647,10 +1701,10 @@ class MsgFactory {
 	 * - `{ set: Record<string,PartialItem> }`: merge/update by id
 	 * - `{ delete: string[] }`: remove by id
 	 *
-	 * @param {Array<{id: string, name: string, category?: string, quantity?: { val: number, unit: string }, checked: boolean}>|undefined} existingItems Existing list items.
-	 * @param {Array<{id: string, name: string, category?: string, quantity?: { val: number; unit: string }, checked: boolean}>|{set?: Array<{id: string, name: string, category?: string, quantity?: { val: number; unit: string }, checked: boolean}>|Record<string, {name: string, category?: string, quantity?: { val: number; unit: string }, checked: boolean}>, delete?: string[]}|null|undefined} patch List items patch.
+	 * @param {Array<{id: string, name: string, category?: string, quantity?: { val: number, unit: string }, perUnit?: { val: number, unit: string }, checked: boolean}>|undefined} existingItems Existing list items.
+	 * @param {Array<{id: string, name: string, category?: string, quantity?: { val: number; unit: string }, perUnit?: { val: number; unit: string }, checked: boolean}>|{set?: Array<{id: string, name: string, category?: string, quantity?: { val: number; unit: string }, perUnit?: { val: number; unit: string }, checked: boolean}>|Record<string, {name: string, category?: string, quantity?: { val: number; unit: string }, perUnit?: { val: number; unit: string }, checked: boolean}>, delete?: string[]}|null|undefined} patch List items patch.
 	 * @param {string} kind Message kind.
-	 * @returns {Array<{id: string, name: string, category?: string, quantity?: { val: number, unit: string }, checked: boolean}>|undefined} Updated list items.
+	 * @returns {Array<{id: string, name: string, category?: string, quantity?: { val: number, unit: string }, perUnit?: { val: number, unit: string }, checked: boolean}>|undefined} Updated list items.
 	 */
 	_applyListItemsPatch(existingItems, patch, kind) {
 		if (patch === null) {

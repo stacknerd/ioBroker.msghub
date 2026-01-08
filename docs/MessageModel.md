@@ -175,6 +175,42 @@ Messages can track coarse completion state in `progress`:
 
 ---
 
+## Lists: shopping/inventory (`listItems[]`)
+
+For `kind: "shoppinglist"` and `kind: "inventorylist"`, a message can include a list of items:
+
+```js
+listItems: [
+  {
+    id: string,
+    name: string,
+    category?: string,
+
+    // “requested amount” (count, volume, mass, …)
+    quantity?: { val: number, unit: string },
+
+    // measurement/size per single unit (optional)
+    perUnit?: { val: number, unit: string },
+
+    checked: boolean
+  }
+]
+```
+
+Semantics:
+
+- `id` is the stable key (used for id-based patching).
+- `quantity` is “how much do we need in total?” (example: `6 pcs`, `2 kg`, `1.5 l`).
+- `perUnit` is “how much is one unit/pack?” (example: `0.33 l` per bottle, `500 g` per pack).
+- Both fields are optional and may be absent when the source provides only free text (like Alexa lists).
+
+Examples:
+
+- “Water 6×0.33l” → `quantity: { val: 6, unit: "pcs" }`, `perUnit: { val: 0.33, unit: "l" }`
+- “Potatoes 2kg” → `quantity: { val: 2, unit: "kg" }`
+
+---
+
 ## Actions: what a user/automation is allowed to do (`actions[]`)
 
 Messages may include a list of allowed actions (`actions[]`). Only actions present in this list are executable.

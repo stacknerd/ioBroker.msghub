@@ -571,6 +571,60 @@ describe('MsgFactory.applyPatch', () => {
 		expect(updated.listItems.find(it => it.id === 'a:2')).to.deep.equal({ id: 'a:2', name: 'Eggs', checked: false });
 	});
 
+	it('normalizes listItems perUnit and supports clearing it', () => {
+		const { factory, logs } = makeFactory();
+		const msg = factory.createMessage(
+			buildBase({
+				kind: MsgConstants.kind.shoppinglist,
+				listItems: [
+					{
+						id: 'a:1',
+						name: 'Water',
+						checked: false,
+						quantity: { val: 6, unit: 'pcs' },
+						perUnit: { val: 0.33, unit: 'l' },
+					},
+				],
+			}),
+		);
+
+		expect(logs.warn).to.have.length(0);
+		expect(msg.listItems).to.deep.equal([
+			{
+				id: 'a:1',
+				name: 'Water',
+				checked: false,
+				quantity: { val: 6, unit: 'pcs' },
+				perUnit: { val: 0.33, unit: 'l' },
+			},
+		]);
+
+		const updated = factory.applyPatch(msg, {
+			listItems: { set: { 'a:1': { perUnit: { val: 500, unit: 'ml' } } } },
+		});
+		expect(updated.listItems).to.deep.equal([
+			{
+				id: 'a:1',
+				name: 'Water',
+				checked: false,
+				quantity: { val: 6, unit: 'pcs' },
+				perUnit: { val: 500, unit: 'ml' },
+			},
+		]);
+
+		const cleared = factory.applyPatch(updated, {
+			listItems: { set: { 'a:1': { perUnit: null } } },
+		});
+		expect(cleared.listItems).to.deep.equal([
+			{
+				id: 'a:1',
+				name: 'Water',
+				checked: false,
+				quantity: { val: 6, unit: 'pcs' },
+			},
+		]);
+	});
+
 	it('accepts patches that include an already normalized ref', () => {
 		const { factory, logs } = makeFactory();
 		const msg = factory.createMessage(buildBase({ ref: 'ref-\n-1' }));
