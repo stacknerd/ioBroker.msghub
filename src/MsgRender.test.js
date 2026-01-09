@@ -228,6 +228,23 @@ describe('MsgRender', () => {
 		expect(msg.details.tools).to.deep.equal(['Use {{m.tool.val}}', 123]);
 	});
 
+	it('renders details placeholders with the d prefix', () => {
+		const renderer = createRenderer({ locale });
+		const msg = createMessage({
+			title: 'At {{d.location}}: {{d.task}} ({{d.tools}} / {{d.consumables}})',
+			details: {
+				location: 'Kitchen',
+				task: 'Clean',
+				tools: ['Brush', 'Soap', 123, null],
+				consumables: ['Filter'],
+			},
+		});
+
+		const out = renderer.renderMessage(msg);
+
+		expect(out.title).to.equal('At Kitchen: Clean (Brush, Soap, 123 / Filter)');
+	});
+
 	it('renders multiple placeholders in one string', () => {
 		const renderer = createRenderer({ locale });
 		const metrics = buildMetrics([

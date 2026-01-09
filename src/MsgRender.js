@@ -3,7 +3,7 @@
 /**
  * MsgRender
  * =========
- * Lightweight template renderer that resolves metric- and timing-related placeholders in message fields.
+ * Lightweight template renderer that resolves metric-, timing- and details-related placeholders in message fields.
  *
  * Docs: ../docs/modules/MsgRender.md
  *
@@ -12,7 +12,8 @@
  *   of `title`, `text` and selected `details` fields.
  * - Resolve `{{ ... }}` placeholders in `title`, `text`, and selected `details` fields against:
  *   - `msg.metrics` (a `Map<string, { val, unit?, ts? }>`), and
- *   - `msg.timing` (a plain object containing timestamps like `createdAt`, `updatedAt`, `notifyAt`, ...).
+ *   - `msg.timing` (a plain object containing timestamps like `createdAt`, `updatedAt`, `notifyAt`, ...), and
+ *   - `msg.details` (a plain object; arrays are rendered as ", "-joined strings).
  * - Apply a small, deterministic filter pipeline for formatting numbers, dates, booleans, and defaults.
  *
  * Design guidelines / invariants
@@ -24,6 +25,7 @@
  * Template model
  * - Metrics are referenced via `m.<key>` where `<key>` is the Map key.
  * - Timing fields are referenced via `t.<field>` (or `timing.<field>`).
+ * - Details fields are referenced via `d.<field>` (or `details.<field>`); arrays resolve to a ", "-joined string.
  * - Paths may use a property suffix for metrics: `.val`, `.unit`, `.ts`.
  *
  * Supported template syntax:
@@ -32,6 +34,8 @@
  * - {{m.temperature.unit}}    -> "C"
  * - {{m.temperature.ts}}      -> unix ms timestamp
  * - {{t.createdAt}}           -> raw timing value (e.g., unix ms timestamp)
+ * - {{d.location}}            -> raw details value (e.g., "Kitchen")
+ * - {{d.tools}}               -> array joined by ", " (e.g., "Brush, Soap")
  *
  * Supported filters:
  * - {{m.temperature|num:1}}   -> number formatting with max fraction digits
@@ -170,6 +174,7 @@ class MsgRender {
 		const ctx = {
 			metrics: msg && msg.metrics instanceof Map ? msg.metrics : new Map(),
 			timing: msg && msg.timing && typeof msg.timing === 'object' ? msg.timing : null,
+			details: msg && msg.details && typeof msg.details === 'object' ? msg.details : null,
 			locale: locale || this.locale,
 		};
 
@@ -240,6 +245,9 @@ class MsgRender {
 		if (bits[0] === 't' || bits[0] === 'timing') {
 			return this._resolveTiming(bits.slice(1), ctx);
 		}
+		if (bits[0] === 'd' || bits[0] === 'details') {
+			return this._resolveDetails(bits.slice(1), ctx);
+		}
 		return undefined;
 	}
 
@@ -263,6 +271,56 @@ class MsgRender {
 				return undefined;
 			}
 			cur = cur[part];
+		}
+		return cur;
+	}
+
+	/**
+	 * Resolves a details path such as "d.location" or "d.tools".
+	 *
+	 * - Scalars are returned as-is.
+	 * - Arrays are joined with ", " (e.g. tools/consumables).
+	 *
+	 * @param {string[]} parts Path parts after the "d" prefix.
+	 * @param {object} ctx Render context (metrics + locale).
+	 * @returns {any} Details value or undefined.
+	 */
+	_resolveDetails(parts, ctx) {
+		const details = ctx.details;
+		if (!details || typeof details !== 'object') {
+			return undefined;
+		}
+		if (!Array.isArray(parts) || parts.length === 0) {
+			return undefined;
+		}
+
+		let cur = details;
+		for (const part of parts) {
+			if (!part) {
+				return undefined;
+			}
+			if (cur == null) {
+				return undefined;
+			}
+			if (Array.isArray(cur)) {
+				const idx = Number(part);
+				if (!Number.isInteger(idx)) {
+					return undefined;
+				}
+				cur = cur[idx];
+				continue;
+			}
+			if (typeof cur !== 'object') {
+				return undefined;
+			}
+			cur = cur[part];
+		}
+
+		if (Array.isArray(cur)) {
+			return cur
+				.filter(v => v != null)
+				.map(v => String(v))
+				.join(', ');
 		}
 		return cur;
 	}

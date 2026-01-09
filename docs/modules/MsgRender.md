@@ -34,6 +34,7 @@ Instead of rebuilding the entire title/text every time, a message can contain te
 
 - `msg.metrics` (a `Map` of measured values), and/or
 - `msg.timing` (time-related fields like `createdAt`, `notifyAt`, `remindEvery`, `timeBudget`, …).
+- `msg.details` (structured message context like `location`, `task`, `tools`, …)
 
 `MsgRender` combines both into human-readable strings.
 
@@ -111,6 +112,26 @@ Example:
 {{t.createdAt}}         // raw timestamp value
 {{timing.createdAt}}    // same as above
 {{t.createdAt|datetime}} // formatted date/time (locale-aware)
+```
+
+#### Details: `d.<field>` (or `details.<field>`)
+
+Details values come from `msg.details` (plain object). Common fields include:
+
+- `location`, `task`, `reason` (strings)
+- `tools`, `consumables` (arrays)
+
+Rules:
+
+- Scalars are returned as-is.
+- Arrays are joined with `', '` (for example `{{d.tools}}`).
+
+Examples:
+
+```js
+At {{d.location}}: {{d.task}}
+Tools: {{d.tools}}
+Consumables: {{details.consumables}}
 ```
 
 ---
@@ -239,7 +260,7 @@ Returns a **new** message list:
 
 ### `renderTemplate(input, { msg, locale }): string`
 
-Renders a single string and resolves placeholders using `msg.metrics` + `msg.timing`.
+Renders a single string and resolves placeholders using `msg.metrics` + `msg.timing` + `msg.details`.
 Non-strings (and strings without `{{`) are returned unchanged.
 
 ---
