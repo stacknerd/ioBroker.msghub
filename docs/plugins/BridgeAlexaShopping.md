@@ -75,8 +75,8 @@ Required / common options:
   - Inbound (Alexa → MsgHub): copied to `audience.channels.include` / `audience.channels.exclude`.
 - `fullSyncIntervalMs` (number)
   - Periodic full reconciliation interval; `0` disables the periodic run.
-- `conflictWindowMs` (number)
-  - Conflict debounce window after write-back (see best practices below).
+- `pendingMaxJsonMisses` (number)
+  - How many Alexa JSON updates are allowed before a pending "create" is retried.
 - `keepCompleted` (number, ms)
   - Retention time for completed items.
   - After this duration, completed items are deleted (in Message Hub and therefore also in Alexa).
@@ -151,8 +151,7 @@ write back to Alexa.
   - `msghub.0.BridgeAlexaShopping.<instanceId>.categories`
   These states are intentionally marked read-only (for users); the adapter still writes to them internally.
 - Conflicts and loops:
-  - If you have other automations writing to the same Alexa list, keep `conflictWindowMs` at a non-zero value (default `5000`).
-  - This reduces “ping-pong” updates by enforcing Message Hub as the source of truth after write-back.
+  - Value formatting is one-way (MsgHub → Alexa). Inbound sync accepts completion changes and deletions as signal, while MsgHub remains the source of truth for item text/structure.
 - AI categories:
   - If `aiEnhancement` is enabled in the plugin but AI is disabled in the adapter instance config, category assignment is skipped (no errors; it just does nothing).
   - Keep `categoriesCsv` small and stable. Changing the list resets the learned cache for that plugin instance.
@@ -182,8 +181,7 @@ Common symptoms and what to check:
   - Check adapter logs for warnings about `setForeignState` failures.
 
 - “Items oscillate / ping-pong between values”
-  - Increase `conflictWindowMs` (start with the default `5000`).
-  - Reduce other automations that write to the same list, or ensure they do not fight Message Hub.
+  - Reduce other automations that write to the same Alexa list, or ensure they do not fight Message Hub.
 
 - “AI categories do not show up”
   - Confirm AI is enabled in the Message Hub adapter instance config and a valid API key is set.
@@ -237,9 +235,6 @@ Both states are created with `common.write=false` (read-only for users). The ada
 
 Migration note:
 
-- Older versions stored `categories` inside the mapping state.
-- On startup, the plugin migrates that block into the dedicated `...categories` state once.
-
 ### Inbound sync (Alexa → Message Hub)
 
 Input signal:
@@ -255,17 +250,13 @@ Processing flow:
 3. Apply deletions:
    - If an Alexa item disappears from the list, the corresponding Message Hub item is deleted (hard rule).
 4. Apply updates:
-   - `value` maps to list item `name`
-   - `completed` maps to list item `checked`
+   - For existing items, `completed` maps to list item `checked`.
+   - New Alexa items are ingested into Message Hub (parsed into `name` + optional `quantity`/`perUnit` when `parseItemText=true`).
+   - Item text/structure is treated as MsgHub-owned and is not updated from Alexa once the item exists locally.
 5. Completed-item retention:
    - If `keepCompleted > 0`, completed items are deleted after that duration.
    - The plugin tracks the first time an item becomes `checked=true` in its mapping state (`checkedAt`) and uses that timestamp.
    - Deletion is applied during reconciliation (startup full sync + periodic `fullSyncIntervalMs`).
-
-Conflict handling:
-
-- If the plugin recently wrote a value/checked change to Alexa (within `conflictWindowMs`), and Alexa reports a different value within that window, it is treated as a conflict.
-- The plugin does not immediately “accept” the Alexa change; instead it schedules a debounced enforcement after `conflictWindowMs`.
 
 ### Outbound sync (Message Hub → Alexa)
 
@@ -279,8 +270,9 @@ Processing flow:
    - If mapped to an Alexa `extId`, write `base.items.<extId>.#delete = true`.
 2. For each current item:
    - If it has no mapping yet:
-     - write `base.#New = <name>` (or `base.#create = <name>`) and record it in `pendingCreates`.
-     - later “adopt” the created Alexa item id when it shows up in the JSON list.
+     - write `base.#New = <value>` (or `base.#create = <value>`) and record the *exact* `expectedValue` in `pendingCreates`.
+     - later “adopt” the created Alexa item id when it shows up in the JSON list with an exact `value === expectedValue`.
+     - If the expected value does not show up for `pendingMaxJsonMisses` JSON changes, the create is retried.
    - If it has an `extId`:
      - write `base.items.<extId>.value` when the name differs
      - write `base.items.<extId>.completed` when checked differs
