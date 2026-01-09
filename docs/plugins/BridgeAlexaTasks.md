@@ -58,6 +58,8 @@ Common options:
   - This single option also determines the write-back command ids (derived from `jsonStateId` without the `.json` suffix).
 - `fullSyncIntervalMs` (number)
   - Periodic full reconciliation interval; `0` disables the periodic run.
+- `pendingMaxJsonMisses` (number)
+  - How many Alexa JSON updates are allowed before a pending "create" is retried.
 - `audienceTagsCsv` (string, CSV)
   - Inbound (Alexa → MsgHub): comma-separated tags copied to `audience.tags` for imported tasks.
 - `audienceChannelsIncludeCsv` / `audienceChannelsExcludeCsv` (string, CSV)
@@ -205,6 +207,9 @@ It contains the outbound projection bookkeeping:
 - `out.messageRefToExternal`: MsgHub message ref → Alexa item id
 - `out.externalToMessageRef`: Alexa item id → MsgHub message ref
 - `out.pendingCreates`: tracks create requests until the new Alexa item id appears in the JSON list
+  - `expectedValue`: exact Alexa value written via `#New/#create`
+  - `misses`: number of JSON updates without seeing `expectedValue`
+  - `tries`: number of create attempts
 
 This state is created with `common.write=false` (read-only for users). The adapter can still update it.
 
@@ -250,6 +255,7 @@ Processing flow:
    - if not mapped yet:
      - create an Alexa item via `base.#New` or `base.#create` and track it as pending
      - later “adopt” the created Alexa item id when it appears in the JSON list
+     - if the expected value does not show up for `pendingMaxJsonMisses` JSON updates, the create is retried
    - if mapped:
      - update `...items.<id>.value` only when the desired text changed
 
