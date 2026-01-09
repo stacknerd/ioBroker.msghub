@@ -36,6 +36,7 @@
 const { DEFAULT_MAP_TYPE_MARKER, serializeWithMaps, ensureMetaObject, ensureBaseDir, createOpQueue } = require(
 	`${__dirname}/MsgUtils`,
 );
+const crypto = require('crypto');
 
 /**
  * MsgArchive
@@ -52,6 +53,7 @@ class MsgArchive {
 	 * @param {number} [options.flushIntervalMs] Flush interval in ms (0 = immediate; default 10000).
 	 * @param {number} [options.maxBatchSize] Max queued events per ref before forced flush (default 200).
 	 * @param {number} [options.keepPreviousWeeks] How many previous week segments to keep, in addition to the current one (default 3).
+	 * @param {number} [options.maxPathSegmentLength] Max length (bytes) per path component derived from refs (default 120).
 	 */
 	constructor(adapter, options = {}) {
 		if (!adapter) {
@@ -78,6 +80,13 @@ class MsgArchive {
 				? Math.max(0, Math.trunc(options.keepPreviousWeeks))
 				: 3;
 
+		// Bound file/path segment size to avoid ENAMETOOLONG crashes when refs are huge.
+		// (Most Linux filesystems limit a single path component to 255 bytes; encoded refs can exceed this easily.)
+		this.maxPathSegmentLength =
+			typeof options.maxPathSegmentLength === 'number' && Number.isFinite(options.maxPathSegmentLength)
+				? Math.max(32, Math.trunc(options.maxPathSegmentLength))
+				: 120;
+
 		this.schemaVersion = 1;
 
 		// Promise chain used as a simple mutex to serialize writes across refs.
@@ -96,6 +105,52 @@ class MsgArchive {
 		this._sizeEstimateAt = 0;
 		this._sizeEstimateBytes = null;
 		this._sizeEstimateIsComplete = false;
+	}
+
+	/**
+	 * Create a stable short hash for a segment shortening suffix.
+	 *
+	 * @param {any} value Input value to hash.
+	 * @returns {string} Short hex hash string.
+	 */
+	_hashSegment(value) {
+		return crypto
+			.createHash('sha1')
+			.update(String(value || ''))
+			.digest('hex')
+			.slice(0, 12);
+	}
+
+	/**
+	 * Bound a single path component derived from an encoded ref.
+	 *
+	 * When a segment exceeds `maxPathSegmentLength` (bytes), the segment is truncated and a stable hash suffix is added:
+	 * `<prefix>~<hash>`.
+	 *
+	 * @param {string} segment Path segment candidate.
+	 * @param {string} refKey Full encoded ref key (used for stable hashing).
+	 * @param {number} index Segment index within the ref path.
+	 * @returns {string} Safe path segment.
+	 */
+	_limitPathSegment(segment, refKey, index) {
+		const maxLen =
+			typeof this.maxPathSegmentLength === 'number' && Number.isFinite(this.maxPathSegmentLength)
+				? this.maxPathSegmentLength
+				: 120;
+		const s = String(segment || '');
+		if (!s) {
+			return s;
+		}
+
+		// Use byte length to avoid surprises with non-ascii content (even though encoded refs are typically ascii).
+		if (Buffer.byteLength(s, 'utf8') <= maxLen) {
+			return s;
+		}
+
+		const hash = this._hashSegment(`${refKey || ''}:${index}:${s}`);
+		const suffix = `~${hash}`;
+		const keep = Math.max(1, maxLen - suffix.length);
+		return `${s.slice(0, keep)}${suffix}`;
 	}
 
 	/**
@@ -193,10 +248,14 @@ class MsgArchive {
 		}
 
 		const parts = key.split('.').filter(Boolean);
+		let segments;
 		if (parts.length >= 2 && /^[0-9]+$/.test(parts[1])) {
-			return [`${parts[0]}.${parts[1]}`, ...parts.slice(2)];
+			segments = [`${parts[0]}.${parts[1]}`, ...parts.slice(2)];
+		} else {
+			segments = parts;
 		}
-		return parts;
+
+		return segments.map((segment, index) => this._limitPathSegment(segment, key, index)).filter(Boolean);
 	}
 
 	/**

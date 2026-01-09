@@ -158,6 +158,38 @@ describe('MsgArchive', () => {
 		});
 	});
 
+	it('shortens very long ref path segments to avoid ENAMETOOLONG', async () => {
+		const { adapter, files } = createAdapter();
+		const archive = new MsgArchive(adapter, { baseDir: 'archive', flushIntervalMs: 0 });
+		await archive.init();
+
+		const now = new Date(2025, 0, 6, 12, 0, 0).getTime();
+		await withMockedNow(now, async () => {
+			const longPart = 'Obst%20%26%20Gem%C3%BCse%2C'.repeat(60);
+			const ref = `BridgeAlexaShopping.1.${longPart}Sonstiges`;
+
+			await archive.appendSnapshot({ ref, title: 'hello' });
+			await archive.appendPatch(ref, { text: 'patch-1' });
+
+			const segmentKey = segmentKeyForLocalWeek(now);
+			const created = Array.from(files.keys()).filter(key =>
+				key.startsWith(`${adapter.namespace}/archive/BridgeAlexaShopping.1/`),
+			);
+			expect(created).to.have.length(1);
+
+			const fileKey = created[0];
+			const fileName = fileKey.split('/').pop();
+			expect(fileName.endsWith(`.${segmentKey}.jsonl`)).to.equal(true);
+			expect(Buffer.byteLength(fileName, 'utf8')).to.be.lessThan(200);
+			expect(fileName.includes('~')).to.equal(true);
+
+			const lines = readJsonl(files, fileKey);
+			expect(lines).to.have.length(2);
+			expect(lines[0].event).to.equal('create');
+			expect(lines[1].event).to.equal('patch');
+		});
+	});
+
 	it('supports overriding the snapshot event name', async () => {
 		const { adapter, files } = createAdapter();
 		const archive = new MsgArchive(adapter, { baseDir: 'archive', flushIntervalMs: 0 });
