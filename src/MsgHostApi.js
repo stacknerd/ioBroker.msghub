@@ -112,7 +112,7 @@ function buildStoreApi(store, { hostName = 'Host' } = {}) {
 	const isIngestHost = /Ingest/i.test(name);
 
 	const api = {
-		getMessageByRef: ref => store.getMessageByRef(ref),
+		getMessageByRef: (ref, filter) => store.getMessageByRef(ref, filter),
 		getMessages: () => store.getMessages(),
 		queryMessages: options => store.queryMessages(options),
 	};

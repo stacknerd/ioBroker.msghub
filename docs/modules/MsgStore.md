@@ -132,8 +132,11 @@ Important semantics:
 When does the store dispatch?
 
 - `addMessage(msg)`
-  - Dispatch `"added"` for the newly created message.
-  - If `timing.notifyAt` is missing/not finite **and** `lifecycle.state === "open"`: dispatch `"due"` immediately (message is “due now”).
+  - Dispatch a creation event:
+    - `"added"` when the `ref` is truly new
+    - `"recreated"` when the `ref` existed only in quasi-deleted states (`deleted`/`closed`/`expired`) and is replaced
+    - `"recovered"` when recreated within `timing.cooldown` (no immediate `"due"`)
+  - If `timing.notifyAt` is missing/not finite **and** `lifecycle.state === "open"`: dispatch `"due"` immediately (message is “due now”), except during recreate cooldown.
 - `updateMessage(...)`
   - Dispatch `"updated"` only when the update is non-silent (detected by a change in `timing.updatedAt`).
   - Additionally dispatch `"due"` when:
@@ -194,7 +197,15 @@ Adds a new message if its `ref` does not exist yet.
   - If `ref` is unused: message is added.
   - If a message with the same `ref` exists and is `deleted` / `expired` / `closed`: the existing entry is replaced (hard-removed) and the new message is added (recreate).
   - Otherwise: the call is rejected (`false`).
-- Triggers: persist + archive + `"added"` + maybe an immediate `"due"`.
+- Triggers: persist + archive + (`"added"` | `"recreated"` | `"recovered"`) + maybe an immediate `"due"`.
+
+### `getMessageByRef(ref, filter?): object|undefined`
+Reads one message by `ref` (rendered view).
+
+- `filter` defaults to `'all'` (no lifecycle filtering).
+- `filter='quasiOpen'` returns only `open|snoozed|acked`.
+- `filter='quasiDeleted'` returns only `deleted|closed|expired`.
+- `filter=string[]` is an explicit allowlist of lifecycle state values (1:1 match).
 
 ### `updateMessage(ref, patch)` / `updateMessage({ ref, ...patch }): boolean`
 Updates an existing message by delegating to `MsgFactory.applyPatch()`.

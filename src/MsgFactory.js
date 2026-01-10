@@ -20,7 +20,7 @@
  *   and optionally which external system/id it was derived from.
  * - Lifecycle semantics: `lifecycle` holds the current workflow/UI state (open/acked/closed/...) with attribution.
  * - Temporal semantics: `timing` holds creation/update timestamps plus optional reminder/domain timestamps
- *   (e.g., notifyAt/remindEvery, timeBudget planning duration, due dates, appointment start/end).
+ *   (e.g., notifyAt/remindEvery/cooldown, timeBudget planning duration, due dates, appointment start/end).
  * - Extensibility: optional sections (`details`, `metrics`, `attachments`, `actions`, etc.)
  *   allow richer structured content without bloating the required core fields.
  *
@@ -59,6 +59,7 @@
  *     expiresAt?: number | null
  *     notifyAt?: number | null
  *     remindEvery?: number | null
+ *     cooldown?: number | null   // notification cooldown duration (ms) on recreate from quasi-deleted states
  *     timeBudget?: number | null // planning duration (ms)
  *
  *     // Domain time fields (optional; semantics depend on kind)
@@ -1180,6 +1181,21 @@ class MsgFactory {
 				const v = this._normalizeMsgNumber(value.timeBudget, 'timing.timeBudget');
 				if (v !== undefined) {
 					timing.timeBudget = v;
+				}
+			}
+		}
+		// Notification cooldown (duration in ms). Null clears the field.
+		if (has('cooldown')) {
+			if (value.cooldown === null) {
+				delete timing.cooldown;
+			} else {
+				const v = this._normalizeMsgNumber(value.cooldown, 'timing.cooldown');
+				if (v !== undefined) {
+					if (v >= 0) {
+						timing.cooldown = v;
+					} else {
+						this.adapter?.log?.warn?.(`MsgFactory: 'timing.cooldown' must be >= 0, received '${v}'`);
+					}
 				}
 			}
 		}

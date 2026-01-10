@@ -378,8 +378,7 @@ class MsgStats {
 	 * @returns {{ total: number, overdue: number, today: number, tomorrow: number, next7Days: number, thisWeek: number, thisWeekFromToday: number, thisMonth: number, thisMonthFromToday: number, byKind: Record<string, { total: number, overdue: number, today: number, tomorrow: number, next7Days: number, thisWeek: number, thisWeekFromToday: number, thisMonth: number, thisMonthFromToday: number }> }} Due buckets (domain time).
 	 */
 	_computeSchedule(messages, windows) {
-		const lifecycle = this.msgConstants.lifecycle?.state || {};
-		const excluded = new Set([lifecycle.deleted, lifecycle.expired, lifecycle.closed]);
+		const isQuasiDeletedState = this.msgConstants.lifecycle?.isQuasiDeletedState;
 
 		const empty = Object.freeze({
 			total: 0,
@@ -411,7 +410,7 @@ class MsgStats {
 			}
 
 			const state = msg?.lifecycle?.state;
-			if (excluded.has(state)) {
+			if (typeof isQuasiDeletedState === 'function' && isQuasiDeletedState(state)) {
 				continue;
 			}
 

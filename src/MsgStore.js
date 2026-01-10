@@ -233,14 +233,43 @@ class MsgStore {
 	 *
 	 * Side-effects on success:
 	 * - Persists the updated full list via `MsgStorage` (not awaited).
-	 * - If `timing.notifyAt` is missing or not finite, dispatches an immediate `"due"` notification.
-	 *   (only when `lifecycle.state === "open"`; non-open messages are not considered due-on-create).
+	 * - Dispatches a creation notification:
+	 *   - `"added"` when the `ref` was not present in the store
+	 *   - `"recreated"` when the `ref` existed only in quasi-deleted states (closed/deleted/expired) and is now replaced
+	 *   - `"recovered"` when the `ref` existed only in quasi-deleted states and is recreated within `timing.cooldown`
+	 * - If `timing.notifyAt` is missing or not finite, dispatches an immediate `"due"` notification
+	 *   (only when `lifecycle.state === "open"` and the recreate cooldown is not active).
 	 * - Appends an archive snapshot (best-effort, not awaited).
 	 *
 	 * @param {object} msg Normalized message object.
 	 * @returns {boolean} True when added, false when rejected by guards.
 	 */
 	addMessage(msg) {
+		const isQuasiDeletedState = this.msgConstants.lifecycle.isQuasiDeletedState;
+		const ref = typeof msg?.ref === 'string' ? msg.ref.trim() : '';
+		const cooldownMs = msg?.timing?.cooldown;
+		const wantsCooldownGate = Number.isFinite(cooldownMs) && cooldownMs > 0;
+
+		// For recreate/cooldown semantics we need a snapshot from *before* store maintenance.
+		// `_deleteClosedMessages` / `_pruneOldMessages` may update lifecycle.stateChangedAt and would distort the cooldown base.
+		let previousQuasiDeletedChangedAt = null;
+		if (wantsCooldownGate && ref) {
+			for (const candidate of this.fullList) {
+				if (candidate?.ref !== ref) {
+					continue;
+				}
+				const state = candidate?.lifecycle?.state;
+				const stateChangedAt = candidate?.lifecycle?.stateChangedAt;
+				if (!isQuasiDeletedState(state) || !Number.isFinite(stateChangedAt)) {
+					continue;
+				}
+				previousQuasiDeletedChangedAt =
+					previousQuasiDeletedChangedAt == null
+						? stateChangedAt
+						: Math.max(previousQuasiDeletedChangedAt, stateChangedAt);
+			}
+		}
+
 		// Keep the list clean before inserting anything new.
 		this._deleteClosedMessages();
 		this._pruneOldMessages();
@@ -249,7 +278,7 @@ class MsgStore {
 		if (!msg || typeof msg !== 'object') {
 			return false;
 		}
-		if (typeof msg.ref !== 'string' || !msg.ref.trim()) {
+		if (!ref) {
 			return false;
 		}
 		if (typeof msg.level !== 'number' || !Number.isInteger(msg.level)) {
@@ -257,14 +286,10 @@ class MsgStore {
 		}
 
 		// Guard: reject duplicates by ref.
-		const candidates = this.fullList.filter(item => item?.ref === msg.ref);
-		if (candidates.length > 0) {
-			const replaceableStates = new Set([
-				this.msgConstants.lifecycle.state.expired,
-				this.msgConstants.lifecycle.state.deleted,
-				this.msgConstants.lifecycle.state.closed,
-			]);
-			const nonReplaceable = candidates.find(item => !replaceableStates.has(item?.lifecycle?.state));
+		const candidates = this.fullList.filter(item => item?.ref === ref);
+		const isRecreate = candidates.length > 0;
+		if (isRecreate) {
+			const nonReplaceable = candidates.find(item => !isQuasiDeletedState(item?.lifecycle?.state));
 			if (nonReplaceable) {
 				return false;
 			}
@@ -273,7 +298,7 @@ class MsgStore {
 			for (const existing of candidates) {
 				this.msgArchive?.appendDelete?.(existing, { event: 'purgeOnRecreate' });
 			}
-			this.fullList = this.fullList.filter(item => item?.ref !== msg.ref);
+			this.fullList = this.fullList.filter(item => item?.ref !== ref);
 		}
 
 		// Mutate canonical list.
@@ -281,14 +306,25 @@ class MsgStore {
 		// Persist the entire list (best-effort; MsgStorage may throttle).
 		this.msgStorage.writeJson(this.fullList);
 
-		// notify about added message
-		this._dispatchNotify(this.msgConstants.notfication.events.added, msg);
+		// Notify about the new entry: truly new vs. recreated vs. recovered (cooldown).
+		const now = Date.now();
+		const isWithinCooldown =
+			isRecreate &&
+			wantsCooldownGate &&
+			Number.isFinite(previousQuasiDeletedChangedAt) &&
+			now < previousQuasiDeletedChangedAt + cooldownMs;
+		const createEvent = isRecreate
+			? isWithinCooldown
+				? this.msgConstants.notfication.events.recovered
+				: this.msgConstants.notfication.events.recreated
+			: this.msgConstants.notfication.events.added;
+		this._dispatchNotify(createEvent, msg);
 
 		// If no future notifyAt exists, treat the message as immediately due.
 		const isOpen =
 			(msg?.lifecycle?.state || this.msgConstants.lifecycle?.state?.open) ===
 			this.msgConstants.lifecycle?.state?.open;
-		if (isOpen && !Number.isFinite(msg?.timing?.notifyAt)) {
+		if (isOpen && !isWithinCooldown && !Number.isFinite(msg?.timing?.notifyAt)) {
 			this._dispatchNotify(this.msgConstants.notfication.events.due, msg);
 		}
 
@@ -423,7 +459,9 @@ class MsgStore {
 	addOrUpdateMessage(msg) {
 		this._pruneOldMessages();
 		// Existence check uses getMessageByRef(), which returns rendered output for existing entries.
-		if (this.getMessageByRef(msg.ref) != null) {
+		// Important: treat quasi-deleted entries (deleted/closed/expired) as non-existent so recreate semantics
+		// run through `addMessage()` (and dispatch `recreated`/`recovered`).
+		if (this.getMessageByRef(msg.ref, 'quasiOpen') != null) {
 			return this.updateMessage(msg);
 		}
 		return this.addMessage(msg);
@@ -438,13 +476,53 @@ class MsgStore {
 	 * - Does not mutate stored data.
 	 *
 	 * @param {string} reference Message ref.
+	 * @param {'all'|'quasiDeleted'|'quasiOpen'|string[]|undefined} [filter] Optional lifecycle filter.
+	 *  - `'all'`: no lifecycle filtering (current behavior / default)
+	 *  - `'quasiDeleted'`: only `deleted|closed|expired`
+	 *  - `'quasiOpen'`: only `open|snoozed|acked`
+	 *  - `string[]`: explicit allowlist of lifecycle state values (1:1 match)
 	 * @returns {object|undefined} Matching message, if found.
 	 */
-	getMessageByRef(reference) {
+	getMessageByRef(reference, filter = 'all') {
 		this._pruneOldMessages();
-		const msg = this.fullList.filter(obj => {
-			return obj.ref === reference;
-		})[0];
+		const ref = typeof reference === 'string' ? reference.trim() : '';
+		if (!ref) {
+			return undefined;
+		}
+
+		const lifecycle = this.msgConstants.lifecycle || {};
+		const isQuasiDeletedState = lifecycle.isQuasiDeletedState;
+		const isQuasiOpenState = lifecycle.isQuasiOpenState;
+
+		let matches = null;
+		if (Array.isArray(filter)) {
+			const set = new Set(
+				filter
+					.filter(v => typeof v === 'string')
+					.map(v => v.trim())
+					.filter(Boolean),
+			);
+			matches = msg => set.has(msg?.lifecycle?.state);
+		} else {
+			const f = typeof filter === 'string' ? filter.trim().toLowerCase() : '';
+			if (!f || f === 'all') {
+				matches = () => true;
+			} else if (f === 'quasideleted') {
+				matches = msg => {
+					const state = msg?.lifecycle?.state || lifecycle?.state?.open;
+					return typeof isQuasiDeletedState === 'function' ? isQuasiDeletedState(state) : false;
+				};
+			} else if (f === 'quasiopen') {
+				matches = msg => {
+					const state = msg?.lifecycle?.state || lifecycle?.state?.open;
+					return typeof isQuasiOpenState === 'function' ? isQuasiOpenState(state) : false;
+				};
+			} else {
+				matches = () => true;
+			}
+		}
+
+		const msg = this.fullList.find(obj => obj?.ref === ref && matches(obj));
 		// Render only on output; keep `fullList` unmodified.
 		return this.msgRender?.renderMessage(msg) || msg;
 	}

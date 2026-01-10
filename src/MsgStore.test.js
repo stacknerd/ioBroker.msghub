@@ -238,36 +238,89 @@ describe('MsgStore', () => {
 	});
 
 	describe('notifications', () => {
-		it('dispatches immediately on addMessage when notifyAt is missing', () => {
-			const received = [];
-			const msgNotify = { dispatch: (event, msg) => received.push({ event, msg }) };
-			const { store } = createStore({ msgNotify });
+			it('dispatches immediately on addMessage when notifyAt is missing', () => {
+				const received = [];
+				const msgNotify = { dispatch: (event, msg) => received.push({ event, msg }) };
+				const { store } = createStore({ msgNotify });
 
-			const msg = { ref: 'r1', level: 10, timing: {} };
-			store.addMessage(msg);
+				const msg = { ref: 'r1', level: 10, timing: {} };
+				store.addMessage(msg);
 
-			expect(received).to.have.length(2);
-			expect(received[0].event).to.equal('added');
-			expect(received[0].msg.ref).to.equal('r1');
-			expect(received[0].msg.__rendered).to.equal(true);
-			expect(received[1].event).to.equal('due');
-			expect(received[1].msg.ref).to.equal('r1');
-			expect(received[1].msg.__rendered).to.equal(true);
-		});
+				expect(received).to.have.length(2);
+				expect(received[0].event).to.equal('added');
+				expect(received[0].msg.ref).to.equal('r1');
+				expect(received[0].msg.__rendered).to.equal(true);
+				expect(received[1].event).to.equal('due');
+				expect(received[1].msg.ref).to.equal('r1');
+				expect(received[1].msg.__rendered).to.equal(true);
+			});
 
-		it('does not dispatch on addMessage when notifyAt is set', () => {
-			const received = [];
-			const msgNotify = { dispatch: (event, msg) => received.push({ event, msg }) };
-			const { store } = createStore({ msgNotify });
+			it('dispatches recovered (no due) when recreating within timing.cooldown', () => {
+				const received = [];
+				const msgNotify = { dispatch: (event, msg) => received.push({ event, msg }) };
+				const previousChangedAt = 1000;
+				const { store } = createStore({
+					messages: [
+						{
+							ref: 'r1',
+							level: 10,
+							lifecycle: { state: MsgConstants.lifecycle.state.deleted, stateChangedAt: previousChangedAt },
+						},
+					],
+					msgNotify,
+				});
 
-			const msg = { ref: 'r1', level: 10, timing: { notifyAt: Date.now() + 1000 } };
-			store.addMessage(msg);
+				withFixedNow(previousChangedAt + 500, () => {
+					store.addMessage({ ref: 'r1', level: 10, timing: { cooldown: 1000 } });
+				});
 
-			expect(received).to.have.length(1);
-			expect(received[0].event).to.equal('added');
-			expect(received[0].msg.ref).to.equal('r1');
-			expect(received[0].msg.__rendered).to.equal(true);
-		});
+				expect(received).to.have.length(1);
+				expect(received[0].event).to.equal('recovered');
+				expect(received[0].msg.ref).to.equal('r1');
+				expect(received[0].msg.__rendered).to.equal(true);
+			});
+
+			it('dispatches recreated + due when recreating after timing.cooldown', () => {
+				const received = [];
+				const msgNotify = { dispatch: (event, msg) => received.push({ event, msg }) };
+				const previousChangedAt = 1000;
+				const { store } = createStore({
+					messages: [
+						{
+							ref: 'r1',
+							level: 10,
+							lifecycle: { state: MsgConstants.lifecycle.state.deleted, stateChangedAt: previousChangedAt },
+						},
+					],
+					msgNotify,
+				});
+
+				withFixedNow(previousChangedAt + 1500, () => {
+					store.addMessage({ ref: 'r1', level: 10, timing: { cooldown: 1000 } });
+				});
+
+				expect(received).to.have.length(2);
+				expect(received[0].event).to.equal('recreated');
+				expect(received[0].msg.ref).to.equal('r1');
+				expect(received[0].msg.__rendered).to.equal(true);
+				expect(received[1].event).to.equal('due');
+				expect(received[1].msg.ref).to.equal('r1');
+				expect(received[1].msg.__rendered).to.equal(true);
+			});
+
+			it('does not dispatch on addMessage when notifyAt is set', () => {
+				const received = [];
+				const msgNotify = { dispatch: (event, msg) => received.push({ event, msg }) };
+				const { store } = createStore({ msgNotify });
+
+				const msg = { ref: 'r1', level: 10, timing: { notifyAt: Date.now() + 1000 } };
+				store.addMessage(msg);
+
+				expect(received).to.have.length(1);
+				expect(received[0].event).to.equal('added');
+				expect(received[0].msg.ref).to.equal('r1');
+				expect(received[0].msg.__rendered).to.equal(true);
+			});
 
 		it('dispatches updated + due on updateMessage when notifyAt is missing and update is not silent', () => {
 			const received = [];
@@ -576,41 +629,76 @@ describe('MsgStore', () => {
 		});
 	});
 
-	describe('addOrUpdateMessage guards', () => {
-		it('updates when the ref already exists', () => {
-			const factory = createFactory();
-			const { store, writes } = createStore({
-				messages: [{ ref: 'r1', level: 10, text: 'old' }],
-				factory,
+		describe('addOrUpdateMessage guards', () => {
+			it('updates when the ref already exists', () => {
+				const factory = createFactory();
+				const { store, writes } = createStore({
+					messages: [{ ref: 'r1', level: 10, text: 'old' }],
+					factory,
+				});
+
+				const result = store.addOrUpdateMessage({ ref: 'r1', text: 'new' });
+				expect(result).to.equal(true);
+				expect(store.getMessageByRef('r1').text).to.equal('new');
+				expect(writes).to.have.length(1);
 			});
 
-			const result = store.addOrUpdateMessage({ ref: 'r1', text: 'new' });
-			expect(result).to.equal(true);
-			expect(store.getMessageByRef('r1').text).to.equal('new');
-			expect(writes).to.have.length(1);
-		});
+			it('adds (recreates) when the ref exists only in quasi-deleted states', () => {
+				const received = [];
+				const msgNotify = { dispatch: (event, msg) => received.push({ event, msg }) };
+				const { store } = createStore({
+					messages: [{ ref: 'r1', level: 10, lifecycle: { state: MsgConstants.lifecycle.state.deleted } }],
+					msgNotify,
+				});
 
-		it('adds when the ref does not exist', () => {
-			const { store, writes } = createStore();
-			const result = store.addOrUpdateMessage({ ref: 'r2', level: 10 });
-			expect(result).to.equal(true);
-			expect(store.getMessages()).to.have.length(1);
+				const ok = store.addOrUpdateMessage({ ref: 'r1', level: 10, text: 'new' });
+				expect(ok).to.equal(true);
+				expect(store.getMessageByRef('r1').text).to.equal('new');
+				expect(received[0].event).to.equal('recreated');
+			});
+
+			it('adds when the ref does not exist', () => {
+				const { store, writes } = createStore();
+				const result = store.addOrUpdateMessage({ ref: 'r2', level: 10 });
+				expect(result).to.equal(true);
+				expect(store.getMessages()).to.have.length(1);
 			expect(writes).to.have.length(1);
 		});
 	});
 
-	describe('read helpers', () => {
-		it('finds by ref and returns undefined when missing', () => {
-			const { store } = createStore({ messages: [{ ref: 'r1', level: 10 }] });
-			expect(store.getMessageByRef('r1')).to.be.an('object');
-			expect(store.getMessageByRef('missing')).to.equal(undefined);
-		});
+		describe('read helpers', () => {
+			it('finds by ref and returns undefined when missing', () => {
+				const { store } = createStore({ messages: [{ ref: 'r1', level: 10 }] });
+				expect(store.getMessageByRef('r1')).to.be.an('object');
+				expect(store.getMessageByRef('missing')).to.equal(undefined);
+			});
 
-		it('returns the full list', () => {
-			const messages = [{ ref: 'r1', level: 10 }];
-			const { store } = createStore({ messages });
-			expect(store.getMessages().map(msg => msg.ref)).to.deep.equal(['r1']);
-		});
+			it('supports lifecycle filtering on getMessageByRef', () => {
+				const now = 1000;
+				const messages = [
+					{ ref: 'open', level: 10, lifecycle: { state: MsgConstants.lifecycle.state.open, stateChangedAt: now } },
+					{ ref: 'closed', level: 10, lifecycle: { state: MsgConstants.lifecycle.state.closed, stateChangedAt: now } },
+					{ ref: 'deleted', level: 10, lifecycle: { state: MsgConstants.lifecycle.state.deleted, stateChangedAt: now } },
+				];
+				const { store } = createStore({ messages });
+				// Prevent maintenance from transforming closed → deleted during this test.
+				store._lastDeleteClosedAt = now;
+				store.lastPruneAt = now;
+
+				withFixedNow(now, () => {
+					expect(store.getMessageByRef('open', 'quasiOpen')).to.be.an('object');
+					expect(store.getMessageByRef('open', 'quasiDeleted')).to.equal(undefined);
+					expect(store.getMessageByRef('closed', 'quasiDeleted')).to.be.an('object');
+					expect(store.getMessageByRef('closed', ['closed'])).to.be.an('object');
+					expect(store.getMessageByRef('closed', ['deleted'])).to.equal(undefined);
+				});
+			});
+
+			it('returns the full list', () => {
+				const messages = [{ ref: 'r1', level: 10 }];
+				const { store } = createStore({ messages });
+				expect(store.getMessages().map(msg => msg.ref)).to.deep.equal(['r1']);
+			});
 	});
 
 		describe('queryMessages', () => {

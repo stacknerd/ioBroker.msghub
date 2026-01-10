@@ -118,6 +118,7 @@ Message Hub keeps several time-related fields in `timing` (Unix ms timestamps + 
 - `updatedAt`: when a user-visible update happened (not all internal updates bump this)
 - `notifyAt`: when the message should trigger a `due` **notification**
 - `remindEvery`: reminder interval in ms (used to reschedule `notifyAt` after a `due`)
+- `cooldown`: optional cooldown duration in ms used when recreating a message from quasi-deleted states (see below)
 - `timeBudget`: planned time budget in ms (estimate for planning/scheduling; does not affect due handling)
 - `expiresAt`: when the message becomes expired
 - `dueAt` / `startAt` / `endAt`: optional **domain timestamps** (scheduling window / deadline)
@@ -131,6 +132,10 @@ Important terminology (common source of confusion):
 Important behavior:
 
 - If a message has no `timing.notifyAt`, Message Hub treats it as “notification due now” and may dispatch a `due` notification immediately.
+- On create events, the store distinguishes:
+  - `added`: the message is truly new (ref not present before)
+  - `recreated`: the ref existed only in quasi-deleted states (`deleted`/`closed`/`expired`) and is now replaced
+  - `recovered`: like `recreated`, but within `timing.cooldown` (no immediate `due` is dispatched)
 - “Due” is checked by a simple polling mechanism in the store; it is not a full job scheduler.
 
 ### Domain timestamps: `dueAt`, `startAt`, `endAt`

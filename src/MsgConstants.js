@@ -20,6 +20,9 @@
  * - `level` uses numeric severities to allow simple comparisons/sorting (none < notice < warning < error).
  * - `kind` and the various `type` fields use stable string identifiers intended for storage/transport.
  */
+const quasiDeletedStates = new Set(['deleted', 'closed', 'expired']);
+const quasiOpenStates = new Set(['open', 'snoozed', 'acked']);
+
 const MsgConstants = Object.freeze({
 	level: Object.freeze({ none: 0, notice: 10, warning: 20, error: 30 }),
 	kind: Object.freeze({
@@ -51,10 +54,14 @@ const MsgConstants = Object.freeze({
 			deleted: 'deleted',
 			expired: 'expired',
 		}),
+		isQuasiDeletedState: state => quasiDeletedStates.has(state),
+		isQuasiOpenState: state => quasiOpenStates.has(state),
 	}),
 	notfication: Object.freeze({
 		events: Object.freeze({
 			added: 'added',
+			recreated: 'recreated',
+			recovered: 'recovered',
 			due: 'due',
 			update: 'updated',
 			deleted: 'deleted',
