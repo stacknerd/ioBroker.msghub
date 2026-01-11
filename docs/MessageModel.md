@@ -119,6 +119,7 @@ Message Hub keeps several time-related fields in `timing` (Unix ms timestamps + 
 - `notifyAt`: when the message should trigger a `due` **notification**
 - `remindEvery`: reminder interval in ms (used to reschedule `notifyAt` after a `due`)
 - `cooldown`: optional cooldown duration in ms used when recreating a message from quasi-deleted states (see below)
+- `notifiedAt`: optional core-managed timestamps of dispatched notification events (keys are `MsgConstants.notfication.events` values, e.g. `due`/`added`/`updated`)
 - `timeBudget`: planned time budget in ms (estimate for planning/scheduling; does not affect due handling)
 - `expiresAt`: when the message becomes expired
 - `dueAt` / `startAt` / `endAt`: optional **domain timestamps** (scheduling window / deadline)

@@ -66,6 +66,16 @@ function parseJsonArrayWithWarn(adapter, value, label) {
 	}
 }
 
+function parseTimeStringToMinutesStrict(adapter, value, label) {
+	const raw = typeof value === 'string' ? value.trim() : '';
+	const m = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(raw);
+	if (!m) {
+		adapter?.log?.error?.(`MsgStore config: invalid ${label} time '${raw || String(value)}' (expected HH:MM)`);
+		return null;
+	}
+	return Number(m[1]) * 60 + Number(m[2]);
+}
+
 const REDACT_KEYS = new Set(['apiKey', 'token', 'password', 'aiOpenAiApiKey']);
 function sanitizeForLog(value) {
 	const isObject = v => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -159,6 +169,7 @@ class Msghub extends utils.Adapter {
 		/////////////////////////////////////////
 
 		this.msgFactory = new MsgFactory(this, this.msgConstants);
+		const config = this.config || {};
 
 		const msgAi = createMsgAiFromConfig(this, this.config);
 		this.msgAi = msgAi;
@@ -176,6 +187,14 @@ class Msghub extends utils.Adapter {
 		const pruneIntervalMs = Number.isFinite(pruneIntervalSecParsed)
 			? Math.max(0, Math.trunc(pruneIntervalSecParsed)) * 1000
 			: undefined;
+
+		const notifierIntervalSecRaw = config?.notifierIntervalSec;
+		const notifierIntervalSecParsed =
+			typeof notifierIntervalSecRaw === 'number' ? notifierIntervalSecRaw : Number(notifierIntervalSecRaw);
+		const notifierIntervalMs = Number.isFinite(notifierIntervalSecParsed)
+			? Math.max(0, Math.trunc(notifierIntervalSecParsed)) * 1000
+			: undefined;
+		const notifierIntervalMsEffective = notifierIntervalMs === undefined ? 10_000 : notifierIntervalMs;
 
 		const hardDeleteAfterHoursRaw = this.config?.hardDeleteAfterHours;
 		const hardDeleteAfterHoursParsed =
@@ -230,11 +249,61 @@ class Msghub extends utils.Adapter {
 			? Math.max(0, Math.trunc(writeIntervalMsParsed))
 			: undefined;
 
+		let quietHours = null;
+		const quietHoursEnabled = config?.quietHoursEnabled !== false;
+		if (quietHoursEnabled) {
+			if (notifierIntervalMsEffective <= 0) {
+				this.log?.error?.('MsgStore config: quiet hours require notifierIntervalMs > 0 (feature disabled)');
+			} else {
+				const startMin = parseTimeStringToMinutesStrict(this, config?.quietHoursStart, 'quietHoursStart');
+				const endMin = parseTimeStringToMinutesStrict(this, config?.quietHoursEnd, 'quietHoursEnd');
+				const maxLevelRaw = config?.quietHoursMaxLevel;
+				const maxLevelParsed = typeof maxLevelRaw === 'number' ? maxLevelRaw : Number(maxLevelRaw);
+				const spreadMinRaw = config?.quietHoursSpreadMin;
+				const spreadMinParsed = typeof spreadMinRaw === 'number' ? spreadMinRaw : Number(spreadMinRaw);
+				if (startMin != null && endMin != null) {
+					if (startMin === endMin) {
+						this.log?.error?.(
+							'MsgStore config: quiet hours start == end is not allowed (feature disabled)',
+						);
+					} else if (!Number.isFinite(maxLevelParsed) || !Number.isFinite(spreadMinParsed)) {
+						this.log?.error?.(
+							'MsgStore config: quiet hours require numeric maxLevel and spreadMin (feature disabled)',
+						);
+					} else {
+						const maxLevel = Math.trunc(maxLevelParsed);
+						const spreadMin = Math.max(0, Math.trunc(spreadMinParsed));
+						const quietDurationMin = startMin < endMin ? endMin - startMin : 24 * 60 - startMin + endMin;
+						const freeMin = 24 * 60 - quietDurationMin;
+						if (freeMin < 240) {
+							this.log?.error?.(
+								'MsgStore config: quiet hours must leave at least 4 hours outside the quiet window (feature disabled)',
+							);
+						} else if (spreadMin > freeMin) {
+							this.log?.error?.(
+								'MsgStore config: quiet hours spread window must fit into non-quiet time (feature disabled)',
+							);
+						} else {
+							quietHours = {
+								enabled: true,
+								startMin,
+								endMin,
+								maxLevel,
+								spreadMs: spreadMin * 60 * 1000,
+							};
+						}
+					}
+				}
+			}
+		}
+
 		this.msgStore = new MsgStore(this, this.msgConstants, this.msgFactory, {
 			pruneIntervalMs,
+			...(notifierIntervalMs !== undefined ? { notifierIntervalMs } : {}),
 			hardDeleteAfterMs,
 			hardDeleteBatchSize,
 			hardDeleteStartupDelayMs,
+			...(quietHours ? { quietHours } : {}),
 			archive: { keepPreviousWeeks, flushIntervalMs, maxBatchSize },
 			storage: { writeIntervalMs },
 			stats: { rollupKeepDays },

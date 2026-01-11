@@ -67,6 +67,7 @@ const { MsgRender } = require(`${__dirname}/MsgRender`);
 const { MsgNotify } = require(`${__dirname}/MsgNotify`);
 const { MsgIngest } = require(`${__dirname}/MsgIngest`);
 const { MsgStats } = require(`${__dirname}/MsgStats`);
+const { MsgNotificationPolicy } = require(`${__dirname}/MsgNotificationPolicy`);
 
 const _CORE_LIFECYCLE_TOKEN = Symbol('MsgStore.coreLifecycle');
 
@@ -100,6 +101,8 @@ class MsgStore {
 	 * @param {object} [options.storage] Options forwarded to `MsgStorage` (e.g. `baseDir`, `fileName`, `writeIntervalMs`).
 	 * @param {object} [options.archive] Options forwarded to `MsgArchive` (e.g. `baseDir`, `fileExtension`, `flushIntervalMs`).
 	 * @param {object} [options.stats] Options forwarded to `MsgStats` (e.g. `rollupKeepDays`).
+	 * @param {{ enabled: boolean, startMin: number, endMin: number, maxLevel: number, spreadMs: number }} [options.quietHours] Optional quiet-hours configuration (fully normalized by `main.js`).
+	 * @param {() => number} [options.quietHoursRandomFn] Optional random function injection (tests).
 	 * @param {any} [options.ai] Optional AI helper instance.
 	 */
 	constructor(adapter, msgConstants, msgFactory, options = {}) {
@@ -163,6 +166,9 @@ class MsgStore {
 		this.lastPruneAt = 0;
 		this.pruneIntervalMs = pruneIntervalMs;
 		this.notifierIntervalMs = notifierIntervalMs;
+		this._quietHours = options?.quietHours || null;
+		this._quietHoursRandomFn =
+			typeof options?.quietHoursRandomFn === 'function' ? options.quietHoursRandomFn : Math.random;
 		this._notifyTimer = null;
 		this._initialized = false;
 		this._keepDeletedAndExpiredFilesMs = hardDeleteAfterMs;
@@ -303,8 +309,13 @@ class MsgStore {
 
 		// Mutate canonical list.
 		this.fullList.push(msg);
+
 		// Persist the entire list (best-effort; MsgStorage may throttle).
 		this.msgStorage.writeJson(this.fullList);
+
+		// Archive the creation for audit/replay. This must not block the store.
+		// Note: notification markers (`timing.notifiedAt`) are appended as separate patches after dispatch.
+		this.msgArchive?.appendSnapshot?.(msg);
 
 		// Notify about the new entry: truly new vs. recreated vs. recovered (cooldown).
 		const now = Date.now();
@@ -325,11 +336,8 @@ class MsgStore {
 			(msg?.lifecycle?.state || this.msgConstants.lifecycle?.state?.open) ===
 			this.msgConstants.lifecycle?.state?.open;
 		if (isOpen && !isWithinCooldown && !Number.isFinite(msg?.timing?.notifyAt)) {
-			this._dispatchNotify(this.msgConstants.notfication.events.due, msg);
+			this._dispatchImmediateDue(msg);
 		}
-
-		// Archive the creation for audit/replay. This must not block the store.
-		this.msgArchive?.appendSnapshot?.(msg);
 		this.adapter?.log?.debug?.(`MsgStore: added Message '${msg.ref}'`);
 		this.adapter?.log?.silly?.(`MsgStore: added Message '${serializeWithMaps(msg)}'`);
 
@@ -404,7 +412,12 @@ class MsgStore {
 
 		// Replace the entry and persist.
 		this.fullList[index] = updated;
+		// Persist the updated list (best-effort; MsgStorage may throttle).
 		this.msgStorage.writeJson(this.fullList);
+
+		// Archive patch information for audit and debugging (best-effort).
+		// Note: notification markers (`timing.notifiedAt`) are appended as separate patches after dispatch.
+		this.msgArchive?.appendPatch?.(msg.ref, msg, existing, updated);
 
 		// Detect whether this was a non-silent update by comparing updatedAt.
 		const t = updated?.timing;
@@ -436,11 +449,8 @@ class MsgStore {
 			(updated?.lifecycle?.state || this.msgConstants.lifecycle?.state?.open) ===
 			this.msgConstants.lifecycle?.state?.open;
 		if (!Number.isFinite(t?.notifyAt) && hadUpdate && notExpired && isOpen) {
-			this._dispatchNotify(this.msgConstants.notfication.events.due, updated);
+			this._dispatchImmediateDue(updated);
 		}
-
-		// Archive patch information for audit and debugging (best-effort).
-		this.msgArchive?.appendPatch?.(msg.ref, msg, existing, updated);
 		this.adapter?.log?.debug?.(`MsgStore: updated Message '${updated.ref}'`);
 		this.adapter?.log?.silly?.(`MsgStore: updated Message '${serializeWithMaps(updated)}'`);
 
@@ -1448,14 +1458,7 @@ class MsgStore {
 			return;
 		}
 
-		// Dispatch as a batch; MsgNotify will fan out per message internally.
-		this._dispatchNotify(this.msgConstants.notfication.events.due, notifications);
-
-		// Update notifyAt to reschedule notification as needed.
-		for (const msg of notifications) {
-			const newNotifyAt = Number.isFinite(msg.timing.remindEvery) ? now + msg.timing.remindEvery : null;
-			this.updateMessage(msg.ref, { timing: { notifyAt: newNotifyAt } }, true);
-		}
+		this._dispatchScheduledDue(notifications, { now });
 
 		this.adapter?.log?.debug?.(
 			`MsgStore: initiated Notification for Message(s) '${notifications.map(msg => msg.ref).join(', ')}'`,
@@ -1486,6 +1489,94 @@ class MsgStore {
 			: render?.renderMessage?.(payload) || payload;
 
 		this.msgNotify.dispatch(event, rendered);
+
+		// Append a core-managed notification marker after dispatch.
+		// This is best-effort and uses a stealth patch (no updatedAt bump, no updated-event).
+		const eventKey = typeof event === 'string' ? event.trim() : '';
+		if (!eventKey) {
+			return;
+		}
+		const list = Array.isArray(payload) ? payload : payload ? [payload] : [];
+		if (list.length === 0) {
+			return;
+		}
+		const now = Date.now();
+		for (const msg of list) {
+			const ref = typeof msg?.ref === 'string' ? msg.ref.trim() : '';
+			if (!ref) {
+				continue;
+			}
+			this.updateMessage(ref, { timing: { notifiedAt: { [eventKey]: now } } }, true);
+		}
+	}
+
+	/**
+	 * Dispatch an immediate `due` notification (internal policy entry point).
+	 *
+	 * Important:
+	 * - Quiet hours apply only to scheduled repeats, not to immediate due dispatches.
+	 * - Notification markers (`timing.notifiedAt`) are appended as separate patches after dispatch.
+	 *
+	 * @param {object} message Message to dispatch.
+	 * @returns {void}
+	 */
+	_dispatchImmediateDue(message) {
+		const msg = message && typeof message === 'object' ? message : null;
+		if (!msg) {
+			return;
+		}
+		// Quiet hours are only applied to scheduled repeats; immediate due stays unaffected.
+		this._dispatchNotify(this.msgConstants.notfication.events.due, msg);
+	}
+
+	/**
+	 * Dispatch scheduled `due` notifications (internal policy entry point).
+	 *
+	 * Applies quiet hours to repeats by rescheduling `timing.notifyAt` out of the quiet window.
+	 *
+	 * @param {object|Array<object>} messages Message or list of messages.
+	 * @param {object} root0 Options.
+	 * @param {number} root0.now Current timestamp (ms).
+	 * @returns {void}
+	 */
+	_dispatchScheduledDue(messages, { now }) {
+		const list = Array.isArray(messages) ? messages : messages ? [messages] : [];
+		if (list.length === 0) {
+			return;
+		}
+
+		const quietHours = this._quietHours;
+		const dispatchables = [];
+		for (const msg of list) {
+			if (!msg || typeof msg !== 'object') {
+				continue;
+			}
+			if (MsgNotificationPolicy.shouldSuppressDue({ msg, now, quietHours })) {
+				const nextNotifyAt = MsgNotificationPolicy.computeQuietRescheduleTs({
+					now,
+					quietHours,
+					randomFn: this._quietHoursRandomFn,
+				});
+				if (Number.isFinite(nextNotifyAt)) {
+					this.updateMessage(msg.ref, { timing: { notifyAt: nextNotifyAt } }, true);
+				}
+				continue;
+			}
+			dispatchables.push(msg);
+		}
+
+		if (dispatchables.length === 0) {
+			return;
+		}
+
+		// Dispatch as a batch; MsgNotify will fan out per message internally.
+		this._dispatchNotify(this.msgConstants.notfication.events.due, dispatchables);
+
+		for (const msg of dispatchables) {
+			const remindEvery = msg?.timing?.remindEvery;
+			const newNotifyAt = Number.isFinite(remindEvery) && remindEvery > 0 ? now + remindEvery : null;
+			this.updateMessage(msg.ref, { timing: { notifyAt: newNotifyAt } }, true);
+		}
 	}
 }
 

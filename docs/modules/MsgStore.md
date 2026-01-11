@@ -81,6 +81,11 @@ If a message is due (`notifyAt <= now`), `_initiateNotifications()` dispatches `
 - if `timing.remindEvery` is set: `notifyAt = now + remindEvery`
 - otherwise: `notifyAt` is cleared (one-shot)
 
+Quiet hours (optional):
+- The store can suppress **repeat** `"due"` notifications during a configured quiet-hours window.
+- Repeat detection is based on the core-managed marker `timing.notifiedAt.due` (first due always dispatches).
+- When suppressed, the store reschedules `notifyAt` to the quiet-hours end plus an optional random spread window.
+
 Note: rescheduling uses a silent store patch (`stealthMode`), so it does not produce `"updated"` events (but the change is still persisted and archived).
 
 ### 5) Ordering is predictable
@@ -124,10 +129,10 @@ and `MsgNotify` fans those out to registered notifier plugins.
 
 Important semantics:
 
-- There is **no** “already notified” flag in the store.
+- The store tracks dispatched notifications via `timing.notifiedAt` (core-managed timestamps keyed by `MsgConstants.notfication.events` values).
 - Naming note: the notification event `"due"` refers to `timing.notifyAt` only and is intentionally independent from domain timing (`timing.dueAt` / `timing.startAt`).
 - “Due” (notification) means: `timing.notifyAt <= now` (and not expired).
-- Due messages are re-sent as `"due"` on every polling tick as long as they remain due.
+- `timing.notifiedAt.due` records “dispatched by core”, not “confirmed delivered by plugin”.
 
 When does the store dispatch?
 
@@ -147,6 +152,7 @@ When does the store dispatch?
 - `_initiateNotifications()` (optional timer)
   - Dispatches `"due"` as a batch for all messages whose `notifyAt` has been reached.
   - Then reschedules/clears `notifyAt` based on `timing.remindEvery` (one-shot vs repeat).
+  - Optional quiet hours can suppress repeat `"due"` notifications and push `notifyAt` out of the quiet window.
 
 ---
 
@@ -260,6 +266,8 @@ When creating `MsgStore`, you can pass options:
 - `initialMessages` (default `[]`): initial in-memory list (primarily for tests/imports)
 - `pruneIntervalMs` (default `30000`): maximum frequency for expiration scans
 - `notifierIntervalMs` (default `10000`, `0` disables): polling interval for due notifications (`notifyAt`)
+- `quietHours` (optional): fully normalized quiet-hours policy options passed from `main.js` (`{ enabled, startMin, endMin, maxLevel, spreadMs }`)
+- `quietHoursRandomFn` (optional): random injection for quiet-hours spread (tests)
 - `hardDeleteAfterMs` (default `259200000` / 3 days): retention window before hard-delete for `deleted`/`expired` messages
 - `hardDeleteIntervalMs` (default `14400000` / 4 hours): how often the store checks for hard-deletes
 - `hardDeleteBatchSize` (default `50`): max number of messages hard-deleted per run (backlogs are processed over multiple runs)

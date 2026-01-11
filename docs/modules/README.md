@@ -95,6 +95,7 @@ Consumer/UI  --->  MsgStore.getMessages()/getMessageByRef()  --->  MsgRender  --
 - `MsgFactory`: [`./MsgFactory.md`](./MsgFactory.md)
 - `MsgHostApi`: [`./MsgHostApi.md`](./MsgHostApi.md)
 - `MsgIngest`: [`./MsgIngest.md`](./MsgIngest.md)
+- `MsgNotificationPolicy`: [`./MsgNotificationPolicy.md`](./MsgNotificationPolicy.md)
 - `MsgNotify`: [`./MsgNotify.md`](./MsgNotify.md)
 - `MsgRender`: [`./MsgRender.md`](./MsgRender.md)
 - `MsgStats`: [`./MsgStats.md`](./MsgStats.md)

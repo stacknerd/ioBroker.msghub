@@ -60,6 +60,7 @@
  *     notifyAt?: number | null
  *     remindEvery?: number | null
  *     cooldown?: number | null   // notification cooldown duration (ms) on recreate from quasi-deleted states
+ *     notifiedAt?: { [event: string]: number | null } | null // core-managed notification dispatch timestamps (ms)
  *     timeBudget?: number | null // planning duration (ms)
  *
  *     // Domain time fields (optional; semantics depend on kind)
@@ -1196,6 +1197,45 @@ class MsgFactory {
 					} else {
 						this.adapter?.log?.warn?.(`MsgFactory: 'timing.cooldown' must be >= 0, received '${v}'`);
 					}
+				}
+			}
+		}
+		// Core-managed notification markers.
+		// `null` clears the whole object; `timing.notifiedAt.<event>=null` clears just that key.
+		if (has('notifiedAt')) {
+			if (value.notifiedAt === null) {
+				delete timing.notifiedAt;
+			} else {
+				const input = value.notifiedAt;
+				if (!input || typeof input !== 'object' || Array.isArray(input)) {
+					throw new TypeError(`'timing.notifiedAt' must be an object`);
+				}
+				const base =
+					updating &&
+					baseTiming.notifiedAt &&
+					typeof baseTiming.notifiedAt === 'object' &&
+					!Array.isArray(baseTiming.notifiedAt)
+						? { ...baseTiming.notifiedAt }
+						: {};
+				const out = { ...base };
+
+				const events = this.msgConstants?.notfication?.events || {};
+				const allowedKeys = Object.values(events).filter(v => typeof v === 'string' && v.trim());
+				for (const key of allowedKeys) {
+					if (!Object.prototype.hasOwnProperty.call(input, key)) {
+						continue;
+					}
+					if (input[key] === null) {
+						delete out[key];
+						continue;
+					}
+					out[key] = this._normalizeMsgTime(input[key], `timing.notifiedAt.${key}`);
+				}
+
+				if (Object.keys(out).length === 0) {
+					delete timing.notifiedAt;
+				} else {
+					timing.notifiedAt = this._removeUndefinedKeys(out);
 				}
 			}
 		}

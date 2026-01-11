@@ -162,7 +162,8 @@ describe('MsgStore', () => {
 			const result = store.addMessage({ ref: 'r1', level: 10, text: 'hello' });
 			expect(result).to.equal(true);
 			expect(store.getMessages()).to.have.length(1);
-			expect(writes).to.have.length(1);
+			// create persists list + notifiedAt(added) patch + notifiedAt(due) patch
+			expect(writes).to.have.length(3);
 		});
 	});
 
@@ -436,7 +437,7 @@ describe('MsgStore', () => {
 			expect(received[0].msgs[0].__rendered).to.equal(true);
 		});
 
-		it('uses stealthMode when rescheduling due notifications (no updated event)', () => {
+			it('uses stealthMode when rescheduling due notifications (no updated event)', () => {
 			const received = [];
 			const msgNotify = { dispatch: (event, msgs) => received.push({ event, msgs }) };
 			const now = 5000;
@@ -464,37 +465,122 @@ describe('MsgStore', () => {
 			expect(received[0].msgs[0].__rendered).to.equal(true);
 			expect(store.fullList[0].timing.notifyAt).to.equal(now + 1000);
 			expect(store.fullList[0].timing.updatedAt).to.equal(undefined);
-		});
-
-		it('archives raw messages while notifying rendered views', () => {
-			const received = [];
-			const msgNotify = { dispatch: (event, msg) => received.push({ event, msg }) };
-			const patches = [];
-			const msgArchive = {
-				appendSnapshot: () => {},
-				appendDelete: () => {},
-				appendPatch: (ref, patch, existing, updated) => patches.push({ ref, patch, existing, updated }),
-			};
-			const factory = createFactoryWithUpdatedAt();
-			const now = 6000;
-			const { store } = createStore({
-				messages: [{ ref: 'r1', level: 10, timing: {}, title: 'T', text: 'old' }],
-				factory,
-				msgNotify,
-				msgArchive,
-			});
-			store.lastPruneAt = now;
-
-			withFixedNow(now, () => {
-				const ok = store.updateMessage({ ref: 'r1', text: 'new' });
-				expect(ok).to.equal(true);
 			});
 
-			expect(received[0].msg.__rendered).to.equal(true);
-			expect(patches).to.have.length(1);
-			expect(patches[0].updated).to.not.have.property('__rendered');
-			expect(patches[0].existing).to.not.have.property('__rendered');
-		});
+			it('suppresses repeat due during quiet hours and reschedules notifyAt', () => {
+				const received = [];
+				const msgNotify = { dispatch: (event, msgs) => received.push({ event, msgs }) };
+				const now = new Date(2020, 0, 1, 23, 0, 0, 0).getTime();
+				const quietEnd = new Date(2020, 0, 2, 6, 0, 0, 0).getTime();
+
+				const factory = {
+					applyPatch: (existing, patch, stealthMode = false) => {
+						const updated = { ...existing, ...patch };
+						updated.timing = { ...(existing?.timing || {}), ...(patch?.timing || {}) };
+						if (patch?.timing?.notifiedAt && typeof patch.timing.notifiedAt === 'object') {
+							updated.timing.notifiedAt = { ...(existing?.timing?.notifiedAt || {}), ...(patch.timing.notifiedAt || {}) };
+						}
+						if (!stealthMode) {
+							updated.timing.updatedAt = Date.now();
+						}
+						return updated;
+					},
+				};
+
+				const messages = [
+					{
+						ref: 'due',
+						level: 10,
+						timing: { notifyAt: now - 1, remindEvery: 1000, notifiedAt: { due: now - 60_000 } },
+					},
+				];
+				const quietHours = { enabled: true, startMin: 22 * 60, endMin: 6 * 60, maxLevel: 20, spreadMs: 0 };
+				const { store } = createStore({
+					messages,
+					msgNotify,
+					factory,
+					options: { quietHours, quietHoursRandomFn: () => 0 },
+				});
+
+				withFixedNow(now, () => {
+					store._initiateNotifications();
+				});
+
+				expect(received).to.have.length(0);
+				expect(store.fullList[0].timing.notifyAt).to.equal(quietEnd);
+				expect(store.fullList[0].timing.notifiedAt.due).to.equal(now - 60_000);
+			});
+
+			it('dispatches first due during quiet hours and records timing.notifiedAt.due', () => {
+				const received = [];
+				const msgNotify = { dispatch: (event, msgs) => received.push({ event, msgs }) };
+				const now = new Date(2020, 0, 1, 23, 0, 0, 0).getTime();
+
+				const factory = {
+					applyPatch: (existing, patch, stealthMode = false) => {
+						const updated = { ...existing, ...patch };
+						updated.timing = { ...(existing?.timing || {}), ...(patch?.timing || {}) };
+						if (patch?.timing?.notifiedAt && typeof patch.timing.notifiedAt === 'object') {
+							updated.timing.notifiedAt = { ...(existing?.timing?.notifiedAt || {}), ...(patch.timing.notifiedAt || {}) };
+						}
+						if (!stealthMode) {
+							updated.timing.updatedAt = Date.now();
+						}
+						return updated;
+					},
+				};
+
+				const messages = [{ ref: 'due', level: 10, timing: { notifyAt: now - 1, remindEvery: 1000 } }];
+				const quietHours = { enabled: true, startMin: 22 * 60, endMin: 6 * 60, maxLevel: 20, spreadMs: 0 };
+				const { store } = createStore({
+					messages,
+					msgNotify,
+					factory,
+					options: { quietHours, quietHoursRandomFn: () => 0 },
+				});
+
+				withFixedNow(now, () => {
+					store._initiateNotifications();
+				});
+
+				expect(received).to.have.length(1);
+				expect(received[0].event).to.equal('due');
+				expect(store.fullList[0].timing.notifyAt).to.equal(now + 1000);
+				expect(store.fullList[0].timing.notifiedAt.due).to.equal(now);
+			});
+
+			it('archives raw messages while notifying rendered views', () => {
+				const received = [];
+				const msgNotify = { dispatch: (event, msg) => received.push({ event, msg }) };
+				const patches = [];
+				const msgArchive = {
+					appendSnapshot: () => {},
+					appendDelete: () => {},
+					appendPatch: (ref, patch, existing, updated) => patches.push({ ref, patch, existing, updated }),
+				};
+				const factory = createFactoryWithUpdatedAt();
+				const now = 6000;
+				const { store } = createStore({
+					messages: [{ ref: 'r1', level: 10, timing: {}, title: 'T', text: 'old' }],
+					factory,
+					msgNotify,
+					msgArchive,
+				});
+				store.lastPruneAt = now;
+
+				withFixedNow(now, () => {
+					const ok = store.updateMessage({ ref: 'r1', text: 'new' });
+					expect(ok).to.equal(true);
+				});
+
+				expect(received[0].msg.__rendered).to.equal(true);
+				// 1x user patch + notifiedAt(updated) + notifiedAt(due)
+				expect(patches).to.have.length(3);
+				for (const p of patches) {
+					expect(p.updated).to.not.have.property('__rendered');
+					expect(p.existing).to.not.have.property('__rendered');
+				}
+			});
 	});
 
 	describe('closed lifecycle cleanup', () => {
@@ -657,14 +743,15 @@ describe('MsgStore', () => {
 				expect(received[0].event).to.equal('recreated');
 			});
 
-			it('adds when the ref does not exist', () => {
-				const { store, writes } = createStore();
-				const result = store.addOrUpdateMessage({ ref: 'r2', level: 10 });
-				expect(result).to.equal(true);
-				expect(store.getMessages()).to.have.length(1);
-			expect(writes).to.have.length(1);
+				it('adds when the ref does not exist', () => {
+					const { store, writes } = createStore();
+					const result = store.addOrUpdateMessage({ ref: 'r2', level: 10 });
+					expect(result).to.equal(true);
+					expect(store.getMessages()).to.have.length(1);
+					// create persists list + notifiedAt(added) patch + notifiedAt(due) patch
+					expect(writes).to.have.length(3);
+				});
 		});
-	});
 
 		describe('read helpers', () => {
 			it('finds by ref and returns undefined when missing', () => {
