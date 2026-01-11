@@ -91,6 +91,9 @@ While running, it schedules a timer tick and performs one operation per tick (cr
 - Ref format:
   - `IngestRandomChaos.<instanceId>.<runId>.<kind>.<slot>`
   - Example: `IngestRandomChaos.0.<runId>.task.3`
+- Reuse semantics:
+  - Updates are only applied when the message is quasi-open (`store.getMessageByRef(ref, 'quasiOpen')`).
+  - Otherwise the plugin recreates the message via `store.addMessage(...)` (to exercise realistic `recreated`/`recovered` core behavior).
 
 ### Message characteristics
 
