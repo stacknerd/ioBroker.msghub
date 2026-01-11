@@ -181,6 +181,40 @@ Messages can track coarse completion state in `progress`:
 
 ---
 
+## Structured details: canonical hints (`details`)
+
+Messages may include optional, structured details in `details`.
+
+Unlike `title` and `text` (which are the primary, human-facing presentation fields), `details` is meant to carry **plain, explicit hints**
+that downstream logic can consume without having to parse or reinterpret prose. Typical use cases are templates, TTS phrasing, grouping, or later AI enhancements.
+
+Shape:
+
+```js
+details: {
+  location?: string,
+  task?: string,
+  reason?: string,
+  tools?: string[],
+  consumables?: string[],
+}
+```
+
+Field semantics:
+
+- `details.location`: “where?” — a human-readable place, area, object, or target (free text).
+- `details.task`: “what to do?” — a short, unembellished instruction (free text; may be localized).
+- `details.reason`: “why / what caused it?” — the cause or context (free text; may be localized).
+- `details.tools`: list of tools/equipment needed (free text entries; no normalization beyond trimming).
+- `details.consumables`: list of consumables/spare parts/materials (free text entries; no normalization beyond trimming).
+
+Update semantics:
+
+- If `details` is present in a patch, it is treated as a **block replacement** (similar to `title`/`text`): provide the full `details` object you want to keep.
+- Use `details: null` to clear/remove the entire block.
+
+---
+
 ## Lists: shopping/inventory (`listItems[]`)
 
 For `kind: "shoppinglist"` and `kind: "inventorylist"`, a message can include a list of items:
