@@ -487,9 +487,7 @@ The writer provides:
   - `msg-taskTimeBudget*` → `timing.timeBudget` (duration in ms)
   - `msg-taskDueIn*` → `timing.dueAt` (timestamp = now + duration)
   - `dueAt` is set when a message is created/reopened and is not shifted on updates (filled if missing)
-- delayed auto-close (`resetOnNormal` + `resetDelay*`) with persistence:
-  - schedule stored in `message.metrics` under an internal key
-  - `tryCloseScheduled()` checks that key and performs the close when due
+- auto-close on recovery via `msg-resetOnNormal`
 - metrics patching:
   - change detection + throttling (`metricsMaxIntervalMs`)
   - separate throttling for session start vs end messages
@@ -639,9 +637,11 @@ Timer details:
 - The timer is started when the condition becomes active and the message does not exist yet.
 - If the condition becomes normal before the timer fires, the timer is cancelled.
 
-Metric:
+Metrics:
 
 - `state-value`: `{ val: <current>, unit: <object.common.unit>, ts: <now> }`
+- `state-min`: recovery lower bound (includes hysteresis when configured)
+- `state-max`: recovery upper bound (includes hysteresis when configured)
 
 Actions:
 
@@ -775,9 +775,12 @@ Message settings (`msg-*`):
 - `msg-kind`: `status|task`
 - `msg-level`: `0|10|20|30` (none/notice/warning/error)
 - `msg-title`, `msg-text`
+- `msg-consumables` (CSV)
+- `msg-tools` (CSV)
+- `msg-reason`, `msg-task`
 - `msg-audienceTags`, `msg-audienceChannels` (CSV strings)
 - `msg-remindValue`, `msg-remindUnit` (seconds per unit)
-- `msg-resetOnNormal`, `msg-resetDelayValue`, `msg-resetDelayUnit` (seconds per unit)
+- `msg-resetOnNormal`
 - `msg-cooldownValue`, `msg-cooldownUnit` (seconds per unit)
 
 Session start message settings (`msg-sessionStart*`):

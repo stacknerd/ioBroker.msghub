@@ -97,11 +97,13 @@
 		}
 
 		function cssSafe(s) {
-			return String(s || '')
-				.trim()
-				.toLowerCase()
-				.replace(/[^a-z0-9_-]+/g, '-')
-				.replace(/^-+|-+$/g, '') || 'unknown';
+			return (
+				String(s || '')
+					.trim()
+					.toLowerCase()
+					.replace(/[^a-z0-9_-]+/g, '-')
+					.replace(/^-+|-+$/g, '') || 'unknown'
+			);
 		}
 
 		let deleteModalApi = null;
@@ -115,20 +117,44 @@
 			const titleId = 'msghub-dialog-delete-title';
 			const descId = 'msghub-dialog-delete-desc';
 
-			const el = h('div', { id: 'msghub-dialog-delete-instance', class: 'msghub-dialog-backdrop', 'aria-hidden': 'true' }, [
-				h('div', { class: 'msghub-dialog', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': titleId, 'aria-describedby': descId }, [
-					h('h6', { id: titleId, class: 'msghub-dialog-title', text: 'Delete instance?' }),
-					h('p', {
-						id: descId,
-						class: 'msghub-muted',
-						text: 'Options of this instance will be lost and states will be deleted.',
-					}),
-					h('div', { class: 'msghub-dialog-actions' }, [
-						h('a', { href: '#', class: 'btn-flat', id: 'msghub-dialog-delete-cancel', text: 'Cancel' }),
-						h('a', { href: '#', class: 'btn red', id: 'msghub-dialog-delete-confirm', text: 'Delete' }),
-					]),
-				]),
-			]);
+			const el = h(
+				'div',
+				{ id: 'msghub-dialog-delete-instance', class: 'msghub-dialog-backdrop', 'aria-hidden': 'true' },
+				[
+					h(
+						'div',
+						{
+							class: 'msghub-dialog',
+							role: 'dialog',
+							'aria-modal': 'true',
+							'aria-labelledby': titleId,
+							'aria-describedby': descId,
+						},
+						[
+							h('h6', { id: titleId, class: 'msghub-dialog-title', text: 'Delete instance?' }),
+							h('p', {
+								id: descId,
+								class: 'msghub-muted',
+								text: 'Options of this instance will be lost and states will be deleted.',
+							}),
+							h('div', { class: 'msghub-dialog-actions' }, [
+								h('a', {
+									href: '#',
+									class: 'btn-flat',
+									id: 'msghub-dialog-delete-cancel',
+									text: 'Cancel',
+								}),
+								h('a', {
+									href: '#',
+									class: 'btn red',
+									id: 'msghub-dialog-delete-confirm',
+									text: 'Delete',
+								}),
+							]),
+						],
+					),
+				],
+			);
 
 			mount.appendChild(el);
 
@@ -348,15 +374,33 @@
 			const titleId = 'msghub-dialog-readme-title';
 			const bodyId = 'msghub-dialog-readme-body';
 
-			const el = h('div', { id: 'msghub-dialog-plugin-readme', class: 'msghub-dialog-backdrop', 'aria-hidden': 'true' }, [
-				h('div', { class: 'msghub-dialog msghub-dialog--readme', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': titleId }, [
-					h('h6', { id: titleId, class: 'msghub-dialog-title', text: 'Plugin guide' }),
-					h('div', { id: bodyId, class: 'msghub-dialog-body' }),
-					h('div', { class: 'msghub-dialog-actions' }, [
-						h('a', { href: '#', class: 'btn-flat', id: 'msghub-dialog-readme-close', text: 'Close' }),
-					]),
-				]),
-			]);
+			const el = h(
+				'div',
+				{ id: 'msghub-dialog-plugin-readme', class: 'msghub-dialog-backdrop', 'aria-hidden': 'true' },
+				[
+					h(
+						'div',
+						{
+							class: 'msghub-dialog msghub-dialog--readme',
+							role: 'dialog',
+							'aria-modal': 'true',
+							'aria-labelledby': titleId,
+						},
+						[
+							h('h6', { id: titleId, class: 'msghub-dialog-title', text: 'Plugin guide' }),
+							h('div', { id: bodyId, class: 'msghub-dialog-body' }),
+							h('div', { class: 'msghub-dialog-actions' }, [
+								h('a', {
+									href: '#',
+									class: 'btn-flat',
+									id: 'msghub-dialog-readme-close',
+									text: 'Close',
+								}),
+							]),
+						],
+					),
+				],
+			);
 
 			mount.appendChild(el);
 
@@ -514,7 +558,11 @@
 				}
 
 				const initial =
-					value === undefined || value === null || value === '' ? '' : valueSet.has(String(value)) ? String(value) : String(value);
+					value === undefined || value === null || value === ''
+						? ''
+						: valueSet.has(String(value))
+							? String(value)
+							: String(value);
 				input.value = initial;
 
 				return {
@@ -621,10 +669,7 @@
 							return Math.round(n * factor);
 						},
 						wrapper: h('div', { class: 'input-field msghub-field msghub-field-time' }, [
-							h('div', { class: 'msghub-field-time-row' }, [
-								input,
-								select,
-							]),
+							h('div', { class: 'msghub-field-time-row' }, [input, select]),
 							h('label', { for: id, text: label || key }),
 							help ? h('div', { class: 'msghub-muted', text: help }) : null,
 						]),
@@ -718,7 +763,9 @@
 			const spec = plugin?.options?.[fieldKey];
 			const fallback = spec && typeof spec === 'object' ? spec.default : undefined;
 			const raw =
-				inst?.native?.[fieldKey] !== undefined && inst?.native?.[fieldKey] !== null ? inst.native[fieldKey] : fallback;
+				inst?.native?.[fieldKey] !== undefined && inst?.native?.[fieldKey] !== null
+					? inst.native[fieldKey]
+					: fallback;
 			if (raw === undefined || raw === null) {
 				return '';
 			}
@@ -770,33 +817,33 @@
 				}
 			};
 
-				const initial = loadState() || {};
+			const initial = loadState() || {};
 
-				function readCfg(cfg, path) {
-					if (!cfg || typeof cfg !== 'object') {
-						return undefined;
-					}
-					return cfg[path];
+			function readCfg(cfg, path) {
+				if (!cfg || typeof cfg !== 'object') {
+					return undefined;
+				}
+				return cfg[path];
+			}
+
+			function isPlainObject(value) {
+				return !!value && typeof value === 'object' && !Array.isArray(value);
+			}
+
+			function sanitizeIngestStatesCustom(custom) {
+				const out = JSON.parse(JSON.stringify(custom || {}));
+				if (!isPlainObject(out)) {
+					return {};
 				}
 
-				function isPlainObject(value) {
-					return !!value && typeof value === 'object' && !Array.isArray(value);
+				for (const [key, value] of Object.entries(out)) {
+					if (typeof key !== 'string' || !key || key.includes('.') || isPlainObject(value)) {
+						delete out[key];
+					}
 				}
 
-				function sanitizeIngestStatesCustom(custom) {
-					const out = JSON.parse(JSON.stringify(custom || {}));
-					if (!isPlainObject(out)) {
-						return {};
-					}
-
-					for (const [key, value] of Object.entries(out)) {
-						if (typeof key !== 'string' || !key || key.includes('.') || isPlainObject(value)) {
-							delete out[key];
-						}
-					}
-
-					return out;
-				}
+				return out;
+			}
 
 			function joinOptions(list) {
 				return (Array.isArray(list) ? list : []).map(v => String(v)).join('|');
@@ -811,7 +858,9 @@
 				if (!modeStr) {
 					warnings.push(`WARNING: missing mode detected. valid options are: ${allowedModes.join('|')}`);
 				} else if (!allowedModes.includes(modeStr)) {
-					warnings.push(`WARNING: invalid mode detected ('${modeStr}'). valid options are: ${allowedModes.join('|')}`);
+					warnings.push(
+						`WARNING: invalid mode detected ('${modeStr}'). valid options are: ${allowedModes.join('|')}`,
+					);
 				}
 
 				if (modeStr === 'triggered') {
@@ -932,20 +981,21 @@
 				const tags = String(readCfg(cfg, 'msg-audienceTags') || '').trim();
 				const channels = String(readCfg(cfg, 'msg-audienceChannels') || '').trim();
 				if (tags || channels) {
-					lines.push(`Audience: ${[tags ? `tags=[${tags}]` : null, channels ? `channels=[${channels}]` : null].filter(Boolean).join(' ')}`);
+					lines.push(
+						`Audience: ${[tags ? `tags=[${tags}]` : null, channels ? `channels=[${channels}]` : null].filter(Boolean).join(' ')}`,
+					);
 				} else {
 					lines.push('Audience: default');
 				}
 
 				const resetOnNormal = readCfg(cfg, 'msg-resetOnNormal');
 				lines.push(`Auto-remove on normal: ${resetOnNormal === false ? 'off' : 'on'}`);
-				const resetDelay = formatDurationValueUnit(readCfg(cfg, 'msg-resetDelayValue'), readCfg(cfg, 'msg-resetDelayUnit'));
-				if (resetDelay) {
-					lines.push(`Reset delay: ${resetDelay}`);
-				}
 				const remind = formatDurationValueUnit(readCfg(cfg, 'msg-remindValue'), readCfg(cfg, 'msg-remindUnit'));
 				lines.push(`Reminder: ${remind ? `every ${remind}` : 'off'}`);
-				const cooldown = formatDurationValueUnit(readCfg(cfg, 'msg-cooldownValue'), readCfg(cfg, 'msg-cooldownUnit'));
+				const cooldown = formatDurationValueUnit(
+					readCfg(cfg, 'msg-cooldownValue'),
+					readCfg(cfg, 'msg-cooldownUnit'),
+				);
 				if (cooldown) {
 					lines.push(`Cooldown after close: ${cooldown}`);
 				}
@@ -956,7 +1006,10 @@
 				if (mode === 'threshold') {
 					const thrMode = String(readCfg(cfg, 'thr-mode') || '').trim() || 'lt';
 					const h = readCfg(cfg, 'thr-hysteresis');
-					const minDur = formatDurationValueUnit(readCfg(cfg, 'thr-minDurationValue'), readCfg(cfg, 'thr-minDurationUnit'));
+					const minDur = formatDurationValueUnit(
+						readCfg(cfg, 'thr-minDurationValue'),
+						readCfg(cfg, 'thr-minDurationUnit'),
+					);
 					const value = readCfg(cfg, 'thr-value');
 					const min = readCfg(cfg, 'thr-min');
 					const max = readCfg(cfg, 'thr-max');
@@ -985,14 +1038,22 @@
 					lines.push('- Actions: ack, snooze (4h), close (only when auto-remove is off).');
 				} else if (mode === 'freshness') {
 					const evaluateBy = readCfg(cfg, 'fresh-evaluateBy') === 'lc' ? 'change (lc)' : 'update (ts)';
-					const thr = formatDurationValueUnit(readCfg(cfg, 'fresh-everyValue'), readCfg(cfg, 'fresh-everyUnit'));
+					const thr = formatDurationValueUnit(
+						readCfg(cfg, 'fresh-everyValue'),
+						readCfg(cfg, 'fresh-everyUnit'),
+					);
 					lines.push(`- Alerts when the state has no ${evaluateBy} for longer than ${thr || '(not set)'}.`);
 					lines.push('- Actions: ack, snooze (4h), close (only when auto-remove is off).');
 				} else if (mode === 'triggered') {
-					const windowDur = formatDurationValueUnit(readCfg(cfg, 'trg-windowValue'), readCfg(cfg, 'trg-windowUnit'));
+					const windowDur = formatDurationValueUnit(
+						readCfg(cfg, 'trg-windowValue'),
+						readCfg(cfg, 'trg-windowUnit'),
+					);
 					const exp = String(readCfg(cfg, 'trg-expectation') || '').trim();
 					lines.push('- Starts a time window when the trigger becomes active.');
-					lines.push(`- If the expectation is not met within ${windowDur || '(not set)'}, it creates a message.`);
+					lines.push(
+						`- If the expectation is not met within ${windowDur || '(not set)'}, it creates a message.`,
+					);
 					if (exp) {
 						lines.push(`- Expectation: ${exp}.`);
 					}
@@ -1000,7 +1061,9 @@
 				} else if (mode === 'nonSettling') {
 					const profile = String(readCfg(cfg, 'nonset-profile') || '').trim();
 					lines.push(`- Non-settling profile: ${profile || '(not set)'}.`);
-					lines.push('- Creates a message when the value is not stable/trending as configured, and closes on recovery.');
+					lines.push(
+						'- Creates a message when the value is not stable/trending as configured, and closes on recovery.',
+					);
 					lines.push('- Actions: ack, snooze (4h), close (only when auto-remove is off).');
 				} else if (mode === 'session') {
 					lines.push('- Tracks a start and an end message (two refs).');
@@ -1094,6 +1157,10 @@
 							'msg-level': 10,
 							'msg-title': '',
 							'msg-text': '',
+							'msg-consumables': '',
+							'msg-tools': '',
+							'msg-reason': '',
+							'msg-task': '',
 							'msg-audienceTags': '',
 							'msg-audienceChannels': '',
 							'msg-cooldownValue': 60,
@@ -1101,8 +1168,6 @@
 							'msg-remindValue': 0,
 							'msg-remindUnit': 3600,
 							'msg-resetOnNormal': true,
-							'msg-resetDelayValue': 0,
-							'msg-resetDelayUnit': 60,
 
 							// Session start message (msg-sessionStart*)
 							'msg-sessionStartEnabled': false,
@@ -1114,23 +1179,23 @@
 							'msg-sessionStartAudienceChannels': '',
 						};
 
-				const elCustom = h('textarea', {
-					class: 'msghub-bulk-apply-textarea',
-					rows: '24',
-					disabled: enabled ? undefined : '',
-				});
-				{
-					const raw = typeof initial.customJson === 'string' ? initial.customJson : '';
-					if (raw && raw.trim()) {
-						try {
-							elCustom.value = JSON.stringify(sanitizeIngestStatesCustom(JSON.parse(raw)), null, 2);
-						} catch {
-							elCustom.value = raw;
-						}
-					} else {
-						elCustom.value = JSON.stringify(sanitizeIngestStatesCustom(defaultCustom), null, 2);
+			const elCustom = h('textarea', {
+				class: 'msghub-bulk-apply-textarea',
+				rows: '24',
+				disabled: enabled ? undefined : '',
+			});
+			{
+				const raw = typeof initial.customJson === 'string' ? initial.customJson : '';
+				if (raw && raw.trim()) {
+					try {
+						elCustom.value = JSON.stringify(sanitizeIngestStatesCustom(JSON.parse(raw)), null, 2);
+					} catch {
+						elCustom.value = raw;
 					}
+				} else {
+					elCustom.value = JSON.stringify(sanitizeIngestStatesCustom(defaultCustom), null, 2);
 				}
+			}
 
 			const elDescription = h('textarea', {
 				class: 'msghub-bulk-apply-textarea msghub-bulk-apply-textarea--desc',
@@ -1292,16 +1357,16 @@
 				setStatus('Loading…');
 				try {
 					const res = await sendTo('admin.ingestStates.custom.read', { id });
-						if (!res?.custom) {
-							setStatus('No MsgHub Custom config found on that object.');
-							return;
-						}
-						elCustom.value = JSON.stringify(sanitizeIngestStatesCustom(res.custom), null, 2);
-						updateLs();
-						updateDescription();
-						invalidatePreview();
-						setStatus('Loaded.');
-					} catch (err) {
+					if (!res?.custom) {
+						setStatus('No MsgHub Custom config found on that object.');
+						return;
+					}
+					elCustom.value = JSON.stringify(sanitizeIngestStatesCustom(res.custom), null, 2);
+					updateLs();
+					updateDescription();
+					invalidatePreview();
+					setStatus('Loaded.');
+				} catch (err) {
 					setStatus(`Load failed: ${String(err?.message || err)}`);
 				} finally {
 					setBusy(false, [btnLoad, btnPreview, btnApply]);
@@ -1310,15 +1375,15 @@
 
 			btnGenerateEmpty.addEventListener('click', e => {
 				e.preventDefault();
-					if (!ensureEnabledOrWarn()) {
-						return;
-					}
-					elCustom.value = JSON.stringify(sanitizeIngestStatesCustom(defaultCustom), null, 2);
-					updateLs();
-					updateDescription();
-					invalidatePreview();
-					setStatus('Generated.');
-				});
+				if (!ensureEnabledOrWarn()) {
+					return;
+				}
+				elCustom.value = JSON.stringify(sanitizeIngestStatesCustom(defaultCustom), null, 2);
+				updateLs();
+				updateDescription();
+				invalidatePreview();
+				setStatus('Generated.');
+			});
 
 			btnPreview.addEventListener('click', async e => {
 				e.preventDefault();
@@ -1330,16 +1395,16 @@
 					setStatus('Enter an object id pattern first.');
 					return;
 				}
-					let custom;
-					try {
-						custom = sanitizeIngestStatesCustom(parseCustom());
-						elCustom.value = JSON.stringify(custom, null, 2);
-						updateLs();
-						updateDescription();
-					} catch (err) {
-						setStatus(`Invalid JSON: ${String(err?.message || err)}`);
-						return;
-					}
+				let custom;
+				try {
+					custom = sanitizeIngestStatesCustom(parseCustom());
+					elCustom.value = JSON.stringify(custom, null, 2);
+					updateLs();
+					updateDescription();
+				} catch (err) {
+					setStatus(`Invalid JSON: ${String(err?.message || err)}`);
+					return;
+				}
 
 				setBusy(true, [btnLoad, btnPreview, btnApply]);
 				setStatus('Previewing…');
@@ -1375,16 +1440,16 @@
 					setStatus('Enter an object id pattern first.');
 					return;
 				}
-					let custom;
-					try {
-						custom = sanitizeIngestStatesCustom(parseCustom());
-						elCustom.value = JSON.stringify(custom, null, 2);
-						updateLs();
-						updateDescription();
-					} catch (err) {
-						setStatus(`Invalid JSON: ${String(err?.message || err)}`);
-						return;
-					}
+				let custom;
+				try {
+					custom = sanitizeIngestStatesCustom(parseCustom());
+					elCustom.value = JSON.stringify(custom, null, 2);
+					updateLs();
+					updateDescription();
+				} catch (err) {
+					setStatus(`Invalid JSON: ${String(err?.message || err)}`);
+					return;
+				}
 				const count = Number(lastPreview?.willChange) || 0;
 				if (!window.confirm(`Apply MsgHub Custom config to ${count} object(s) as previewed?`)) {
 					return;
@@ -1398,7 +1463,9 @@
 						custom,
 						replace: elReplace.checked === true,
 					});
-					setStatus(`Done: updated=${res.updated}, unchanged=${res.unchanged}, errors=${(res.errors || []).length}`);
+					setStatus(
+						`Done: updated=${res.updated}, unchanged=${res.unchanged}, errors=${(res.errors || []).length}`,
+					);
 					setPreview(null);
 					try {
 						M.toast({ html: `Bulk apply done: updated=${res.updated}` });
@@ -1431,7 +1498,10 @@
 							elSource,
 							h('label', { class: 'active', text: 'Import from existing config (object id)' }),
 						]),
-						h('div', { class: 'col s12 m4 msghub-actions msghub-actions--inline' }, [btnLoad, btnGenerateEmpty]),
+						h('div', { class: 'col s12 m4 msghub-actions msghub-actions--inline' }, [
+							btnLoad,
+							btnGenerateEmpty,
+						]),
 					]),
 				]),
 				h('div', { class: 'msghub-bulk-step' }, [
@@ -1439,7 +1509,10 @@
 					h('div', { class: 'row' }, [
 						h('div', { class: 'input-field col s12' }, [
 							elPattern,
-							h('label', { class: 'active', text: 'Export to ids matching the following target pattern' }),
+							h('label', {
+								class: 'active',
+								text: 'Export to ids matching the following target pattern',
+							}),
 						]),
 					]),
 				]),
@@ -1451,7 +1524,10 @@
 								h('div', { class: 'msghub-bulk-apply-col' }, [
 									h('div', { class: 'input-field' }, [
 										elCustom,
-										h('label', { class: 'active', text: `Custom config JSON (${adapterNamespace})` }),
+										h('label', {
+											class: 'active',
+											text: `Custom config JSON (${adapterNamespace})`,
+										}),
 									]),
 								]),
 								h('div', { class: 'msghub-bulk-apply-col' }, [
@@ -1462,7 +1538,9 @@
 								]),
 							]),
 						]),
-						h('div', { class: 'col s12' }, [h('label', null, [elReplace, h('span', { text: ' ' }), elReplaceLabel])]),
+						h('div', { class: 'col s12' }, [
+							h('label', null, [elReplace, h('span', { text: ' ' }), elReplaceLabel]),
+						]),
 					]),
 				]),
 				h('div', { class: 'msghub-bulk-step' }, [
@@ -1520,8 +1598,12 @@
 
 			const openReadme = () => {
 				const body = h('div', null, [
-					readme?.source ? h('div', { class: 'msghub-muted msghub-readme-source', text: `Source: ${readme.source}` }) : null,
-					hasReadme ? renderMarkdownLite(readme.md) : h('p', { class: 'msghub-muted', text: 'No guide available.' }),
+					readme?.source
+						? h('div', { class: 'msghub-muted msghub-readme-source', text: `Source: ${readme.source}` })
+						: null,
+					hasReadme
+						? renderMarkdownLite(readme.md)
+						: h('p', { class: 'msghub-muted', text: 'No guide available.' }),
 				]);
 				ensureReadmeModal().open({
 					title: `${label.primary} · User Guide`,
@@ -1562,7 +1644,10 @@
 					})
 					.catch(err => {
 						body.replaceChildren(
-							h('div', { class: 'msghub-error', text: `Failed to load tools.\n${String(err?.message || err)}` }),
+							h('div', {
+								class: 'msghub-error',
+								text: `Failed to load tools.\n${String(err?.message || err)}`,
+							}),
 						);
 					});
 			};
@@ -1774,12 +1859,16 @@
 				const headActions = h('div', { class: 'msghub-instance-actions' }, []);
 				if (hasOptions) {
 					headActions.appendChild(
-						h('label', { class: 'msghub-acc-toggle msghub-acc-toggle--instance', for: instAccId, text: 'Options' }),
+						h('label', {
+							class: 'msghub-acc-toggle msghub-acc-toggle--instance',
+							for: instAccId,
+							text: 'Options',
+						}),
 					);
 				}
-					headActions.appendChild(
-						h('a', {
-							class: 'btn-flat red-text',
+				headActions.appendChild(
+					h('a', {
+						class: 'btn-flat red-text',
 						href: '#',
 						onclick: async e => {
 							e.preventDefault();
@@ -1794,79 +1883,79 @@
 							await refreshPlugin(plugin.type);
 						},
 						text: 'Delete',
-						}),
-					);
+					}),
+				);
 
-					const wantsChannel = plugin.supportsChannelRouting === true;
-					let channelRow = null;
-					if (wantsChannel) {
-						const channelId = `ch_${plugin.type}_${inst.instanceId}_${adapterInstance}`;
-						const initialChannel = typeof inst.native?.channel === 'string' ? inst.native.channel : '';
-						const channelInput = h('input', {
-							type: 'text',
-							id: channelId,
-							class: 'msghub-instance-channel-input',
-							placeholder: 'all',
-						});
-						channelInput.value = initialChannel;
-						channelInput.setAttribute('data-prev', initialChannel);
+				const wantsChannel = plugin.supportsChannelRouting === true;
+				let channelRow = null;
+				if (wantsChannel) {
+					const channelId = `ch_${plugin.type}_${inst.instanceId}_${adapterInstance}`;
+					const initialChannel = typeof inst.native?.channel === 'string' ? inst.native.channel : '';
+					const channelInput = h('input', {
+						type: 'text',
+						id: channelId,
+						class: 'msghub-instance-channel-input',
+						placeholder: 'all',
+					});
+					channelInput.value = initialChannel;
+					channelInput.setAttribute('data-prev', initialChannel);
 
-						const saveChannel = async () => {
-							const prev = channelInput.getAttribute('data-prev') || '';
-							const next = String(channelInput.value || '').trim();
-							if (next === prev) {
-								return;
-							}
-							try {
-								channelInput.setAttribute('data-prev', next);
-								await sendTo('admin.plugins.updateInstance', {
-									type: plugin.type,
-									instanceId: inst.instanceId,
-									nativePatch: { channel: next || null },
-								});
-								await refreshPlugin(plugin.type);
-							} catch (e) {
-								channelInput.value = prev;
-								channelInput.setAttribute('data-prev', prev);
-								M.toast({ html: `Failed to save channel: ${String(e?.message || e)}` });
-							}
-						};
+					const saveChannel = async () => {
+						const prev = channelInput.getAttribute('data-prev') || '';
+						const next = String(channelInput.value || '').trim();
+						if (next === prev) {
+							return;
+						}
+						try {
+							channelInput.setAttribute('data-prev', next);
+							await sendTo('admin.plugins.updateInstance', {
+								type: plugin.type,
+								instanceId: inst.instanceId,
+								nativePatch: { channel: next || null },
+							});
+							await refreshPlugin(plugin.type);
+						} catch (e) {
+							channelInput.value = prev;
+							channelInput.setAttribute('data-prev', prev);
+							M.toast({ html: `Failed to save channel: ${String(e?.message || e)}` });
+						}
+					};
 
-						channelInput.addEventListener('keydown', e => {
-							if (e.key === 'Enter') {
-								e.preventDefault();
-								channelInput.blur();
-							}
-						});
-						channelInput.addEventListener('blur', () => saveChannel());
-						channelInput.addEventListener('change', () => saveChannel());
+					channelInput.addEventListener('keydown', e => {
+						if (e.key === 'Enter') {
+							e.preventDefault();
+							channelInput.blur();
+						}
+					});
+					channelInput.addEventListener('blur', () => saveChannel());
+					channelInput.addEventListener('change', () => saveChannel());
 
-						channelRow = h('div', { class: 'msghub-instance-channel' }, [
-							h('span', { class: 'msghub-instance-channel-label', text: 'Channel:' }),
-							channelInput,
-						]);
-					}
-
-					const metaChildren = [
-						h('div', { text: `Status: ${inst.status || 'unknown'}` }),
-						instanceTitleValue ? h('div', { text: instanceTitleValue }) : null,
-						channelRow,
-					].filter(Boolean);
-
-					const head = h('div', { class: 'msghub-instance-head' }, [
-						h('div', { class: 'msghub-instance-title', text: `#${inst.instanceId}` }),
-						h('div', { class: 'msghub-instance-enabled' }, [enabledWrap]),
-						h('div', { class: 'msghub-instance-meta msghub-muted' }, metaChildren),
-						headActions,
+					channelRow = h('div', { class: 'msghub-instance-channel' }, [
+						h('span', { class: 'msghub-instance-channel-label', text: 'Channel:' }),
+						channelInput,
 					]);
+				}
+
+				const metaChildren = [
+					h('div', { text: `Status: ${inst.status || 'unknown'}` }),
+					instanceTitleValue ? h('div', { text: instanceTitleValue }) : null,
+					channelRow,
+				].filter(Boolean);
+
+				const head = h('div', { class: 'msghub-instance-head' }, [
+					h('div', { class: 'msghub-instance-title', text: `#${inst.instanceId}` }),
+					h('div', { class: 'msghub-instance-enabled' }, [enabledWrap]),
+					h('div', { class: 'msghub-instance-meta msghub-muted' }, metaChildren),
+					headActions,
+				]);
 
 				instWrap.appendChild(head);
 
-					if (hasOptions) {
-						const bodyWrap = h('div', { class: 'msghub-instance-body' });
-						const fieldsContainer = h('div', { class: 'msghub-instance-fields' });
-						const inputs = {};
-						const initial = {};
+				if (hasOptions) {
+					const bodyWrap = h('div', { class: 'msghub-instance-body' });
+					const fieldsContainer = h('div', { class: 'msghub-instance-fields' });
+					const inputs = {};
+					const initial = {};
 
 					const normalize = v => (v === undefined ? null : v);
 					const isEqual = (a, b) => Object.is(a, b);
@@ -1893,51 +1982,54 @@
 
 					const updateDirtyUi = () => setSaveEnabled(isDirtyNow());
 
-						for (const field of fields) {
-							const key = field?.key;
-							if (!key) {
-								continue;
-							}
-							const effectiveValue =
-								inst.native?.[key] !== undefined && inst.native?.[key] !== null
-									? inst.native?.[key]
-									: field.default;
-							const unit = field?.unit;
-							const { input, select, wrapper, getValue, skipSave } = buildFieldInput({
-								type: field.type,
-								key,
-								label: field.type === 'header' ? pickText(field.label) || '' : pickText(field.label) || field.key,
-								help: pickText(field.help) || '',
-								value: effectiveValue,
-								unit,
-								min: field.min,
-								max: field.max,
-								step: field.step,
-								options: field.options,
-							});
+					for (const field of fields) {
+						const key = field?.key;
+						if (!key) {
+							continue;
+						}
+						const effectiveValue =
+							inst.native?.[key] !== undefined && inst.native?.[key] !== null
+								? inst.native?.[key]
+								: field.default;
+						const unit = field?.unit;
+						const { input, select, wrapper, getValue, skipSave } = buildFieldInput({
+							type: field.type,
+							key,
+							label:
+								field.type === 'header'
+									? pickText(field.label) || ''
+									: pickText(field.label) || field.key,
+							help: pickText(field.help) || '',
+							value: effectiveValue,
+							unit,
+							min: field.min,
+							max: field.max,
+							step: field.step,
+							options: field.options,
+						});
 
-							if (skipSave === true) {
-								fieldsContainer.appendChild(wrapper);
-								continue;
-							}
-
-							const valueGetter = typeof getValue === 'function' ? getValue : () => null;
-							inputs[key] = { input, select, field, getValue: valueGetter };
-							initial[key] = normalize(valueGetter());
-
-							if (input?.tagName === 'SELECT') {
-								input.addEventListener('change', updateDirtyUi);
-							} else if (field.type === 'boolean') {
-								input?.addEventListener?.('change', updateDirtyUi);
-							} else {
-								input?.addEventListener?.('input', updateDirtyUi);
-								input?.addEventListener?.('change', updateDirtyUi);
-							}
-							if (select) {
-								select.addEventListener('change', updateDirtyUi);
-							}
-
+						if (skipSave === true) {
 							fieldsContainer.appendChild(wrapper);
+							continue;
+						}
+
+						const valueGetter = typeof getValue === 'function' ? getValue : () => null;
+						inputs[key] = { input, select, field, getValue: valueGetter };
+						initial[key] = normalize(valueGetter());
+
+						if (input?.tagName === 'SELECT') {
+							input.addEventListener('change', updateDirtyUi);
+						} else if (field.type === 'boolean') {
+							input?.addEventListener?.('change', updateDirtyUi);
+						} else {
+							input?.addEventListener?.('input', updateDirtyUi);
+							input?.addEventListener?.('change', updateDirtyUi);
+						}
+						if (select) {
+							select.addEventListener('change', updateDirtyUi);
+						}
+
+						fieldsContainer.appendChild(wrapper);
 					}
 
 					saveBtn = h('a', {
@@ -1975,16 +2067,20 @@
 			const catClass = typeof plugin?.category === 'string' ? `msghub-plugin-${cssSafe(plugin.category)}` : '';
 			const multiClass = plugin.supportsMultiple === true ? 'msghub-plugin--multi' : 'msghub-plugin--single';
 
-			return h('div', { class: `card msghub-plugin-card ${catClass} ${multiClass}`.trim(), 'data-plugin-type': plugin.type }, [
-				h('input', {
-					class: 'msghub-acc-input',
-					type: 'checkbox',
-					id: accId,
-					checked: isExpanded === true ? '' : undefined,
-				}),
-				header,
-				body,
-			]);
+			return h(
+				'div',
+				{ class: `card msghub-plugin-card ${catClass} ${multiClass}`.trim(), 'data-plugin-type': plugin.type },
+				[
+					h('input', {
+						class: 'msghub-acc-input',
+						type: 'checkbox',
+						id: accId,
+						checked: isExpanded === true ? '' : undefined,
+					}),
+					header,
+					body,
+				],
+			);
 		}
 
 		let cachedPluginsWithUi = [];
@@ -2075,7 +2171,10 @@
 						}
 
 						const section = h('div', { class: 'msghub-plugin-category', 'data-category': category }, [
-							h('h6', { class: 'msghub-plugin-category-title', text: CATEGORY_TITLES[category] || category }),
+							h('h6', {
+								class: 'msghub-plugin-category-title',
+								text: CATEGORY_TITLES[category] || category,
+							}),
 						]);
 
 						for (const plugin of list) {

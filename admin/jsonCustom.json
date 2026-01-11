@@ -1338,22 +1338,71 @@
 					"xl": 6,
 					"placeholder": "e.g. No update for 12h – please check sensor."
 				},
+					"_msgRenderThreshold": {
+						"newLine": true,
+						"type": "staticText",
+						"text": "Threshold rules: you can use these templates in Title/Text:\n\n- {{m.state-value}}: current value (at render time)\n- {{m.state-min}}: lower recovery bound (incl. hysteresis; may be empty depending on mode)\n- {{m.state-max}}: upper recovery bound (incl. hysteresis; may be empty depending on mode)\n\nTip: use .val / .unit when needed (e.g. {{m.state-value.val}}).",
+						"xs": 12,
+						"sm": 12,
+						"md": 12,
+						"lg": 12,
+					"xl": 12,
+					"hidden": "((data['managedMeta-managedMessage']) && ((data['managedMeta-managedBy'] || '').indexOf('IngestStates.') === -1)) || ((data.mode || data['mode']) !== 'threshold')",
+					"style": { "whiteSpace": "pre-wrap" }
+				},
+					"_msgRenderFreshness": {
+						"newLine": true,
+						"type": "staticText",
+						"text": "Freshness rules: you can use these templates in Title/Text:\n\n- (to be defined).",
+						"xs": 12,
+						"sm": 12,
+						"md": 12,
+						"lg": 12,
+					"xl": 12,
+					"hidden": "((data['managedMeta-managedMessage']) && ((data['managedMeta-managedBy'] || '').indexOf('IngestStates.') === -1)) || ((data.mode || data['mode']) !== 'freshness')",
+					"style": { "whiteSpace": "pre-wrap" }
+				},
+					"_msgRenderTriggered": {
+						"newLine": true,
+						"type": "staticText",
+						"text": "Triggered rules: you can use these templates in Title/Text:\n\n- (to be defined).",
+						"xs": 12,
+						"sm": 12,
+						"md": 12,
+						"lg": 12,
+					"xl": 12,
+					"hidden": "((data['managedMeta-managedMessage']) && ((data['managedMeta-managedBy'] || '').indexOf('IngestStates.') === -1)) || ((data.mode || data['mode']) !== 'triggered')",
+					"style": { "whiteSpace": "pre-wrap" }
+				},
+					"_msgRenderNonSettling": {
+						"newLine": true,
+						"type": "staticText",
+						"text": "NonSettling rules: you can use these templates in Title/Text:\n\n- (to be defined).",
+						"xs": 12,
+						"sm": 12,
+						"md": 12,
+						"lg": 12,
+					"xl": 12,
+					"hidden": "((data['managedMeta-managedMessage']) && ((data['managedMeta-managedBy'] || '').indexOf('IngestStates.') === -1)) || ((data.mode || data['mode']) !== 'nonSettling')",
+					"style": { "whiteSpace": "pre-wrap" }
+				},
+					"_msgRenderSession": {
+						"newLine": true,
+						"type": "staticText",
+						"text": "Session rules: you can use these templates in Title/Text:\n\n- (to be defined).",
+						"xs": 12,
+						"sm": 12,
+						"md": 12,
+						"lg": 12,
+					"xl": 12,
+					"hidden": "((data['managedMeta-managedMessage']) && ((data['managedMeta-managedBy'] || '').indexOf('IngestStates.') === -1)) || ((data.mode || data['mode']) !== 'session')",
+					"style": { "whiteSpace": "pre-wrap" }
+				},
 				"_msgH4StatusDetails": {
 					"newLine": true,
 					"type": "header",
 					"size": 4,
 					"text": "Status details",
-					"xs": 12,
-					"sm": 12,
-					"md": 12,
-					"lg": 12,
-					"xl": 12,
-					"hidden": "data['msg-kind'] !== 'status'"
-				},
-				"_msgStatusInfo0": {
-					"newLine": true,
-					"type": "staticText",
-					"text": "Status does not need additional config. ",
 					"xs": 12,
 					"sm": 12,
 					"md": 12,
@@ -1412,10 +1461,10 @@
 					"default": 24,
 					"hidden": "data['msg-kind'] !== 'task'"
 				},
-				"msg-taskDueInUnit": {
-					"type": "select",
-					"label": "Unit",
-					"xs": 12,
+					"msg-taskDueInUnit": {
+						"type": "select",
+						"label": "Unit",
+						"xs": 12,
 					"sm": 6,
 					"md": 3,
 					"lg": 3,
@@ -1425,13 +1474,61 @@
 						{ "label": "Minutes", "value": 60 },
 						{ "label": "Hours", "value": 3600 },
 						{ "label": "Days", "value": 86400 }
-					],
-					"hidden": "data['msg-kind'] !== 'task'"
-				},
-				"_msgH4Audience": {
-					"newLine": true,
-					"type": "header",
-					"size": 4,
+						],
+						"hidden": "data['msg-kind'] !== 'task'"
+					},
+					"msg-consumables": {
+						"newLine": true,
+						"type": "text",
+						"label": "Consumables (CSV)",
+						"help": "Comma-separated consumables. Example: paper,ink",
+						"xs": 12,
+						"sm": 12,
+						"md": 6,
+						"lg": 6,
+						"xl": 6,
+						"default": "",
+						"hidden": "data['msg-kind'] !== 'task'"
+					},
+					"msg-tools": {
+						"type": "text",
+						"label": "Tools (CSV)",
+						"help": "Comma-separated tools. Example: screwdriver,wrench",
+						"xs": 12,
+						"sm": 12,
+						"md": 6,
+						"lg": 6,
+						"xl": 6,
+						"default": "",
+						"hidden": "data['msg-kind'] !== 'task'"
+					},
+					"msg-reason": {
+						"newLine": true,
+						"type": "text",
+						"label": "Cause / context",
+						"help": "Optional plain hint why this message exists (stored as details.reason). Useful for TTS/templates/AI; title/text remain the primary display fields.",
+						"xs": 12,
+						"sm": 12,
+						"md": 6,
+						"lg": 6,
+						"xl": 6,
+						"default": ""
+					},
+					"msg-task": {
+						"type": "text",
+						"label": "What to do",
+						"help": "Optional plain instruction (stored as details.task). Useful for TTS/templates/AI; title/text remain the primary display fields.",
+						"xs": 12,
+						"sm": 12,
+						"md": 6,
+						"lg": 6,
+						"xl": 6,
+						"default": ""
+					},
+					"_msgH4Audience": {
+						"newLine": true,
+						"type": "header",
+						"size": 4,
 					"text": "Audience (optional)",
 					"xs": 12,
 					"sm": 12,
@@ -1542,52 +1639,22 @@
 					"lg": 12,
 					"xl": 12
 				},
-				"msg-resetOnNormal": {
-					"newLine": true,
-					"type": "checkbox",
-					"label": "Auto-remove message(s)",
-					"help": "When back to normal: close the message automatically.\nIf disabled: the message stays and must be acknowledged manually.",
+					"msg-resetOnNormal": {
+						"newLine": true,
+						"type": "checkbox",
+						"label": "Auto-remove message(s)",
+						"help": "When back to normal: close the message automatically.\nIf disabled: the message stays and must be acknowledged manually.",
 					"xs": 12,
 					"sm": 12,
-					"md": 6,
-					"lg": 6,
-					"xl": 6,
-					"default": true
-				},
-					"msg-resetDelayValue": {
-						"type": "number",
-						"label": "Delay",
-						"help": "When back to normal: wait this long and then remove the message (0 = immediately).",
-					"xs": 12,
-					"sm": 6,
-					"md": 3,
-					"lg": 3,
-					"xl": 3,
-						"min": 0,
-						"default": 0,
-					"hidden": "!data['msg-resetOnNormal']"
-				},
-					"msg-resetDelayUnit": {
-						"type": "select",
-						"label": "Unit",
-					"xs": 12,
-					"sm": 6,
-					"md": 3,
-					"lg": 3,
-					"xl": 3,
-					"default": 60,
-					"options": [
-						{ "label": "Seconds", "value": 1 },
-						{ "label": "Minutes", "value": 60 },
-							{ "label": "Hours", "value": 3600 },
-							{ "label": "Days", "value": 86400 }
-						],
-					"hidden": "!data['msg-resetOnNormal']"
-				},
-				"_msgSessionInfo1": {
-					"newLine": true,
-					"type": "staticText",
-					"text": "Note (Session): The following settings apply to the session start (beginning) message.",
+					"md": 12,
+					"lg": 12,
+						"xl": 6,
+						"default": true
+					},
+					"_msgSessionInfo1": {
+						"newLine": true,
+						"type": "staticText",
+						"text": "Note (Session): The following settings apply to the session start (beginning) message.",
 					"xs": 12,
 					"sm": 12,
 					"md": 12,
