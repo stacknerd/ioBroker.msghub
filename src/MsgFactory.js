@@ -1471,8 +1471,8 @@ class MsgFactory {
 				);
 				continue;
 			}
-			if (typeof unit !== 'string' || !unit.trim()) {
-				this.adapter?.log?.warn?.(`MsgFactory: 'metrics.${key}.unit' must be a non-empty string`);
+			if (typeof unit !== 'string') {
+				this.adapter?.log?.warn?.(`MsgFactory: 'metrics.${key}.unit' must be a string`);
 				continue;
 			}
 			const tsOk =

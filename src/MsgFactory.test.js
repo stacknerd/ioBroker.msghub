@@ -323,24 +323,37 @@ function buildBase(overrides = {}) {
 		});
 	});
 
-	describe('metrics', () => {
-		it('normalizes valid metrics map entries', () => {
-			const { factory } = makeFactory();
-			const metrics = new Map([
+		describe('metrics', () => {
+			it('normalizes valid metrics map entries', () => {
+				const { factory } = makeFactory();
+				const metrics = new Map([
 				['temperature', { val: 21.5, unit: 'C', ts: Date.UTC(2025, 0, 1) }],
 				['mode', { val: 'auto', unit: 'state', ts: Date.UTC(2025, 0, 2) }],
 			]);
 
 			const msg = factory.createMessage(buildBase({ metrics }));
 			expect(msg.metrics).to.be.instanceOf(Map);
-			expect(msg.metrics.get('temperature')).to.deep.equal({ val: 21.5, unit: 'C', ts: Date.UTC(2025, 0, 1) });
-			expect(msg.metrics.get('mode')).to.deep.equal({ val: 'auto', unit: 'state', ts: Date.UTC(2025, 0, 2) });
-		});
+				expect(msg.metrics.get('temperature')).to.deep.equal({ val: 21.5, unit: 'C', ts: Date.UTC(2025, 0, 1) });
+				expect(msg.metrics.get('mode')).to.deep.equal({ val: 'auto', unit: 'state', ts: Date.UTC(2025, 0, 2) });
+			});
 
-		it('drops invalid metrics entries', () => {
-			const { factory } = makeFactory();
-			const metrics = new Map([
-				['ok', { val: 1, unit: 'C', ts: Date.UTC(2025, 0, 1) }],
+			it('accepts empty metrics unit strings', () => {
+				const { factory } = makeFactory();
+				const metrics = new Map([
+					['a', { val: 1, unit: '', ts: Date.UTC(2025, 0, 1) }],
+					['b', { val: 2, unit: '  ', ts: Date.UTC(2025, 0, 1) }],
+				]);
+
+				const msg = factory.createMessage(buildBase({ metrics }));
+				expect(msg.metrics).to.be.instanceOf(Map);
+				expect(msg.metrics.get('a')).to.deep.equal({ val: 1, unit: '', ts: Date.UTC(2025, 0, 1) });
+				expect(msg.metrics.get('b')).to.deep.equal({ val: 2, unit: '', ts: Date.UTC(2025, 0, 1) });
+			});
+
+			it('drops invalid metrics entries', () => {
+				const { factory } = makeFactory();
+				const metrics = new Map([
+					['ok', { val: 1, unit: 'C', ts: Date.UTC(2025, 0, 1) }],
 				['bad', { val: { nested: true }, unit: 'x' }],
 			]);
 
