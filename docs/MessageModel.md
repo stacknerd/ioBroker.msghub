@@ -6,9 +6,117 @@ This document explains the concepts without requiring you to read the internal c
 
 ---
 
+## Quick reference: `Message` at a glance
+
+This is the canonical field set used by MsgHub (grouped for readability; optional blocks may be omitted):
+
+```js
+Message {
+  ref: string
+
+  // Presentation (required)
+  title: string
+  text: string
+
+  // Classification (required)
+  level: 0 | 10 | 20 | 30
+  kind: 'task' | 'status' | 'appointment' | 'shoppinglist' | 'inventorylist'
+  origin: { 
+    type: 'manual' | 'import' | 'automation', 
+    system?: string, 
+    id?: string 
+  }
+
+  // Workflow + time
+  lifecycle: {
+    state: 'open' | 'acked' | 'closed' | 'snoozed' | 'deleted' | 'expired'
+    stateChangedAt?: number
+    stateChangedBy?: string | null
+  }
+
+  timing: {
+    createdAt: number
+    updatedAt?: number
+
+    notifyAt?: number | null
+    remindEvery?: number | null
+    cooldown?: number | null
+    notifiedAt?: { [event: string]: number | null } | null
+
+    timeBudget?: number | null
+    expiresAt?: number | null
+
+    // Domain time fields (optional)
+    dueAt?: number | null
+    startAt?: number | null
+    endAt?: number | null
+  }
+
+  // Optional structured blocks
+  details?: {
+    location?: string
+    task?: string
+    reason?: string
+    tools?: string[]
+    consumables?: string[]
+  }
+
+  audience?: {
+    tags?: string[]
+    channels?: { include?: string[], exclude?: string[] }
+  }
+
+  metrics?: 
+    Map<string, { 
+      val: number | string | boolean | null, 
+      unit: string, 
+      ts: number 
+    }>
+
+  attachments?: 
+    Array<{ 
+      type: 'ssml' | 'image' | 'video' | 'file', 
+      value: string 
+    }>
+
+  listItems?: 
+    Array<{ 
+      id: string, 
+      name: string, 
+      category?: string, 
+      quantity?: { 
+        val: number, 
+        unit: string 
+      }, 
+      perUnit?: { 
+        val: number, 
+        unit: string 
+      }, 
+      checked: boolean 
+    }>
+
+  actions?: 
+    Array<{ 
+      type: 'ack' | 'close' | 'delete' | 'snooze' | 'open' | 'link' | 'custom', 
+      id: string, 
+      payload?: Record<string, unknown> | null 
+    }>
+    
+  dependencies?: string[]
+
+  progress: {
+    percentage: number
+    startedAt?: number
+    finishedAt?: number
+  }
+}
+```
+
+For developer-level details and patch semantics, see [`docs/modules/MsgFactory.md`](./modules/MsgFactory.md).
+
 ## Identity: `ref` (the stable key)
 
-Every message is identified by `ref` (string). Think of it as the primary key.
+Every message is identified by `ref` (string). Think of it as the primary key. `ref` is immutable after creation.
 
 Why it matters:
 
@@ -19,6 +127,18 @@ Best practice:
 
 - Always provide a stable `ref` when you can (for example a foreign id or a stable state id).
 - When you create a message without a `ref`, Message Hub may generate one; always use the returned `ref` for follow-up calls.
+- If you rely on auto-generated refs, make sure `origin.id` is stable (otherwise the generated `ref` may change between updates).
+
+---
+
+## Presentation: `title` and `text`
+
+`title` and `text` are the primary, human-facing fields:
+
+- `title`: short headline (UI list rows, notification subject)
+- `text`: free-form description (UI details, notification body, TTS input)
+
+Both fields are required when creating a message and are replaced as-is when patched.
 
 ---
 
@@ -28,11 +148,11 @@ Best practice:
 
 `kind` is a string that describes the domain of the message. Today the built-in constants include:
 
-- `task`
-- `status`
-- `appointment`
-- `shoppinglist`
-- `inventorylist`
+- `task` - actionable item; someone should do something.
+- `status` - informational update; no explicit action is required.
+- `appointment` - scheduled event with a time window.
+- `shoppinglist` - list of items to buy.
+- `inventorylist` - checklist of items to verify/maintain.
 
 ### `level` (severity / urgency)
 
@@ -253,16 +373,30 @@ Examples:
 
 ## Actions: what a user/automation is allowed to do (`actions[]`)
 
-Messages may include a list of allowed actions (`actions[]`). Only actions present in this list are executable.
+Messages may include a list of allowed actions (`actions[]`).
+
+Shape:
+
+```js
+actions: [
+  {
+    type: 'ack' | 'close' | 'delete' | 'snooze' | 'open' | 'link' | 'custom',
+    id: string,
+    payload?: Record<string, unknown> | null
+  }
+]
+```
 
 In practice:
 
-- UIs can render actions as buttons.
-- `EngageSendTo` can execute actions via the `action` command.
+- UIs can render actions as buttons (use `id` as the stable key).
+- Engage/integration plugins may execute actions; execution is integration-specific and not every action type is supported everywhere.
 
-The core supports these action types today:
+Notes:
 
-- `ack`, `close`, `delete`, `snooze`
+- Lifecycle-changing action types supported by the core control plane today: `ack`, `close`, `delete`, `snooze` (see `EngageSendTo`).
+- `open` and `link` are typically UI/navigation hints (no store mutation).
+- `custom` is reserved for plugin-specific semantics and may carry a `payload`.
 
 Full reference for `sendTo` actions: [`docs/plugins/EngageSendTo.md`](./plugins/EngageSendTo.md)
 
@@ -272,8 +406,17 @@ Full reference for `sendTo` actions: [`docs/plugins/EngageSendTo.md`](./plugins/
 
 Messages can contain metrics (for example temperature, battery, last-seen timestamps). Internally they are stored as a JavaScript `Map`.
 
-Two important consequences:
+Shape:
 
+```js
+metrics: new Map([
+  ['temperature', { val: 21.2, unit: '°C', ts: 1700000000000 }],
+])
+```
+
+Notes:
+
+- Metric values are `{ val, unit, ts }` objects where `ts` is a Unix ms timestamp.
 - JSON serialization uses a special Map encoding (so maps survive persistence and state output).
 - Rendering templates (see `MsgRender`) can reference metrics via `{{m.someKey}}`.
 
@@ -281,8 +424,36 @@ If you use `NotifyStates`, metric maps are serialized into JSON-safe form automa
 
 ---
 
+## Attachments: extra payload (`attachments[]`)
+
+Messages may carry optional attachments:
+
+```js
+attachments: [
+  { type: 'ssml' | 'image' | 'video' | 'file', value: string }
+]
+```
+
+- `type` describes how consumers should interpret `value`.
+- `value` is a string reference or inline payload (for example SSML text, a URL, or an ioBroker file id/path).
+
+---
+
+## Dependencies: related messages (`dependencies[]`)
+
+`dependencies` is an optional list of other message refs:
+
+```js
+dependencies: ['some-ref', 'other-ref']
+```
+
+MsgHub does not enforce semantics on this field; it’s meant as a hint for UIs/automations (for example: “blocked by”, “belongs to”, “related”).
+
+---
+
 ## Where to read more
 
 - Control plane API: [`docs/plugins/EngageSendTo.md`](./plugins/EngageSendTo.md)
 - Core schema and rules (developer-level detail): [`docs/modules/MsgFactory.md`](./modules/MsgFactory.md)
+- Map serialization (Map-in-JSON helpers): [`docs/modules/MsgUtils.md`](./modules/MsgUtils.md)
 - Constants (allowed kinds/levels/actions/events): [`docs/modules/MsgConstants.md`](./modules/MsgConstants.md)

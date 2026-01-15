@@ -85,6 +85,7 @@ Outbound mirroring (projection) options:
 Note:
 
 - For `kind=task`, outbound mirroring only includes messages where `timing.startAt` is either missing (unscheduled) **or** set to a timestamp in the past (`startAt <= now`).
+- Outbound items in Alexa are always written with a leading `~` (tilde). These `~`-prefixed items are treated as plugin-owned projections.
 
 ### How to find the correct `jsonStateId`
 
@@ -258,6 +259,11 @@ Processing flow:
      - if the expected value does not show up for `pendingMaxJsonMisses` JSON updates, the create is retried
    - if mapped:
      - update `...items.<id>.value` only when the desired text changed
+
+Orphan / recovery behavior:
+
+- If a `~`-prefixed Alexa item exists but does not match any currently desired outbound item, it is treated as an orphan and deleted in Alexa.
+- If the mapping was reset/lost but a `~`-prefixed Alexa item matches a desired outbound value, the plugin adopts it into the mapping instead of creating a duplicate.
 
 Outbound value selection:
 

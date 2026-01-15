@@ -1294,8 +1294,8 @@
 					"xl": 6,
 					"default": "status",
 					"options": [
-						{ "label": "status", "value": "status" },
-						{ "label": "task", "value": "task" }
+						{ "label": "Status: informational update; no explicit action is required.", "value": "status" },
+						{ "label": "Task: actionable item; someone should do something.", "value": "task" }
 					]
 				},
 				"msg-level": {
@@ -1581,7 +1581,7 @@
 					"lg": 3,
 					"xl": 3,
 					"min": 0,
-					"default": 60
+					"default": 0
 				},
 				"msg-cooldownUnit": {
 					"type": "select",
@@ -1591,11 +1591,11 @@
 					"md": 3,
 					"lg": 3,
 					"xl": 3,
-					"default": 60,
+					"default": 1,
 					"options": [
+						{ "label": "Seconds", "value": 1 },
 						{ "label": "Minutes", "value": 60 },
-						{ "label": "Hours", "value": 3600 },
-						{ "label": "Days", "value": 86400 }
+						{ "label": "Hours", "value": 3600 }
 					]
 				},
 				"msg-remindValue": {
@@ -1608,7 +1608,7 @@
 					"lg": 3,
 					"xl": 3,
 					"min": 0,
-					"default": 0,
+					"default": 24,
 					"hidden": "(['threshold','freshness','triggered','nonSettling','session'].indexOf(((data.mode) || data['mode'])) === -1)"
 				},
 				"msg-remindUnit": {

@@ -253,6 +253,9 @@ Processing flow:
    - For existing items, `completed` maps to list item `checked`.
    - New Alexa items are ingested into Message Hub (parsed into `name` + optional `quantity`/`perUnit` when `parseItemText=true`).
    - Item text/structure is treated as MsgHub-owned and is not updated from Alexa once the item exists locally.
+5. Cleanup of orphaned write-back items:
+   - The plugin writes back list item text to Alexa with a leading `~` (to mark it as managed by MsgHub).
+   - If a `~`-prefixed Alexa item exists but has no matching local item (and no pending create match), it is treated as an orphan and deleted in Alexa.
 5. Completed-item retention:
    - If `keepCompleted > 0`, completed items are deleted after that duration.
    - The plugin tracks the first time an item becomes `checked=true` in its mapping state (`checkedAt`) and uses that timestamp.
