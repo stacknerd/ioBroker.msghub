@@ -19,14 +19,14 @@ This document has two parts:
 ### What it does
 
 - Sends Telegram messages for Message Hub `due` notifications (Pushover-like).
-- Renders message actions as Telegram **inline buttons**.
+- Renders message actions as Telegram **inline buttons** (menu entry + menu navigation).
 - Handles button clicks and executes the corresponding Message Hub action (`ack/close/delete/snooze`) by allow-list (`message.actions[]`).
 - Provides a minimal command entry point:
   - `/start` replies with a short help message.
 
 ### What it intentionally does not do (today)
 
-- It does not send Telegram messages for `added` / `updated` events (only `due`, plus cleanup on `deleted/expired`).
+- It does not create *new* Telegram notifications for `updated/recovered/recreated` events (it only syncs text/buttons and sends newly added image attachments).
 - It does not implement a rich chat bot command set (this is intentionally kept modular and small).
 
 ### Prerequisites
@@ -39,6 +39,8 @@ This document has two parts:
     - `<telegramInstance>.communicate.requestChatId`
     - `<telegramInstance>.communicate.requestMessageId`
   - A `send` response that can be interpreted as a mapping `{ [chatId]: messageId }` (some adapter versions return this as JSON string or list).
+- For image attachments (`attachments[].type === 'image'`), the Telegram adapter must support sending photo messages via `send` payload field `photo` (plus optional `caption`).
+  - If you run an older Telegram adapter that does not support this, image attachments will not be delivered (and therefore also cannot be auto-deleted later).
 
 ### Quick start (recommended setup)
 
@@ -75,14 +77,9 @@ Telegram-specific behavior options:
 - `disableNotificationUpToLevel` (number)
   - For `message.level <= disableNotificationUpToLevel`, outgoing Telegram sends use `disable_notification: true` (silent notifications).
   - Above this level, `disable_notification: false`.
-- `deleteOldNotificationOnResend` (boolean, default `true`)
-  - When a new notification for the same `message.ref` is sent:
-    - `true`: delete the previous Telegram message via `deleteMessage`
-    - `false`: keep the previous message, but remove its buttons via `editMessageText`
-- `deleteOldNotificationOnEnd` (boolean, default `false`)
-  - When a Message Hub message ends with `lifecycle=deleted|expired`:
-    - `true`: delete the Telegram message(s) via `deleteMessage`
-    - `false`: keep the Telegram message(s), but remove its buttons (if there are any)
+- Menu action switches (booleans, default `true`):
+  - `enableAck`, `enableClose`, `enableSnooze`, `enableOpen`, `enableLink`
+  - These only affect which actions are shown in the Telegram menu; the core still enforces the action allow-list via `message.actions[]`.
 
 Icons:
 
@@ -101,7 +98,7 @@ Commands:
 - Use silent notifications for low-severity messages:
   - Keep `disableNotificationUpToLevel` at `notice`/`10` if you want informational messages to be quiet.
 - Prefer deleting old notifications on resend:
-  - `deleteOldNotificationOnResend=true` keeps the chat clean when the same message is re-notified.
+  - The plugin always deletes the old Telegram messages for a ref before sending the new `due` notification, to keep the chat clean.
 
 ### Troubleshooting
 
@@ -156,14 +153,10 @@ The plugin subscribes to:
 
 ### Snooze buttons and overrides
 
-If a message contains at least one `snooze` action:
+If a message contains at least one `snooze` action and `enableSnooze=true`:
 
-- The plugin renders exactly three snooze buttons in a dedicated keyboard row.
-- It uses the default duration from `actions[].payload.snooze.forMs` when present.
-  - If missing/invalid, the default set is `1h`, `4h`, `8h`.
-  - If present, the set is derived to always include `1h`, the default, and one “next” duration (example: default `3h` -> `1h/3h/4h`).
-- Button callback_data encodes the override duration:
-  - `opt_<shortId>:<actionId>:<forMs>`
+- The root menu contains a `Snooze` entry which opens a snooze submenu.
+- The snooze submenu offers a fixed set of durations: `1h`, `4h`, `8h`, `12h`, `24h`.
 - On click, the plugin calls `ctx.api.action.execute({ ref, actionId, snoozeForMs })`.
 
 ### Incoming interactions (engage path)
@@ -184,7 +177,10 @@ Dispatch rules:
 
 Telegram `callback_data` has a tight length limit. The plugin uses a short id:
 
-- Format: `opt_<shortId>:<actionId>[:<arg>]`
+- Formats:
+  - `opt_<shortId>:menu`
+  - `opt_<shortId>:nav:<target>[:<actionId>]`
+  - `opt_<shortId>:act:<actionId>[:<forMs>]`
 - `<shortId>` restricted to `[A-Za-z0-9]`
 
 Persistent state ids (JSON, read-only for users):
@@ -203,11 +199,10 @@ Additional mapping state:
 Cleanup:
 
 - Resend (`due` for the same `ref` again):
-  - The old Telegram message(s) are cleaned up first (delete message or remove buttons, controlled by `deleteOldNotificationOnResend`).
+  - The old Telegram message(s) for the `ref` are deleted first (always).
   - Then a new Telegram message is sent and the mapping is updated to point to the new messageId(s).
 - End-of-life (`deleted` / `expired`):
-  - The mapped Telegram messages are cleaned up and the mapping is removed.
-  - Cleanup mode is controlled by `deleteOldNotificationOnEnd` (delete message vs. remove buttons).
+  - The mapped Telegram messages are deleted (always) and the mapping is removed.
 - Retention / GC:
   - Entries that no longer have buttons (`shouldHaveButtons=false`) may be pruned after a retention window (currently 90 days).
 
