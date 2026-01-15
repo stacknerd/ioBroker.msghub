@@ -66,7 +66,8 @@
     "dev-server": "dev-server",
     "i18n:push": "node i18n-push.mjs",
     "i18n:report": "node i18n-audit.mjs --scope all",
-    "i18n:check": "node i18n-audit.mjs --scope all --check"
+    "i18n:check": "node i18n-audit.mjs --scope all --check --sort",
+    "i18n:sort": "node i18n-audit.mjs --scope all --sort --write"
   },
   "bugs": {
     "url": "https://github.com/stacknerd/ioBroker.msghub/issues"

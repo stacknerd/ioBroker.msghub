@@ -4,13 +4,13 @@
 	"items": {
 		"general": {
 			"type": "panel",
-			"label": "General",
+			"label": "msghub.i18n.core.admin.jsonConfig.general.panel.label",
 			"items": {
 				"locale": {
 					"type": "text",
-					"label": "Locale",
-					"help": "Locale for number/date formatting (e.g. de-DE, en-US).",
-					"placeholder": "de-DE",
+					"label": "msghub.i18n.core.admin.jsonConfig.general.locale.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.general.locale.help",
+					"placeholder": "msghub.i18n.core.admin.jsonConfig.general.locale.placeholder",
 					"default": "de-DE",
 					"newLine": true,
 					"xs": 12,
@@ -21,8 +21,8 @@
 				},
 				"createI18nReport": {
 					"type": "checkbox",
-					"label": "Create i18n report file",
-					"help": "Development helper: writes a runtime report of used + missing i18n keys to ioBroker file storage (msghub.0/data/i18nReport.json).",
+					"label": "msghub.i18n.core.admin.jsonConfig.general.createI18nReport.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.general.createI18nReport.help",
 					"default": false,
 					"newLine": true,
 					"xs": 12,
@@ -35,12 +35,12 @@
 		},
 		"archive": {
 			"type": "panel",
-			"label": "Archive",
+			"label": "msghub.i18n.core.admin.jsonConfig.archive.panel.label",
 			"items": {
 				"keepPreviousWeeks": {
 					"type": "number",
-					"label": "keepPreviousWeeks",
-					"help": "Archive retention (weeks): keep N previous weeks plus the current week. 0 = current only.",
+					"label": "msghub.i18n.core.admin.jsonConfig.archive.keepPreviousWeeks.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.archive.keepPreviousWeeks.help",
 					"default": 3,
 					"newLine": true,
 					"xs": 12,
@@ -51,8 +51,8 @@
 				},
 				"archiveFlushIntervalSec": {
 					"type": "number",
-					"label": "flushInterval (seconds)",
-					"help": "Archive flush interval in seconds (0 = immediate).",
+					"label": "msghub.i18n.core.admin.jsonConfig.archive.flushIntervalSec.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.archive.flushIntervalSec.help",
 					"default": 10,
 					"min": 0,
 					"max": 3600,
@@ -65,8 +65,8 @@
 				},
 				"archiveMaxBatchSize": {
 					"type": "number",
-					"label": "maxBatchSize (pieces)",
-					"help": "Max queued archive events per message ref before forced flush.",
+					"label": "msghub.i18n.core.admin.jsonConfig.archive.maxBatchSize.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.archive.maxBatchSize.help",
 					"default": 200,
 					"min": 1,
 					"max": 5000,
@@ -81,12 +81,12 @@
 		},
 		"store": {
 			"type": "panel",
-			"label": "Store",
+			"label": "msghub.i18n.core.admin.jsonConfig.store.panel.label",
 			"items": {
 					"pruneIntervalSec": {
 						"type": "number",
-						"label": "pruneInterval (sec)",
-						"help": "Throttle window for pruning expired messages (seconds).",
+						"label": "msghub.i18n.core.admin.jsonConfig.store.pruneIntervalSec.label",
+						"help": "msghub.i18n.core.admin.jsonConfig.store.pruneIntervalSec.help",
 						"default": 30,
 						"min": 0,
 						"max": 3600,
@@ -100,14 +100,14 @@
 					},
 					"_quietHoursHeader": {
 						"type": "header",
-						"text": "Notification quiet hours",
+						"text": "msghub.i18n.core.admin.jsonConfig.store.quietHours.header.text",
 						"newLine": true,
 						"size": 2
 					},
 					"quietHoursEnabled": {
 						"type": "checkbox",
-						"label": "Quiet hours enabled",
-						"help": "Suppress repeat notifications during quiet hours (first notifications are still dispatched). Requires the store notifier timer to be enabled.",
+						"label": "msghub.i18n.core.admin.jsonConfig.store.quietHours.enabled.label",
+						"help": "msghub.i18n.core.admin.jsonConfig.store.quietHours.enabled.help",
 						"default": true,
 						"newLine": true,
 						"xs": 12,
@@ -118,8 +118,8 @@
 					},
 					"quietHoursStart": {
 						"type": "text",
-						"label": "Quiet hours start (HH:MM)",
-						"help": "Start time (local time) in HH:MM, e.g. 22:00.",
+						"label": "msghub.i18n.core.admin.jsonConfig.store.quietHours.start.label",
+						"help": "msghub.i18n.core.admin.jsonConfig.store.quietHours.start.help",
 						"default": "22:00",
 						"xs": 12,
 						"sm": 12,
@@ -129,8 +129,8 @@
 					},
 					"quietHoursEnd": {
 						"type": "text",
-						"label": "Quiet hours end (HH:MM)",
-						"help": "End time (local time) in HH:MM, e.g. 06:00.",
+						"label": "msghub.i18n.core.admin.jsonConfig.store.quietHours.end.label",
+						"help": "msghub.i18n.core.admin.jsonConfig.store.quietHours.end.help",
 						"default": "06:00",
 						"xs": 12,
 						"sm": 12,
@@ -140,8 +140,8 @@
 					},
 					"quietHoursMaxLevel": {
 						"type": "number",
-						"label": "Quiet hours: applies up to level",
-						"help": "Suppress repeats only for messages with level <= this value. Above: always dispatch.",
+						"label": "msghub.i18n.core.admin.jsonConfig.store.quietHours.maxLevel.label",
+						"help": "msghub.i18n.core.admin.jsonConfig.store.quietHours.maxLevel.help",
 						"default": 20,
 						"min": 0,
 						"max": 100,
@@ -154,8 +154,8 @@
 					},
 					"quietHoursSpreadMin": {
 						"type": "number",
-						"label": "Morning delivery window (minutes)",
-						"help": "When a repeat notification is suppressed, reschedule it to the quiet-hours end plus a random delay within this window (0 = no randomization).",
+						"label": "msghub.i18n.core.admin.jsonConfig.store.quietHours.spreadMin.label",
+						"help": "msghub.i18n.core.admin.jsonConfig.store.quietHours.spreadMin.help",
 						"default": 60,
 						"min": 0,
 						"max": 720,
@@ -166,10 +166,16 @@
 						"lg": 4,
 						"xl": 4
 					},
+					"_hardDeleteHeader": {
+						"type": "header",
+						"text": "msghub.i18n.core.admin.jsonConfig.store.hardDelete.header.text",
+						"newLine": true,
+						"size": 2
+					},
 					"hardDeleteAfterHours": {
 						"type": "number",
-						"label": "hardDeleteAfter (hours)",
-						"help": "Hard-delete retention for messages in lifecycle.state deleted/expired (hours).",
+						"label": "msghub.i18n.core.admin.jsonConfig.store.hardDelete.afterHours.label",
+						"help": "msghub.i18n.core.admin.jsonConfig.store.hardDelete.afterHours.help",
 					"default": 72,
 					"min": 0,
 					"max": 8760,
@@ -182,8 +188,8 @@
 				},
 				"hardDeleteBatchSize": {
 					"type": "number",
-					"label": "hardDeleteBatchSize (pieces)",
-					"help": "Max messages hard-deleted per run.",
+					"label": "msghub.i18n.core.admin.jsonConfig.store.hardDelete.batchSize.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.store.hardDelete.batchSize.help",
 					"default": 50,
 					"min": 1,
 					"max": 5000,
@@ -196,8 +202,8 @@
 				},
 				"hardDeleteStartupDelaySec": {
 					"type": "number",
-					"label": "hardDeleteStartupDelay (sec)",
-					"help": "Delay hard-deletes after startup to reduce I/O spikes (seconds).",
+					"label": "msghub.i18n.core.admin.jsonConfig.store.hardDelete.startupDelaySec.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.store.hardDelete.startupDelaySec.help",
 					"default": 60,
 					"min": 0,
 					"max": 3600,
@@ -212,12 +218,12 @@
 		},
 		"storage": {
 			"type": "panel",
-			"label": "Storage",
+			"label": "msghub.i18n.core.admin.jsonConfig.storage.panel.label",
 			"items": {
 				"writeIntervalMs": {
 					"type": "number",
-					"label": "writeInterval (ms)",
-					"help": "Throttle window for persisting the message list to file storage (0 = immediate).",
+					"label": "msghub.i18n.core.admin.jsonConfig.storage.writeIntervalMs.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.storage.writeIntervalMs.help",
 					"default": 10000,
 					"min": 0,
 					"max": 600000,
@@ -233,12 +239,12 @@
 		},
 		"stats": {
 			"type": "panel",
-			"label": "Stats",
+			"label": "msghub.i18n.core.admin.jsonConfig.stats.panel.label",
 			"items": {
 				"rollupKeepDays": {
 					"type": "number",
-					"label": "rollupKeepDays (days)",
-					"help": "Retention for stats rollup buckets (days).",
+					"label": "msghub.i18n.core.admin.jsonConfig.stats.rollupKeepDays.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.stats.rollupKeepDays.help",
 					"default": 400,
 					"min": 1,
 					"max": 5000,
@@ -254,12 +260,12 @@
 		},
 		"ai": {
 			"type": "panel",
-			"label": "AI",
+			"label": "msghub.i18n.core.admin.jsonConfig.ai.panel.label",
 			"items": {
 				"aiEnabled": {
 					"type": "checkbox",
-					"label": "Enable AI enhancements",
-					"help": "Enable the core AI service (plugins may use ctx.api.ai.*).",
+					"label": "msghub.i18n.core.admin.jsonConfig.ai.enabled.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.ai.enabled.help",
 					"default": false,
 					"newLine": true,
 					"xs": 12,
@@ -270,17 +276,17 @@
 				},
 				"_aiProviderHeader": {
 					"type": "header",
-					"text": "AI Provider",
+					"text": "msghub.i18n.core.admin.jsonConfig.ai.provider.header.text",
 					"newLine": true,
 					"size": 2
 				},
 				"aiProvider": {
 					"type": "select",
-					"label": "AI provider",
-					"help": "Currently supported: OpenAI.",
+					"label": "msghub.i18n.core.admin.jsonConfig.ai.provider.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.ai.provider.help",
 					"options": [
 						{
-							"label": "OpenAI",
+							"label": "msghub.i18n.core.admin.jsonConfig.ai.provider.option.openai.label",
 							"value": "openai"
 						}
 					],
@@ -294,8 +300,8 @@
 				},
 				"aiOpenAiApiKey": {
 					"type": "password",
-					"label": "OpenAI API key",
-					"help": "Stored encrypted in ioBroker objects (admins can still access).",
+					"label": "msghub.i18n.core.admin.jsonConfig.ai.openai.apiKey.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.ai.openai.apiKey.help",
 					"xs": 12,
 					"sm": 12,
 					"md": 6,
@@ -304,14 +310,14 @@
 				},
 				"_aiOpenAiHeader": {
 					"type": "header",
-					"text": "OpenAi Models",
+					"text": "msghub.i18n.core.admin.jsonConfig.ai.openai.models.header.text",
 					"newLine": true,
 					"size": 2
 				},
 				"aiOpenAiModel": {
 					"type": "text",
-					"label": "OpenAI model (fallback)",
-					"help": "Fallback model when no profile model is set. Example: gpt-5-mini",
+					"label": "msghub.i18n.core.admin.jsonConfig.ai.openai.modelFallback.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.ai.openai.modelFallback.help",
 					"default": "gpt-5-mini",
 					"newLine": true,
 					"xs": 12,
@@ -322,8 +328,8 @@
 				},
 				"aiOpenAiModelFast": {
 					"type": "text",
-					"label": "OpenAI model (fast)",
-					"help": "Used when plugins call ctx.api.ai.* with hints.quality='fast'.",
+					"label": "msghub.i18n.core.admin.jsonConfig.ai.openai.modelFast.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.ai.openai.modelFast.help",
 					"default": "gpt-4o-mini",
 					"xs": 12,
 					"sm": 12,
@@ -333,8 +339,8 @@
 				},
 				"aiOpenAiModelBalanced": {
 					"type": "text",
-					"label": "OpenAI model (balanced)",
-					"help": "Used when plugins call ctx.api.ai.* with hints.quality='balanced'. If empty, fallback model is used.",
+					"label": "msghub.i18n.core.admin.jsonConfig.ai.openai.modelBalanced.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.ai.openai.modelBalanced.help",
 					"default": "gpt-5-mini",
 					"xs": 12,
 					"sm": 12,
@@ -344,8 +350,8 @@
 				},
 				"aiOpenAiModelBest": {
 					"type": "text",
-					"label": "OpenAI model (best)",
-					"help": "Used when plugins call ctx.api.ai.* with hints.quality='best'.",
+					"label": "msghub.i18n.core.admin.jsonConfig.ai.openai.modelBest.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.ai.openai.modelBest.help",
 					"default": "gpt-5.2",
 					"xs": 12,
 					"sm": 12,
@@ -355,8 +361,8 @@
 				},
 				"aiPurposeModelOverrides": {
 					"type": "text",
-					"label": "Purpose→model overrides (JSON)",
-					"help": "Optional array of overrides: [{\"purpose\":\"ssml\",\"quality\":\"best\",\"model\":\"gpt-4o-mini\"},{\"purpose\":\"categorize\",\"model\":\"gpt-4o-mini\"}]. Precedence: purpose+quality > purpose(any) > profile model.",
+					"label": "msghub.i18n.core.admin.jsonConfig.ai.openai.purposeModelOverrides.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.ai.openai.purposeModelOverrides.help",
 					"default": "[]",
 					"minRows": 5,
 					"maxRows": 20,
@@ -369,8 +375,8 @@
 				},
 				"aiOpenAiBaseUrl": {
 					"type": "text",
-					"label": "OpenAI base URL",
-					"help": "Default: https://api.openai.com/v1 (useful for proxies).",
+					"label": "msghub.i18n.core.admin.jsonConfig.ai.openai.baseUrl.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.ai.openai.baseUrl.help",
 					"default": "https://api.openai.com/v1",
 					"newLine": true,
 					"xs": 12,
@@ -381,8 +387,8 @@
 				},
 				"aiTimeoutMs": {
 					"type": "number",
-					"label": "AI timeout (ms)",
-					"help": "Default request timeout for ctx.api.ai.* calls.",
+					"label": "msghub.i18n.core.admin.jsonConfig.ai.timeoutMs.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.ai.timeoutMs.help",
 					"default": 30000,
 					"xs": 12,
 					"sm": 6,
@@ -392,8 +398,8 @@
 				},
 				"aiMaxConcurrency": {
 					"type": "number",
-					"label": "AI max concurrency",
-					"help": "Max concurrent requests (global).",
+					"label": "msghub.i18n.core.admin.jsonConfig.ai.maxConcurrency.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.ai.maxConcurrency.help",
 					"default": 2,
 					"xs": 12,
 					"sm": 6,
@@ -403,8 +409,8 @@
 				},
 				"aiRpm": {
 					"type": "number",
-					"label": "AI rate limit (RPM)",
-					"help": "Requests per minute per plugin (0 = unlimited).",
+					"label": "msghub.i18n.core.admin.jsonConfig.ai.rpm.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.ai.rpm.help",
 					"default": 0,
 					"xs": 12,
 					"sm": 6,
@@ -414,8 +420,8 @@
 				},
 				"aiCacheTtlMs": {
 					"type": "number",
-					"label": "AI cache TTL (ms)",
-					"help": "Default TTL for request.cache (0 = off).",
+					"label": "msghub.i18n.core.admin.jsonConfig.ai.cacheTtlMs.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.ai.cacheTtlMs.help",
 					"default": 0,
 					"xs": 12,
 					"sm": 6,
@@ -425,13 +431,13 @@
 				},
 				"_aiTestHeader": {
 					"type": "header",
-					"text": "AI Test",
+					"text": "msghub.i18n.core.admin.jsonConfig.ai.test.header.text",
 					"size": 2
 				},
 				"aiTestPurpose": {
 					"type": "text",
-					"label": "Test purpose",
-					"help": "Used for model selection (purpose overrides + profile mapping).",
+					"label": "msghub.i18n.core.admin.jsonConfig.ai.test.purpose.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.ai.test.purpose.help",
 					"default": "ai-test",
 					"doNotSave": true,
 					"newLine": true,
@@ -443,12 +449,12 @@
 				},
 				"aiTestQuality": {
 					"type": "select",
-					"label": "Test quality",
-					"help": "Maps to the configured model profile (fast|balanced|best).",
+					"label": "msghub.i18n.core.admin.jsonConfig.ai.test.quality.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.ai.test.quality.help",
 					"options": [
-						{ "label": "fast", "value": "fast" },
-						{ "label": "balanced", "value": "balanced" },
-						{ "label": "best", "value": "best" }
+						{ "label": "msghub.i18n.core.admin.jsonConfig.ai.test.quality.option.fast.label", "value": "fast" },
+						{ "label": "msghub.i18n.core.admin.jsonConfig.ai.test.quality.option.balanced.label", "value": "balanced" },
+						{ "label": "msghub.i18n.core.admin.jsonConfig.ai.test.quality.option.best.label", "value": "best" }
 					],
 					"default": "balanced",
 					"doNotSave": true,
@@ -460,8 +466,8 @@
 				},
 				"aiTestPrompt": {
 					"type": "text",
-					"label": "Test prompt",
-					"help": "Sent as the user prompt for the AI test.",
+					"label": "msghub.i18n.core.admin.jsonConfig.ai.test.prompt.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.ai.test.prompt.help",
 					"default": "Respond with a short sentence: Hi, i am Message Hub! who are you?",
 					"doNotSave": true,
 					"xs": 12,
@@ -472,7 +478,7 @@
 				},
 				"aiTestRun": {
 					"type": "sendTo",
-					"label": "Run AI test",
+					"label": "msghub.i18n.core.admin.jsonConfig.ai.test.run.label",
 					"command": "admin.ai.test",
 					"timeout": 15000,
 					"useNative": true,
@@ -486,8 +492,8 @@
 				},
 				"aiTestLastResult": {
 					"type": "text",
-					"label": "AI test result",
-					"help": "Filled by the test action. Not saved.",
+					"label": "msghub.i18n.core.admin.jsonConfig.ai.test.lastResult.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.ai.test.lastResult.help",
 					"minRows": 5,
 					"maxRows": 5,
 					"doNotSave": true,

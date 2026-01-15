@@ -18,6 +18,36 @@ function stableSortStrings(list) {
 	return list.slice().sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 }
 
+function detectIndent(jsonText) {
+	// Keep existing style: admin/i18n uses tabs, i18n uses 2 spaces
+	if (/\n\t"/.test(jsonText)) {
+		return '\t';
+	}
+	return 2;
+}
+
+function detectEol(text) {
+	return text.includes('\r\n') ? '\r\n' : '\n';
+}
+
+function sameStringList(a, b) {
+	if (a === b) {
+		return true;
+	}
+	if (!Array.isArray(a) || !Array.isArray(b)) {
+		return false;
+	}
+	if (a.length !== b.length) {
+		return false;
+	}
+	for (let i = 0; i < a.length; i += 1) {
+		if (a[i] !== b[i]) {
+			return false;
+		}
+	}
+	return true;
+}
+
 async function listJsonFiles(dirPath) {
 	let entries;
 	try {
@@ -46,6 +76,34 @@ async function readJsonObject(filePath) {
 		throw new Error(`Expected JSON object in ${filePath}`);
 	}
 	return json;
+}
+
+async function readJsonObjectWithStyle(filePath) {
+	const text = await fs.readFile(filePath, 'utf8');
+	const json = JSON.parse(text);
+	if (!isPlainObject(json)) {
+		throw new Error(`Expected JSON object in ${filePath}`);
+	}
+	return {
+		text,
+		json,
+		indent: detectIndent(text),
+		eol: detectEol(text),
+		keys: Object.keys(json),
+	};
+}
+
+function sortObjectKeysShallow(json) {
+	const keys = Object.keys(json);
+	const sortedKeys = stableSortStrings(keys);
+	if (sameStringList(keys, sortedKeys)) {
+		return { changed: false, sorted: json, sortedKeys };
+	}
+	const sorted = Object.create(null);
+	for (const key of sortedKeys) {
+		sorted[key] = json[key];
+	}
+	return { changed: true, sorted, sortedKeys };
 }
 
 function collectKeys(json) {
@@ -318,7 +376,14 @@ function formatTextReport(report, { maxList, maxKeyLen }) {
 
 	for (const area of report.areas) {
 		push('');
-		push(`[${area.name}] dir=${area.dir} base=${area.baseLang} keys=${area.baseCount}`);
+		let header = `[${area.name}] dir=${area.dir} base=${area.baseLang} keys=${area.baseCount}`;
+		if (area.sort && area.sort.enabled) {
+			header += ` sort=${area.sort.unsortedCount}`;
+			if (area.sort.write) {
+				header += ` (fixed=${area.sort.fixedCount})`;
+			}
+		}
+		push(header);
 		for (const lang of area.languages) {
 			const d = area.diffByLang[lang];
 			push(`- ${lang}: keys=${area.countByLang[lang]} missing=${d.missing.length} extra=${d.extra.length}`);
@@ -421,6 +486,7 @@ async function buildAreaReport({ name, dir, enableUsage }) {
 			languages: [],
 			countByLang: {},
 			diffByLang: {},
+			sort: null,
 			usage: enableUsage ? { usedCount: 0, missingInBase: [], unusedInBase: [] } : null,
 		};
 	}
@@ -430,6 +496,13 @@ async function buildAreaReport({ name, dir, enableUsage }) {
 
 	const keysByLang = {};
 	const countByLang = {};
+	const sort = {
+		enabled: false,
+		write: false,
+		unsortedCount: 0,
+		fixedCount: 0,
+		unsortedByLang: {},
+	};
 	for (const t of targets) {
 		const json = await readJsonObject(t.filePath);
 		const keys = collectKeys(json);
@@ -477,6 +550,7 @@ async function buildAreaReport({ name, dir, enableUsage }) {
 		languages: langs,
 		countByLang,
 		diffByLang,
+		sort,
 		usage,
 	};
 }
@@ -487,6 +561,9 @@ const { values } = parseArgs({
 		format: { type: 'string' },
 		check: { type: 'boolean' },
 		usage: { type: 'boolean' },
+		sort: { type: 'boolean' },
+		write: { type: 'boolean' },
+		fix: { type: 'boolean' },
 		'max-list': { type: 'string' },
 		'max-key-len': { type: 'string' },
 		help: { type: 'boolean' },
@@ -495,15 +572,17 @@ const { values } = parseArgs({
 
 if (values.help) {
 	console.log(`Usage:
-  node i18n-audit.mjs [--scope all|runtime|admin] [--format text|json] [--check] [--usage] [--max-list N] [--max-key-len N]
+  node i18n-audit.mjs [--scope all|runtime|admin] [--format text|json] [--check] [--usage] [--sort] [--write|--fix] [--max-list N] [--max-key-len N]
 
 Purpose:
   - Check whether i18n language files are in sync (same keys across languages).
   - Best-effort scan for used keys and report missing/unused keys (runtime and admin).
+  - Optional: enforce / fix deterministic key order (alphabetical, shallow sort).
 
 Notes:
   - Usage scanning is intentionally best-effort (dynamic keys can't be detected reliably).
   - --check fails only on "sync" errors and on used keys missing from the base language.
+  - --sort enables key-order checking; add --write (or --fix) to rewrite files in sorted order.
 `);
 	process.exit(0);
 }
@@ -512,6 +591,8 @@ const scope = values.scope ?? 'runtime';
 const format = String(values.format ?? 'text').toLowerCase();
 const check = Boolean(values.check);
 const enableUsage = values.usage !== false;
+const sortKeys = Boolean(values.sort || values.fix);
+const writeSorted = Boolean(values.write || values.fix);
 const maxListRaw = values['max-list'];
 const maxList = Number.isFinite(Number(maxListRaw)) ? Math.max(0, Math.trunc(Number(maxListRaw))) : 25;
 const maxKeyLenRaw = values['max-key-len'];
@@ -521,7 +602,25 @@ const dirs = resolveTargetDirs(scope);
 const areas = [];
 for (const dir of dirs) {
 	const name = dir === 'i18n' ? 'runtime' : 'admin';
-	areas.push(await buildAreaReport({ name, dir, enableUsage }));
+	const area = await buildAreaReport({ name, dir, enableUsage });
+	if (sortKeys) {
+		area.sort.enabled = true;
+		area.sort.write = writeSorted;
+		for (const t of await listLangFilesInDir(dir)) {
+			const { json, indent, eol } = await readJsonObjectWithStyle(t.filePath);
+			const { changed, sorted } = sortObjectKeysShallow(json);
+			if (changed) {
+				area.sort.unsortedCount += 1;
+				area.sort.unsortedByLang[t.lang] = true;
+				if (writeSorted) {
+					const out = `${JSON.stringify(sorted, null, indent)}${eol}`;
+					await fs.writeFile(t.filePath, out, 'utf8');
+					area.sort.fixedCount += 1;
+				}
+			}
+		}
+	}
+	areas.push(area);
 }
 
 const report = {
@@ -540,7 +639,10 @@ if (format === 'json') {
 if (check) {
 	const syncProblems = areas.some(hasSyncProblems);
 	const usageProblems = areas.some(hasUsageProblems);
-	if (syncProblems || usageProblems) {
+	const sortProblems = sortKeys
+		? areas.some(a => (a.sort?.enabled ? a.sort.unsortedCount > 0 && !a.sort.write : false))
+		: false;
+	if (syncProblems || usageProblems || sortProblems) {
 		process.exitCode = 1;
 	}
 }
