@@ -72,6 +72,42 @@ From a file (will be cleared after successful import; use `--keep-file` to disab
 
 `npm run i18n:push -- i18n-input.js`
 
+## i18n keying guideline (new keys)
+
+New i18n strings should use stable keys (not default texts) so they are searchable, rename-safe and easy to audit.
+
+### Key prefix + scope
+
+- Prefix: `msghub.i18n.`
+- Core strings: `msghub.i18n.core.<area>...`
+- Plugin strings: `msghub.i18n.<PluginTypeName>.<area>...` (example: `msghub.i18n.EngageTelegram...`)
+
+Notes:
+
+- `<PluginTypeName>` must match `manifest.type` (e.g. `IngestStates`, `NotifyStates`, `EngageTelegram`).
+- Do not include plugin instance ids in keys (no `.0.` etc.).
+
+### Areas + suffixes
+
+Use a small set of areas and always end keys with what the string represents:
+
+- Areas (recommended): `admin`, `ui`, `msg`, `error`, `format`, `unit`
+- Suffixes: `.label`, `.help`, `.title`, `.text`, `.action`, `.hint`, `.caption`, `.format`, `.unit`
+
+Examples:
+
+- `msghub.i18n.core.admin.jsonConfig.general.locale.label`
+- `msghub.i18n.core.admin.jsonConfig.general.locale.help`
+- `msghub.i18n.EngageTelegram.action.ack`
+- `msghub.i18n.IngestStates.msg.threshold.title`
+- `msghub.i18n.IngestStates.msg.threshold.text.aboveLimit`
+
+### Style rules
+
+- Allowed characters: `[A-Za-z0-9.]` (dot-separated segments).
+- Keys are semantically named, not based on English sentence texts.
+- Prefer string literals in `i18n.t('...')` calls (avoid concatenated/dynamic keys) so `npm run i18n:report` stays useful.
+
 ## i18n audit / sync checks
 
 Keep language files in sync and get a best-effort usage report:

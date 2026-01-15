@@ -77,6 +77,9 @@ Telegram-specific behavior options:
 - `disableNotificationUpToLevel` (number)
   - For `message.level <= disableNotificationUpToLevel`, outgoing Telegram sends use `disable_notification: true` (silent notifications).
   - Above this level, `disable_notification: false`.
+- Gate options (optional):
+  - `gateStateId`, `gateOp`, `gateValue`, `gateBypassFromLevel`
+  - This is a **global** send/mute gate for the Telegram integration (useful for maintenance/quiet hours). It is not user-specific.
 - Menu action switches (booleans, default `true`):
   - `enableAck`, `enableClose`, `enableSnooze`, `enableOpen`, `enableLink`
   - These only affect which actions are shown in the Telegram menu; the core still enforces the action allow-list via `message.actions[]`.

@@ -48,6 +48,66 @@ const lang = typeof args.lang === 'string' ? args.lang : 'en';
 const debugTheme = args.debugTheme === true || args.debugTheme === '1' || args.debugTheme === 'true';
 const initialThemeFromQuery = resolveTheme(args);
 
+let adminDict = Object.freeze({});
+let adminDictPromise = null;
+
+function normalizeLang(x) {
+	const s = typeof x === 'string' ? x.trim().toLowerCase() : '';
+	return s || 'en';
+}
+
+async function fetchJson(url) {
+	if (typeof fetch !== 'function') {
+		throw new Error('fetch is not available');
+	}
+	const res = await fetch(url, { cache: 'no-cache' });
+	if (!res.ok) {
+		throw new Error(`HTTP ${res.status} for ${url}`);
+	}
+	const json = await res.json();
+	return json && typeof json === 'object' ? json : {};
+}
+
+async function loadAdminI18nDictionary() {
+	const l = normalizeLang(lang);
+	const enUrl = 'i18n/en.json';
+	const langUrl = `i18n/${l}.json`;
+
+	const [enRes, langRes] = await Promise.allSettled([
+		fetchJson(enUrl),
+		l === 'en' ? Promise.resolve({}) : fetchJson(langUrl),
+	]);
+
+	const enDict = enRes.status === 'fulfilled' ? enRes.value : {};
+	const locDict = langRes.status === 'fulfilled' ? langRes.value : {};
+	adminDict = Object.freeze({ ...enDict, ...locDict });
+}
+
+function ensureAdminI18nLoaded() {
+	if (adminDictPromise) {
+		return adminDictPromise;
+	}
+	adminDictPromise = Promise.resolve()
+		.then(() => loadAdminI18nDictionary())
+		.catch(() => undefined);
+	return adminDictPromise;
+}
+
+function hasAdminKey(key) {
+	const k = String(key || '');
+	return !!k && Object.prototype.hasOwnProperty.call(adminDict, k);
+}
+
+function t(key, ...args) {
+	const k = String(key ?? '');
+	let out = hasAdminKey(k) ? adminDict[k] : k;
+	out = String(out ?? '');
+	for (const arg of args) {
+		out = out.replace('%s', String(arg));
+	}
+	return out;
+}
+
 function resolveTheme(query) {
 	const qReact = typeof query?.react === 'string' ? query.react.trim().toLowerCase() : '';
 	if (qReact === 'dark' || qReact === 'light') {
@@ -309,14 +369,15 @@ function h(tag, attrs, children) {
 
 function pickText(value) {
 	if (typeof value === 'string') {
-		return value;
+		const s = value;
+		return s.startsWith('msghub.i18n.') || hasAdminKey(s) ? t(s) : s;
 	}
 	if (!value || typeof value !== 'object') {
 		return '';
 	}
 	const v = value[lang] ?? value.en ?? value.de;
 	if (typeof v === 'string') {
-		return v;
+		return v.startsWith('msghub.i18n.') || hasAdminKey(v) ? t(v) : v;
 	}
 	return '';
 }
@@ -334,6 +395,7 @@ const ctx = Object.freeze({
 	socket,
 	sendTo,
 	h,
+	t,
 	pickText,
 	M,
 	lang,
@@ -358,7 +420,9 @@ let pluginsSection = null;
 let statsSection = null;
 let messagesSection = null;
 
-function initSectionsIfAvailable() {
+async function initSectionsIfAvailable() {
+	await ensureAdminI18nLoaded();
+
 	const pluginsApi = win.MsghubAdminTabPlugins;
 	if (!pluginsSection && pluginsApi?.init) {
 		pluginsSection = pluginsApi.init(ctx);
@@ -386,13 +450,13 @@ function initSectionsIfAvailable() {
 
 window.addEventListener('DOMContentLoaded', () => {
 	M.Tabs.init(document.querySelectorAll('.tabs'), {});
-	initSectionsIfAvailable();
+	void initSectionsIfAvailable();
 });
 
 socket.on('connect', () => {
 	setConnText(`connected (${adapterInstance})`);
 	setConnStatus(true);
-	initSectionsIfAvailable();
+	void initSectionsIfAvailable();
 	pluginsSection?.onConnect?.();
 	statsSection?.onConnect?.();
 	messagesSection?.onConnect?.();

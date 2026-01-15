@@ -253,6 +253,7 @@ Frequently used filters:
   - `string[]`: matches when it would dispatch to **any** of the given channels
   - `routeTo: ""`: matches only “unscoped” messages (where `audience.channels.include` is empty)
   - `routeTo: "all"` (or `routeTo: "*"`): matches all messages (match-all)
+  - Best practice: use this in pull-based plugins/bridges so selection matches the notification routing done by `IoPlugins`.
 - `where.timing.*`: range filter (`number` or `{ min/max }`)
   - Range objects also support `orMissing`:
     - Example: `{ max: now, orMissing: true }` matches messages where the timing field is missing (`undefined|null`) **or** `<= now`.
