@@ -67,8 +67,6 @@ Common options:
   - Filter by `message.kind` (empty = allow all).
 - `levelMin` / `levelMax` (number)
   - Filter by `message.level` (inclusive).
-- `lifecycleStatesCsv` (string, CSV)
-  - Filter by `message.lifecycle.state` (empty = allow all).
 - `audienceTagsAnyCsv` (string, CSV)
   - If set, only messages with at least one matching `audience.tags[]` entry are sent.
 
@@ -104,7 +102,7 @@ Common symptoms and what to check:
 
 - “No Telegram messages are sent”
   - Verify the plugin instance is enabled and running.
-  - Verify your filters (especially `levelMin/levelMax` and `lifecycleStatesCsv`).
+  - Verify your filters (especially `levelMin/levelMax`).
   - Confirm that Message Hub actually emits `due` notifications for your messages.
 
 - “Buttons show up, but clicks do nothing”

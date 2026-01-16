@@ -1484,27 +1484,27 @@
 					"default": 20,
 					"options": [
 						{
-							"label": "msghub.i18n.IngestStates.admin.jsonCustom.common.level.option.noneLong.label",
+							"label": "msghub.i18n.core.admin.common.MsgConstants.level.noneLong.label",
 							"value": 0
 						},
 						{
-							"label": "msghub.i18n.IngestStates.admin.jsonCustom.common.level.option.infoLong.label",
+							"label": "msghub.i18n.core.admin.common.MsgConstants.level.infoLong.label",
 							"value": 10
 						},
 						{
-							"label": "msghub.i18n.IngestStates.admin.jsonCustom.common.level.option.noticeLong.label",
+							"label": "msghub.i18n.core.admin.common.MsgConstants.level.noticeLong.label",
 							"value": 20
 						},
 						{
-							"label": "msghub.i18n.IngestStates.admin.jsonCustom.common.level.option.warningLong.label",
+							"label": "msghub.i18n.core.admin.common.MsgConstants.level.warningLong.label",
 							"value": 30
 						},
 						{
-							"label": "msghub.i18n.IngestStates.admin.jsonCustom.common.level.option.errorLong.label",
+							"label": "msghub.i18n.core.admin.common.MsgConstants.level.errorLong.label",
 							"value": 40
 						},
 						{
-							"label": "msghub.i18n.IngestStates.admin.jsonCustom.common.level.option.criticalLong.label",
+							"label": "msghub.i18n.core.admin.common.MsgConstants.level.criticalLong.label",
 							"value": 50
 						}
 					]
@@ -1951,27 +1951,27 @@
 					"default": 20,
 					"options": [
 						{
-							"label": "msghub.i18n.IngestStates.admin.jsonCustom.common.level.option.noneLong.label",
+							"label": "msghub.i18n.core.admin.common.MsgConstants.level.noneLong.label",
 							"value": 0
 						},
 						{
-							"label": "msghub.i18n.IngestStates.admin.jsonCustom.common.level.option.infoLong.label",
+							"label": "msghub.i18n.core.admin.common.MsgConstants.level.infoLong.label",
 							"value": 10
 						},
 						{
-							"label": "msghub.i18n.IngestStates.admin.jsonCustom.common.level.option.noticeLong.label",
+							"label": "msghub.i18n.core.admin.common.MsgConstants.level.noticeLong.label",
 							"value": 20
 						},
 						{
-							"label": "msghub.i18n.IngestStates.admin.jsonCustom.common.level.option.warningLong.label",
+							"label": "msghub.i18n.core.admin.common.MsgConstants.level.warningLong.label",
 							"value": 30
 						},
 						{
-							"label": "msghub.i18n.IngestStates.admin.jsonCustom.common.level.option.errorLong.label",
+							"label": "msghub.i18n.core.admin.common.MsgConstants.level.errorLong.label",
 							"value": 40
 						},
 						{
-							"label": "msghub.i18n.IngestStates.admin.jsonCustom.common.level.option.criticalLong.label",
+							"label": "msghub.i18n.core.admin.common.MsgConstants.level.criticalLong.label",
 							"value": 50
 						}
 					],

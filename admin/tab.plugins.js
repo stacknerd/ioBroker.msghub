@@ -25,6 +25,67 @@
 		const pickText = ctx.pickText;
 		const M = ctx.M;
 
+		let cachedConstants = null;
+		let constantsLoadPromise = null;
+
+		function pick(obj, path) {
+			const parts = typeof path === 'string' ? path.split('.') : [];
+			let cur = obj;
+			for (const key of parts) {
+				if (!cur || typeof cur !== 'object') {
+					return undefined;
+				}
+				cur = cur[key];
+			}
+			return cur;
+		}
+
+		async function ensureConstantsLoaded() {
+			if (constantsLoadPromise) {
+				return constantsLoadPromise;
+			}
+			constantsLoadPromise = (async () => {
+				try {
+					cachedConstants = await sendTo('admin.constants.get', {});
+				} catch {
+					cachedConstants = null;
+				}
+				return cachedConstants;
+			})();
+			return constantsLoadPromise;
+		}
+
+		function resolveDynamicOptions(options) {
+			if (Array.isArray(options)) {
+				return options;
+			}
+			const src = typeof options === 'string' ? options.trim() : '';
+			if (!src || !src.startsWith('MsgConstants.')) {
+				return [];
+			}
+
+			const path = src.slice('MsgConstants.'.length);
+			const obj = cachedConstants && typeof cachedConstants === 'object' ? pick(cachedConstants, path) : null;
+			if (!obj || typeof obj !== 'object' || Array.isArray(obj)) {
+				return [];
+			}
+
+			const entries = Object.entries(obj).filter(([_k, v]) => typeof v === 'string' || typeof v === 'number');
+
+			const allNumbers = entries.every(([_k, v]) => typeof v === 'number' && Number.isFinite(v));
+			if (allNumbers) {
+				entries.sort((a, b) => Number(a[1]) - Number(b[1]));
+			} else {
+				entries.sort((a, b) => String(a[0]).localeCompare(String(b[0])));
+			}
+
+			return entries.map(([k, v]) => ({
+				label: `msghub.i18n.core.admin.common.${src}.${k}.label`,
+				value: v,
+				fallbackLabel: k,
+			}));
+		}
+
 		const CATEGORY_ORDER = Object.freeze(['ingest', 'notify', 'bridge', 'engage']);
 		const CATEGORY_TITLES = Object.freeze({
 			ingest: 'Ingest',
@@ -519,7 +580,15 @@
 			return map;
 		};
 
-		function buildFieldInput({ type, key, label, value, help, unit, min, max, step, options }) {
+		function parseCsvValues(csv) {
+			const s = typeof csv === 'string' ? csv : csv == null ? '' : String(csv);
+			return s
+				.split(',')
+				.map(x => x.trim())
+				.filter(Boolean);
+		}
+
+		function buildFieldInput({ type, key, label, value, help, unit, min, max, step, options, multiOptions }) {
 			const id = `f_${key}_${Math.random().toString(36).slice(2, 8)}`;
 
 			if (type === 'header') {
@@ -534,13 +603,71 @@
 				};
 			}
 
-			const optionList = Array.isArray(options) ? options.filter(o => o && typeof o === 'object') : [];
+			const multiOptionList =
+				typeof multiOptions === 'string'
+					? resolveDynamicOptions(multiOptions).filter(o => o && typeof o === 'object')
+					: [];
+			if (type === 'string' && multiOptionList.length > 0) {
+				const input = h('select', { id, multiple: 'multiple' });
+
+				const normalized = multiOptionList
+					.map(o => ({
+						label: (() => {
+							const raw = pickText(o.label);
+							if (raw === o.label && typeof o.fallbackLabel === 'string' && o.fallbackLabel.trim()) {
+								return o.fallbackLabel.trim();
+							}
+							return raw || (o.value !== undefined ? String(o.value) : '');
+						})(),
+						value: o.value,
+					}))
+					.filter(o => o.value !== undefined && o.value !== null);
+
+				const valueSet = new Set(normalized.map(o => String(o.value)));
+				const selected = new Set(parseCsvValues(value).map(String));
+
+				for (const v of selected) {
+					if (!valueSet.has(v)) {
+						input.appendChild(h('option', { value: v, text: v }));
+					}
+				}
+
+				for (const opt of normalized) {
+					input.appendChild(h('option', { value: String(opt.value), text: opt.label }));
+				}
+
+				for (const opt of input.options) {
+					opt.selected = selected.has(String(opt.value));
+				}
+
+				return {
+					input,
+					getValue: () =>
+						Array.from(input.selectedOptions || [])
+							.map(o => String(o.value))
+							.filter(Boolean)
+							.join(','),
+					wrapper: h('div', { class: 'input-field msghub-field msghub-field-select' }, [
+						input,
+						h('label', { for: id, text: label || key }),
+						help ? h('div', { class: 'msghub-muted', text: help }) : null,
+					]),
+				};
+			}
+
+			const optionList = resolveDynamicOptions(options).filter(o => o && typeof o === 'object');
 			if ((type === 'string' || type === 'number') && optionList.length > 0) {
 				const input = h('select', { id });
 
 				const normalized = optionList
 					.map(o => ({
-						label: pickText(o.label) || (o.value !== undefined ? String(o.value) : ''),
+						label: (() => {
+							const raw = pickText(o.label);
+							if (raw === o.label && typeof o.fallbackLabel === 'string' && o.fallbackLabel.trim()) {
+								return o.fallbackLabel.trim();
+							}
+							return raw || (o.value !== undefined ? String(o.value) : '');
+						})(),
 						value: o.value,
 					}))
 					.filter(o => o.value !== undefined && o.value !== null);
@@ -2006,6 +2133,7 @@
 							max: field.max,
 							step: field.step,
 							options: field.options,
+							multiOptions: field.multiOptions,
 						});
 
 						if (skipSave === true) {
@@ -2112,6 +2240,7 @@
 
 		async function refreshAll() {
 			try {
+				await ensureConstantsLoaded();
 				const expandedById = captureAccordionState();
 				const { plugins } = await sendTo('admin.plugins.getCatalog', {});
 				const { instances } = await sendTo('admin.plugins.listInstances', {});

@@ -497,7 +497,8 @@ html, body { background: transparent; }
 .msghub-root .input-field input[type="number"],
 .msghub-root .input-field input[type="text"],
 .msghub-root .input-field input[type="password"],
-.msghub-root .input-field input[type="email"] {
+.msghub-root .input-field input[type="email"],
+.msghub-root .input-field select{
   height: 44px;
   margin: 6px 0 0 0;
   padding: 0 12px;

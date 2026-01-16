@@ -34,7 +34,7 @@ What it intentionally does not do:
 1. Create one `NotifyPushover` instance in the Message Hub Plugins tab.
 2. Set:
    - `pushoverInstance` to your adapter instance (default: `pushover.0`)
-   - optionally: filters (`kindsCsv`, `levelMin/max`, `lifecycleStatesCsv`, `audienceTagsAnyCsv`)
+   - optionally: filters (`kindsCsv`, `levelMin/max`, `audienceTagsAnyCsv`)
 3. Optional gate:
    - set `gateStateId` and a `gateOp` (and `gateValue` if needed)
 4. Enable the plugin instance (`...enable` switch).
@@ -55,8 +55,6 @@ Message filters (all optional; empty = allow all):
   - Filters by `message.kind` (example: `task,status,appointment`).
 - `levelMin` / `levelMax` (number)
   - Inclusive level range.
-- `lifecycleStatesCsv` (string, CSV)
-  - Filters by `message.lifecycle.state` (example: `open,acked,closed,snoozed,deleted,expired`).
 - `audienceTagsAnyCsv` (string, CSV)
   - If set, only messages with at least one matching `audience.tags` entry are sent.
 
