@@ -133,7 +133,18 @@
 		"hardDeleteStartupDelaySec": 60,
 		"rollupKeepDays": 400,
 		"writeIntervalMs": 10000,
-		"locale": "de-DE"
+		"locale": "de-DE",
+		"prefixLevelNone": "",
+		"prefixLevelInfo": "ℹ️",
+		"prefixLevelNotice": "🔔",
+		"prefixLevelWarning": "⚠️",
+		"prefixLevelError": "❌",
+		"prefixLevelCritical": "🛑",
+		"prefixKindTask": "✅",
+		"prefixKindStatus": "📡",
+		"prefixKindAppointment": "📅",
+		"prefixKindShoppinglist": "🛒",
+		"prefixKindInventorylist": "📦"
 		},
 	"objects": [],
 	"instanceObjects": []

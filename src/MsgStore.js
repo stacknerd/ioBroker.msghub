@@ -101,6 +101,7 @@ class MsgStore {
 	 * @param {object} [options.storage] Options forwarded to `MsgStorage` (e.g. `baseDir`, `fileName`, `writeIntervalMs`).
 	 * @param {object} [options.archive] Options forwarded to `MsgArchive` (e.g. `baseDir`, `fileExtension`, `flushIntervalMs`).
 	 * @param {object} [options.stats] Options forwarded to `MsgStats` (e.g. `rollupKeepDays`).
+	 * @param {any} [options.render] Render-related options forwarded to `MsgRender` (e.g. prefix configuration).
 	 * @param {{ enabled: boolean, startMin: number, endMin: number, maxLevel: number, spreadMs: number }} [options.quietHours] Optional quiet-hours configuration (fully normalized by `main.js`).
 	 * @param {() => number} [options.quietHoursRandomFn] Optional random function injection (tests).
 	 * @param {any} [options.ai] Optional AI helper instance.
@@ -148,7 +149,7 @@ class MsgStore {
 		this.msgArchive = new MsgArchive(this.adapter, { baseDir: 'data/archive', ...(archive || {}) });
 
 		// View rendering (pure transformation; no I/O).
-		this.msgRender = new MsgRender(this.adapter, { locale: this.adapter?.locale });
+		this.msgRender = new MsgRender(this.adapter, { locale: this.adapter?.locale, render: options?.render || null });
 
 		// Notification dispatcher (plugins register elsewhere).
 		this.msgNotify = new MsgNotify(this.adapter, this.msgConstants, { store: this, ai });

@@ -17,14 +17,14 @@
  *
  * Notes:
  * - The object is deeply frozen via `Object.freeze()` to make it effectively immutable at runtime.
- * - `level` uses numeric severities to allow simple comparisons/sorting (none < notice < warning < error).
+ * - `level` uses numeric severities to allow simple comparisons/sorting (none < info < notice < warning < error < critical).
  * - `kind` and the various `type` fields use stable string identifiers intended for storage/transport.
  */
 const quasiDeletedStates = new Set(['deleted', 'closed', 'expired']);
 const quasiOpenStates = new Set(['open', 'snoozed', 'acked']);
 
 const MsgConstants = Object.freeze({
-	level: Object.freeze({ none: 0, notice: 10, warning: 20, error: 30 }),
+	level: Object.freeze({ none: 0, info: 10, notice: 20, warning: 30, error: 40, critical: 50 }),
 	kind: Object.freeze({
 		task: 'task',
 		status: 'status',

@@ -15,7 +15,7 @@ Simplified flow:
 1. A producer plugin creates or patches a message (usually via `MsgFactory` and `MsgStore`).
 2. `MsgStore` stores the **raw** message in its canonical list (`fullList`).
 3. When a consumer reads messages (`getMessages()`, `getMessageByRef()`, …), `MsgStore` returns a **rendered view**:
-   - `MsgRender.renderMessage(msg)` returns the message with rendered `title`/`text`/`details` (no `display` block).
+   - `MsgRender.renderMessage(msg)` returns the message with rendered `title`/`text`/`details` plus a view-only `display` block.
 4. The rendered output is used for UI or human-facing text, but it is not written back to storage.
 
 This keeps the persisted data stable and compact, while still allowing dynamic display text.
@@ -47,6 +47,9 @@ Instead of rebuilding the entire title/text every time, a message can contain te
 - `title` from `msg.title`
 - `text` from `msg.text`
 - `details` from selected `msg.details` fields
+- `display` (view-only) from message classification and render config
+
+The `display` block is intended for presentation helpers (e.g. prefix tokens) and is not part of the canonical persisted message.
 
 Only a small subset of `details` is rendered on purpose (predictability and safety):
 

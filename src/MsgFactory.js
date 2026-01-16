@@ -38,7 +38,7 @@
  *   text: string                  // free-form description
  *
  *   // Classification
- *   level: 0|10|20|30             // none/notice/warning/error
+ *   level: 0|10|20|30|40|50        // none/info/notice/warning/error/critical
  *   kind: "task"|"status"|"appointment"|"shoppinglist"|"inventorylist"
  *
  *   origin: {

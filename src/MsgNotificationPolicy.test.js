@@ -38,13 +38,12 @@ describe('MsgNotificationPolicy', () => {
 		it('suppresses only repeats within quiet hours up to maxLevel', () => {
 			const quietHours = { enabled: true, startMin: 22 * 60, endMin: 6 * 60, maxLevel: 20, spreadMs: 0 };
 			const now = new Date(2020, 0, 1, 23, 0, 0, 0).getTime();
-			const first = { level: 10, timing: { notifiedAt: {} } };
-			const repeat = { level: 10, timing: { notifiedAt: { due: now - 1 } } };
-			const high = { level: 30, timing: { notifiedAt: { due: now - 1 } } };
+			const first = { level: 20, timing: { notifiedAt: {} } };
+			const repeat = { level: 20, timing: { notifiedAt: { due: now - 1 } } };
+			const high = { level: 40, timing: { notifiedAt: { due: now - 1 } } };
 			expect(MsgNotificationPolicy.shouldSuppressDue({ msg: first, now, quietHours })).to.equal(false);
 			expect(MsgNotificationPolicy.shouldSuppressDue({ msg: repeat, now, quietHours })).to.equal(true);
 			expect(MsgNotificationPolicy.shouldSuppressDue({ msg: high, now, quietHours })).to.equal(false);
 		});
 	});
 });
-

@@ -84,11 +84,6 @@ Telegram-specific behavior options:
   - `enableAck`, `enableClose`, `enableSnooze`, `enableOpen`, `enableLink`
   - These only affect which actions are shown in the Telegram menu; the core still enforces the action allow-list via `message.actions[]`.
 
-Icons:
-
-- Kind icons (title prefix): `iconTask`, `iconStatus`, `iconAppointment`, `iconShoppinglist`, `iconInventorylist`
-- Level icons (title prefix): `iconNone`, `iconNotice`, `iconWarning`, `iconError`
-
 Commands:
 
 - Commands are fixed to `/...` and currently only `/start` is implemented.
@@ -99,7 +94,7 @@ Commands:
 - Start with a narrow filter:
   - Use `levelMin` and `kindsCsv` to reduce noise.
 - Use silent notifications for low-severity messages:
-  - Keep `disableNotificationUpToLevel` at `notice`/`10` if you want informational messages to be quiet.
+  - Keep `disableNotificationUpToLevel` at `info`/`10` if you want informational messages to be quiet.
 - Prefer deleting old notifications on resend:
   - The plugin always deletes the old Telegram messages for a ref before sending the new `due` notification, to keep the chat clean.
 

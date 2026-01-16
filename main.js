@@ -124,7 +124,6 @@ function createMsgAiFromConfig(adapter, config) {
 // const fs = require('fs');
 
 class Msghub extends utils.Adapter {
-	static eLevel = Object.freeze({ none: 0, notice: 1, warning: 2, error: 3 });
 	/**
 	 * @param {Partial<utils.AdapterOptions>} [options] - Adapter options
 	 */
@@ -170,6 +169,32 @@ class Msghub extends utils.Adapter {
 
 		this.msgFactory = new MsgFactory(this, this.msgConstants);
 		const config = this.config || {};
+		const normalizePrefix = value => {
+			if (value == null) {
+				return '';
+			}
+			const s = typeof value === 'string' ? value : String(value);
+			return s.trim();
+		};
+		const render = Object.freeze({
+			prefixes: Object.freeze({
+				level: Object.freeze({
+					none: normalizePrefix(config.prefixLevelNone),
+					info: normalizePrefix(config.prefixLevelInfo),
+					notice: normalizePrefix(config.prefixLevelNotice),
+					warning: normalizePrefix(config.prefixLevelWarning),
+					error: normalizePrefix(config.prefixLevelError),
+					critical: normalizePrefix(config.prefixLevelCritical),
+				}),
+				kind: Object.freeze({
+					task: normalizePrefix(config.prefixKindTask),
+					status: normalizePrefix(config.prefixKindStatus),
+					appointment: normalizePrefix(config.prefixKindAppointment),
+					shoppinglist: normalizePrefix(config.prefixKindShoppinglist),
+					inventorylist: normalizePrefix(config.prefixKindInventorylist),
+				}),
+			}),
+		});
 
 		const msgAi = createMsgAiFromConfig(this, this.config);
 		this.msgAi = msgAi;
@@ -304,6 +329,7 @@ class Msghub extends utils.Adapter {
 			hardDeleteBatchSize,
 			hardDeleteStartupDelayMs,
 			...(quietHours ? { quietHours } : {}),
+			render,
 			archive: { keepPreviousWeeks, flushIntervalMs, maxBatchSize },
 			storage: { writeIntervalMs },
 			stats: { rollupKeepDays },

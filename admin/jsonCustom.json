@@ -467,14 +467,14 @@
 					"xl": 12,
 					"style": { "whiteSpace": "pre-wrap" }
 				},
-					"fresh-everyValue": {
-						"newLine": true,
-						"type": "number",
-						"label": "msghub.i18n.IngestStates.admin.jsonCustom.rules.freshness.field.every.value.label",
-						"help": "msghub.i18n.IngestStates.admin.jsonCustom.rules.freshness.field.every.value.help",
-						"xs": 12,
-						"sm": 6,
-						"md": 3,
+				"fresh-everyValue": {
+					"newLine": true,
+					"type": "number",
+					"label": "msghub.i18n.IngestStates.admin.jsonCustom.rules.freshness.field.every.value.label",
+					"help": "msghub.i18n.IngestStates.admin.jsonCustom.rules.freshness.field.every.value.help",
+					"xs": 12,
+					"sm": 6,
+					"md": 3,
 					"lg": 3,
 					"xl": 3,
 					"min": 1,
@@ -504,21 +504,27 @@
 						}
 					]
 				},
-					"fresh-evaluateBy": {
-						"type": "select",
-						"label": "msghub.i18n.IngestStates.admin.jsonCustom.rules.freshness.field.evaluateBy.label",
-						"help": "msghub.i18n.IngestStates.admin.jsonCustom.rules.freshness.field.evaluateBy.help",
-						"xs": 12,
-						"sm": 12,
-						"md": 6,
+				"fresh-evaluateBy": {
+					"type": "select",
+					"label": "msghub.i18n.IngestStates.admin.jsonCustom.rules.freshness.field.evaluateBy.label",
+					"help": "msghub.i18n.IngestStates.admin.jsonCustom.rules.freshness.field.evaluateBy.help",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
 					"lg": 6,
 					"xl": 6,
-						"default": "ts",
-						"options": [
-							{ "label": "msghub.i18n.IngestStates.admin.jsonCustom.rules.freshness.field.evaluateBy.option.ts.label", "value": "ts" },
-							{ "label": "msghub.i18n.IngestStates.admin.jsonCustom.rules.freshness.field.evaluateBy.option.lc.label", "value": "lc" }
-						]
-					},
+					"default": "ts",
+					"options": [
+						{
+							"label": "msghub.i18n.IngestStates.admin.jsonCustom.rules.freshness.field.evaluateBy.option.ts.label",
+							"value": "ts"
+						},
+						{
+							"label": "msghub.i18n.IngestStates.admin.jsonCustom.rules.freshness.field.evaluateBy.option.lc.label",
+							"value": "lc"
+						}
+					]
+				},
 				"_freshH4Examples": {
 					"newLine": true,
 					"type": "header",
@@ -1475,23 +1481,31 @@
 					"md": 6,
 					"lg": 6,
 					"xl": 6,
-					"default": 10,
+					"default": 20,
 					"options": [
 						{
-							"label": "msghub.i18n.IngestStates.admin.jsonCustom.message.field.level.option.none.label",
+							"label": "msghub.i18n.IngestStates.admin.jsonCustom.common.level.option.noneLong.label",
 							"value": 0
 						},
 						{
-							"label": "msghub.i18n.IngestStates.admin.jsonCustom.message.field.level.option.notice.label",
+							"label": "msghub.i18n.IngestStates.admin.jsonCustom.common.level.option.infoLong.label",
 							"value": 10
 						},
 						{
-							"label": "msghub.i18n.IngestStates.admin.jsonCustom.message.field.level.option.warning.label",
+							"label": "msghub.i18n.IngestStates.admin.jsonCustom.common.level.option.noticeLong.label",
 							"value": 20
 						},
 						{
-							"label": "msghub.i18n.IngestStates.admin.jsonCustom.message.field.level.option.error.label",
+							"label": "msghub.i18n.IngestStates.admin.jsonCustom.common.level.option.warningLong.label",
 							"value": 30
+						},
+						{
+							"label": "msghub.i18n.IngestStates.admin.jsonCustom.common.level.option.errorLong.label",
+							"value": 40
+						},
+						{
+							"label": "msghub.i18n.IngestStates.admin.jsonCustom.common.level.option.criticalLong.label",
+							"value": 50
 						}
 					]
 				},
@@ -1916,11 +1930,11 @@
 					"default": "status",
 					"options": [
 						{
-							"label": "msghub.i18n.IngestStates.admin.jsonCustom.message.field.kind.option.status.label",
+							"label": "msghub.i18n.IngestStates.admin.jsonCustom.message.field.kind.option.statusLong.label",
 							"value": "status"
 						},
 						{
-							"label": "msghub.i18n.IngestStates.admin.jsonCustom.message.field.kind.option.task.label",
+							"label": "msghub.i18n.IngestStates.admin.jsonCustom.message.field.kind.option.taskLong.label",
 							"value": "task"
 						}
 					],
@@ -1934,23 +1948,31 @@
 					"md": 6,
 					"lg": 6,
 					"xl": 6,
-					"default": 10,
+					"default": 20,
 					"options": [
 						{
-							"label": "msghub.i18n.IngestStates.admin.jsonCustom.message.field.level.option.none.label",
+							"label": "msghub.i18n.IngestStates.admin.jsonCustom.common.level.option.noneLong.label",
 							"value": 0
 						},
 						{
-							"label": "msghub.i18n.IngestStates.admin.jsonCustom.message.field.level.option.notice.label",
+							"label": "msghub.i18n.IngestStates.admin.jsonCustom.common.level.option.infoLong.label",
 							"value": 10
 						},
 						{
-							"label": "msghub.i18n.IngestStates.admin.jsonCustom.message.field.level.option.warning.label",
+							"label": "msghub.i18n.IngestStates.admin.jsonCustom.common.level.option.noticeLong.label",
 							"value": 20
 						},
 						{
-							"label": "msghub.i18n.IngestStates.admin.jsonCustom.message.field.level.option.error.label",
+							"label": "msghub.i18n.IngestStates.admin.jsonCustom.common.level.option.warningLong.label",
 							"value": 30
+						},
+						{
+							"label": "msghub.i18n.IngestStates.admin.jsonCustom.common.level.option.errorLong.label",
+							"value": 40
+						},
+						{
+							"label": "msghub.i18n.IngestStates.admin.jsonCustom.common.level.option.criticalLong.label",
+							"value": 50
 						}
 					],
 					"hidden": "((data.mode) || data['mode']) !== 'session' || !(data['msg-sessionStartEnabled'])"

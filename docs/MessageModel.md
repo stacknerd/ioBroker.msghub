@@ -19,7 +19,7 @@ Message {
   text: string
 
   // Classification (required)
-  level: 0 | 10 | 20 | 30
+  level: 0 | 10 | 20 | 30 | 40 | 50
   kind: 'task' | 'status' | 'appointment' | 'shoppinglist' | 'inventorylist'
   origin: { 
     type: 'manual' | 'import' | 'automation', 
@@ -109,6 +109,17 @@ Message {
     startedAt?: number
     finishedAt?: number
   }
+
+  // Presentation helpers (view-only; optional)
+  // Computed by the renderer on output and not intended to be persisted by producers.
+  display?: {
+    titleLevelPrefix: string
+    titleKindPrefix: string
+    titleFullPrefix: string
+    textLevelPrefix: string
+    textKindPrefix: string
+    textFullPrefix: string
+  }
 }
 ```
 
@@ -159,9 +170,26 @@ Both fields are required when creating a message and are replaced as-is when pat
 `level` is numeric to allow sorting and comparisons:
 
 - `0` none
-- `10` notice
-- `20` warning
-- `30` error
+- `10` info
+- `20` notice
+- `30` warning
+- `40` error
+- `50` critical
+
+Semantics (recommended interpretation):
+
+- `none` (0): do not actively surface; keep fully silent (no notification/ping). Useful for “internal”/background messages.
+- `info` (10): delivered and visible, but should not require attention (no urgency).
+- `notice` (20): should draw attention; typically qualifies for a user-facing notification (depending on channel/user settings).
+- `warning` (30): urgent; action required soon (escalation).
+- `error` (40): failure/overdue/incident; action required.
+- `critical` (50): immediate escalation; “wake me up” class (if your integration supports that).
+
+UI meaning (typical):
+
+- Sorting: higher `level` first.
+- Styling: color/badge can be derived from `level`.
+- Notification thresholds: many outputs treat “notify” as `>= notice`, while still listing `info` in overviews/inbox.
 
 ---
 

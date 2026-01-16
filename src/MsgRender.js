@@ -1,5 +1,7 @@
 'use strict';
 
+const { MsgConstants } = require(`${__dirname}/MsgConstants`);
+
 /**
  * MsgRender
  * =========
@@ -53,15 +55,67 @@ class MsgRender {
 	 * @param {import('@iobroker/adapter-core').AdapterInstance} adapter Adapter instance (used for logging only).
 	 * @param {object} [options] Configuration options.
 	 * @param {string} [options.locale] Default locale for number/date formatting.
+	 * @param {object|null} [options.render] Optional render-related settings (prefixes, styles, ...).
 	 */
-	constructor(adapter, { locale = 'en-US' } = {}) {
+	constructor(adapter, { locale = 'en-US', render = null } = {}) {
 		if (!adapter) {
 			throw new Error('MsgRender: adapter is required');
 		}
 		this.adapter = adapter;
 		this.locale = locale;
+		this.render = render && typeof render === 'object' ? render : null;
+		this._levelKeyByValue = new Map();
+		try {
+			const levels = MsgConstants?.level && typeof MsgConstants.level === 'object' ? MsgConstants.level : null;
+			if (levels) {
+				for (const [k, v] of Object.entries(levels)) {
+					if (typeof v === 'number' && Number.isFinite(v)) {
+						this._levelKeyByValue.set(v, k);
+					}
+				}
+			}
+		} catch {
+			// ignore
+		}
 
 		this.adapter?.log?.info?.(`MsgRender initialized: locale='${this.locale}'`);
+	}
+
+	/**
+	 * Build view-only display prefix tokens for a message (no mutation).
+	 *
+	 * @param {object} msg Message object.
+	 * @returns {{ titleLevelPrefix: string, titleKindPrefix: string, titleFullPrefix: string, textLevelPrefix: string, textKindPrefix: string, textFullPrefix: string }} Display tokens.
+	 */
+	_buildDisplay(msg) {
+		const getToken = v => {
+			if (v == null) {
+				return '';
+			}
+			const s = typeof v === 'string' ? v : String(v);
+			return s.trim();
+		};
+
+		const prefixes = this.render?.prefixes;
+		const levelPrefixes = prefixes?.level && typeof prefixes.level === 'object' ? prefixes.level : null;
+		const kindPrefixes = prefixes?.kind && typeof prefixes.kind === 'object' ? prefixes.kind : null;
+
+		const levelValue = typeof msg?.level === 'number' ? msg.level : Number(msg?.level);
+		const levelKey = Number.isFinite(levelValue) ? this._levelKeyByValue.get(levelValue) || '' : '';
+		const kindKey = typeof msg?.kind === 'string' ? msg.kind.trim() : '';
+
+		const titleLevelPrefix = getToken(levelKey && levelPrefixes ? levelPrefixes[levelKey] : '');
+		const titleKindPrefix = getToken(kindKey && kindPrefixes ? kindPrefixes[kindKey] : '');
+		const titleFullPrefix = [titleLevelPrefix, titleKindPrefix].filter(Boolean).join(' ').trim();
+
+		return {
+			titleLevelPrefix,
+			titleKindPrefix,
+			titleFullPrefix,
+			textLevelPrefix: titleLevelPrefix,
+			textKindPrefix: titleKindPrefix,
+			textFullPrefix: titleFullPrefix,
+		};
 	}
 
 	/**
@@ -82,10 +136,7 @@ class MsgRender {
 		}
 
 		// Return a view-only message clone with rendered presentation fields.
-		// Explicitly drop any existing `display` key to keep the output shape stable.
-		// (Canonical messages should not contain `display`, but this also protects against accidental persistence.)
-		const { display, ...rest } = msg;
-		const out = { ...rest };
+		const out = { ...msg };
 
 		// Only render/override fields that exist on the input message to avoid adding new keys.
 		if (Object.prototype.hasOwnProperty.call(msg, 'title')) {
@@ -97,6 +148,8 @@ class MsgRender {
 		if (Object.prototype.hasOwnProperty.call(msg, 'details')) {
 			out.details = this.renderDetails(msg.details, { msg, locale: lc });
 		}
+
+		out.display = this._buildDisplay(msg);
 
 		return out;
 	}

@@ -2,6 +2,7 @@
 
 const { expect } = require('chai');
 const { MsgRender } = require('./MsgRender');
+const { MsgConstants } = require('./MsgConstants');
 
 describe('MsgRender', () => {
 	const locale = 'en-GB';
@@ -24,11 +25,44 @@ describe('MsgRender', () => {
 		const msg = createMessage({ title: 'Temp {{m.temperature}}', metrics });
 
 		const out = renderer.renderMessage(msg);
-		const nf = new Intl.NumberFormat(locale, { maximumFractionDigits: 2 });
+			const nf = new Intl.NumberFormat(locale, { maximumFractionDigits: 2 });
 
-		expect(out.title).to.equal(`Temp ${nf.format(21.75)} C`);
-		expect(out).to.not.have.property('display');
-	});
+			expect(out.title).to.equal(`Temp ${nf.format(21.75)} C`);
+			expect(out).to.have.property('display');
+			expect(out.display).to.include({
+				titleLevelPrefix: '',
+				titleKindPrefix: '',
+				titleFullPrefix: '',
+				textLevelPrefix: '',
+				textKindPrefix: '',
+				textFullPrefix: '',
+			});
+		});
+
+		it('computes display prefixes from render config', () => {
+			const renderer = createRenderer({
+				locale,
+				render: {
+					prefixes: {
+						level: { warning: 'WARNUNG' },
+						kind: { task: 'TASK' },
+					},
+				},
+			});
+			const msg = createMessage({ title: 'Hello', text: 'World' });
+			msg.kind = 'task';
+			msg.level = MsgConstants.level.warning;
+
+			const out = renderer.renderMessage(msg);
+			expect(out.display).to.include({
+				titleLevelPrefix: 'WARNUNG',
+				titleKindPrefix: 'TASK',
+				titleFullPrefix: 'WARNUNG TASK',
+				textLevelPrefix: 'WARNUNG',
+				textKindPrefix: 'TASK',
+				textFullPrefix: 'WARNUNG TASK',
+			});
+		});
 
 	it('renders explicit val, unit, and ts fields', () => {
 		const renderer = createRenderer({ locale });
@@ -273,9 +307,9 @@ describe('MsgRender', () => {
 			{ locale },
 		);
 
-		expect(list).to.have.length(2);
-		expect(list[0].title).to.include('Temp');
-		expect(list[0]).to.not.have.property('display');
-		expect(list[1]).to.not.have.property('display');
+			expect(list).to.have.length(2);
+			expect(list[0].title).to.include('Temp');
+			expect(list[0]).to.have.property('display');
+			expect(list[1]).to.have.property('display');
+		});
 	});
-});

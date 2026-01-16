@@ -139,13 +139,36 @@
 						"xl": 4
 					},
 					"quietHoursMaxLevel": {
-						"type": "number",
+						"type": "select",
 						"label": "msghub.i18n.core.admin.jsonConfig.store.quietHours.maxLevel.label",
 						"help": "msghub.i18n.core.admin.jsonConfig.store.quietHours.maxLevel.help",
-						"default": 20,
-						"min": 0,
-						"max": 100,
-						"step": 1,
+						"options": [
+							{
+								"label": "msghub.i18n.IngestStates.admin.jsonCustom.common.level.option.noneLong.label",
+								"value": 0
+							},
+							{
+								"label": "msghub.i18n.IngestStates.admin.jsonCustom.common.level.option.infoLong.label",
+								"value": 10
+							},
+							{
+								"label": "msghub.i18n.IngestStates.admin.jsonCustom.common.level.option.noticeLong.label",
+								"value": 20
+							},
+							{
+								"label": "msghub.i18n.IngestStates.admin.jsonCustom.common.level.option.warningLong.label",
+								"value": 30
+							},
+							{
+								"label": "msghub.i18n.IngestStates.admin.jsonCustom.common.level.option.errorLong.label",
+								"value": 40
+							},
+							{
+								"label": "msghub.i18n.IngestStates.admin.jsonCustom.common.level.option.criticalLong.label",
+								"value": 50
+							}
+						],
+						"default": 40,
 						"xs": 12,
 						"sm": 12,
 						"md": 6,
@@ -255,6 +278,147 @@
 					"md": 6,
 					"lg": 4,
 					"xl": 4
+				}
+			}
+		},
+		"render": {
+			"type": "panel",
+			"label": "msghub.i18n.core.admin.jsonConfig.render.panel.label",
+			"items": {
+				"_renderLevelPrefixHeader": {
+					"type": "header",
+					"text": "msghub.i18n.core.admin.jsonConfig.render.levelPrefixes.header.text",
+					"newLine": true,
+					"size": 2
+				},
+				"prefixLevelNone": {
+					"type": "text",
+					"label": "msghub.i18n.core.admin.jsonConfig.render.prefixLevelNone.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.render.prefixLevelNone.help",
+					"default": "",
+					"newLine": true,
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 4,
+					"xl": 2
+				},
+				"prefixLevelInfo": {
+					"type": "text",
+					"label": "msghub.i18n.core.admin.jsonConfig.render.prefixLevelInfo.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.render.prefixLevelInfo.help",
+					"default": "ℹ️",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 4,
+					"xl": 2
+				},
+				"prefixLevelNotice": {
+					"type": "text",
+					"label": "msghub.i18n.core.admin.jsonConfig.render.prefixLevelNotice.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.render.prefixLevelNotice.help",
+					"default": "🔔",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 4,
+					"xl": 2
+				},
+				"prefixLevelWarning": {
+					"type": "text",
+					"label": "msghub.i18n.core.admin.jsonConfig.render.prefixLevelWarning.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.render.prefixLevelWarning.help",
+					"default": "⚠️",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 4,
+					"xl": 2
+				},
+				"prefixLevelError": {
+					"type": "text",
+					"label": "msghub.i18n.core.admin.jsonConfig.render.prefixLevelError.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.render.prefixLevelError.help",
+					"default": "❌",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 4,
+					"xl": 2
+				},
+				"prefixLevelCritical": {
+					"type": "text",
+					"label": "msghub.i18n.core.admin.jsonConfig.render.prefixLevelCritical.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.render.prefixLevelCritical.help",
+					"default": "🛑",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 4,
+					"xl": 2
+				},
+				"_renderKindPrefixHeader": {
+					"type": "header",
+					"text": "msghub.i18n.core.admin.jsonConfig.render.kindPrefixes.header.text",
+					"newLine": true,
+					"size": 2
+				},
+				"prefixKindTask": {
+					"type": "text",
+					"label": "msghub.i18n.core.admin.jsonConfig.render.prefixKindTask.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.render.prefixKindTask.help",
+					"default": "✅",
+					"newLine": true,
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 4,
+					"xl": 2
+				},
+				"prefixKindStatus": {
+					"type": "text",
+					"label": "msghub.i18n.core.admin.jsonConfig.render.prefixKindStatus.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.render.prefixKindStatus.help",
+					"default": "📡",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 4,
+					"xl": 2
+				},
+				"prefixKindAppointment": {
+					"type": "text",
+					"label": "msghub.i18n.core.admin.jsonConfig.render.prefixKindAppointment.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.render.prefixKindAppointment.help",
+					"default": "📅",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 4,
+					"xl": 2
+				},
+				"prefixKindShoppinglist": {
+					"type": "text",
+					"label": "msghub.i18n.core.admin.jsonConfig.render.prefixKindShoppinglist.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.render.prefixKindShoppinglist.help",
+					"default": "🛒",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 4,
+					"xl": 2
+				},
+				"prefixKindInventorylist": {
+					"type": "text",
+					"label": "msghub.i18n.core.admin.jsonConfig.render.prefixKindInventorylist.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.render.prefixKindInventorylist.help",
+					"default": "📦",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 4,
+					"xl": 2
 				}
 			}
 		},

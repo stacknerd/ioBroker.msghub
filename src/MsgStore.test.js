@@ -821,16 +821,16 @@ describe('MsgStore', () => {
 			expect(result.items.map(msg => msg.ref)).to.deep.equal(['r2', 'r3']);
 		});
 
-			it('supports level filtering', () => {
-			const messages = [
-				{ ref: 'r1', level: 10, lifecycle: { state: MsgConstants.lifecycle.state.open } },
-				{ ref: 'r2', level: 20, lifecycle: { state: MsgConstants.lifecycle.state.open } },
-				{ ref: 'r3', level: 10, lifecycle: { state: MsgConstants.lifecycle.state.open } },
-			];
-			const { store } = createStore({ messages });
-			const result = store.queryMessages({ where: { level: 10 } });
-				expect(result.items.map(msg => msg.ref)).to.deep.equal(['r1', 'r3']);
-			});
+				it('supports level filtering', () => {
+					const messages = [
+						{ ref: 'r1', level: MsgConstants.level.notice, lifecycle: { state: MsgConstants.lifecycle.state.open } },
+						{ ref: 'r2', level: MsgConstants.level.warning, lifecycle: { state: MsgConstants.lifecycle.state.open } },
+						{ ref: 'r3', level: MsgConstants.level.notice, lifecycle: { state: MsgConstants.lifecycle.state.open } },
+					];
+					const { store } = createStore({ messages });
+					const result = store.queryMessages({ where: { level: MsgConstants.level.notice } });
+					expect(result.items.map(msg => msg.ref)).to.deep.equal(['r1', 'r3']);
+				});
 
 			it('supports origin.system filtering', () => {
 				const messages = [

@@ -35,7 +35,6 @@ What it intentionally does not do:
 2. Set:
    - `pushoverInstance` to your adapter instance (default: `pushover.0`)
    - optionally: filters (`kindsCsv`, `levelMin/max`, `lifecycleStatesCsv`, `audienceTagsAnyCsv`)
-   - priorities/icons to match your desired urgency mapping
 3. Optional gate:
    - set `gateStateId` and a `gateOp` (and `gateValue` if needed)
 4. Enable the plugin instance (`...enable` switch).
@@ -61,17 +60,12 @@ Message filters (all optional; empty = allow all):
 - `audienceTagsAnyCsv` (string, CSV)
   - If set, only messages with at least one matching `audience.tags` entry are sent.
 
-Priority + title icons:
+Priority mapping (fixed):
 
-- `priorityNone` / `priorityNotice` / `priorityWarning` / `priorityError` (number)
-  - Per-level Pushover priority mapping (`-1` low, `0` normal, `1` high).
-- `iconNone` / `iconNotice` / `iconWarning` / `iconError` (string)
-  - Prefix icons used in the Pushover `title` (example defaults: `''`, `ℹ️`, `⚠️`, `🛑`).
-
-Title icons (per message kind):
-
-- `iconTask` / `iconStatus` / `iconAppointment` / `iconShoppinglist` / `iconInventorylist` (string)
-  - Additional prefix icons used in the Pushover `title`, based on `message.kind`.
+- `none` / `info`: `-2` (no notification)
+- `notice`: `-1` (quiet / no sound)
+- `warning` / `error`: `0` (normal)
+- `critical`: `1` (high; bypass quiet hours)
 
 Gate (optional):
 
@@ -85,7 +79,7 @@ Gate (optional):
   - Ignored for `true` / `false`.
 - `gateBypassFromLevel` (number)
   - If `message.level >= gateBypassFromLevel`, the gate is bypassed and the notification is always sent.
-  - Default: `99` (effectively disabled for built-in levels 0/10/20/30).
+  - Default: `50` (critical).
 
 ### How to find the correct `pushoverInstance`
 
@@ -185,8 +179,9 @@ Gate bypass:
 For each matching message, the plugin sends:
 
 - `message`: `message.text` with HTML tags removed
-- `title`: `<kindIcon><levelIcon> <message.title>` (trimmed; missing/empty icons are omitted)
-- `priority`: mapped per level (`priorityNone/Notice/Warning/Error`)
+- `title`: `<display.titleFullPrefix> <message.title>` (trimmed; empty when `message.title` is empty)
+  - If `message.title` is empty, the `display.textFullPrefix` (if present) is prepended to the Pushover `message` instead.
+- `priority`: mapped per level (`priorityNone/Info/Notice/Warning/Error/Critical`)
 - `sound`: hard-coded to `"incoming"`
 
 ### Image attachments
