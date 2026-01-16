@@ -409,6 +409,12 @@ describe('MsgHostApi', () => {
 				]);
 			});
 
+		it('omits subscribe helpers for Notify hosts', () => {
+			const { adapter } = createAdapterStub({});
+			const api = buildIoBrokerApi(adapter, { hostName: 'MsgNotify' });
+			expect(api).to.not.have.property('subscribe');
+		});
+
 		it('binds subscribe methods to the adapter instance', () => {
 				const { adapter } = createAdapterStub({
 					_subscribeStates: [],

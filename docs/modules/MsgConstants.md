@@ -43,10 +43,12 @@ That means: **changing `MsgConstants` can affect everything** (create, update, s
 
 `level` is numeric so code can easily compare/sort it:
 
-- `MsgConstants.level.none` → `0` (no severity / informational)
-- `MsgConstants.level.notice` → `10` (normal information)
-- `MsgConstants.level.warning` → `20` (important / might need attention)
-- `MsgConstants.level.error` → `30` (problem / action required)
+- `MsgConstants.level.none` → `0` (fully silent; do not actively surface)
+- `MsgConstants.level.info` → `10` (delivered/visible, but no urgency)
+- `MsgConstants.level.notice` → `20` (should draw attention; often qualifies for a notification)
+- `MsgConstants.level.warning` → `30` (urgent; action required soon)
+- `MsgConstants.level.error` → `40` (failure/incident; action required)
+- `MsgConstants.level.critical` → `50` (immediate escalation; “wake me up” class when supported)
 
 Typical rule of thumb: higher number = more urgent.
 

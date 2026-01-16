@@ -35,6 +35,13 @@ Source of truth is the documentation file; the Admin Tab reads it from an auto-g
 - optional `label` renders a small heading below the line
 - the element is **not persisted** into `object.native` (Admin UI does not save it)
 
+### Enum dropdowns (`options` / `multiOptions`)
+
+For convenience, the Admin Tab supports dynamic dropdowns based on `MsgConstants`:
+
+- `options: 'MsgConstants.<path>'` renders a single-select dropdown (stored value keeps its original type, e.g. number for `MsgConstants.level`)
+- `multiOptions: 'MsgConstants.<path>'` renders a multi-select dropdown for `type: 'string'` fields (stored as CSV string; empty string when nothing is selected)
+
 ---
 
 ## Stats (diagnostics)

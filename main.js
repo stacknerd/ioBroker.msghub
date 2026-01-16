@@ -430,6 +430,7 @@ class Msghub extends utils.Adapter {
 		}
 
 		if (state) {
+			this._msgPlugins?.handleGateStateChange?.(id, state);
 			// Forward the raw event to producer plugins (they decide what to do with ack/val changes).
 			this.msgStore?.msgIngest?.dispatchStateChange?.(id, state, { source: 'iobroker.stateChange' });
 

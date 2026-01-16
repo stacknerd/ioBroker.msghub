@@ -144,6 +144,35 @@ can apply per-plugin policies (rate limiting / cache partitioning) without plugi
 
 ---
 
+## Gate helper
+
+`IoPlugins` exposes a small gate helper for runtime state-based toggles:
+
+```
+const handle = ctx.meta.gates.register({
+  id: 'some.0.state',
+  op: 'true' | 'false' | '>' | '<' | '=',
+  value: '...', // comparison value for '>', '<', '='
+  onOpen: ({ id, open, prevOpen, state }) => {},
+  onClose: ({ id, open, prevOpen, state }) => {},
+  onChange: ({ id, open, prevOpen, state }) => {}, // optional
+  fireOnInit: false, // optional; default false
+});
+
+// later:
+handle.dispose();
+```
+
+Behavior:
+
+- The helper subscribes to the given state id (own or foreign) directly via the adapter.
+- The adapter forwards `onStateChange` events to `IoPlugins.handleGateStateChange(...)` (wired in `main.js`).
+- `onOpen`/`onClose` fire only on transitions (no polling).
+- The first observed value does **not** fire by default (`fireOnInit: true` to override).
+- Disposers are auto-cleaned up when the plugin stops/unregisters.
+
+---
+
 ## Fail-fast contract (built-in plugins)
 
 Built-in plugins in this repo are designed to run **only** under `IoPlugins` (Message Hub context).

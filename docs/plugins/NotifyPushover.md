@@ -53,10 +53,15 @@ Message filters (all optional; empty = allow all):
 
 - `kindsCsv` (string, CSV)
   - Filters by `message.kind` (example: `task,status,appointment`).
+  - In the Admin Tab UI this is shown as a multi-select, but it is stored as a CSV string in `native`.
 - `levelMin` / `levelMax` (number)
   - Inclusive level range.
 - `audienceTagsAnyCsv` (string, CSV)
   - If set, only messages with at least one matching `audience.tags` entry are sent.
+
+- `lifecycleStatesCsv` (string, CSV)
+  - Filters by `message.lifecycle.state` (empty = allow all).
+  - In the Admin Tab UI this is shown as a multi-select, but it is stored as a CSV string in `native`.
 
 Priority mapping (fixed):
 
@@ -78,6 +83,10 @@ Gate (optional):
 - `gateBypassFromLevel` (number)
   - If `message.level >= gateBypassFromLevel`, the gate is bypassed and the notification is always sent.
   - Default: `50` (critical).
+- `gateCheckinText` / `gateCheckoutText` (string)
+  - Optional texts sent when the gate opens/closes.
+  - Supports `{id}` templates (replaced with current state values).
+  - If empty, no check-in/check-out messages are sent.
 
 ### How to find the correct `pushoverInstance`
 
@@ -172,6 +181,13 @@ Gate bypass:
 
 - If `message.level >= gateBypassFromLevel`, the gate result is ignored for that message.
 
+Gate check-in/check-out:
+
+- On gate **open**: sends `gateCheckinText` if configured.
+- On gate **close**: sends `gateCheckoutText` if configured.
+- These messages bypass the gate (they always send on transitions).
+- Placeholders `{id}` are replaced via `ctx.api.templates.renderStates(...)`.
+
 ### Payload mapping
 
 For each matching message, the plugin sends:
@@ -179,8 +195,17 @@ For each matching message, the plugin sends:
 - `message`: `message.text` with HTML tags removed
 - `title`: `<display.titleFullPrefix> <message.title>` (trimmed; empty when `message.title` is empty)
   - If `message.title` is empty, the `display.textFullPrefix` (if present) is prepended to the Pushover `message` instead.
-- `priority`: mapped per level (`priorityNone/Info/Notice/Warning/Error/Critical`)
+- `priority`: fixed mapping by `message.level`:
+  - `none` / `info` → `-2`
+  - `notice` → `-1`
+  - `warning` / `error` → `0`
+  - `critical` → `1`
 - `sound`: hard-coded to `"incoming"`
+
+Gate transition messages use:
+
+- `priority`: `0`
+- `sound`: `"magic"`
 
 ### Image attachments
 

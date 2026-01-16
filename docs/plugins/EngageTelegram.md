@@ -65,8 +65,13 @@ Common options:
   - Target adapter instance (example: `telegram.0`).
 - `kindsCsv` (string, CSV)
   - Filter by `message.kind` (empty = allow all).
+  - In the Admin Tab UI this is shown as a multi-select, but it is stored as a CSV string in `native`.
 - `levelMin` / `levelMax` (number)
   - Filter by `message.level` (inclusive).
+
+- `lifecycleStatesCsv` (string, CSV)
+  - Filter by `message.lifecycle.state` (empty = allow all).
+  - In the Admin Tab UI this is shown as a multi-select, but it is stored as a CSV string in `native`.
 - `audienceTagsAnyCsv` (string, CSV)
   - If set, only messages with at least one matching `audience.tags[]` entry are sent.
 
@@ -76,7 +81,7 @@ Telegram-specific behavior options:
   - For `message.level <= disableNotificationUpToLevel`, outgoing Telegram sends use `disable_notification: true` (silent notifications).
   - Above this level, `disable_notification: false`.
 - Gate options (optional):
-  - `gateStateId`, `gateOp`, `gateValue`, `gateBypassFromLevel`
+  - `gateStateId`, `gateOp`, `gateValue`, `gateBypassFromLevel`, `gateCheckinText`, `gateCheckoutText`
   - This is a **global** send/mute gate for the Telegram integration (useful for maintenance/quiet hours). It is not user-specific.
 - Menu action switches (booleans, default `true`):
   - `enableAck`, `enableClose`, `enableSnooze`, `enableOpen`, `enableLink`
@@ -95,6 +100,13 @@ Commands:
   - Keep `disableNotificationUpToLevel` at `info`/`10` if you want informational messages to be quiet.
 - Prefer deleting old notifications on resend:
   - The plugin always deletes the old Telegram messages for a ref before sending the new `due` notification, to keep the chat clean.
+
+Gate check-in/check-out:
+
+- On gate **open**: sends `gateCheckinText` if configured.
+- On gate **close**: sends `gateCheckoutText` if configured.
+- These messages bypass the gate (they always send on transitions).
+- `{id}` placeholders are replaced via `ctx.api.templates.renderStates(...)`.
 
 ### Troubleshooting
 

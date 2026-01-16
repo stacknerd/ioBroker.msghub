@@ -267,7 +267,10 @@ Common fields:
 Option spec fields (per `options.<key>`):
 
 - common: `type` (`number|string|boolean`), `default`, `order`, `label`, `help`
-- number: additionally `min`, `max`, `step`
+- number: optionally `min`, `max`, `step`
+- enum selects (Admin Tab convenience):
+  - `options: 'MsgConstants.<path>'` for a single-select dropdown
+  - `multiOptions: 'MsgConstants.<path>'` for a multi-select dropdown (only for `type: 'string'`, stored as CSV)
 
 ### 4) Create documentation and keep indexes updated
 

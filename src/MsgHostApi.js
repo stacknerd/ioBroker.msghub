@@ -330,6 +330,7 @@ function buildIdsApi(adapter) {
 function buildIoBrokerApi(adapter, { hostName }) {
 	const name = typeof hostName === 'string' && hostName.trim() ? hostName.trim() : 'Host';
 	const ids = buildIdsApi(adapter);
+	const isNotifyHost = /Notify/i.test(name);
 
 	const requireFn = (fn, label) => {
 		if (typeof fn !== 'function') {
@@ -502,23 +503,37 @@ function buildIoBrokerApi(adapter, { hostName }) {
 				});
 			},
 		}),
-		subscribe: Object.freeze({
-			subscribeStates: pattern => requireFn(adapter?.subscribeStates, 'subscribeStates').call(adapter, pattern),
-			unsubscribeStates: pattern =>
-				requireFn(adapter?.unsubscribeStates, 'unsubscribeStates').call(adapter, pattern),
-			subscribeObjects: pattern =>
-				requireFn(adapter?.subscribeObjects, 'subscribeObjects').call(adapter, pattern),
-			unsubscribeObjects: pattern =>
-				requireFn(adapter?.unsubscribeObjects, 'unsubscribeObjects').call(adapter, pattern),
-			subscribeForeignStates: pattern =>
-				requireFn(adapter?.subscribeForeignStates, 'subscribeForeignStates').call(adapter, pattern),
-			unsubscribeForeignStates: pattern =>
-				requireFn(adapter?.unsubscribeForeignStates, 'unsubscribeForeignStates').call(adapter, pattern),
-			subscribeForeignObjects: pattern =>
-				requireFn(adapter?.subscribeForeignObjects, 'subscribeForeignObjects').call(adapter, pattern),
-			unsubscribeForeignObjects: pattern =>
-				requireFn(adapter?.unsubscribeForeignObjects, 'unsubscribeForeignObjects').call(adapter, pattern),
-		}),
+		...(isNotifyHost
+			? {}
+			: {
+					subscribe: Object.freeze({
+						subscribeStates: pattern =>
+							requireFn(adapter?.subscribeStates, 'subscribeStates').call(adapter, pattern),
+						unsubscribeStates: pattern =>
+							requireFn(adapter?.unsubscribeStates, 'unsubscribeStates').call(adapter, pattern),
+						subscribeObjects: pattern =>
+							requireFn(adapter?.subscribeObjects, 'subscribeObjects').call(adapter, pattern),
+						unsubscribeObjects: pattern =>
+							requireFn(adapter?.unsubscribeObjects, 'unsubscribeObjects').call(adapter, pattern),
+						subscribeForeignStates: pattern =>
+							requireFn(adapter?.subscribeForeignStates, 'subscribeForeignStates').call(adapter, pattern),
+						unsubscribeForeignStates: pattern =>
+							requireFn(adapter?.unsubscribeForeignStates, 'unsubscribeForeignStates').call(
+								adapter,
+								pattern,
+							),
+						subscribeForeignObjects: pattern =>
+							requireFn(adapter?.subscribeForeignObjects, 'subscribeForeignObjects').call(
+								adapter,
+								pattern,
+							),
+						unsubscribeForeignObjects: pattern =>
+							requireFn(adapter?.unsubscribeForeignObjects, 'unsubscribeForeignObjects').call(
+								adapter,
+								pattern,
+							),
+					}),
+				}),
 		files: Object.freeze({
 			/**
 			 * Read a file from ioBroker file storage.
