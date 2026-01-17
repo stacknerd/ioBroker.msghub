@@ -28,6 +28,7 @@ const {
 	buildIoBrokerApi,
 	buildI18nApi,
 	buildLogApi,
+	buildConfigApi,
 	buildStoreApi,
 	buildStatsApi,
 	buildAiApi,
@@ -69,6 +70,7 @@ class MsgNotify {
 		const stats = buildStatsApi(msgStore);
 		const ai = buildAiApi(msgAi || null);
 
+		const config = buildConfigApi(this.adapter);
 		const i18n = buildI18nApi(this.adapter);
 		const iobroker = buildIoBrokerApi(this.adapter, { hostName });
 		const log = buildLogApi(this.adapter, { hostName });
@@ -76,6 +78,7 @@ class MsgNotify {
 		// Stable plugin surface: separate API (capabilities) from meta (dispatch metadata).
 		this.api = Object.freeze({
 			constants: this.msgConstants,
+			config,
 			i18n,
 			iobroker,
 			log,

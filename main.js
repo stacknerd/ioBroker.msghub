@@ -10,6 +10,7 @@ const utils = require('@iobroker/adapter-core');
 
 const { MsgFactory } = require(`${__dirname}/src/MsgFactory`);
 const { MsgConstants } = require(`${__dirname}/src/MsgConstants`);
+const { MsgConfig } = require(`${__dirname}/src/MsgConfig`);
 const { MsgStore } = require(`${__dirname}/src/MsgStore`);
 const { MsgAi } = require(`${__dirname}/src/MsgAi`);
 const { createI18nReporter, buildI18nRuntime } = require(`${__dirname}/i18nReporter`);
@@ -64,16 +65,6 @@ function parseJsonArrayWithWarn(adapter, value, label) {
 		adapter?.log?.warn?.(`MsgAi config: invalid JSON for ${label} (${e?.message || e})`);
 		return [];
 	}
-}
-
-function parseTimeStringToMinutesStrict(adapter, value, label) {
-	const raw = typeof value === 'string' ? value.trim() : '';
-	const m = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(raw);
-	if (!m) {
-		adapter?.log?.error?.(`MsgStore config: invalid ${label} time '${raw || String(value)}' (expected HH:MM)`);
-		return null;
-	}
-	return Number(m[1]) * 60 + Number(m[2]);
 }
 
 const REDACT_KEYS = new Set(['apiKey', 'token', 'password', 'aiOpenAiApiKey']);
@@ -274,53 +265,16 @@ class Msghub extends utils.Adapter {
 			? Math.max(0, Math.trunc(writeIntervalMsParsed))
 			: undefined;
 
-		let quietHours = null;
-		const quietHoursEnabled = config?.quietHoursEnabled !== false;
-		if (quietHoursEnabled) {
-			if (notifierIntervalMsEffective <= 0) {
-				this.log?.error?.('MsgStore config: quiet hours require notifierIntervalMs > 0 (feature disabled)');
-			} else {
-				const startMin = parseTimeStringToMinutesStrict(this, config?.quietHoursStart, 'quietHoursStart');
-				const endMin = parseTimeStringToMinutesStrict(this, config?.quietHoursEnd, 'quietHoursEnd');
-				const maxLevelRaw = config?.quietHoursMaxLevel;
-				const maxLevelParsed = typeof maxLevelRaw === 'number' ? maxLevelRaw : Number(maxLevelRaw);
-				const spreadMinRaw = config?.quietHoursSpreadMin;
-				const spreadMinParsed = typeof spreadMinRaw === 'number' ? spreadMinRaw : Number(spreadMinRaw);
-				if (startMin != null && endMin != null) {
-					if (startMin === endMin) {
-						this.log?.error?.(
-							'MsgStore config: quiet hours start == end is not allowed (feature disabled)',
-						);
-					} else if (!Number.isFinite(maxLevelParsed) || !Number.isFinite(spreadMinParsed)) {
-						this.log?.error?.(
-							'MsgStore config: quiet hours require numeric maxLevel and spreadMin (feature disabled)',
-						);
-					} else {
-						const maxLevel = Math.trunc(maxLevelParsed);
-						const spreadMin = Math.max(0, Math.trunc(spreadMinParsed));
-						const quietDurationMin = startMin < endMin ? endMin - startMin : 24 * 60 - startMin + endMin;
-						const freeMin = 24 * 60 - quietDurationMin;
-						if (freeMin < 240) {
-							this.log?.error?.(
-								'MsgStore config: quiet hours must leave at least 4 hours outside the quiet window (feature disabled)',
-							);
-						} else if (spreadMin > freeMin) {
-							this.log?.error?.(
-								'MsgStore config: quiet hours spread window must fit into non-quiet time (feature disabled)',
-							);
-						} else {
-							quietHours = {
-								enabled: true,
-								startMin,
-								endMin,
-								maxLevel,
-								spreadMs: spreadMin * 60 * 1000,
-							};
-						}
-					}
-				}
-			}
-		}
+		const msgCfg = MsgConfig.normalize({
+			adapterConfig: config,
+			msgConstants: this.msgConstants,
+			notifierIntervalMs: notifierIntervalMsEffective,
+			log: this.log,
+		});
+		// Expose the plugin-facing config snapshot via adapter for `ctx.api.config`.
+		// This is intentionally read-only and schema-versioned.
+		this._msgConfigPublic = Object.freeze({ schemaVersion: MsgConfig.schemaVersion, ...msgCfg.pluginPublic });
+		const quietHours = msgCfg.corePrivate.quietHours;
 
 		this.msgStore = new MsgStore(this, this.msgConstants, this.msgFactory, {
 			pruneIntervalMs,

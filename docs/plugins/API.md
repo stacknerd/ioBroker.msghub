@@ -30,6 +30,7 @@ Columns:
 | Meta oder API | Gruppe | Funktion | Ingest | Notify | Bridge | Engage | Kurzbeschreibung | Bereitstellende Klasse | Link zur Doku |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | API | `constants` | `ctx.api.constants` | ✓ | ✓ | ✓ | ✓ | Centralized enums/constants (notification events, lifecycle states, …). | `MsgIngest` / `MsgNotify` | `../modules/MsgConstants.md` |
+| API | `config` | `ctx.api.config` | ✓ | ✓ | ✓ | ✓ | Read-only snapshot of effective config (schema versioned; owned by `MsgConfig`). | `buildConfigApi()` (`src/MsgHostApi.js`) | `../modules/MsgConfig.md` |
 | API | `log` | `silly(message)` | ✓ | ✓ | ✓ | ✓ | String-only logger. Throws on non-string. | `buildLogApi()` (`src/MsgHostApi.js`) | `../modules/MsgHostApi.md` |
 | API | `log` | `debug(message)` | ✓ | ✓ | ✓ | ✓ | String-only logger. Throws on non-string. | `buildLogApi()` (`src/MsgHostApi.js`) | `../modules/MsgHostApi.md` |
 | API | `log` | `info(message)` | ✓ | ✓ | ✓ | ✓ | String-only logger. Throws on non-string. | `buildLogApi()` (`src/MsgHostApi.js`) | `../modules/MsgHostApi.md` |

@@ -94,6 +94,40 @@ function buildI18nApi(adapter) {
 }
 
 /**
+ * Build a read-only "effective config" facade for plugins.
+ *
+ * Source of truth:
+ * - `main.js` runs `MsgConfig.normalize(...)` and stores the plugin-facing snapshot on the adapter instance.
+ * - Hosts (`MsgIngest` / `MsgNotify`) expose this snapshot as `ctx.api.config`.
+ *
+ * Notes for plugin authors:
+ * - Treat this as a snapshot. It does not auto-update at runtime.
+ * - Always use `schemaVersion` to interpret the shape.
+ *
+ * @param {import('@iobroker/adapter-core').AdapterInstance|{ _msgConfigPublic?: any }|any} adapterOrSnapshot Adapter instance or a public snapshot.
+ * @returns {any|null} Config snapshot or `null` when not wired.
+ */
+function buildConfigApi(adapterOrSnapshot) {
+	// Intentionally lean: MsgConfig owns the plugin-facing schema and `main.js` stores it as-is.
+	// This builder does not re-shape or whitelist fields; it only ensures a schemaVersion exists.
+	const obj =
+		adapterOrSnapshot && typeof adapterOrSnapshot === 'object' && !Array.isArray(adapterOrSnapshot)
+			? adapterOrSnapshot
+			: null;
+	const snapshot =
+		obj && obj._msgConfigPublic && typeof obj._msgConfigPublic === 'object' && !Array.isArray(obj._msgConfigPublic)
+			? obj._msgConfigPublic
+			: obj;
+
+	const schemaVersion = snapshot?.schemaVersion;
+	if (typeof schemaVersion !== 'number' || !Number.isFinite(schemaVersion) || schemaVersion <= 0) {
+		return null;
+	}
+
+	return snapshot;
+}
+
+/**
  * Build the MsgStore facade for plugins.
  *
  * Derivation rule:
@@ -632,6 +666,7 @@ function buildIoBrokerApi(adapter, { hostName }) {
 module.exports = {
 	buildLogApi,
 	buildI18nApi,
+	buildConfigApi,
 	buildIoBrokerApi,
 	buildIdsApi,
 	buildStoreApi,

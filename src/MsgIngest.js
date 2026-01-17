@@ -25,6 +25,7 @@ const {
 	buildIoBrokerApi,
 	buildI18nApi,
 	buildLogApi,
+	buildConfigApi,
 	buildStoreApi,
 	buildFactoryApi,
 	buildStatsApi,
@@ -75,6 +76,7 @@ class MsgIngest {
 		const stats = buildStatsApi(this.msgStore);
 		const ai = buildAiApi(options?.ai || null);
 
+		const config = buildConfigApi(this.adapter);
 		const i18n = buildI18nApi(this.adapter);
 
 		const iobroker = buildIoBrokerApi(this.adapter, { hostName });
@@ -83,6 +85,7 @@ class MsgIngest {
 		// Stable plugin surface: separate API (capabilities) from meta (dispatch metadata).
 		this.api = Object.freeze({
 			constants: this.msgConstants,
+			config,
 			factory,
 			store,
 			stats,

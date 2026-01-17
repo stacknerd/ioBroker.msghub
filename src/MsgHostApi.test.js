@@ -6,6 +6,7 @@ const { expect } = require('chai');
 const {
 	buildLogApi,
 	buildI18nApi,
+	buildConfigApi,
 	buildIoBrokerApi,
 	buildIdsApi,
 	buildStoreApi,
@@ -97,6 +98,35 @@ describe('MsgHostApi', () => {
 			expect(Object.isFrozen(i18n)).to.equal(true);
 			expect(i18n.t('x')).to.equal('t:x');
 			expect(i18n.getTranslatedObject({ a: 1 })).to.deep.equal({ a: 1, __t: true });
+		});
+	});
+
+	describe('buildConfigApi', () => {
+		it('returns null when config is not wired', () => {
+			expect(buildConfigApi(null)).to.equal(null);
+			expect(buildConfigApi({})).to.equal(null);
+			expect(buildConfigApi({ schemaVersion: 0 })).to.equal(null);
+		});
+
+		it('reads adapter snapshot and passes through the MsgConfig-provided shape', () => {
+			const quietHours = { enabled: true, startMin: 22 * 60, endMin: 6 * 60, maxLevel: 40, spreadMs: 5 * 60_000 };
+			const snapshot = Object.freeze({
+				schemaVersion: 1,
+				quietHours,
+				extra: 'ok',
+			});
+			const adapter = Object.freeze({
+				_msgConfigPublic: {
+					...snapshot,
+				},
+			});
+
+			const cfg = buildConfigApi(adapter);
+			expect(cfg).to.not.equal(null);
+			expect(cfg).to.equal(adapter._msgConfigPublic);
+			expect(cfg).to.have.property('schemaVersion', 1);
+			expect(cfg).to.have.property('quietHours');
+			expect(cfg).to.have.property('extra', 'ok');
 		});
 	});
 

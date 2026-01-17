@@ -90,6 +90,7 @@ Consumer/UI  --->  MsgStore.getMessages()/getMessageByRef()  --->  MsgRender  --
 - `MsgAi`: [`./MsgAi.md`](./MsgAi.md)
 - `MsgArchive`: [`./MsgArchive.md`](./MsgArchive.md)
 - `MsgBridge`: [`./MsgBridge.md`](./MsgBridge.md)
+- `MsgConfig`: [`./MsgConfig.md`](./MsgConfig.md)
 - `MsgConstants`: [`./MsgConstants.md`](./MsgConstants.md)
 - `MsgEngage`: [`./MsgEngage.md`](./MsgEngage.md)
 - `MsgFactory`: [`./MsgFactory.md`](./MsgFactory.md)
