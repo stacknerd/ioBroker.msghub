@@ -153,21 +153,34 @@ class MsgRender {
 			return msg;
 		}
 
+		// When templates pull data from metrics, we track the maximum metric timestamp (`ts`) that was actually
+		// consumed during rendering. This allows downstream UIs to display a stable "data freshness" timestamp
+		// that is tied to the rendered output (not to "now").
+		let renderedDataTs;
+		const captureMetricTs = ts => {
+			const n = Number(ts);
+			if (!Number.isFinite(n)) {
+				return;
+			}
+			renderedDataTs = renderedDataTs == null ? n : Math.max(renderedDataTs, n);
+		};
+
 		// Return a view-only message clone with rendered presentation fields.
 		const out = { ...msg };
 
 		// Only render/override fields that exist on the input message to avoid adding new keys.
 		if (Object.prototype.hasOwnProperty.call(msg, 'title')) {
-			out.title = this.renderTemplate(msg.title, { msg, locale: lc });
+			out.title = this.renderTemplate(msg.title, { msg, locale: lc, captureMetricTs });
 		}
 		if (Object.prototype.hasOwnProperty.call(msg, 'text')) {
-			out.text = this.renderTemplate(msg.text, { msg, locale: lc });
+			out.text = this.renderTemplate(msg.text, { msg, locale: lc, captureMetricTs });
 		}
 		if (Object.prototype.hasOwnProperty.call(msg, 'details')) {
-			out.details = this.renderDetails(msg.details, { msg, locale: lc });
+			out.details = this.renderDetails(msg.details, { msg, locale: lc, captureMetricTs });
 		}
 
-		out.display = this._buildDisplay(msg);
+		const display = this._buildDisplay(msg);
+		out.display = renderedDataTs == null ? display : { ...display, renderedDataTs };
 
 		return out;
 	}
@@ -197,6 +210,8 @@ class MsgRender {
 	 * @param {object} ctx Context containing the message and locale.
 	 * @param {object} ctx.msg Message object used as the template source.
 	 * @param {string} ctx.locale Locale used for formatting.
+	 * @param {Function} [ctx.captureMetricTs] Optional callback that receives metric timestamps (unix ms) when a metric
+	 * is successfully resolved during rendering.
 	 * @returns {object} Rendered details object (shallow clone).
 	 */
 	renderDetails(details, ctx) {
@@ -236,9 +251,11 @@ class MsgRender {
 	 * @param {object} [options] Rendering context options.
 	 * @param {object} [options.msg] Message containing the "metrics" Map and timing block.
 	 * @param {string} [options.locale] Locale override for this render call.
+	 * @param {Function} [options.captureMetricTs] Optional callback that receives metric timestamps (unix ms)
+	 * when a metric is successfully resolved during rendering.
 	 * @returns {string} Rendered string with placeholders replaced.
 	 */
-	renderTemplate(input, { msg, locale } = {}) {
+	renderTemplate(input, { msg, locale, captureMetricTs } = {}) {
 		if (typeof input !== 'string' || input.indexOf('{{') === -1) {
 			return input;
 		}
@@ -247,6 +264,7 @@ class MsgRender {
 			timing: msg && msg.timing && typeof msg.timing === 'object' ? msg.timing : null,
 			details: msg && msg.details && typeof msg.details === 'object' ? msg.details : null,
 			locale: locale || this.locale,
+			captureMetricTs: typeof captureMetricTs === 'function' ? captureMetricTs : null,
 		};
 
 		// Replace all {{expr}} blocks; unknown values become an empty string.
@@ -413,6 +431,14 @@ class MsgRender {
 		const entry = metrics.get(key);
 		if (!entry || typeof entry !== 'object') {
 			return undefined;
+		}
+
+		// Track the highest timestamp of metrics that were actually resolved during template rendering.
+		// Note: this is view-only metadata and does not mutate the message itself.
+		try {
+			ctx.captureMetricTs?.(entry.ts);
+		} catch {
+			// ignore capture failures
 		}
 
 		// Default metric rendering: formatted "val unit" (unless raw requested).

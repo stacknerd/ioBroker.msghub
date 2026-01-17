@@ -19,31 +19,71 @@ describe('MsgRender', () => {
 		return { title, text, details, metrics, timing };
 	}
 
-	it('renders a basic metric with unit', () => {
-		const renderer = createRenderer({ locale });
-		const metrics = buildMetrics([['temperature', { val: 21.75, unit: 'C', ts: Date.UTC(2025, 0, 1) }]]);
-		const msg = createMessage({ title: 'Temp {{m.temperature}}', metrics });
+		it('renders a basic metric with unit', () => {
+			const renderer = createRenderer({ locale });
+			const metrics = buildMetrics([['temperature', { val: 21.75, unit: 'C', ts: Date.UTC(2025, 0, 1) }]]);
+			const msg = createMessage({ title: 'Temp {{m.temperature}}', metrics });
 
-		const out = renderer.renderMessage(msg);
-			const nf = new Intl.NumberFormat(locale, { maximumFractionDigits: 2 });
+			const out = renderer.renderMessage(msg);
+				const nf = new Intl.NumberFormat(locale, { maximumFractionDigits: 2 });
 
-			expect(out.title).to.equal(`Temp ${nf.format(21.75)} C`);
-			expect(out).to.have.property('display');
-			expect(out.display).to.include({
-				titleLevelPrefix: '',
-				titleKindPrefix: '',
-				titleFullPrefix: '',
-				textLevelPrefix: '',
-				textKindPrefix: '',
-				textFullPrefix: '',
+				expect(out.title).to.equal(`Temp ${nf.format(21.75)} C`);
+				expect(out).to.have.property('display');
+				expect(out.display).to.include({
+					titleLevelPrefix: '',
+					titleKindPrefix: '',
+					titleFullPrefix: '',
+					textLevelPrefix: '',
+					textKindPrefix: '',
+					textFullPrefix: '',
+				});
 			});
+
+		it('tracks display.renderedDataTs for metrics that were actually rendered', () => {
+			const renderer = createRenderer({ locale });
+			const tsA = Date.UTC(2025, 0, 1, 1, 0, 0);
+			const tsB = Date.UTC(2025, 0, 1, 2, 0, 0);
+			const metrics = buildMetrics([
+				['a', { val: 1, unit: 'u', ts: tsA }],
+				['b', { val: 2, unit: 'u', ts: tsB }],
+			]);
+			const msg = createMessage({ title: 'A{{m.a.val}}', metrics });
+
+			const out = renderer.renderMessage(msg);
+			expect(out.display).to.have.property('renderedDataTs', tsA);
 		});
 
-		it('computes display prefixes from render config', () => {
-			const renderer = createRenderer({
-				locale,
-				render: {
-					prefixes: {
+		it('uses the maximum timestamp across all rendered metric placeholders', () => {
+			const renderer = createRenderer({ locale });
+			const tsA = Date.UTC(2025, 0, 1, 1, 0, 0);
+			const tsB = Date.UTC(2025, 0, 1, 2, 0, 0);
+			const metrics = buildMetrics([
+				['a', { val: 1, unit: 'u', ts: tsA }],
+				['b', { val: 2, unit: 'u', ts: tsB }],
+			]);
+			const msg = createMessage({
+				title: 'A{{m.a.val}}',
+				details: { location: 'B{{m.b.val}}' },
+				metrics,
+			});
+
+			const out = renderer.renderMessage(msg);
+			expect(out.display).to.have.property('renderedDataTs', tsB);
+		});
+
+		it('does not add display.renderedDataTs when no metric values are rendered', () => {
+			const renderer = createRenderer({ locale });
+			const msg = createMessage({ title: '{{t.createdAt|datetime}}', timing: { createdAt: Date.UTC(2025, 0, 1) } });
+
+			const out = renderer.renderMessage(msg);
+			expect(out.display).to.not.have.property('renderedDataTs');
+		});
+
+			it('computes display prefixes from render config', () => {
+				const renderer = createRenderer({
+					locale,
+					render: {
+						prefixes: {
 						fullPrefixOrder: 'levelKind',
 						level: { warning: 'WARNUNG' },
 						kind: { task: 'TASK' },

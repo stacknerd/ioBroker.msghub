@@ -51,6 +51,12 @@ Instead of rebuilding the entire title/text every time, a message can contain te
 
 The `display` block is intended for presentation helpers (e.g. prefix tokens) and is not part of the canonical persisted message.
 
+Additionally, `MsgRender` may attach view-only freshness metadata:
+
+- `display.renderedDataTs` (optional, unix ms): maximum `ts` of metric entries that were actually resolved while rendering
+  templates in `title` / `text` / rendered `details` fields. When no metrics are rendered (or no usable `ts` exists),
+  this field is omitted.
+
 Only a small subset of `details` is rendered on purpose (predictability and safety):
 
 - string fields: `details.location`, `details.task`, `details.reason`
