@@ -144,7 +144,8 @@
 		"prefixKindStatus": "📡",
 		"prefixKindAppointment": "📅",
 		"prefixKindShoppinglist": "🛒",
-		"prefixKindInventorylist": "📦"
+		"prefixKindInventorylist": "📦",
+		"prefixFullOrder": "kindLevel"
 		},
 	"objects": [],
 	"instanceObjects": []

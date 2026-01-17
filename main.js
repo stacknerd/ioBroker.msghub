@@ -167,8 +167,26 @@ class Msghub extends utils.Adapter {
 			const s = typeof value === 'string' ? value : String(value);
 			return s.trim();
 		};
+		const normalizeFullPrefixOrder = value => {
+			if (value == null) {
+				return 'kindLevel';
+			}
+			const s = typeof value === 'string' ? value : String(value);
+			const normalized = s.trim().replace(/\s+/g, '').toLowerCase();
+			if (normalized === 'levelkind') {
+				return 'levelKind';
+			}
+			if (normalized === 'kind') {
+				return 'kind';
+			}
+			if (normalized === 'level') {
+				return 'level';
+			}
+			return 'kindLevel';
+		};
 		const render = Object.freeze({
 			prefixes: Object.freeze({
+				fullPrefixOrder: normalizeFullPrefixOrder(config.prefixFullOrder),
 				level: Object.freeze({
 					none: normalizePrefix(config.prefixLevelNone),
 					info: normalizePrefix(config.prefixLevelInfo),

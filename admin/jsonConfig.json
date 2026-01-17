@@ -285,6 +285,36 @@
 			"type": "panel",
 			"label": "msghub.i18n.core.admin.jsonConfig.render.panel.label",
 			"items": {
+				"prefixFullOrder": {
+					"type": "select",
+					"label": "msghub.i18n.core.admin.jsonConfig.render.prefixFullOrder.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.render.prefixFullOrder.help",
+					"options": [
+						{
+							"label": "msghub.i18n.core.admin.jsonConfig.render.prefixFullOrder.option.kindLevel.label",
+							"value": "kindLevel"
+						},
+						{
+							"label": "msghub.i18n.core.admin.jsonConfig.render.prefixFullOrder.option.levelKind.label",
+							"value": "levelKind"
+						},
+						{
+							"label": "msghub.i18n.core.admin.jsonConfig.render.prefixFullOrder.option.kind.label",
+							"value": "kind"
+						},
+						{
+							"label": "msghub.i18n.core.admin.jsonConfig.render.prefixFullOrder.option.level.label",
+							"value": "level"
+						}
+					],
+					"default": "kindLevel",
+					"newLine": true,
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 4,
+					"xl": 4
+				},
 				"_renderLevelPrefixHeader": {
 					"type": "header",
 					"text": "msghub.i18n.core.admin.jsonConfig.render.levelPrefixes.header.text",

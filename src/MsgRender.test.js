@@ -44,6 +44,7 @@ describe('MsgRender', () => {
 				locale,
 				render: {
 					prefixes: {
+						fullPrefixOrder: 'levelKind',
 						level: { warning: 'WARNUNG' },
 						kind: { task: 'TASK' },
 					},

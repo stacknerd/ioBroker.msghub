@@ -106,7 +106,25 @@ class MsgRender {
 
 		const titleLevelPrefix = getToken(levelKey && levelPrefixes ? levelPrefixes[levelKey] : '');
 		const titleKindPrefix = getToken(kindKey && kindPrefixes ? kindPrefixes[kindKey] : '');
-		const titleFullPrefix = [titleLevelPrefix, titleKindPrefix].filter(Boolean).join(' ').trim();
+		const fullPrefixOrderRaw = prefixes?.fullPrefixOrder;
+		const fullPrefixOrder = typeof fullPrefixOrderRaw === 'string' ? fullPrefixOrderRaw.trim() : '';
+		let fullTokens;
+		switch (fullPrefixOrder) {
+			case 'levelKind':
+				fullTokens = [titleLevelPrefix, titleKindPrefix];
+				break;
+			case 'kind':
+				fullTokens = [titleKindPrefix];
+				break;
+			case 'level':
+				fullTokens = [titleLevelPrefix];
+				break;
+			case 'kindLevel':
+			default:
+				fullTokens = [titleKindPrefix, titleLevelPrefix];
+				break;
+		}
+		const titleFullPrefix = fullTokens.filter(Boolean).join(' ').trim();
 
 		return {
 			titleLevelPrefix,
