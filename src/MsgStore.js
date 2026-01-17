@@ -68,6 +68,7 @@ const { MsgNotify } = require(`${__dirname}/MsgNotify`);
 const { MsgIngest } = require(`${__dirname}/MsgIngest`);
 const { MsgStats } = require(`${__dirname}/MsgStats`);
 const { MsgNotificationPolicy } = require(`${__dirname}/MsgNotificationPolicy`);
+const { MsgAction } = require(`${__dirname}/MsgAction`);
 
 const _CORE_LIFECYCLE_TOKEN = Symbol('MsgStore.coreLifecycle');
 
@@ -159,6 +160,9 @@ class MsgStore {
 
 		// Canonical in-memory list (do not store rendered output here).
 		this.fullList = Array.isArray(initialMessages) ? initialMessages : [];
+
+		// Action executor + view policy (core).
+		this.msgActions = new MsgAction(this.adapter, this.msgConstants, this);
 
 		// Stats (read-only insights + rollups).
 		this.msgStats = new MsgStats(this.adapter, this.msgConstants, this, stats || {});
@@ -534,8 +538,7 @@ class MsgStore {
 		}
 
 		const msg = this.fullList.find(obj => obj?.ref === ref && matches(obj));
-		// Render only on output; keep `fullList` unmodified.
-		return this.msgRender?.renderMessage(msg) || msg;
+		return this._renderForOutput(msg);
 	}
 
 	/**
@@ -549,7 +552,7 @@ class MsgStore {
 	 */
 	getMessages() {
 		this._pruneOldMessages();
-		return this.fullList.map(msg => this.msgRender?.renderMessage(msg) || msg);
+		return this.fullList.map(msg => this._renderForOutput(msg));
 	}
 
 	/**
@@ -1104,9 +1107,7 @@ class MsgStore {
 		const pages = size > 0 ? Math.ceil(total / size) : 1;
 		const sliceStart = size > 0 ? (index - 1) * size : 0;
 		const sliceEnd = size > 0 ? sliceStart + size : undefined;
-		const items = (size > 0 ? sorted.slice(sliceStart, sliceEnd) : sorted).map(
-			msg => this.msgRender?.renderMessage(msg) || msg,
-		);
+		const items = (size > 0 ? sorted.slice(sliceStart, sliceEnd) : sorted).map(msg => this._renderForOutput(msg));
 
 		return { total, pages, items };
 	}
@@ -1484,10 +1485,9 @@ class MsgStore {
 			return;
 		}
 
-		const render = this.msgRender;
 		const rendered = Array.isArray(payload)
-			? render?.renderMessages?.(payload) || payload
-			: render?.renderMessage?.(payload) || payload;
+			? payload.map(msg => this._renderForOutput(msg))
+			: this._renderForOutput(payload);
 
 		this.msgNotify.dispatch(event, rendered);
 
@@ -1578,6 +1578,24 @@ class MsgStore {
 			const newNotifyAt = Number.isFinite(remindEvery) && remindEvery > 0 ? now + remindEvery : null;
 			this.updateMessage(msg.ref, { timing: { notifyAt: newNotifyAt } }, true);
 		}
+	}
+
+	/**
+	 * Render a view-only output message and apply the MsgAction view policy.
+	 *
+	 * This is intentionally a small boundary helper:
+	 * - Store remains canonical (`this.fullList` is never mutated here).
+	 * - All "rendered outputs" apply the same action filtering contract:
+	 *   - `actions` only contains executable actions
+	 *   - `actionsInactive` (optional) contains the rest
+	 *
+	 * @param {object|undefined} msg Raw canonical message.
+	 * @returns {object|undefined} Rendered output view.
+	 */
+	_renderForOutput(msg) {
+		const rendered = this.msgRender?.renderMessage(msg) || msg;
+		const buildActions = this.msgActions?.buildActions;
+		return typeof buildActions === 'function' ? buildActions.call(this.msgActions, rendered) : rendered;
 	}
 }
 

@@ -18,16 +18,16 @@ This document has two parts:
 
 ### What it does
 
-- Sends Telegram messages for Message Hub `due` notifications (Pushover-like).
+- Sends Telegram messages for MsgHub `due` notifications.
+- Sends to a **registry of allowed chats** (private chats auto-enrolled; group chats require approval).
 - Renders message actions as Telegram **inline buttons** (menu entry + menu navigation).
-- Handles button clicks and executes the corresponding Message Hub action (`ack/close/delete/snooze`) by allow-list (`message.actions[]`).
-- Provides a minimal command entry point:
-  - `/start` replies with a short help message.
+- Handles button clicks and executes the corresponding MsgHub action (`ack/close/delete/snooze`) by allow-list (`message.actions[]`).
+- Provides simple chat commands (`/start`, `/config`, `/mute`, `/unmute`, `/startbot`, `/stopbot`).
 
 ### What it intentionally does not do (today)
 
 - It does not create *new* Telegram notifications for `updated/recovered/recreated` events (it only syncs text/buttons and sends newly added image attachments).
-- It does not implement a rich chat bot command set (this is intentionally kept modular and small).
+- It does not try to implement per-user ticket ownership or per-user action state. MsgHub messages are shared (“first come, first serve”).
 
 ### Prerequisites
 
@@ -42,6 +42,15 @@ This document has two parts:
 - For image attachments (`attachments[].type === 'image'`), the Telegram adapter must support sending photo messages via `send` payload field `photo` (plus optional `caption`).
   - If you run an older Telegram adapter that does not support this, image attachments will not be delivered (and therefore also cannot be auto-deleted later).
 
+### Security model (important)
+
+`EngageTelegram` relies on the Telegram adapter’s authentication/user allow-list:
+
+- **Private chats**: recipients are derived from `<telegramInstance>.communicate.users` (JSON of authenticated users).
+- **Group chats**: recipients must be explicitly approved via a 2-step flow (`/startbot` in group → approve in private chat).
+
+All inbound traffic from **unregistered groups** is ignored, except `/startbot`.
+
 ### Quick start (recommended setup)
 
 1. Create one `EngageTelegram` instance in the Message Hub Plugins tab.
@@ -53,7 +62,34 @@ This document has two parts:
    - action buttons appear
 6. Click a button and confirm:
    - the corresponding MsgHub action is executed
-   - the old Telegram message is cleaned up (buttons removed or message deleted, depending on your settings)
+    - the old Telegram message is cleaned up (buttons removed or message deleted, depending on your settings)
+
+### Recipient registry (private + group chats)
+
+Outgoing notifications are sent to **registered, non-muted** chats only:
+
+- Private chats are auto-enrolled by periodically syncing the Telegram adapter’s users state:
+  - `<telegramInstance>.communicate.users`
+- Group chats are **not auto-enrolled** (they require explicit approval).
+- Per chat you can toggle “mute” (no notifications) via `/mute` and `/unmute`.
+
+Note: if a user is removed from the Telegram adapter’s authenticated users list, the private chat registration is removed as well (after safe-sync guards).
+
+### Group registration workflow
+
+To allow notifications into a group chat:
+
+1) Add the bot to the group.
+2) In the group chat, run `/startbot`.
+3) The requesting user receives a private message with buttons:
+   - **Allow** → the group is registered as an allowed recipient chat.
+   - **Deny** → request is cancelled; group stays unregistered.
+4) In the group chat, the bot prints a neutral “registration started / waiting for confirmation” status message (no user names).
+
+To remove notifications from a group chat, run `/stopbot` in the group:
+
+- The requesting user again gets a private **Allow/Deny** prompt.
+- On **Allow**, the group is removed from the registry.
 
 ### How to configure
 
@@ -89,8 +125,15 @@ Telegram-specific behavior options:
 
 Commands:
 
-- Commands are fixed to `/...` and currently only `/start` is implemented.
-- The callback prefix is fixed to `opt_` (used internally for inline button callbacks).
+- `/start` – show a short help text.
+- `/config` – show a human-friendly view of the effective EngageTelegram settings (filters, quiet hours, gate, chat registry).
+- `/mute` – mute the current chat (no outgoing notifications to this chat).
+- `/unmute` – unmute the current chat.
+- `/startbot` – group-only: start group enrollment request (private approval required).
+- `/stopbot` – group-only: start group removal request (private approval required).
+
+Implementation detail:
+- Telegram callback prefix is `opt_` (used for inline button callbacks).
 
 ### Best practices
 
@@ -105,7 +148,7 @@ Gate check-in/check-out:
 
 - On gate **open**: sends `gateCheckinText` if configured.
 - On gate **close**: sends `gateCheckoutText` if configured.
-- These messages bypass the gate (they always send on transitions).
+- These messages bypass the gate decision (they always send on transitions), but still respect chat registry and per-chat mute.
 - `{id}` placeholders are replaced via `ctx.api.templates.renderStates(...)`.
 
 ### Troubleshooting
@@ -122,7 +165,10 @@ Common symptoms and what to check:
   - Verify the message contains the action id in `message.actions[]` (it is an allow-list).
 
 - “Text shows raw `<b>...</b>`”
-  - This points to Telegram adapter parsing differences (send/edit payload shape). The plugin uses HTML and escapes input.
+  - This points to Telegram adapter parsing differences. MsgHub message title/text are escaped and sent as HTML, and some command outputs intentionally contain HTML (from i18n strings).
+
+- “Group commands are ignored”
+  - This is expected for unregistered groups. Only `/startbot` is handled in unregistered groups.
 
 ---
 
@@ -153,11 +199,23 @@ The plugin subscribes to:
 
 ### Outgoing notifications (notify path)
 
-- Dispatch event: only `event === 'due'`.
-- Payload:
-  - `text` uses `parse_mode: 'HTML'` and escapes `message.title`/`message.text` (treated as plain text).
-  - `disable_notification` derived from `disableNotificationUpToLevel`.
-  - Buttons are rendered as `reply_markup.inline_keyboard`.
+Recipients:
+
+- `EngageTelegram` maintains a persistent registry state at:
+  - `msghub.0.EngageTelegram.<instanceId>.chatRegistry`
+- Only chats that are:
+  - registered **and**
+  - not muted
+  receive outgoing notifications.
+
+Dispatch:
+
+- Only `event === 'due'` is sent as a new Telegram message.
+- Message text uses `parse_mode: 'HTML'`.
+  - MsgHub `message.title` and `message.text` are treated as plain text and escaped.
+  - Some command responses (from i18n) intentionally contain lightweight HTML (underline/italics).
+- `disable_notification` is derived from `disableNotificationUpToLevel`.
+- Buttons are rendered as `reply_markup.inline_keyboard` (menu entry point).
 
 ### Snooze buttons and overrides
 
@@ -179,7 +237,12 @@ Signal source:
 Dispatch rules:
 
 - Callback path: payload starts with `opt_` (fixed prefix).
-- Command path: payload starts with `/` (only `/start` is implemented).
+- Command path: payload starts with `/` (see commands above).
+
+Group gate:
+
+- Inbound commands/callbacks from **groups** are ignored unless the group is registered.
+- Exception: `/startbot` is handled even in unregistered groups (to start the approval flow).
 
 ### Callback mapping and internal persistence
 
@@ -193,10 +256,16 @@ Telegram `callback_data` has a tight length limit. The plugin uses a short id:
 
 Persistent state ids (JSON, read-only for users):
 
+- `msghub.0.EngageTelegram.<instanceId>.chatRegistry`
+  - Registry `{ chats, pending }`:
+    - `chats[chatId] = { chatId, type:'private'|'group', muted, createdAt, updatedAt, ... }`
+    - `pending[requestId] = { token, chatId, kind:'enroll'|'unenroll', expiresAt, ... }`
 - `msghub.0.EngageTelegram.<instanceId>.mappingByRef`
   - Stores `{ "<ref>": { shortId, textHtml, chatMessages: { "<chatId>": <messageId> }, ... } }`
 - `msghub.0.EngageTelegram.<instanceId>.mappingShortToRef`
   - Stores `{ "<shortId>": "<ref>" }`
+- `msghub.0.EngageTelegram.<instanceId>.mappingByUiId`
+  - Stores additional UI records (future extensions; not all entries map to MsgHub refs).
 
 Additional mapping state:
 
@@ -213,6 +282,10 @@ Cleanup:
   - The mapped Telegram messages are deleted (always) and the mapping is removed.
 - Retention / GC:
   - Entries that no longer have buttons (`shouldHaveButtons=false`) may be pruned after a retention window (currently 90 days).
+
+Index stability:
+
+- `mappingShortToRef` is a derived index. It is rebuilt from `mappingByRef` on load/save to avoid unbounded growth when state writes drift.
 
 ### Concurrency / locking
 

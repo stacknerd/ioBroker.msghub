@@ -35,6 +35,7 @@ This module exports small builder functions. Hosts call them once and then pass 
 
 - `buildLogApi(adapter, { hostName })` → `ctx.api.log`
 - `buildI18nApi(adapter)` → `ctx.api.i18n` (or `null`)
+- `buildConfigApi(snapshot)` → `ctx.api.config` (or `null`)
 - `buildIoBrokerApi(adapter, { hostName })` → `ctx.api.iobroker`
 - `buildStoreApi(store, { hostName })` → `ctx.api.store`
 - `buildStatsApi(store)` → `ctx.api.stats` (or `null`)
@@ -66,6 +67,22 @@ Builds an optional i18n facade:
 - Otherwise returns `{ t, getTranslatedObject, locale, i18nlocale, lang }` from the adapter-scoped i18n instance.
 
 This makes translation support opt-in without breaking plugins that do not need it.
+
+### `buildConfigApi(snapshot)`
+
+Builds a read-only snapshot of the effective, normalized MsgHub configuration as `ctx.api.config`.
+
+Source of truth:
+
+- `main.js` builds a normalized config via `MsgConfig.normalize(...)`.
+- The plugin-facing subset is stored as a frozen snapshot (for example `this._msgConfigPublic`) and passed into the hosts.
+- `MsgHostApi` does not re-interpret config values; it only forwards the snapshot.
+
+Notes:
+
+- The snapshot is schema-versioned (`ctx.api.config.schemaVersion`).
+- Only whitelisted, safe fields are included.
+- Designed for diagnostics/help commands (for example `/config` in EngageTelegram).
 
 ### `buildIdsApi(adapter)`
 
@@ -272,8 +289,15 @@ Derivation rule:
 - For engage hosts (`hostName` contains `"Engage"`): exposes `execute({ ref, actionId, actor?, payload?, snoozeForMs? })`.
 - For other hosts: returns `null` (actions are reserved for Engage).
 
-`execute(...)` runs through `src/MsgAction.js` and mutates messages via `MsgStore.updateMessage(...)` (whitelist semantics:
-only actions present in `message.actions[]` can be executed).
+Implementation note:
+
+- The action executor is owned by the store (`store.msgActions`).
+- `ctx.api.action.execute(...)` forwards into that instance.
+
+This keeps policy consistent:
+
+- inbound: `execute(...)` rejects actions that are not allowed in the current lifecycle state
+- outbound: store read APIs and notification dispatch may expose `actionsInactive[]` and filter `actions[]` for the same reason
 
 ---
 

@@ -44,6 +44,136 @@ class MsgAction {
 	}
 
 	/**
+	 * Determine whether an action is currently allowed for a given message.
+	 *
+	 * This is a pure policy helper that is used in two places:
+	 * - Inbound: `execute()` uses it as an execution gate.
+	 * - Outbound: view/notify code may use it to hide actions that would be rejected anyway.
+	 *
+	 * Notes:
+	 * - This does not validate whether the action exists in `message.actions[]` (whitelisting);
+	 *   callers are expected to resolve the stored action first.
+	 *
+	 * @param {object} msg Message object.
+	 * @param {{ type?: string, id?: string }} action Action descriptor.
+	 * @returns {boolean} True if the action is allowed in the current message state.
+	 */
+	isActionAllowed(msg, action) {
+		if (!this.msgConstants || !msg || typeof msg !== 'object' || !action || typeof action !== 'object') {
+			return false;
+		}
+
+		const lifecycle = this.msgConstants.lifecycle || {};
+		const stateFallback = lifecycle?.state?.open || 'open';
+		const stateRaw = msg?.lifecycle?.state;
+		const state = typeof stateRaw === 'string' && stateRaw.trim() ? stateRaw.trim() : stateFallback;
+
+		const isQuasiDeletedState = lifecycle.isQuasiDeletedState;
+		if (typeof isQuasiDeletedState === 'function' && isQuasiDeletedState(state)) {
+			return false;
+		}
+
+		const type = typeof action.type === 'string' ? action.type.trim() : '';
+		if (!type) {
+			return false;
+		}
+
+		// Semantics:
+		// - ack    -> "mark as seen / stop nagging" (clears notifyAt)
+		// - snooze -> postpone remind/notify (updates notifyAt)
+		//
+		// Action matrix (core policy, lifecycle-sensitive):
+		//
+		// - open:    ack/close/delete/snooze allowed
+		// - acked:   close/delete allowed; ack + snooze blocked
+		// - snoozed: ack/close/delete allowed; snooze blocked
+		// - quasiDeleted (closed/deleted/expired): nothing allowed
+		//
+		// Rationale:
+		// - `ack` means "don't remind me anymore", therefore snooze is incompatible afterwards.
+		// - "First come, first serve": once snoozed, we don't offer/accept snooze again.
+		// - Rejected actions should be hidden from UI/notifiers (view filtering) and rejected on execution (inbound gate).
+
+		// Once a message is acked, "ack again" no longer makes sense and is blocked.
+		if (type === this.msgConstants?.actions?.type?.ack) {
+			if (state === lifecycle?.state?.acked) {
+				return false;
+			}
+		}
+
+		// Once a message is acked, snooze no longer makes sense and is blocked.
+		if (type === this.msgConstants?.actions?.type?.snooze) {
+			if (state === lifecycle?.state?.acked) {
+				return false;
+			}
+			// "First come, first serve": once snoozed, do not offer/accept snooze again.
+			if (state === lifecycle?.state?.snoozed) {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	/**
+	 * Build a view-only message object with an "effective actions" list.
+	 *
+	 * Output contract:
+	 * - `actions` contains only currently allowed actions.
+	 * - `actionsInactive` (optional) contains remaining valid actions that are currently blocked.
+	 *
+	 * Important:
+	 * - This does not mutate the input message.
+	 * - Invalid actions (missing type/id) are dropped from both lists.
+	 *
+	 * @param {object} msg Message object (raw or rendered).
+	 * @returns {object} View-only clone when changes are needed, else original `msg`.
+	 */
+	buildActions(msg) {
+		if (!msg || typeof msg !== 'object') {
+			return msg;
+		}
+
+		const input = Array.isArray(msg.actions) ? msg.actions : [];
+		if (input.length === 0) {
+			return msg;
+		}
+
+		const active = [];
+		const inactive = [];
+		let hadInvalid = false;
+
+		for (const action of input) {
+			if (!action || typeof action !== 'object') {
+				hadInvalid = true;
+				continue;
+			}
+			const type = typeof action.type === 'string' ? action.type.trim() : '';
+			const id = typeof action.id === 'string' ? action.id.trim() : '';
+			if (!type || !id) {
+				hadInvalid = true;
+				continue;
+			}
+
+			const allow = this.isActionAllowed(msg, action);
+			(allow ? active : inactive).push(action);
+		}
+
+		// Fast-path: keep identity stable when no filtering occurred.
+		if (!hadInvalid && inactive.length === 0 && active.length === input.length) {
+			return msg;
+		}
+
+		const out = { ...msg, actions: active };
+		if (inactive.length > 0) {
+			out.actionsInactive = inactive;
+		} else if (Object.prototype.hasOwnProperty.call(out, 'actionsInactive')) {
+			delete out.actionsInactive;
+		}
+		return out;
+	}
+
+	/**
 	 * Best-effort action audit hook (append to MsgArchive when available).
 	 *
 	 * @param {string} ref Message ref.
@@ -146,6 +276,21 @@ class MsgAction {
 					payload: payload !== undefined ? payload : null,
 				});
 				this.adapter?.log?.warn?.(`MsgAction.execute('${msgRef}'): actionId '${id}' not allowed/not found`);
+				return false;
+			}
+
+			if (!this.isActionAllowed(message, action)) {
+				record({
+					ok: false,
+					reason: 'blocked_by_policy',
+					type: action?.type || null,
+					payload: payload !== undefined ? payload : null,
+				});
+				this.adapter?.log?.warn?.(
+					`MsgAction.execute('${msgRef}'): actionId '${id}' blocked by policy (state='${String(
+						message?.lifecycle?.state || '',
+					)}')`,
+				);
 				return false;
 			}
 

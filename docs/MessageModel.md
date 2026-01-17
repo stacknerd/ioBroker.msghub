@@ -101,6 +101,17 @@ Message {
       id: string, 
       payload?: Record<string, unknown> | null 
     }>
+
+  // View-only action helpers (optional)
+  //
+  // Notes:
+  // - `actions[]` is the producer-defined allow-list stored in the canonical message.
+  // - On output, MsgHub may filter actions based on the current lifecycle state
+  //   (example: hide `snooze` when the message is already `snoozed` or `acked`).
+  // - Filtered-out actions are exposed as `actionsInactive[]` so UIs can still show “what exists,
+  //   but is currently not available”.
+  // - Neither `actionsInactive` nor the filtered `actions` are intended to be persisted by producers.
+  actionsInactive?: Array<{ type: string, id: string, payload?: Record<string, unknown> | null }>
     
   dependencies?: string[]
 
@@ -414,6 +425,15 @@ actions: [
   }
 ]
 ```
+
+Semantics:
+
+- delete  → soft delete
+- close   → complete / dismiss
+- snooze  → update notifyAt
+- open    → UI navigation / trigger
+- link    → navigation only
+- custom  → automation / plugin action
 
 In practice:
 

@@ -29,6 +29,9 @@ Internally, the store keeps a list: `this.fullList`.
 - This is the **raw message**, exactly as it is stored/persisted.
 - For output (e.g. UI), reads return a **rendered view** so placeholders like `{{m.temperature}}` can be resolved.
   That rendering happens via `MsgRender` and is **not written back** into `fullList`.
+- After rendering, the store also builds an **actions view** via `MsgAction.buildActions(...)`:
+  - `actions[]` may be filtered based on lifecycle policy.
+  - `actionsInactive[]` may be added for view-only diagnostics.
 
 Practical result: the canonical list stays stable and “clean”, and rendering is a pure output step.
 
@@ -51,6 +54,11 @@ Practical result: the canonical list stays stable and “clean”, and rendering
    - removing expired messages (`expiresAt`)
    - cleaning up completed messages (`closed` → `deleted` → hard-delete)
    - dispatching due notifications (`notifyAt`, optionally via a timer)
+
+5. **Owning the action layer instance**
+   - `MsgStore` owns a single `MsgAction` instance (`store.msgActions`) so the same policy can be used for:
+     - inbound action execution (`ctx.api.action.execute(...)` for Engage integrations)
+     - outbound action filtering (read APIs + notify dispatch)
 
 ---
 

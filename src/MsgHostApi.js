@@ -234,8 +234,10 @@ function buildActionApi(adapter, msgConstants, store, { hostName = 'Host' } = {}
 	}
 
 	try {
-		const { MsgAction } = require(`${__dirname}/MsgAction`);
-		const msgAction = new MsgAction(adapter, msgConstants, store);
+		const msgAction = store?.msgActions;
+		if (!msgAction || typeof msgAction.execute !== 'function') {
+			return null;
+		}
 		return Object.freeze({
 			execute: options => msgAction.execute(options),
 		});

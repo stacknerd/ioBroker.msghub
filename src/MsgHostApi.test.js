@@ -15,6 +15,7 @@ const {
 	buildStatsApi,
 } = require('./MsgHostApi');
 const { MsgConstants } = require('./MsgConstants');
+const { MsgAction } = require('./MsgAction');
 
 function createAdapterStub(overrides = {}) {
 	const calls = {
@@ -703,6 +704,7 @@ describe('MsgHostApi', () => {
 					return true;
 				},
 			};
+			store.msgActions = new MsgAction(adapter, MsgConstants, store);
 
 			const api = buildActionApi(adapter, MsgConstants, store, { hostName: 'MsgEngage' });
 			expect(api).to.not.equal(null);
@@ -712,30 +714,11 @@ describe('MsgHostApi', () => {
 			expect(calls.getByRef).to.equal(1);
 		});
 
-		it('logs a warning and returns null when MsgAction cannot be required', () => {
-			const Module = require('node:module');
-			const originalLoad = Module._load;
-
-			const { adapter, calls } = createAdapterStub();
+		it('returns null when store.msgActions is missing', () => {
+			const { adapter } = createAdapterStub();
 			const store = { getMessageByRef: () => null, updateMessage: () => true };
-
-			Module._load = function (request, parent, isMain) {
-				if (typeof request === 'string' && request.includes(`${__dirname}/MsgAction`)) {
-					throw new Error('boom');
-				}
-				return originalLoad.call(this, request, parent, isMain);
-			};
-
-			try {
-				const api = buildActionApi(adapter, MsgConstants, store, { hostName: 'MsgEngage' });
-				expect(api).to.equal(null);
-			} finally {
-				Module._load = originalLoad;
-			}
-
-			expect(calls.log.warn).to.have.length(1);
-			expect(calls.log.warn[0]).to.include('MsgEngage: failed to build ctx.api.action');
-			expect(calls.log.warn[0]).to.include('boom');
+			const api = buildActionApi(adapter, MsgConstants, store, { hostName: 'MsgEngage' });
+			expect(api).to.equal(null);
 		});
 	});
 });

@@ -102,8 +102,7 @@ Long-term, `MsgConfig` is intended to become the **single source of truth** for 
 - `main.js` reads raw `adapter.config`
 - `MsgConfig.normalize(...)` produces `corePrivate` and `pluginPublic`
 - core constructors (e.g. `MsgStore`) receive only normalized inputs
-- plugins receive only whitelisted, read-only config via `ctx.api.config` (planned)
+- plugins receive only whitelisted, read-only config via `ctx.api.config` (implemented as a thin passthrough of `pluginPublic`)
 
 This strengthens the separation between ioBroker wiring (I/O layer) and core logic (domain layer), and makes future
 config evolution and diagnostics more predictable.
-
