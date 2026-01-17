@@ -62,15 +62,14 @@ Example (`IngestMySystem`):
 - Battery: `mysystem.0.battery.<stateId>` (e.g. `mysystem.0.battery.some.0.device.battery`)
 - Reachable: `mysystem.0.reachable.<stateId>` (e.g. `mysystem.0.reachable.some.0.device.reachable`)
 
-## i18n helper
+## i18n workflow
 
-Distribute a `{lang: text}` object into `i18n/*.json`:
+This repo uses stable i18n keys (not English texts) and maintains language files with helper scripts:
 
-`npm run i18n:push -- --dry-run --json '{"en":"MsgHub plugin (%s/%s/%s)","de":"MsgHub-Plugin (%s/%s/%s)"}'`
-
-From a file (will be cleared after successful import; use `--keep-file` to disable):
-
-`npm run i18n:push -- i18n-input.js`
+- Generate/sync language files: `npm run i18n:generate`
+- Generate + remove keys that do not exist in `en.json` (opt-in): `npm run i18n:generate:remove`
+- Sort keys (deterministic): `npm run i18n:sort`
+- Check key sync (CI-friendly): `npm run i18n:check`
 
 ## i18n keying guideline (new keys)
 
@@ -106,14 +105,15 @@ Examples:
 
 - Allowed characters: `[A-Za-z0-9.]` (dot-separated segments).
 - Keys are semantically named, not based on English sentence texts.
-- Prefer string literals in `i18n.t('...')` calls (avoid concatenated/dynamic keys) so `npm run i18n:report` stays useful.
+- Prefer string literals in `i18n.t('...')` calls (avoid concatenated/dynamic keys) so keys stay searchable and reviewable.
 
-## i18n audit / sync checks
+## i18n sync checks
 
-Keep language files in sync and get a best-effort usage report:
+Keep language files in sync:
 
-- Report: `npm run i18n:report`
-- Check (non-zero exit on sync/usage problems): `npm run i18n:check`
+- `npm run i18n:check` checks that all language files contain the same keys as the base language (`en`).
+- `npm run i18n:sort` enforces deterministic key order (recommended before commits).
+- If you want both in one step: run `npm run i18n:sort` then `npm run i18n:check` (or use `node i18n-check.mjs --scope all --sort`).
 
 ## i18n runtime report (optional)
 

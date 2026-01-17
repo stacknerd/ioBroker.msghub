@@ -90,4 +90,3 @@ Plugins erhalten ihre Options aus `native` plus `options.pluginBaseObjectId` (vo
 ## i18n
 
 - Texte liegen in `i18n/*.json`; für neue Keys bevorzugt den Push-Workflow aus `docs/DevelopmentGuidelines.md` nutzen.
-- Helfer: `npm run i18n:push` (z.B. mit `i18n-input.js`).
