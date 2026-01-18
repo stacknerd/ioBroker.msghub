@@ -147,6 +147,84 @@ Request payload (minimal):
 }
 ```
 
+Request payload (kitchen sink / reference):
+
+```js
+const now = Date.now();
+const kind = 'task'; // 'appointment' | 'shoppinglist' | 'inventorylist' | 'status'
+
+sendTo('msghub.0', 'create', {
+  ref: 'demo.0.kitchensink.1',
+
+  // Required core fields
+  kind,
+  level: 10,
+  title: 'Kitchen sink example',
+  text: 'Shows all supported sections (some are kind-dependent).',
+  origin: { type: 'automation', system: 'javascript.0', id: 'kitchensink-1' },
+
+  // Optional blocks
+  details: {
+    location: 'Basement',
+    task: 'Do the thing',
+    reason: 'Because',
+    tools: ['screwdriver'],
+    consumables: ['tape'],
+  },
+
+  audience: {
+    tags: ['home', 'demo'],
+    channels: { include: ['telegram'], exclude: ['tts'] },
+  },
+
+  lifecycle: {
+    state: 'open',
+    stateChangedBy: 'javascript.0',
+  },
+
+  timing: {
+    // Note: `createdAt`/`updatedAt` are core-owned and ignored on create.
+    notifyAt: now + 5 * 60 * 1000,
+    remindEvery: 60 * 60 * 1000,
+    cooldown: 10 * 60 * 1000,
+    expiresAt: now + 7 * 24 * 60 * 60 * 1000,
+    timeBudget: 15 * 60 * 1000,
+
+    // Kind-dependent:
+    dueAt: kind === 'task' ? now + 2 * 60 * 60 * 1000 : undefined,
+    startAt: kind === 'appointment' ? now + 24 * 60 * 60 * 1000 : undefined,
+    endAt: kind === 'appointment' ? now + 25 * 60 * 60 * 1000 : undefined,
+  },
+
+  // Note: `startedAt`/`finishedAt` are core-owned and ignored on create.
+  progress: { percentage: 0 },
+
+  dependencies: ['demo.0.other.1'],
+
+  attachments: [
+    { type: 'image', value: 'https://example.invalid/img.png' },
+    { type: 'file', value: '/opt/iobroker/files/report.pdf' },
+  ],
+
+  actions: [
+    { type: 'ack', id: 'ack-1' },
+    { type: 'snooze', id: 'snooze-15m', payload: { forMs: 15 * 60 * 1000 } },
+    { type: 'close', id: 'close-1' },
+  ],
+
+  // Only valid for list kinds:
+  listItems:
+    kind === 'shoppinglist'
+      ? [
+          { id: 'milk', name: 'Milk', category: 'dairy', quantity: { val: 2, unit: 'l' }, checked: false },
+          { id: 'bread', name: 'Bread', checked: true },
+        ]
+      : undefined,
+
+  // Metrics are stored as a Map in MsgHub. Over `sendTo`, patch them after create (see `patch` below).
+}, res => console.log(JSON.stringify(res, null, 2)));
+```
+
 Response `data`:
 
 ```js
@@ -177,6 +255,34 @@ Request payload:
 
 ```js
 { ref: 'demo.0.task.1', title: 'New title' }
+```
+
+Example: add/update/remove a `metrics` entry
+
+```js
+const ts = Date.now();
+
+// Add or update one metric (partial update by key)
+sendTo('msghub.0', 'patch', {
+  ref: 'demo.0.task.1',
+  patch: {
+    metrics: {
+      set: {
+        temperature: { val: 21.7, unit: 'C', ts },
+      },
+    },
+  },
+}, res => console.log(JSON.stringify(res, null, 2)));
+
+// Delete one metric key
+sendTo('msghub.0', 'patch', {
+  ref: 'demo.0.task.1',
+  patch: {
+    metrics: {
+      delete: ['temperature'],
+    },
+  },
+}, res => console.log(JSON.stringify(res, null, 2)));
 ```
 
 Response `data`:
@@ -229,6 +335,14 @@ Request payload:
 - string: `'demo.0.task.1'`
 - or object: `{ ref: 'demo.0.task.1' }`
 
+Example: removing a message
+
+```js
+sendTo('msghub.0', 'remove', 'demo.0.task.1', res => {
+  console.log(JSON.stringify(res, null, 2));
+});
+```
+
 Response `data`:
 
 ```js
@@ -250,6 +364,14 @@ Request payload:
 
 - string: `'demo.0.task.1'`
 - or object: `{ ref: 'demo.0.task.1' }`
+
+Example: reading a message
+
+```js
+sendTo('msghub.0', 'get', { ref: 'demo.0.task.1' }, res => {
+  console.log(JSON.stringify(res, null, 2));
+});
+```
 
 Response `data`:
 
@@ -279,6 +401,25 @@ Request payload (optional):
   },
   sort?: Array<{ field: string, dir?: 'asc'|'desc' }>
 }
+```
+
+Example: filter + paging + sorting
+
+```js
+const now = Date.now();
+
+sendTo('msghub.0', 'list', {
+  where: {
+    kind: 'task',
+    lifecycle: { state: 'open' },
+    timing: { notifyAt: { max: now, orMissing: true } }, // due now OR missing notifyAt
+  },
+  sort: [
+    { field: 'level', dir: 'desc' },
+    { field: 'timing.notifyAt', dir: 'asc' },
+  ],
+  page: { size: 10, index: 1 },
+}, res => console.log(JSON.stringify(res, null, 2)));
 ```
 
 `where` is passed through to the core query API (`ctx.api.store.queryMessages({ where, page, sort })`).
