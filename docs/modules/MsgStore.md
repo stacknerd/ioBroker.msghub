@@ -84,7 +84,7 @@ All schema validation, normalization, and patch semantics live in `MsgFactory`.
 
 ### 4) Notification scheduling is intentionally simple
 `MsgStore` does not “schedule” notifications like a job runner. It only checks: **is `notifyAt` reached?**
-If a message is due (`notifyAt <= now`), `_initiateNotifications()` dispatches `"due"` and then **reschedules**:
+If a message is due (`notifyAt <= now`), `_initiateNotifications()` dispatches `"due"` (via `_dispatchNotify()`), and the dispatch path applies store-owned policies (via `_applyMsgPolicy()`), including **rescheduling**:
 
 - if `timing.remindEvery` is set: `notifyAt = now + remindEvery`
 - otherwise: `notifyAt` is cleared (one-shot)
@@ -93,6 +93,7 @@ Quiet hours (optional):
 - The store can suppress **repeat** `"due"` notifications during a configured quiet-hours window.
 - Repeat detection is based on the core-managed marker `timing.notifiedAt.due` (first due always dispatches).
 - When suppressed, the store reschedules `notifyAt` to the quiet-hours end plus an optional random spread window.
+- When a snooze has elapsed and a message becomes due, the store patches `lifecycle.state` back from `snoozed` to `open` before dispatch.
 
 Note: rescheduling uses a silent store patch (`stealthMode`), so it does not produce `"updated"` events (but the change is still persisted and archived).
 
@@ -158,9 +159,8 @@ When does the store dispatch?
     - `lifecycle.state === "open"`,
     - and the message is not expired.
 - `_initiateNotifications()` (optional timer)
-  - Dispatches `"due"` as a batch for all messages whose `notifyAt` has been reached.
-  - Then reschedules/clears `notifyAt` based on `timing.remindEvery` (one-shot vs repeat).
-  - Optional quiet hours can suppress repeat `"due"` notifications and push `notifyAt` out of the quiet window.
+  - Dispatches `"due"` as a batch for all messages whose `notifyAt` has been reached (eligible states: `open|snoozed`, and not expired).
+  - The dispatch path (`_dispatchNotify()` + `_applyMsgPolicy()`) applies quiet-hours suppression (repeat-only) and reschedules/clears `notifyAt` based on `timing.remindEvery`.
 
 ---
 

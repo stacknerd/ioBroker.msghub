@@ -341,7 +341,7 @@ class MsgStore {
 			(msg?.lifecycle?.state || this.msgConstants.lifecycle?.state?.open) ===
 			this.msgConstants.lifecycle?.state?.open;
 		if (isOpen && !isWithinCooldown && !Number.isFinite(msg?.timing?.notifyAt)) {
-			this._dispatchImmediateDue(msg);
+			this._dispatchNotify(this.msgConstants.notfication.events.due, msg);
 		}
 		this.adapter?.log?.debug?.(`MsgStore: added Message '${msg.ref}'`);
 		this.adapter?.log?.silly?.(`MsgStore: added Message '${serializeWithMaps(msg)}'`);
@@ -454,7 +454,7 @@ class MsgStore {
 			(updated?.lifecycle?.state || this.msgConstants.lifecycle?.state?.open) ===
 			this.msgConstants.lifecycle?.state?.open;
 		if (!Number.isFinite(t?.notifyAt) && hadUpdate && notExpired && isOpen) {
-			this._dispatchImmediateDue(updated);
+			this._dispatchNotify(this.msgConstants.notfication.events.due, updated);
 		}
 		this.adapter?.log?.debug?.(`MsgStore: updated Message '${updated.ref}'`);
 		this.adapter?.log?.silly?.(`MsgStore: updated Message '${serializeWithMaps(updated)}'`);
@@ -1469,7 +1469,7 @@ class MsgStore {
 			return;
 		}
 
-		this._dispatchScheduledDue(notifications, { now });
+		this._dispatchNotify(this.msgConstants.notfication.events.due, notifications);
 
 		this.adapter?.log?.debug?.(
 			`MsgStore: initiated Notification for Message(s) '${notifications.map(msg => msg.ref).join(', ')}'`,
@@ -1477,6 +1477,111 @@ class MsgStore {
 		this.adapter?.log?.silly?.(
 			`MsgStore: initiated Notification for Message(s) '${serializeWithMaps(notifications)}'`,
 		);
+	}
+
+	/**
+	 * Apply store-owned dispatch policies to a message payload.
+	 *
+	 * Notes:
+	 * - This method may apply stealth patches via `updateMessage(..., true)` before dispatch.
+	 * - It supports both single-message and list payloads and preserves the input shape.
+	 * - For now, only `event === "due"` is handled; other events return the payload unchanged.
+	 *
+	 * Current policies for `event === "due"`:
+	 * - If lifecycle is `snoozed`, patch it back to `open` (stealth).
+	 * - If quiet-hours suppression applies (repeat due only), reschedule `timing.notifyAt` into the quiet-hours end (stealth) and suppress dispatch.
+	 * - Otherwise, reschedule `timing.notifyAt` based on `timing.remindEvery` (stealth).
+	 *
+	 * @param {string} event Notification event value (see MsgConstants.notfication.events).
+	 * @param {object|Array<object>} payload Message or list of messages.
+	 * @returns {object|Array<object>|undefined} Policy-adjusted message payload.
+	 */
+	_applyMsgPolicy(event, payload) {
+		// Normalize event name and decide early whether this policy layer applies.
+		const eventName = typeof event === 'string' ? event.trim() : '';
+		if (!eventName) {
+			return payload;
+		}
+		const dueEvent = this.msgConstants.notfication?.events?.due;
+		if (eventName !== dueEvent) {
+			return payload;
+		}
+
+		// Normalize payload shape (accept single message or list) and preserve it on return.
+		const list = Array.isArray(payload) ? payload : payload ? [payload] : [];
+		if (list.length === 0) {
+			return payload;
+		}
+
+		// Policy context: these are store-owned semantics and are applied immediately before dispatch.
+		const now = Date.now();
+		const openState = this.msgConstants.lifecycle?.state?.open;
+		const snoozedState = this.msgConstants.lifecycle?.state?.snoozed;
+		const quietHours = this._quietHours;
+		const dispatchables = [];
+		for (const msg of list) {
+			// Dispatch policy only applies to persisted messages (must have a stable ref).
+			const ref = typeof msg?.ref === 'string' ? msg.ref.trim() : '';
+			if (!ref) {
+				continue;
+			}
+
+			let suppressDispatch = false;
+			const patch = {};
+
+			// Snooze elapsed: due messages should become "open" again, regardless of quiet hours.
+			if (msg?.lifecycle?.state === snoozedState) {
+				patch.lifecycle = { state: openState, stateChangedBy: 'MsgStore' };
+			}
+
+			// Quiet hours: suppress repeats only (first due is still delivered).
+			const hasNotifyAt = Number.isFinite(msg?.timing?.notifyAt);
+			const lastDue = msg?.timing?.notifiedAt?.due;
+			const isRepeatDue = Number.isFinite(lastDue) && lastDue > 0;
+			if (hasNotifyAt && isRepeatDue && MsgNotificationPolicy.shouldSuppressDue({ msg, now, quietHours })) {
+				// Suppressed: keep the message due, but move notifyAt out of the quiet window.
+				const nextNotifyAt = MsgNotificationPolicy.computeQuietRescheduleTs({
+					now,
+					quietHours,
+					randomFn: this._quietHoursRandomFn,
+				});
+				if (Number.isFinite(nextNotifyAt)) {
+					patch.timing = { ...(patch.timing || {}), notifyAt: nextNotifyAt };
+				}
+				suppressDispatch = true;
+			} else {
+				// Not suppressed: after dispatch, reschedule the next repeat (or clear for one-shot).
+				const remindEvery = msg?.timing?.remindEvery;
+				const hasRemindEvery = Number.isFinite(remindEvery) && remindEvery > 0;
+				const hasNotifyAt = Number.isFinite(msg?.timing?.notifyAt);
+				if (hasNotifyAt || hasRemindEvery) {
+					const newNotifyAt = hasRemindEvery ? now + remindEvery : null;
+					patch.timing = { ...(patch.timing || {}), notifyAt: newNotifyAt };
+				}
+			}
+
+			// Apply the collected patch as a single stealth update (no updatedAt bump / no "updated" event).
+			const hasPatch = Object.keys(patch).length > 0;
+			if (hasPatch) {
+				this.updateMessage(ref, patch, true);
+			}
+
+			// Quiet hours suppression means "reschedule only" (nothing to dispatch right now).
+			if (suppressDispatch) {
+				continue;
+			}
+
+			// Dispatch should reflect the canonical, patched store view (snoozed->open, rescheduled notifyAt, ...).
+			// Only re-read from the store when we actually applied a patch.
+			if (hasPatch) {
+				dispatchables.push(this.fullList.find(item => item?.ref === ref) || msg);
+			} else {
+				dispatchables.push(msg);
+			}
+		}
+
+		// Preserve the caller's input shape (single in -> single out; list in -> list out).
+		return Array.isArray(payload) ? dispatchables : dispatchables[0];
 	}
 
 	/**
@@ -1494,9 +1599,15 @@ class MsgStore {
 			return;
 		}
 
-		const rendered = Array.isArray(payload)
-			? payload.map(msg => this._renderForOutput(msg))
-			: this._renderForOutput(payload);
+		const toBeDispatched = this._applyMsgPolicy(event, payload);
+		const list = Array.isArray(toBeDispatched) ? toBeDispatched : toBeDispatched ? [toBeDispatched] : [];
+		if (list.length === 0) {
+			return;
+		}
+
+		const rendered = Array.isArray(toBeDispatched)
+			? toBeDispatched.map(msg => this._renderForOutput(msg))
+			: this._renderForOutput(toBeDispatched);
 
 		this.msgNotify.dispatch(event, rendered);
 
@@ -1506,10 +1617,6 @@ class MsgStore {
 		if (!eventKey) {
 			return;
 		}
-		const list = Array.isArray(payload) ? payload : payload ? [payload] : [];
-		if (list.length === 0) {
-			return;
-		}
 		const now = Date.now();
 		for (const msg of list) {
 			const ref = typeof msg?.ref === 'string' ? msg.ref.trim() : '';
@@ -1517,75 +1624,6 @@ class MsgStore {
 				continue;
 			}
 			this.updateMessage(ref, { timing: { notifiedAt: { [eventKey]: now } } }, true);
-		}
-	}
-
-	/**
-	 * Dispatch an immediate `due` notification (internal policy entry point).
-	 *
-	 * Important:
-	 * - Quiet hours apply only to scheduled repeats, not to immediate due dispatches.
-	 * - Notification markers (`timing.notifiedAt`) are appended as separate patches after dispatch.
-	 *
-	 * @param {object} message Message to dispatch.
-	 * @returns {void}
-	 */
-	_dispatchImmediateDue(message) {
-		const msg = message && typeof message === 'object' ? message : null;
-		if (!msg) {
-			return;
-		}
-		// Quiet hours are only applied to scheduled repeats; immediate due stays unaffected.
-		this._dispatchNotify(this.msgConstants.notfication.events.due, msg);
-	}
-
-	/**
-	 * Dispatch scheduled `due` notifications (internal policy entry point).
-	 *
-	 * Applies quiet hours to repeats by rescheduling `timing.notifyAt` out of the quiet window.
-	 *
-	 * @param {object|Array<object>} messages Message or list of messages.
-	 * @param {object} root0 Options.
-	 * @param {number} root0.now Current timestamp (ms).
-	 * @returns {void}
-	 */
-	_dispatchScheduledDue(messages, { now }) {
-		const list = Array.isArray(messages) ? messages : messages ? [messages] : [];
-		if (list.length === 0) {
-			return;
-		}
-
-		const quietHours = this._quietHours;
-		const dispatchables = [];
-		for (const msg of list) {
-			if (!msg || typeof msg !== 'object') {
-				continue;
-			}
-			if (MsgNotificationPolicy.shouldSuppressDue({ msg, now, quietHours })) {
-				const nextNotifyAt = MsgNotificationPolicy.computeQuietRescheduleTs({
-					now,
-					quietHours,
-					randomFn: this._quietHoursRandomFn,
-				});
-				if (Number.isFinite(nextNotifyAt)) {
-					this.updateMessage(msg.ref, { timing: { notifyAt: nextNotifyAt } }, true);
-				}
-				continue;
-			}
-			dispatchables.push(msg);
-		}
-
-		if (dispatchables.length === 0) {
-			return;
-		}
-
-		// Dispatch as a batch; MsgNotify will fan out per message internally.
-		this._dispatchNotify(this.msgConstants.notfication.events.due, dispatchables);
-
-		for (const msg of dispatchables) {
-			const remindEvery = msg?.timing?.remindEvery;
-			const newNotifyAt = Number.isFinite(remindEvery) && remindEvery > 0 ? now + remindEvery : null;
-			this.updateMessage(msg.ref, { timing: { notifyAt: newNotifyAt } }, true);
 		}
 	}
 
