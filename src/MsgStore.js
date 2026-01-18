@@ -1432,6 +1432,7 @@ class MsgStore {
 	 *
 	 * Selection logic:
 	 * - `timing.notifyAt` must be a number and `<= now`.
+	 * - Only messages in `lifecycle.state === "open"|"snoozed"` are eligible.
 	 * - Expired messages are excluded (`expiresAt` missing or `> now`).
 	 *
 	 * Side-effects:
@@ -1449,10 +1450,18 @@ class MsgStore {
 	_initiateNotifications() {
 		const now = Date.now();
 
-		// Determine which entries are currently due.
+		// Determine which entries are currently due (only open/snoozed messages).
+		const openState = this.msgConstants.lifecycle?.state?.open;
+		const snoozedState = this.msgConstants.lifecycle?.state?.snoozed;
+		const isEligibleState = item => {
+			const state = item?.lifecycle?.state || openState;
+			return state === openState || state === snoozedState;
+		};
+
 		const isDue = item =>
 			typeof item?.timing?.notifyAt === 'number' &&
 			item.timing.notifyAt <= now &&
+			isEligibleState(item) &&
 			(typeof item?.timing?.expiresAt !== 'number' || item.timing.expiresAt > now);
 		const notifications = this.fullList.filter(isDue);
 
