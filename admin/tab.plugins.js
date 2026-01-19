@@ -1687,6 +1687,1010 @@
 			]);
 		}
 
+		function renderIngestStatesMessagePresetsTool() {
+			const SCHEMA = 'msghub.IngestStatesMessagePreset.v1';
+
+			const isPresetId = value => {
+				const s = typeof value === 'string' ? value.trim() : '';
+				return /^[A-Za-z0-9_-]+$/.test(s);
+			};
+
+			const parseCsvList = value => {
+				const s = typeof value === 'string' ? value : value == null ? '' : String(value);
+				return s
+					.split(',')
+					.map(x => x.trim())
+					.filter(Boolean);
+			};
+
+			const formatCsvList = list => (Array.isArray(list) ? list : []).filter(Boolean).join(', ');
+
+			const cloneJson = value => JSON.parse(JSON.stringify(value ?? null));
+
+			const defaultPreset = ({ presetId, description, immutable = false, kind = 'status', level = 20 } = {}) => ({
+				schema: SCHEMA,
+				presetId: String(presetId || '').trim(),
+				description: typeof description === 'string' ? description : '',
+				immutable: immutable === true,
+				message: {
+					kind,
+					level,
+					title: '',
+					text: '',
+					timing: {
+						timeBudget: 0,
+						dueInMs: 0,
+						cooldown: 0,
+						remindEvery: 0,
+					},
+					details: {
+						task: '',
+						reason: '',
+						tools: [],
+						consumables: [],
+					},
+					audience: {
+						tags: [],
+						channels: { include: [], exclude: [] },
+					},
+					actions: [],
+				},
+				policy: {
+					resetOnNormal: true,
+				},
+				ui: {
+					timingUnits: {
+						timeBudgetUnitSeconds: 60,
+						dueInUnitSeconds: 3600,
+						cooldownUnitSeconds: 1,
+						remindEveryUnitSeconds: 3600,
+					},
+				},
+			});
+
+			let presets = [];
+
+			let selectedId = '';
+			let original = null;
+			let draft = cloneJson(original);
+			let isNew = false;
+			let listLoading = true;
+			let presetLoading = false;
+			let saving = false;
+			let lastError = '';
+
+			const el = h('div', { class: 'msghub-tools-presets' });
+			const elList = h('div', {
+				class: 'msghub-tools-presets-list',
+				style: 'flex: 0 0 38%; min-width: 260px;',
+			});
+			const elEditor = h('div', { class: 'msghub-tools-presets-editor', style: 'flex: 1 1 auto;' });
+
+			const isDirty = () => JSON.stringify(original) !== JSON.stringify(draft);
+
+			const presetLabel = p => {
+				const id = String(p?.presetId || '').trim();
+				const desc = typeof p?.description === 'string' ? p.description.trim() : '';
+				const kind = String(p?.message?.kind || '').trim();
+				const level = p?.message?.level;
+				const lvl = typeof level === 'number' && Number.isFinite(level) ? String(level) : '';
+				const name = desc || id;
+				return `${kind || 'msg'}, ${lvl || '?'}: ${name || '(unnamed)'}`;
+			};
+
+			const sortPresets = () => {
+				presets.sort((a, b) => presetLabel(a).localeCompare(presetLabel(b)));
+			};
+
+			const loadList = async ({ selectPresetId = '' } = {}) => {
+				listLoading = true;
+				render();
+
+				const opts = await sendTo('admin.ingestStates.presets.list', {});
+				const items = Array.isArray(opts) ? opts : [];
+
+				const next = [];
+				for (const o of items) {
+					const id = typeof o?.value === 'string' ? o.value.trim() : '';
+					if (!isPresetId(id)) {
+						continue;
+					}
+					const label = typeof o?.label === 'string' ? o.label.trim() : '';
+					next.push(
+						defaultPreset({
+							presetId: id,
+							description: label && label !== id ? label : '',
+							immutable: false,
+						}),
+					);
+				}
+
+				presets = next;
+				sortPresets();
+				selectedId = '';
+				original = null;
+				draft = null;
+				isNew = false;
+				listLoading = false;
+
+				const desired = typeof selectPresetId === 'string' ? selectPresetId.trim() : '';
+				if (desired && presets.some(p => p?.presetId === desired)) {
+					setSelected(desired);
+				} else {
+					render();
+				}
+			};
+
+			const loadPreset = async presetId => {
+				const id = String(presetId || '').trim();
+				if (!isPresetId(id)) {
+					return null;
+				}
+				const res = await sendTo('admin.ingestStates.presets.get', { presetId: id });
+				const preset = res?.preset;
+				if (!preset || typeof preset !== 'object') {
+					return null;
+				}
+				return preset;
+			};
+
+			const toast = msg => {
+				try {
+					// Helpful during development: always log, even if Materialize toast is visually broken.
+					console.warn(`Msghub presets: ${String(msg || '')}`);
+				} catch {
+					// ignore
+				}
+				try {
+					M.toast({ html: String(msg || '') });
+				} catch {
+					// ignore
+				}
+			};
+
+			const setError = msg => {
+				lastError = typeof msg === 'string' ? msg : msg == null ? '' : String(msg);
+			};
+
+			const confirmDiscardIfNeeded = () => {
+				if (!isDirty()) {
+					return true;
+				}
+				return window.confirm('Discard unsaved changes?');
+			};
+
+			const setSelected = presetId => {
+				if (!confirmDiscardIfNeeded()) {
+					return;
+				}
+				const nextId = String(presetId || '').trim();
+				if (!nextId) {
+					return;
+				}
+				setError('');
+				presetLoading = true;
+				render();
+				Promise.resolve()
+					.then(() => loadPreset(nextId))
+					.then(preset => {
+						if (!preset) {
+							const msg = `Preset '${nextId}' could not be loaded`;
+							setError(msg);
+							toast(msg);
+							return;
+						}
+						selectedId = nextId;
+						original = cloneJson(preset);
+						draft = cloneJson(original);
+						isNew = false;
+					})
+					.catch(e => {
+						const msg = String(e?.message || e);
+						setError(msg);
+						toast(msg);
+					})
+					.finally(() => {
+						presetLoading = false;
+						render();
+					});
+			};
+
+			const createNew = () => {
+				if (!confirmDiscardIfNeeded()) {
+					return;
+				}
+				setError('');
+				original = null;
+				draft = defaultPreset({ presetId: '', description: '', immutable: false, kind: 'status', level: 20 });
+				isNew = true;
+				render();
+			};
+
+			const duplicateSelected = () => {
+				if (!confirmDiscardIfNeeded()) {
+					return;
+				}
+				if (!original || typeof original !== 'object') {
+					toast('No preset selected');
+					return;
+				}
+				setError('');
+				original = null;
+				draft = cloneJson(draft);
+				draft.presetId = '';
+				draft.immutable = false;
+				isNew = true;
+				render();
+			};
+
+			const deleteSelected = () => {
+				const id = String(selectedId || '').trim();
+				if (!id) {
+					return;
+				}
+				if (!window.confirm(`Delete preset '${id}'?`)) {
+					return;
+				}
+				setError('');
+				saving = true;
+				render();
+				Promise.resolve()
+					.then(() => sendTo('admin.ingestStates.presets.delete', { presetId: id }))
+					.then(() => loadList())
+					.catch(e => {
+						const msg = String(e?.message || e);
+						setError(msg);
+						toast(msg);
+					})
+					.finally(() => {
+						saving = false;
+						render();
+					});
+			};
+
+			const validateDraft = () => {
+				if (!draft || typeof draft !== 'object') {
+					return 'Invalid preset';
+				}
+				if (draft.schema !== SCHEMA) {
+					return `Invalid schema (expected '${SCHEMA}')`;
+				}
+				if (!isPresetId(draft.presetId)) {
+					return 'Invalid presetId (allowed: A-Z a-z 0-9 _ -)';
+				}
+				if (!draft?.message?.kind) {
+					return 'Missing required field: message.kind';
+				}
+				if (typeof draft?.message?.level !== 'number' || !Number.isFinite(draft.message.level)) {
+					return 'Missing/invalid required field: message.level';
+				}
+				const title = typeof draft?.message?.title === 'string' ? draft.message.title.trim() : '';
+				const text = typeof draft?.message?.text === 'string' ? draft.message.text.trim() : '';
+				if (!title) {
+					return 'Missing required field: message.title';
+				}
+				if (!text) {
+					return 'Missing required field: message.text';
+				}
+				return null;
+			};
+
+			const saveDraft = () => {
+				const err = validateDraft();
+				if (err) {
+					setError(err);
+					toast(err);
+					render();
+					return;
+				}
+
+				setError('');
+				saving = true;
+				render();
+				Promise.resolve()
+					.then(() => {
+						try {
+							console.debug('Msghub presets: upsert start', { presetId: draft?.presetId });
+						} catch {
+							// ignore
+						}
+					})
+					.then(() => sendTo('admin.ingestStates.presets.upsert', { preset: cloneJson(draft) }))
+					.then(() => loadList({ selectPresetId: draft.presetId }))
+					.then(() => {
+						try {
+							console.debug('Msghub presets: upsert ok', { presetId: draft?.presetId });
+						} catch {
+							// ignore
+						}
+					})
+					.catch(e => {
+						const msg = String(e?.message || e);
+						setError(msg);
+						toast(msg);
+					})
+					.finally(() => {
+						saving = false;
+						render();
+					});
+			};
+
+			const abortEdit = () => {
+				if (!confirmDiscardIfNeeded()) {
+					return;
+				}
+				setError('');
+				draft = cloneJson(original);
+				isNew = false;
+				render();
+			};
+
+			const updateDraft = patch => {
+				draft = { ...(draft || {}), ...(patch || {}) };
+			};
+
+			const updateMessage = patch => {
+				const cur = draft?.message && typeof draft.message === 'object' ? draft.message : {};
+				updateDraft({ message: { ...cur, ...(patch || {}) } });
+			};
+
+			const updateMessageNested = (path, value) => {
+				const parts = String(path || '').split('.').filter(Boolean);
+				if (parts.length === 0) {
+					return;
+				}
+
+				const next = cloneJson(draft?.message || {});
+				let cur = next;
+				for (let i = 0; i < parts.length - 1; i++) {
+					const k = parts[i];
+					if (!cur[k] || typeof cur[k] !== 'object') {
+						cur[k] = {};
+					}
+					cur = cur[k];
+				}
+				cur[parts[parts.length - 1]] = value;
+				updateMessage(next);
+			};
+
+			const updatePolicy = patch => {
+				const cur = draft?.policy && typeof draft.policy === 'object' ? draft.policy : {};
+				updateDraft({ policy: { ...cur, ...(patch || {}) } });
+			};
+
+			const resolveOptions = src => resolveDynamicOptions(src).map(o => ({ value: o.value, label: pickText(o.label) }));
+
+			const renderList = () => {
+				sortPresets();
+
+				const btnNew = h('a', {
+					class: 'btn-small',
+					href: '#',
+					title: 'New',
+					onclick: e => {
+						e.preventDefault();
+						createNew();
+					},
+					text: '+',
+				});
+				const btnReload = h('a', {
+					class: 'btn-small btn-flat',
+					href: '#',
+					title: 'Reload',
+					onclick: e => {
+						e.preventDefault();
+						void loadList().catch(err => {
+							const msg = String(err?.message || err);
+							setError(msg);
+							toast(msg);
+						});
+					},
+					text: '⟳',
+				});
+				const btnDup = h('a', {
+					class: 'btn-small btn-flat',
+					href: '#',
+					title: 'Duplicate',
+					onclick: e => {
+						e.preventDefault();
+						duplicateSelected();
+					},
+					text: '⧉',
+				});
+				const btnDel = h('a', {
+					class: 'btn-small btn-flat red-text',
+					href: '#',
+					title: 'Delete',
+					onclick: e => {
+						e.preventDefault();
+						deleteSelected();
+					},
+					text: '×',
+				});
+
+				const listHeader = h('div', { class: 'msghub-tools-presets-list-head' }, [
+					h('div', { class: 'msghub-actions msghub-actions--inline' }, [btnNew, btnReload, btnDup, btnDel]),
+				]);
+
+				let items = null;
+				if (listLoading) {
+					items = h('div', { class: 'msghub-muted', text: 'Loading…' });
+				} else if (presets.length === 0) {
+					items = h('div', { class: 'msghub-muted', text: 'No presets yet. Click + to create one.' });
+				} else {
+					items = h(
+						'div',
+						{ class: 'msghub-tools-presets-list-items', style: 'max-height: 60vh; overflow: auto;' },
+						presets.map(p =>
+							h('a', {
+								class: `msghub-tools-presets-item${p?.presetId === selectedId && !isNew ? ' active' : ''}`,
+								href: '#',
+								onclick: e => {
+									e.preventDefault();
+									setSelected(p.presetId);
+								},
+								text: presetLabel(p),
+							}),
+						),
+					);
+				}
+
+				elList.replaceChildren(listHeader, items);
+			};
+
+			const renderEditor = () => {
+				if (presetLoading) {
+					elEditor.replaceChildren(h('p', { class: 'msghub-muted', text: 'Loading preset…' }));
+					return;
+				}
+				if (!draft) {
+					elEditor.replaceChildren(h('p', { class: 'msghub-muted', text: 'Select a preset or create a new one.' }));
+					return;
+				}
+
+				const immutable = draft.immutable === true;
+				const disabled = immutable || saving === true;
+
+				const fields = [];
+
+				const fPresetId = buildFieldInput({
+						type: 'string',
+						key: 'presetId',
+						label: 'Preset ID',
+						value: draft.presetId,
+						help: 'Storage id (A-Z a-z 0-9 _ -).',
+					});
+				if (fPresetId?.input) {
+					fPresetId.input.disabled = disabled || isNew !== true;
+				}
+				fields.push(fPresetId);
+
+				const fDescription = buildFieldInput({
+						type: 'string',
+						key: 'description',
+						label: 'Display name',
+						value: draft.description,
+						help: 'Shown as common.name later.',
+				});
+				if (fDescription?.input) {
+					fDescription.input.disabled = disabled;
+				}
+				fields.push(fDescription);
+
+				const fSchema = buildFieldInput({
+						type: 'string',
+						key: 'schema',
+						label: 'Schema',
+						value: draft.schema,
+						help: '',
+				});
+				if (fSchema?.input) {
+					fSchema.input.disabled = true;
+				}
+				fields.push(fSchema);
+
+				const fImmutable = buildFieldInput({
+						type: 'boolean',
+						key: 'immutable',
+						label: 'Immutable (default preset)',
+						value: immutable,
+						help: '',
+					});
+				if (fImmutable?.input) {
+					fImmutable.input.disabled = true;
+				}
+				fields.push(fImmutable);
+
+				const kindOptions = resolveOptions('MsgConstants.kind');
+				const levelOptions = resolveOptions('MsgConstants.level');
+
+				fields.push(buildFieldInput({ type: 'header', key: '_h_msg', label: 'Message' }));
+				const fKind = buildFieldInput({
+						type: 'string',
+						key: 'message_kind',
+						label: 'Kind',
+						value: draft?.message?.kind,
+						options: kindOptions.length ? kindOptions : undefined,
+				});
+				if (fKind?.input) {
+					fKind.input.disabled = disabled;
+				}
+				fields.push(fKind);
+
+				const fLevel = buildFieldInput({
+						type: 'number',
+						key: 'message_level',
+						label: 'Level',
+						value: draft?.message?.level,
+						options: levelOptions.length ? levelOptions : undefined,
+				});
+				if (fLevel?.input) {
+					fLevel.input.disabled = disabled;
+				}
+				fields.push(fLevel);
+
+				const titleField = (() => {
+					const id = `f_title_${Math.random().toString(36).slice(2, 8)}`;
+					const input = h('input', { type: 'text', id, value: draft?.message?.title ?? '' });
+					if (disabled) {
+						input.disabled = true;
+					}
+					return {
+						input,
+						getValue: () => input.value,
+						wrapper: h('div', { class: 'input-field msghub-field' }, [
+							input,
+							h('label', { for: id, text: 'Title' }),
+						]),
+					};
+				})();
+
+				const textField = (() => {
+					const id = `f_text_${Math.random().toString(36).slice(2, 8)}`;
+					const textarea = h('textarea', {
+						id,
+						class: 'materialize-textarea',
+						text: draft?.message?.text ?? '',
+					});
+					if (disabled) {
+						textarea.disabled = true;
+					}
+					return {
+						textarea,
+						getValue: () => textarea.value,
+						wrapper: h('div', { class: 'input-field msghub-field' }, [
+							textarea,
+							h('label', { for: id, text: 'Text' }),
+							h('div', {
+								class: 'msghub-muted',
+								text: 'Templates (placeholder): {{m.state-value}}, {{m.lastSeenAt|datetime}}',
+							}),
+						]),
+					};
+				})();
+
+				fields.push(titleField);
+				fields.push(textField);
+
+				fields.push(buildFieldInput({ type: 'header', key: '_h_timing', label: 'Timing' }));
+				const fTimeBudget = buildFieldInput({
+						type: 'number',
+						key: 'timing_timeBudget',
+						label: 'Time budget',
+						value: draft?.message?.timing?.timeBudget,
+						unit: 'ms',
+				});
+				if (fTimeBudget?.input) {
+					fTimeBudget.input.disabled = disabled;
+				}
+				if (fTimeBudget?.select) {
+					fTimeBudget.select.disabled = disabled;
+				}
+				fields.push(fTimeBudget);
+
+				const fDueIn = buildFieldInput({
+						type: 'number',
+						key: 'timing_dueInMs',
+						label: 'Due in',
+						value: draft?.message?.timing?.dueInMs,
+						unit: 'ms',
+				});
+				if (fDueIn?.input) {
+					fDueIn.input.disabled = disabled;
+				}
+				if (fDueIn?.select) {
+					fDueIn.select.disabled = disabled;
+				}
+				fields.push(fDueIn);
+
+				const fCooldown = buildFieldInput({
+						type: 'number',
+						key: 'timing_cooldown',
+						label: 'Cooldown',
+						value: draft?.message?.timing?.cooldown,
+						unit: 'ms',
+				});
+				if (fCooldown?.input) {
+					fCooldown.input.disabled = disabled;
+				}
+				if (fCooldown?.select) {
+					fCooldown.select.disabled = disabled;
+				}
+				fields.push(fCooldown);
+
+				const fRemindEvery = buildFieldInput({
+						type: 'number',
+						key: 'timing_remindEvery',
+						label: 'Reminder',
+						value: draft?.message?.timing?.remindEvery,
+						unit: 'ms',
+				});
+				if (fRemindEvery?.input) {
+					fRemindEvery.input.disabled = disabled;
+				}
+				if (fRemindEvery?.select) {
+					fRemindEvery.select.disabled = disabled;
+				}
+				fields.push(fRemindEvery);
+
+				fields.push(buildFieldInput({ type: 'header', key: '_h_details', label: 'Details' }));
+				const fDetailsTask = buildFieldInput({
+						type: 'string',
+						key: 'details_task',
+						label: 'Task',
+						value: draft?.message?.details?.task ?? '',
+				});
+				if (fDetailsTask?.input) {
+					fDetailsTask.input.disabled = disabled;
+				}
+				fields.push(fDetailsTask);
+
+				const fDetailsReason = buildFieldInput({
+						type: 'string',
+						key: 'details_reason',
+						label: 'Reason',
+						value: draft?.message?.details?.reason ?? '',
+				});
+				if (fDetailsReason?.input) {
+					fDetailsReason.input.disabled = disabled;
+				}
+				fields.push(fDetailsReason);
+
+				const toolsField = (() => {
+					const id = `f_tools_${Math.random().toString(36).slice(2, 8)}`;
+					const input = h('input', {
+						type: 'text',
+						id,
+						value: formatCsvList(draft?.message?.details?.tools),
+					});
+					if (disabled) {
+						input.disabled = true;
+					}
+					return {
+						input,
+						getValue: () => parseCsvList(input.value),
+						wrapper: h('div', { class: 'input-field msghub-field' }, [
+							input,
+							h('label', { for: id, text: 'Tools (CSV)' }),
+						]),
+					};
+				})();
+				const consumablesField = (() => {
+					const id = `f_consumables_${Math.random().toString(36).slice(2, 8)}`;
+					const input = h('input', {
+						type: 'text',
+						id,
+						value: formatCsvList(draft?.message?.details?.consumables),
+					});
+					if (disabled) {
+						input.disabled = true;
+					}
+					return {
+						input,
+						getValue: () => parseCsvList(input.value),
+						wrapper: h('div', { class: 'input-field msghub-field' }, [
+							input,
+							h('label', { for: id, text: 'Consumables (CSV)' }),
+						]),
+					};
+				})();
+				fields.push(toolsField);
+				fields.push(consumablesField);
+
+				fields.push(buildFieldInput({ type: 'header', key: '_h_audience', label: 'Audience' }));
+				const tagsField = (() => {
+					const id = `f_tags_${Math.random().toString(36).slice(2, 8)}`;
+					const input = h('input', {
+						type: 'text',
+						id,
+						value: formatCsvList(draft?.message?.audience?.tags),
+					});
+					if (disabled) {
+						input.disabled = true;
+					}
+					return {
+						input,
+						getValue: () => parseCsvList(input.value),
+						wrapper: h('div', { class: 'input-field msghub-field' }, [
+							input,
+							h('label', { for: id, text: 'Tags (CSV)' }),
+						]),
+					};
+				})();
+				const channelsIncludeField = (() => {
+					const id = `f_chinc_${Math.random().toString(36).slice(2, 8)}`;
+					const input = h('input', {
+						type: 'text',
+						id,
+						value: formatCsvList(draft?.message?.audience?.channels?.include),
+					});
+					if (disabled) {
+						input.disabled = true;
+					}
+					return {
+						input,
+						getValue: () => parseCsvList(input.value),
+						wrapper: h('div', { class: 'input-field msghub-field' }, [
+							input,
+							h('label', { for: id, text: 'Channels include (CSV)' }),
+						]),
+					};
+				})();
+				const channelsExcludeField = (() => {
+					const id = `f_chexc_${Math.random().toString(36).slice(2, 8)}`;
+					const input = h('input', {
+						type: 'text',
+						id,
+						value: formatCsvList(draft?.message?.audience?.channels?.exclude),
+					});
+					if (disabled) {
+						input.disabled = true;
+					}
+					return {
+						input,
+						getValue: () => parseCsvList(input.value),
+						wrapper: h('div', { class: 'input-field msghub-field' }, [
+							input,
+							h('label', { for: id, text: 'Channels exclude (CSV)' }),
+						]),
+					};
+				})();
+				fields.push(tagsField);
+				fields.push(channelsIncludeField);
+				fields.push(channelsExcludeField);
+
+				fields.push(buildFieldInput({ type: 'header', key: '_h_actions', label: 'Actions (JSON)' }));
+				const actionsField = (() => {
+					const id = `f_actions_${Math.random().toString(36).slice(2, 8)}`;
+					const textarea = h('textarea', {
+						id,
+						class: 'materialize-textarea',
+						text: JSON.stringify(draft?.message?.actions || [], null, 2),
+					});
+					if (disabled) {
+						textarea.disabled = true;
+					}
+					return {
+						textarea,
+						getValue: () => {
+							const raw = typeof textarea.value === 'string' ? textarea.value.trim() : '';
+							if (!raw) {
+								return [];
+							}
+							try {
+								const parsed = JSON.parse(raw);
+								return Array.isArray(parsed) ? parsed : [];
+							} catch {
+								return null;
+							}
+						},
+						wrapper: h('div', { class: 'input-field msghub-field' }, [
+							textarea,
+							h('label', { for: id, text: 'Actions array' }),
+							h('div', { class: 'msghub-muted', text: 'Optional; must be valid JSON array.' }),
+						]),
+					};
+				})();
+				fields.push(actionsField);
+
+				fields.push(buildFieldInput({ type: 'header', key: '_h_policy', label: 'Policy' }));
+				const fResetOnNormal = buildFieldInput({
+						type: 'boolean',
+						key: 'policy_resetOnNormal',
+						label: 'Reset on normal (auto-close)',
+						value: draft?.policy?.resetOnNormal === true,
+				});
+				if (fResetOnNormal?.input) {
+					fResetOnNormal.input.disabled = disabled;
+				}
+				fields.push(fResetOnNormal);
+
+				const btnSave = h('a', {
+					class: `btn${disabled ? ' disabled' : ''}`,
+					href: '#',
+					onclick: e => {
+						e.preventDefault();
+						if (disabled) {
+							return;
+						}
+						saveDraft();
+					},
+					text: 'Save',
+				});
+				const btnAbort = h('a', {
+					class: `btn-flat${saving ? ' disabled' : ''}`,
+					href: '#',
+					onclick: e => {
+						e.preventDefault();
+						if (saving) {
+							return;
+						}
+						abortEdit();
+					},
+					text: 'Cancel',
+				});
+
+				const elError = lastError
+					? h('div', { class: 'msghub-error', text: String(lastError) })
+					: saving
+						? h('div', { class: 'msghub-muted', text: 'Saving…' })
+						: null;
+
+				const wrapper = h('div', { class: 'row' }, [
+					h('div', { class: 'col s12' }, [
+						immutable
+							? h('div', {
+									class: 'msghub-muted',
+									text: 'This is an immutable default preset (view-only in this editor).',
+								})
+							: null,
+						elError,
+						...fields.map(f => f.wrapper),
+						h('div', { class: 'msghub-actions msghub-actions--inline' }, [btnSave, btnAbort]),
+					]),
+				]);
+
+				// Wire field changes into draft
+				const apply = () => {
+					updateDraft({
+						presetId: String(fPresetId.getValue() || '').trim(),
+						description: String(fDescription.getValue() || ''),
+						schema: String(fSchema.getValue() || ''),
+						immutable: immutable,
+					});
+					updateMessage({ kind: fKind.getValue(), level: fLevel.getValue() });
+					updateMessageNested('title', titleField.getValue());
+					updateMessageNested('text', textField.getValue());
+					updateMessageNested('timing.timeBudget', fTimeBudget.getValue() || 0);
+					updateMessageNested('timing.dueInMs', fDueIn.getValue() || 0);
+					updateMessageNested('timing.cooldown', fCooldown.getValue() || 0);
+					updateMessageNested('timing.remindEvery', fRemindEvery.getValue() || 0);
+					updateMessageNested('details.task', fDetailsTask.getValue());
+					updateMessageNested('details.reason', fDetailsReason.getValue());
+					updateMessageNested('details.tools', toolsField.getValue());
+					updateMessageNested('details.consumables', consumablesField.getValue());
+					updateMessageNested('audience.tags', tagsField.getValue());
+					updateMessageNested('audience.channels.include', channelsIncludeField.getValue());
+					updateMessageNested('audience.channels.exclude', channelsExcludeField.getValue());
+					const actions = actionsField.getValue();
+					if (actions !== null) {
+						updateMessageNested('actions', actions);
+					}
+					updatePolicy({ resetOnNormal: fResetOnNormal.getValue() === true });
+
+					const kind = String(draft?.message?.kind || '');
+					const isTask = kind === 'task';
+					fTimeBudget.wrapper.style.display = isTask ? '' : 'none';
+					fDueIn.wrapper.style.display = isTask ? '' : 'none';
+					fDetailsTask.wrapper.style.display = isTask ? '' : 'none';
+				};
+
+				const watch = input => {
+					if (!input) {
+						return;
+					}
+					input.addEventListener('change', apply);
+					input.addEventListener('input', apply);
+				};
+
+				// Basic fields
+				watch(fPresetId.input);
+				watch(fDescription.input);
+				watch(fKind.input);
+				watch(fLevel.input);
+				watch(titleField.input);
+				watch(textField.textarea);
+
+				// Timing fields
+				watch(fTimeBudget.input);
+				watch(fTimeBudget.select);
+				watch(fDueIn.input);
+				watch(fDueIn.select);
+				watch(fCooldown.input);
+				watch(fCooldown.select);
+				watch(fRemindEvery.input);
+				watch(fRemindEvery.select);
+
+				// Details + audience + policy
+				watch(fDetailsTask.input);
+				watch(fDetailsReason.input);
+				watch(toolsField.input);
+				watch(consumablesField.input);
+				watch(tagsField.input);
+				watch(channelsIncludeField.input);
+				watch(channelsExcludeField.input);
+				watch(actionsField.textarea);
+				watch(fResetOnNormal.input);
+
+				apply();
+
+				elEditor.replaceChildren(wrapper);
+			};
+
+			const render = () => {
+				renderList();
+				renderEditor();
+			};
+
+			el.appendChild(
+				h('div', { class: 'msghub-tools-presets-grid', style: 'display: flex; gap: 16px; align-items: flex-start;' }, [
+					elList,
+					elEditor,
+				]),
+			);
+			render();
+			void loadList().catch(e => {
+				const msg = String(e?.message || e);
+				setError(msg);
+				toast(msg);
+			});
+			return el;
+		}
+
+		function renderIngestStatesTools({ instances, schema }) {
+			const body = h('div', { class: 'msghub-tools-root' });
+
+			const tabs = [
+				{ id: 'bulk', label: 'Batch edit', render: () => renderIngestStatesBulkApply({ instances, schema }) },
+				{ id: 'presets', label: 'Message presets', render: () => renderIngestStatesMessagePresetsTool() },
+			];
+
+			let activeId = 'bulk';
+
+			const elTabs = h(
+				'div',
+				{ class: 'msghub-tools-tabs' },
+				tabs.map(t =>
+					h('a', {
+						class: `msghub-tools-tab${t.id === activeId ? ' active' : ''}`,
+						href: '#',
+						'data-tab': t.id,
+						onclick: e => {
+							e.preventDefault();
+							activeId = t.id;
+							render();
+						},
+						text: t.label,
+					}),
+				),
+			);
+
+			const elContent = h('div', { class: 'msghub-tools-content' });
+
+			const render = () => {
+				for (const a of elTabs.querySelectorAll('a')) {
+					a.classList.toggle('active', a.getAttribute('data-tab') === activeId);
+				}
+				const t = tabs.find(x => x.id === activeId) || tabs[0];
+				elContent.replaceChildren(t.render());
+			};
+
+			body.appendChild(elTabs);
+			body.appendChild(elContent);
+			render();
+			return body;
+		}
+
 		function renderPluginCard({ plugin, instances, refreshAll, refreshPlugin, expandedById, readmesByType }) {
 			const label = formatPluginLabel(plugin);
 			const desc = pickText(plugin?.description) || '';
@@ -1765,9 +2769,10 @@
 				});
 
 				Promise.resolve()
-					.then(() => ensureIngestStatesSchema())
-					.then(schema => {
-						body.replaceChildren(renderIngestStatesBulkApply({ instances: instList, schema }));
+					.then(async () => {
+						await ensureConstantsLoaded();
+						const schema = await ensureIngestStatesSchema();
+						body.replaceChildren(renderIngestStatesTools({ instances: instList, schema }));
 					})
 					.catch(err => {
 						body.replaceChildren(

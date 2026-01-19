@@ -13,6 +13,15 @@
 		return typeof v === 'string' ? v : v == null ? '' : String(v);
 	}
 
+	function truncateStr(s, maxLen) {
+		const str = safeStr(s);
+		const n = Number(maxLen);
+		if (!Number.isFinite(n) || n <= 0) {
+			return '';
+		}
+		return str.length > n ? `${str.slice(0, n)}[...]` : str;
+	}
+
 	function pick(obj, path) {
 		const parts = typeof path === 'string' ? path.split('.') : [];
 		let cur = obj;
@@ -700,16 +709,18 @@
 
 			function renderTable(itemsToRender) {
 				const rows = itemsToRender.map(msg => {
-					const ref = safeStr(pick(msg, 'ref'));
-					const title = safeStr(pick(msg, 'title'));
+					const title = truncateStr(pick(msg, 'title'), 40);
+					const text = truncateStr(pick(msg, 'text'), 70);
 					const location = safeStr(pick(msg, 'details.location'));
 					const kind = safeStr(pick(msg, 'kind'));
 					const lifecycle = safeStr(pick(msg, 'lifecycle.state'));
 					const level = pick(msg, 'level');
 					const origin = safeStr(pick(msg, 'origin.system')) || safeStr(pick(msg, 'origin.type'));
+					const progressPercentage = pick(msg, 'progress.percentage');
 					const createdAt = pick(msg, 'timing.createdAt');
 					const updatedAt = pick(msg, 'timing.updatedAt');
 
+					const ref = expertMode ? safeStr(pick(msg, 'ref')) : '';
 					const checkboxCell = expertMode
 						? h('td', { class: 'msghub-messages-select' }, [
 								h('label', null, [
@@ -738,15 +749,16 @@
 						},
 						[
 							...(checkboxCell ? [checkboxCell] : []),
-							h('td', { class: 'msghub-mono', text: ref }),
-							h('td', { text: title }),
-							h('td', { text: location }),
 							h('td', { text: kind }),
-							h('td', { text: lifecycle }),
 							h('td', { text: getLevelLabel(level) }),
-							h('td', { text: origin }),
+							h('td', { text: lifecycle }),
+							h('td', { text: title }),
+							h('td', { text: text }),
+							h('td', { text: location }),
 							h('td', { class: 'msghub-muted', text: formatTs(typeof createdAt === 'number' ? createdAt : NaN) }),
 							h('td', { class: 'msghub-muted', text: formatTs(typeof updatedAt === 'number' ? updatedAt : NaN) }),
+							h('td', { text: origin }),
+							h('td', { text: typeof progressPercentage === 'number' && Number.isFinite(progressPercentage) ? String(progressPercentage) : '' }),
 						],
 					);
 				});
@@ -817,9 +829,9 @@
 				}
 			};
 
-			let tableColCount = 9;
+			let tableColCount = 10;
 			const updateTableColCount = () => {
-				tableColCount = expertMode ? 10 : 9;
+				tableColCount = expertMode ? 11 : 10;
 			};
 
 			const makeSortBtn = (field, title, label) => {
@@ -857,15 +869,11 @@
 				theadEl.replaceChildren(
 					h('tr', null, [
 						...(expertMode ? [h('th', { class: 'msghub-th msghub-messages-select' }, [])] : []),
-						h('th', { class: 'msghub-th' }, [makeSortBtn('ref', 'Ref', '(Ref)')]),
-						h('th', { class: 'msghub-th' }, [makeSortBtn('title', 'Title', '(Title)')]),
-						h('th', { class: 'msghub-th' }, [
-							makeFilterBtn('details.location', 'Location', 'Location', () =>
-								listDistinctFromItems('details.location'),
-							),
-						]),
 						h('th', { class: 'msghub-th' }, [
 							makeFilterBtn('kind', 'Kind', 'Kind', () => listEnumValues(getConstantsEnum('kind'))),
+						]),
+						h('th', { class: 'msghub-th' }, [
+							makeFilterBtn('level', 'Level', 'Level', () => listEnumKeys(getConstantsEnum('level'))),
 						]),
 						h('th', { class: 'msghub-th' }, [
 							makeFilterBtn('lifecycle.state', 'Lifecycle state', 'Lifecycle', () =>
@@ -873,15 +881,20 @@
 							),
 						]),
 						h('th', { class: 'msghub-th' }, [
-							makeFilterBtn('level', 'Level', 'Level', () => listEnumKeys(getConstantsEnum('level'))),
+							makeSortBtn('title', 'Title', 'Title'),
 						]),
+						h('th', { class: 'msghub-th' }, [h('span', { text: 'Text' })]),
 						h('th', { class: 'msghub-th' }, [
-							makeFilterBtn('origin.system', 'Origin system', '(Origin)', () =>
-								listDistinctFromItems('origin.system'),
+							makeFilterBtn('details.location', 'Location', 'Location', () =>
+								listDistinctFromItems('details.location'),
 							),
 						]),
-						h('th', { class: 'msghub-th' }, [makeSortBtn('timing.createdAt', 'Created', '(Created)')]),
-						h('th', { class: 'msghub-th' }, [makeSortBtn('timing.updatedAt', 'Updated', '(Updated)')]),
+						h('th', { class: 'msghub-th' }, [makeSortBtn('timing.createdAt', 'Created', 'Created')]),
+						h('th', { class: 'msghub-th' }, [makeSortBtn('timing.updatedAt', 'Updated', 'Updated')]),
+						h('th', { class: 'msghub-th' }, [
+							makeFilterBtn('origin.system', 'Origin system', 'Origin', () => listDistinctFromItems('origin.system')),
+						]),
+						h('th', { class: 'msghub-th' }, [makeSortBtn('progress.percentage', 'Progress', 'Progress')]),
 					]),
 				);
 			};
@@ -955,10 +968,10 @@
 				const btnOrigin = headerBtns['filter:origin.system'];
 				if (btnOrigin) {
 					btnOrigin.classList.toggle('is-active', originCount > 0);
-					btnOrigin.textContent = originCount > 0 ? `(Origin ${originCount})` : '(Origin)';
+					btnOrigin.textContent = originCount > 0 ? `Origin (${originCount})` : 'Origin';
 				}
 
-				for (const field of ['ref', 'title', 'timing.createdAt', 'timing.updatedAt']) {
+				for (const field of ['title', 'timing.createdAt', 'timing.updatedAt', 'progress.percentage']) {
 					const btn = headerBtns[`sort:${field}`];
 					if (btn) {
 						btn.classList.toggle('is-active', sortField === field);

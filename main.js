@@ -412,7 +412,19 @@ class Msghub extends utils.Adapter {
 			if (state.ack === false) {
 				// This is a command from the user (e.g., from the UI or other adapter)
 				// and should be processed by the adapter
-				this.log?.info?.(`MsgHub main.js: User command received for ${id}: ${state.val}`);
+				const ts = typeof state.ts === 'number' && Number.isFinite(state.ts) ? Math.trunc(state.ts) : null;
+				const lc = typeof state.lc === 'number' && Number.isFinite(state.lc) ? Math.trunc(state.lc) : null;
+				const from = typeof state.from === 'string' ? state.from : '';
+				const user = typeof state.user === 'string' ? state.user : '';
+				let shownVal;
+				try {
+					shownVal = JSON.stringify(state.val);
+				} catch {
+					shownVal = String(state.val);
+				}
+				this.log?.info?.(
+					`MsgHub main.js: User command received for ${id}: ${shownVal} (ts=${ts} lc=${lc} from='${from}' user='${user}')`,
+				);
 			}
 		} else {
 			// The object was deleted or the state value has expired
@@ -448,7 +460,12 @@ class Msghub extends utils.Adapter {
 		let result;
 
 		try {
-			if (typeof cmd === 'string' && cmd.startsWith('admin.')) {
+			// ioBroker jsonCustom `selectSendTo` expects a plain options array (not `{ ok, data }`).
+			// Keep this as a dedicated non-`admin.*` command so the AdminTab UI can continue to use
+			// the structured `{ ok, data }` responses.
+			if (cmd === 'ingestStates.presets.selectOptions') {
+				result = await this._handleCustomSelectOptions(cmd, payload);
+			} else if (typeof cmd === 'string' && cmd.startsWith('admin.')) {
 				result = await this._handleAdminCommand(cmd, payload);
 			} else {
 				result = await this._msgPlugins?.dispatchMessagebox?.(obj);
@@ -464,6 +481,9 @@ class Msghub extends utils.Adapter {
 		if (obj.callback) {
 			this.sendTo(obj.from, obj.command, result, obj.callback);
 		}
+		this.log?.silly?.(
+			`MsgHub main.js onMessage: this.sendTo(${obj.from}, ${obj.command}, ${JSON.stringify(result)}, ${obj.callback})`,
+		);
 	}
 
 	async _handleAdminCommand(cmd, payload) {
@@ -474,6 +494,23 @@ class Msghub extends utils.Adapter {
 			return { ok: false, error: { code: 'NOT_READY', message: 'AdminTab runtime not ready' } };
 		}
 		return await this._adminTab.handleCommand(cmd, payload);
+	}
+
+	async _handleCustomSelectOptions(cmd, payload) {
+		if (cmd !== 'ingestStates.presets.selectOptions') {
+			return [];
+		}
+
+		if (!this._adminTab) {
+			return [{ value: '', label: '' }];
+		}
+
+		const res = await this._adminTab.handleCommand('admin.ingestStates.presets.list', payload);
+		const items = res?.ok && Array.isArray(res?.data) ? res.data : [];
+
+		// Ensure the select isn't treated as "offline" when no presets exist yet.
+		// (jsonCustom `selectSendTo` shows an offline error when the options array is empty.)
+		return [{ value: '', label: '' }, ...items];
 	}
 
 	async _i18ninit(locale) {
