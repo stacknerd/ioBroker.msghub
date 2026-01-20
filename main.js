@@ -496,22 +496,36 @@ class Msghub extends utils.Adapter {
 		return await this._adminTab.handleCommand(cmd, payload);
 	}
 
-	async _handleCustomSelectOptions(cmd, payload) {
-		if (cmd !== 'ingestStates.presets.selectOptions') {
-			return [];
+		async _handleCustomSelectOptions(cmd, payload) {
+			if (cmd !== 'ingestStates.presets.selectOptions') {
+				return [];
+			}
+
+			function ensureOptionsArray(items) {
+				const list = Array.isArray(items) ? items : [];
+				const next = [];
+				for (const it of list) {
+					const value = typeof it?.value === 'string' ? it.value : '';
+					const label = typeof it?.label === 'string' ? it.label : '';
+					if (!value) {
+						continue;
+					}
+					next.push({ value, label });
+				}
+				// Ensure the select isn't treated as "offline" when no presets exist yet.
+				// (jsonCustom `selectSendTo` shows an offline error when the options array is empty.)
+				return [{ value: '', label: '' }, ...next];
+			}
+
+			if (!this._adminTab) {
+				return ensureOptionsArray([]);
+			}
+
+			const res = await this._adminTab.handleCommand('admin.ingestStates.presets.list', payload);
+			const items = res?.ok && Array.isArray(res?.data) ? res.data : [];
+
+			return ensureOptionsArray(items);
 		}
-
-		if (!this._adminTab) {
-			return [{ value: '', label: '' }];
-		}
-
-		const res = await this._adminTab.handleCommand('admin.ingestStates.presets.list', payload);
-		const items = res?.ok && Array.isArray(res?.data) ? res.data : [];
-
-		// Ensure the select isn't treated as "offline" when no presets exist yet.
-		// (jsonCustom `selectSendTo` shows an offline error when the options array is empty.)
-		return [{ value: '', label: '' }, ...items];
-	}
 
 	async _i18ninit(locale) {
 		const _i18ndebug = false;

@@ -311,8 +311,11 @@
 	"msghub.i18n.IngestStates.admin.jsonCustom.rules.triggered.section.expectation.header.text": "Erwartete Reaktion",
 	"msghub.i18n.IngestStates.admin.jsonCustom.rules.triggered.section.trigger.header.text": "Trigger",
 	"msghub.i18n.IngestStates.admin.jsonCustom.rules.triggered.section.window.header.text": "Zeitfenster",
-	"msghub.i18n.IngestStates.admin.jsonCustom.message.field.preset.defaultId.label": "Message-Preset",
-	"msghub.i18n.IngestStates.admin.jsonCustom.message.field.preset.defaultId.help": "Wähle, welches Preset die Standard-Nachricht definiert (wenn die Regel auslöst).",
+	"msghub.i18n.IngestStates.admin.jsonCustom.message.field.preset.label": "Preset Auswahl",
+	"msghub.i18n.IngestStates.admin.jsonCustom.message.field.preset.help": "Wähle, welches Preset die Nachricht definiert (wenn die Regel auslöst).",
+	"msghub.i18n.IngestStates.admin.jsonCustom.message.field.info.editor.text": "Die Presets können im Tab 'Message Hub' > Plugin Config > IngestStates > Tools definiert und bearbeitet werden",
 	"msghub.i18n.IngestStates.admin.jsonCustom.message.field.preset.sessionStartId.label": "Session-Start-Preset",
-	"msghub.i18n.IngestStates.admin.jsonCustom.message.field.preset.sessionStartId.help": "Optional: Wähle, welches Preset die Session-Start-Nachricht definiert."
+	"msghub.i18n.IngestStates.admin.jsonCustom.message.field.preset.sessionStartId.help": "Wähle, welches Preset die Session-Start-Nachricht definiert.",
+	"msghub.i18n.IngestStates.admin.jsonCustom.message.field.preset.sessionEndId.label": "Session-StartEnd-Preset",
+	"msghub.i18n.IngestStates.admin.jsonCustom.message.field.preset.sessionEndId.help": "Wähle, welches Preset die Session-End-Nachricht definiert."
 }

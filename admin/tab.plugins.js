@@ -1707,11 +1707,11 @@
 
 			const cloneJson = value => JSON.parse(JSON.stringify(value ?? null));
 
-			const defaultPreset = ({ presetId, description, immutable = false, kind = 'status', level = 20 } = {}) => ({
+			const defaultPreset = ({ presetId, description, ownedBy = null, kind = 'status', level = 20 } = {}) => ({
 				schema: SCHEMA,
 				presetId: String(presetId || '').trim(),
 				description: typeof description === 'string' ? description : '',
-				immutable: immutable === true,
+				ownedBy: typeof ownedBy === 'string' && ownedBy.trim() ? ownedBy.trim() : null,
 				message: {
 					kind,
 					level,
@@ -1740,10 +1740,10 @@
 				},
 				ui: {
 					timingUnits: {
-						timeBudgetUnitSeconds: 60,
-						dueInUnitSeconds: 3600,
-						cooldownUnitSeconds: 1,
-						remindEveryUnitSeconds: 3600,
+						timeBudgetUnit: 60000,
+						dueInUnit: 3600000,
+						cooldownUnit: 1000,
+						remindEveryUnit: 3600000,
 					},
 				},
 			});
@@ -1796,14 +1796,14 @@
 						continue;
 					}
 					const label = typeof o?.label === 'string' ? o.label.trim() : '';
-					next.push(
-						defaultPreset({
-							presetId: id,
-							description: label && label !== id ? label : '',
-							immutable: false,
-						}),
-					);
-				}
+						next.push(
+							defaultPreset({
+								presetId: id,
+								description: label && label !== id ? label : '',
+								ownedBy: null,
+							}),
+						);
+					}
 
 				presets = next;
 				sortPresets();
@@ -1895,16 +1895,16 @@
 					});
 			};
 
-			const createNew = () => {
-				if (!confirmDiscardIfNeeded()) {
-					return;
-				}
-				setError('');
-				original = null;
-				draft = defaultPreset({ presetId: '', description: '', immutable: false, kind: 'status', level: 20 });
-				isNew = true;
-				render();
-			};
+				const createNew = () => {
+					if (!confirmDiscardIfNeeded()) {
+						return;
+					}
+					setError('');
+					original = null;
+					draft = defaultPreset({ presetId: '', description: '', ownedBy: null, kind: 'status', level: 20 });
+					isNew = true;
+					render();
+				};
 
 			const duplicateSelected = () => {
 				if (!confirmDiscardIfNeeded()) {
@@ -1914,14 +1914,14 @@
 					toast('No preset selected');
 					return;
 				}
-				setError('');
-				original = null;
-				draft = cloneJson(draft);
-				draft.presetId = '';
-				draft.immutable = false;
-				isNew = true;
-				render();
-			};
+					setError('');
+					original = null;
+					draft = cloneJson(draft);
+					draft.presetId = '';
+					draft.ownedBy = null;
+					isNew = true;
+					render();
+				};
 
 			const deleteSelected = () => {
 				const id = String(selectedId || '').trim();
@@ -2035,7 +2035,9 @@
 			};
 
 			const updateMessageNested = (path, value) => {
-				const parts = String(path || '').split('.').filter(Boolean);
+				const parts = String(path || '')
+					.split('.')
+					.filter(Boolean);
 				if (parts.length === 0) {
 					return;
 				}
@@ -2058,7 +2060,8 @@
 				updateDraft({ policy: { ...cur, ...(patch || {}) } });
 			};
 
-			const resolveOptions = src => resolveDynamicOptions(src).map(o => ({ value: o.value, label: pickText(o.label) }));
+			const resolveOptions = src =>
+				resolveDynamicOptions(src).map(o => ({ value: o.value, label: pickText(o.label) }));
 
 			const renderList = () => {
 				sortPresets();
@@ -2144,33 +2147,35 @@
 					return;
 				}
 				if (!draft) {
-					elEditor.replaceChildren(h('p', { class: 'msghub-muted', text: 'Select a preset or create a new one.' }));
+					elEditor.replaceChildren(
+						h('p', { class: 'msghub-muted', text: 'Select a preset or create a new one.' }),
+					);
 					return;
 				}
 
-				const immutable = draft.immutable === true;
-				const disabled = immutable || saving === true;
+				const ownedBy = typeof draft?.ownedBy === 'string' && draft.ownedBy.trim() ? draft.ownedBy.trim() : null;
+				const disabled = !!ownedBy || saving === true;
 
 				const fields = [];
 
 				const fPresetId = buildFieldInput({
-						type: 'string',
-						key: 'presetId',
-						label: 'Preset ID',
-						value: draft.presetId,
-						help: 'Storage id (A-Z a-z 0-9 _ -).',
-					});
+					type: 'string',
+					key: 'presetId',
+					label: 'Preset ID',
+					value: draft.presetId,
+					help: 'Storage id (A-Z a-z 0-9 _ -).',
+				});
 				if (fPresetId?.input) {
 					fPresetId.input.disabled = disabled || isNew !== true;
 				}
 				fields.push(fPresetId);
 
 				const fDescription = buildFieldInput({
-						type: 'string',
-						key: 'description',
-						label: 'Display name',
-						value: draft.description,
-						help: 'Shown as common.name later.',
+					type: 'string',
+					key: 'description',
+					label: 'Display name',
+					value: draft.description,
+					help: 'Shown as common.name later.',
 				});
 				if (fDescription?.input) {
 					fDescription.input.disabled = disabled;
@@ -2178,39 +2183,39 @@
 				fields.push(fDescription);
 
 				const fSchema = buildFieldInput({
-						type: 'string',
-						key: 'schema',
-						label: 'Schema',
-						value: draft.schema,
-						help: '',
+					type: 'string',
+					key: 'schema',
+					label: 'Schema',
+					value: draft.schema,
+					help: '',
 				});
 				if (fSchema?.input) {
 					fSchema.input.disabled = true;
 				}
 				fields.push(fSchema);
 
-				const fImmutable = buildFieldInput({
-						type: 'boolean',
-						key: 'immutable',
-						label: 'Immutable (default preset)',
-						value: immutable,
-						help: '',
-					});
-				if (fImmutable?.input) {
-					fImmutable.input.disabled = true;
+				const fOwnedBy = buildFieldInput({
+					type: 'string',
+					key: 'ownedBy',
+					label: 'Owned by (default preset)',
+					value: ownedBy || '',
+					help: '',
+				});
+				if (fOwnedBy?.input) {
+					fOwnedBy.input.disabled = true;
 				}
-				fields.push(fImmutable);
+				fields.push(fOwnedBy);
 
 				const kindOptions = resolveOptions('MsgConstants.kind');
 				const levelOptions = resolveOptions('MsgConstants.level');
 
 				fields.push(buildFieldInput({ type: 'header', key: '_h_msg', label: 'Message' }));
 				const fKind = buildFieldInput({
-						type: 'string',
-						key: 'message_kind',
-						label: 'Kind',
-						value: draft?.message?.kind,
-						options: kindOptions.length ? kindOptions : undefined,
+					type: 'string',
+					key: 'message_kind',
+					label: 'Kind',
+					value: draft?.message?.kind,
+					options: kindOptions.length ? kindOptions : undefined,
 				});
 				if (fKind?.input) {
 					fKind.input.disabled = disabled;
@@ -2218,11 +2223,11 @@
 				fields.push(fKind);
 
 				const fLevel = buildFieldInput({
-						type: 'number',
-						key: 'message_level',
-						label: 'Level',
-						value: draft?.message?.level,
-						options: levelOptions.length ? levelOptions : undefined,
+					type: 'number',
+					key: 'message_level',
+					label: 'Level',
+					value: draft?.message?.level,
+					options: levelOptions.length ? levelOptions : undefined,
 				});
 				if (fLevel?.input) {
 					fLevel.input.disabled = disabled;
@@ -2274,11 +2279,11 @@
 
 				fields.push(buildFieldInput({ type: 'header', key: '_h_timing', label: 'Timing' }));
 				const fTimeBudget = buildFieldInput({
-						type: 'number',
-						key: 'timing_timeBudget',
-						label: 'Time budget',
-						value: draft?.message?.timing?.timeBudget,
-						unit: 'ms',
+					type: 'number',
+					key: 'timing_timeBudget',
+					label: 'Time budget',
+					value: draft?.message?.timing?.timeBudget,
+					unit: 'ms',
 				});
 				if (fTimeBudget?.input) {
 					fTimeBudget.input.disabled = disabled;
@@ -2289,11 +2294,11 @@
 				fields.push(fTimeBudget);
 
 				const fDueIn = buildFieldInput({
-						type: 'number',
-						key: 'timing_dueInMs',
-						label: 'Due in',
-						value: draft?.message?.timing?.dueInMs,
-						unit: 'ms',
+					type: 'number',
+					key: 'timing_dueInMs',
+					label: 'Due in',
+					value: draft?.message?.timing?.dueInMs,
+					unit: 'ms',
 				});
 				if (fDueIn?.input) {
 					fDueIn.input.disabled = disabled;
@@ -2304,11 +2309,11 @@
 				fields.push(fDueIn);
 
 				const fCooldown = buildFieldInput({
-						type: 'number',
-						key: 'timing_cooldown',
-						label: 'Cooldown',
-						value: draft?.message?.timing?.cooldown,
-						unit: 'ms',
+					type: 'number',
+					key: 'timing_cooldown',
+					label: 'Cooldown',
+					value: draft?.message?.timing?.cooldown,
+					unit: 'ms',
 				});
 				if (fCooldown?.input) {
 					fCooldown.input.disabled = disabled;
@@ -2319,11 +2324,11 @@
 				fields.push(fCooldown);
 
 				const fRemindEvery = buildFieldInput({
-						type: 'number',
-						key: 'timing_remindEvery',
-						label: 'Reminder',
-						value: draft?.message?.timing?.remindEvery,
-						unit: 'ms',
+					type: 'number',
+					key: 'timing_remindEvery',
+					label: 'Reminder',
+					value: draft?.message?.timing?.remindEvery,
+					unit: 'ms',
 				});
 				if (fRemindEvery?.input) {
 					fRemindEvery.input.disabled = disabled;
@@ -2335,10 +2340,10 @@
 
 				fields.push(buildFieldInput({ type: 'header', key: '_h_details', label: 'Details' }));
 				const fDetailsTask = buildFieldInput({
-						type: 'string',
-						key: 'details_task',
-						label: 'Task',
-						value: draft?.message?.details?.task ?? '',
+					type: 'string',
+					key: 'details_task',
+					label: 'Task',
+					value: draft?.message?.details?.task ?? '',
 				});
 				if (fDetailsTask?.input) {
 					fDetailsTask.input.disabled = disabled;
@@ -2346,10 +2351,10 @@
 				fields.push(fDetailsTask);
 
 				const fDetailsReason = buildFieldInput({
-						type: 'string',
-						key: 'details_reason',
-						label: 'Reason',
-						value: draft?.message?.details?.reason ?? '',
+					type: 'string',
+					key: 'details_reason',
+					label: 'Reason',
+					value: draft?.message?.details?.reason ?? '',
 				});
 				if (fDetailsReason?.input) {
 					fDetailsReason.input.disabled = disabled;
@@ -2495,10 +2500,10 @@
 
 				fields.push(buildFieldInput({ type: 'header', key: '_h_policy', label: 'Policy' }));
 				const fResetOnNormal = buildFieldInput({
-						type: 'boolean',
-						key: 'policy_resetOnNormal',
-						label: 'Reset on normal (auto-close)',
-						value: draft?.policy?.resetOnNormal === true,
+					type: 'boolean',
+					key: 'policy_resetOnNormal',
+					label: 'Reset on normal (auto-close)',
+					value: draft?.policy?.resetOnNormal === true,
 				});
 				if (fResetOnNormal?.input) {
 					fResetOnNormal.input.disabled = disabled;
@@ -2536,31 +2541,31 @@
 						? h('div', { class: 'msghub-muted', text: 'Saving…' })
 						: null;
 
-				const wrapper = h('div', { class: 'row' }, [
-					h('div', { class: 'col s12' }, [
-						immutable
-							? h('div', {
-									class: 'msghub-muted',
-									text: 'This is an immutable default preset (view-only in this editor).',
-								})
-							: null,
-						elError,
-						...fields.map(f => f.wrapper),
+					const wrapper = h('div', { class: 'row' }, [
+						h('div', { class: 'col s12' }, [
+							ownedBy
+								? h('div', {
+										class: 'msghub-muted',
+										text: `This is a default preset owned by '${ownedBy}' (view-only in this editor).`,
+									})
+								: null,
+							elError,
+							...fields.map(f => f.wrapper),
 						h('div', { class: 'msghub-actions msghub-actions--inline' }, [btnSave, btnAbort]),
 					]),
 				]);
 
 				// Wire field changes into draft
-				const apply = () => {
-					updateDraft({
-						presetId: String(fPresetId.getValue() || '').trim(),
-						description: String(fDescription.getValue() || ''),
-						schema: String(fSchema.getValue() || ''),
-						immutable: immutable,
-					});
-					updateMessage({ kind: fKind.getValue(), level: fLevel.getValue() });
-					updateMessageNested('title', titleField.getValue());
-					updateMessageNested('text', textField.getValue());
+					const apply = () => {
+						updateDraft({
+							presetId: String(fPresetId.getValue() || '').trim(),
+							description: String(fDescription.getValue() || ''),
+							schema: String(fSchema.getValue() || ''),
+							ownedBy: ownedBy,
+						});
+						updateMessage({ kind: fKind.getValue(), level: fLevel.getValue() });
+						updateMessageNested('title', titleField.getValue());
+						updateMessageNested('text', textField.getValue());
 					updateMessageNested('timing.timeBudget', fTimeBudget.getValue() || 0);
 					updateMessageNested('timing.dueInMs', fDueIn.getValue() || 0);
 					updateMessageNested('timing.cooldown', fCooldown.getValue() || 0);
@@ -2633,10 +2638,11 @@
 			};
 
 			el.appendChild(
-				h('div', { class: 'msghub-tools-presets-grid', style: 'display: flex; gap: 16px; align-items: flex-start;' }, [
-					elList,
-					elEditor,
-				]),
+				h(
+					'div',
+					{ class: 'msghub-tools-presets-grid', style: 'display: flex; gap: 16px; align-items: flex-start;' },
+					[elList, elEditor],
+				),
 			);
 			render();
 			void loadList().catch(e => {

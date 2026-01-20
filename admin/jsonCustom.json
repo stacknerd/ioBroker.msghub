@@ -395,6 +395,43 @@
 						}
 					]
 				},
+				"_thrH4Message": {
+					"newLine": true,
+					"type": "header",
+					"size": 4,
+					"text": "msghub.i18n.IngestStates.admin.jsonCustom.message.header.text",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12
+				},
+				"msg-ThresholdId": {
+					"newLine": true,
+					"type": "selectSendTo",
+					"label": "msghub.i18n.IngestStates.admin.jsonCustom.message.field.preset.label",
+					"help": "msghub.i18n.IngestStates.admin.jsonCustom.message.field.preset.help",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12,
+					"default": "",
+					"command": "ingestStates.presets.selectOptions",
+					"noTranslation": true,
+					"manual": false
+				},
+				"_thrMessageInfo": {
+					"newLine": true,
+					"type": "staticText",
+					"text": "msghub.i18n.IngestStates.admin.jsonCustom.message.field.info.editor.text",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12,
+					"style": { "whiteSpace": "pre-wrap" }
+				},
 				"_thrH4Examples": {
 					"newLine": true,
 					"type": "header",
@@ -524,6 +561,43 @@
 							"value": "lc"
 						}
 					]
+				},
+				"_freshH4Message": {
+					"newLine": true,
+					"type": "header",
+					"size": 4,
+					"text": "msghub.i18n.IngestStates.admin.jsonCustom.message.header.text",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12
+				},
+				"msg-FreshnessId": {
+					"newLine": true,
+					"type": "selectSendTo",
+					"label": "msghub.i18n.IngestStates.admin.jsonCustom.message.field.preset.label",
+					"help": "msghub.i18n.IngestStates.admin.jsonCustom.message.field.preset.help",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12,
+					"default": "",
+					"command": "ingestStates.presets.selectOptions",
+					"noTranslation": true,
+					"manual": false
+				},
+				"_freshMessageInfo": {
+					"newLine": true,
+					"type": "staticText",
+					"text": "msghub.i18n.IngestStates.admin.jsonCustom.message.field.info.editor.text",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12,
+					"style": { "whiteSpace": "pre-wrap" }
 				},
 				"_freshH4Examples": {
 					"newLine": true,
@@ -810,6 +884,43 @@
 					"xl": 6,
 					"hidden": "(data['trg-expectation'] !== 'thresholdGte') && (data['trg-expectation'] !== 'thresholdLte')"
 				},
+				"_trgH4Message": {
+					"newLine": true,
+					"type": "header",
+					"size": 4,
+					"text": "msghub.i18n.IngestStates.admin.jsonCustom.message.header.text",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12
+				},
+				"msg-TriggeredId": {
+					"newLine": true,
+					"type": "selectSendTo",
+					"label": "msghub.i18n.IngestStates.admin.jsonCustom.message.field.preset.label",
+					"help": "msghub.i18n.IngestStates.admin.jsonCustom.message.field.preset.help",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12,
+					"default": "",
+					"command": "ingestStates.presets.selectOptions",
+					"noTranslation": true,
+					"manual": false
+				},
+				"_trgMessageInfo": {
+					"newLine": true,
+					"type": "staticText",
+					"text": "msghub.i18n.IngestStates.admin.jsonCustom.message.field.info.editor.text",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12,
+					"style": { "whiteSpace": "pre-wrap" }
+				},
 				"_trgH4Examples": {
 					"newLine": true,
 					"type": "header",
@@ -1094,6 +1205,43 @@
 					"default": 0,
 					"hidden": "data['nonset-profile'] !== 'trend'"
 				},
+				"_nsH4Message": {
+					"newLine": true,
+					"type": "header",
+					"size": 4,
+					"text": "msghub.i18n.IngestStates.admin.jsonCustom.message.header.text",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12
+				},
+				"msg-NonSettlingId": {
+					"newLine": true,
+					"type": "selectSendTo",
+					"label": "msghub.i18n.IngestStates.admin.jsonCustom.message.field.preset.label",
+					"help": "msghub.i18n.IngestStates.admin.jsonCustom.message.field.preset.help",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12,
+					"default": "",
+					"command": "ingestStates.presets.selectOptions",
+					"noTranslation": true,
+					"manual": false
+				},
+				"_nsMessageInfo": {
+					"newLine": true,
+					"type": "staticText",
+					"text": "msghub.i18n.IngestStates.admin.jsonCustom.message.field.info.editor.text",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12,
+					"style": { "whiteSpace": "pre-wrap" }
+				},
 				"_nsH4Examples": {
 					"newLine": true,
 					"type": "header",
@@ -1377,6 +1525,58 @@
 					"xl": 6,
 					"default": ""
 				},
+				"_sessH4Message": {
+					"newLine": true,
+					"type": "header",
+					"size": 4,
+					"text": "msghub.i18n.IngestStates.admin.jsonCustom.message.header.text",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12
+				},
+				"msg-SessionStartId": {
+					"newLine": true,
+					"type": "selectSendTo",
+					"label": "msghub.i18n.IngestStates.admin.jsonCustom.message.field.preset.sessionStartId.label",
+					"help": "msghub.i18n.IngestStates.admin.jsonCustom.message.field.preset.sessionStartId.help",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12,
+					"default": "",
+					"command": "ingestStates.presets.selectOptions",
+					"noTranslation": true,
+					"manual": false
+				},
+				"msg-SessionEndId": {
+					"newLine": true,
+					"type": "selectSendTo",
+					"label": "msghub.i18n.IngestStates.admin.jsonCustom.message.field.preset.sessionEndId.label",
+					"help": "msghub.i18n.IngestStates.admin.jsonCustom.message.field.preset.EndId.helpelp",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12,
+					"default": "",
+					"command": "ingestStates.presets.selectOptions",
+					"noTranslation": true,
+					"manual": false
+				},
+				"_sessMessageInfo": {
+					"newLine": true,
+					"type": "staticText",
+					"text": "msghub.i18n.IngestStates.admin.jsonCustom.message.field.info.editor.text",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12,
+					"style": { "whiteSpace": "pre-wrap" }
+				},
 				"_sessH4Examples": {
 					"newLine": true,
 					"type": "header",
@@ -1398,65 +1598,6 @@
 					"lg": 12,
 					"xl": 12,
 					"style": { "whiteSpace": "pre-wrap" }
-				}
-			}
-		},
-		"message": {
-			"type": "panel",
-			"label": "msghub.i18n.IngestStates.admin.jsonCustom.message.panel.label",
-			"hidden": "((data['managedMeta-managedMessage']) && ((data['managedMeta-managedBy'] || '').indexOf('IngestStates.') === -1)) || ((data.mode || data['mode']) == '')",
-			"items": {
-				"_msgH0": {
-					"type": "header",
-					"size": 2,
-					"text": "msghub.i18n.IngestStates.admin.jsonCustom.message.header.text",
-					"xs": 12,
-					"sm": 12,
-					"md": 12,
-					"lg": 12,
-					"xl": 12
-				},
-				"_msgInfo0": {
-					"newLine": true,
-					"type": "staticText",
-					"text": "msghub.i18n.IngestStates.admin.jsonCustom.message.info.summary.text",
-					"xs": 12,
-					"sm": 12,
-					"md": 12,
-					"lg": 12,
-					"xl": 12,
-					"style": { "whiteSpace": "pre-wrap" }
-				},
-				"msg-DefaultId": {
-					"newLine": true,
-					"type": "selectSendTo",
-					"label": "msghub.i18n.IngestStates.admin.jsonCustom.message.field.preset.defaultId.label",
-					"help": "msghub.i18n.IngestStates.admin.jsonCustom.message.field.preset.defaultId.help",
-					"xs": 12,
-					"sm": 12,
-					"md": 12,
-					"lg": 12,
-					"xl": 12,
-					"default": "",
-					"command": "ingestStates.presets.selectOptions",
-					"noTranslation": true,
-					"manual": false
-				},
-				"msg-SessionStartId": {
-					"newLine": true,
-					"type": "selectSendTo",
-					"label": "msghub.i18n.IngestStates.admin.jsonCustom.message.field.preset.sessionStartId.label",
-					"help": "msghub.i18n.IngestStates.admin.jsonCustom.message.field.preset.sessionStartId.help",
-					"xs": 12,
-					"sm": 12,
-					"md": 12,
-					"lg": 12,
-					"xl": 12,
-					"default": "",
-					"command": "ingestStates.presets.selectOptions",
-					"noTranslation": true,
-					"manual": false,
-					"hidden": "((data.mode) || data['mode']) !== 'session'"
 				}
 			}
 		},
@@ -1485,6 +1626,22 @@
 					"lg": 12,
 					"xl": 12,
 					"style": { "whiteSpace": "pre-wrap" }
+				},
+				"msg-DefaultId": {
+					"newLine": true,
+					"type": "selectSendTo",
+					"label": "msghub.i18n.IngestStates.admin.jsonCustom.message.field.preset.label",
+					"help": "msghub.i18n.IngestStates.admin.jsonCustom.message.field.preset.help",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12,
+					"default": "",
+					"command": "ingestStates.presets.selectOptions",
+					"noTranslation": true,
+					"manual": false,
+					"hidden": true
 				}
 			}
 		}
