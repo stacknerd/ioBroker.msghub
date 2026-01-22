@@ -66,6 +66,8 @@
     "dev-server": "dev-server",
     "i18n:generate": "node i18n-generate.mjs --scope all",
     "i18n:generate:remove": "node i18n-generate.mjs --scope all --remove",
+    "i18n:mirror:admin-to-runtime": "node i18n-mirror-admin-to-runtime.mjs",
+    "i18n:mirror:admin-to-runtime:check": "node i18n-mirror-admin-to-runtime.mjs --check",
     "i18n:check": "node i18n-check.mjs --scope all",
     "i18n:sort": "node i18n-sort.mjs --scope all"
   },

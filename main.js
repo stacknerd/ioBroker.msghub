@@ -456,14 +456,14 @@ class Msghub extends utils.Adapter {
 		const cmd = obj.command;
 		const payload = obj.message;
 
-		this.log?.silly?.(`MsgHub main.js onMessage: '${cmd}' ${JSON.stringify(sanitizeForLog(payload), null, 2)}`);
+		this.log?.debug?.(`MsgHub main.js onMessage: '${cmd}' ${JSON.stringify(sanitizeForLog(payload), null, 2)}`);
 		let result;
 
 		try {
 			// ioBroker jsonCustom `selectSendTo` expects a plain options array (not `{ ok, data }`).
 			// Keep this as a dedicated non-`admin.*` command so the AdminTab UI can continue to use
 			// the structured `{ ok, data }` responses.
-			if (cmd === 'ingestStates.presets.selectOptions') {
+			if (typeof cmd === 'string' && cmd.startsWith('ingestStates.presets.selectOptions')) {
 				result = await this._handleCustomSelectOptions(cmd, payload);
 			} else if (typeof cmd === 'string' && cmd.startsWith('admin.')) {
 				result = await this._handleAdminCommand(cmd, payload);
@@ -481,7 +481,7 @@ class Msghub extends utils.Adapter {
 		if (obj.callback) {
 			this.sendTo(obj.from, obj.command, result, obj.callback);
 		}
-		this.log?.silly?.(
+		this.log?.debug?.(
 			`MsgHub main.js onMessage: this.sendTo(${obj.from}, ${obj.command}, ${JSON.stringify(result)}, ${obj.callback})`,
 		);
 	}
@@ -496,36 +496,57 @@ class Msghub extends utils.Adapter {
 		return await this._adminTab.handleCommand(cmd, payload);
 	}
 
-		async _handleCustomSelectOptions(cmd, payload) {
-			if (cmd !== 'ingestStates.presets.selectOptions') {
-				return [];
-			}
+	async _handleCustomSelectOptions(cmd, payload) {
+		const baseCmd = 'ingestStates.presets.selectOptions';
+		const rawCmd = typeof cmd === 'string' ? cmd.trim() : '';
 
-			function ensureOptionsArray(items) {
-				const list = Array.isArray(items) ? items : [];
-				const next = [];
-				for (const it of list) {
-					const value = typeof it?.value === 'string' ? it.value : '';
-					const label = typeof it?.label === 'string' ? it.label : '';
-					if (!value) {
-						continue;
-					}
-					next.push({ value, label });
-				}
-				// Ensure the select isn't treated as "offline" when no presets exist yet.
-				// (jsonCustom `selectSendTo` shows an offline error when the options array is empty.)
-				return [{ value: '', label: '' }, ...next];
-			}
-
-			if (!this._adminTab) {
-				return ensureOptionsArray([]);
-			}
-
-			const res = await this._adminTab.handleCommand('admin.ingestStates.presets.list', payload);
-			const items = res?.ok && Array.isArray(res?.data) ? res.data : [];
-
-			return ensureOptionsArray(items);
+		if (!rawCmd.startsWith(baseCmd)) {
+			return [];
 		}
+
+		function ensureOptionsArray(items) {
+			const list = Array.isArray(items) ? items : [];
+			const next = [];
+			for (const it of list) {
+				const value = typeof it?.value === 'string' ? it.value : '';
+				const label = typeof it?.label === 'string' ? it.label : '';
+				if (!value) {
+					continue;
+				}
+				next.push({ value, label });
+			}
+			// Ensure the select isn't treated as "offline" when no presets exist yet.
+			// (jsonCustom `selectSendTo` shows an offline error when the options array is empty.)
+			return [{ value: '', label: '' }, ...next];
+		}
+
+		if (!this._adminTab) {
+			return ensureOptionsArray([]);
+		}
+
+		let suffix = rawCmd.slice(baseCmd.length);
+		if (suffix.startsWith('.')) {
+			suffix = suffix.slice(1);
+		}
+		const parts = suffix ? suffix.split('.').filter(Boolean) : [];
+
+		const rule = parts[0] || null; // z.B. 'session' | 'freshness'
+		const subset = parts[1] || null; // z.B. 'start' | null
+
+		const nextPayload = payload && typeof payload === 'object' && !Array.isArray(payload) ? { ...payload } : {};
+		// Respect explicitly provided filter params (do not override).
+		if (!Object.prototype.hasOwnProperty.call(nextPayload, 'rule')) {
+			nextPayload.rule = rule;
+		}
+		if (!Object.prototype.hasOwnProperty.call(nextPayload, 'subset')) {
+			nextPayload.subset = subset;
+		}
+
+		const res = await this._adminTab.handleCommand('admin.ingestStates.presets.list', nextPayload);
+		const items = res?.ok && Array.isArray(res?.data) ? res.data : [];
+
+		return ensureOptionsArray(items);
+	}
 
 	async _i18ninit(locale) {
 		const _i18ndebug = false;

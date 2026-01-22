@@ -67,6 +67,7 @@ Example (`IngestMySystem`):
 This repo uses stable i18n keys (not English texts) and maintains language files with helper scripts:
 
 - Generate/sync language files: `npm run i18n:generate`
+- Mirror admin i18n keys into runtime i18n (for `ctx.api.i18n.t`): `npm run i18n:mirror:admin-to-runtime`
 - Generate + remove keys that do not exist in `en.json` (opt-in): `npm run i18n:generate:remove`
 - Sort keys (deterministic): `npm run i18n:sort`
 - Check key sync (CI-friendly): `npm run i18n:check`

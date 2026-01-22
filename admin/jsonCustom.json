@@ -130,10 +130,6 @@
 							"value": "threshold"
 						},
 						{
-							"label": "msghub.i18n.IngestStates.admin.jsonCustom.mode.ruleType.option.freshness.label",
-							"value": "freshness"
-						},
-						{
 							"label": "msghub.i18n.IngestStates.admin.jsonCustom.mode.ruleType.option.triggered.label",
 							"value": "triggered"
 						},
@@ -410,15 +406,16 @@
 					"newLine": true,
 					"type": "selectSendTo",
 					"label": "msghub.i18n.IngestStates.admin.jsonCustom.message.field.preset.label",
-					"help": "msghub.i18n.IngestStates.admin.jsonCustom.message.field.preset.help",
 					"xs": 12,
 					"sm": 12,
 					"md": 12,
 					"lg": 12,
 					"xl": 12,
 					"default": "",
-					"command": "ingestStates.presets.selectOptions",
+					"command": "ingestStates.presets.selectOptions.threshold",
+					"jsonData": "{\"subset\": ${JSON.stringify(data['thr-mode'] || '')}}",
 					"noTranslation": true,
+					"alsoDependsOn": ["thr-mode"],
 					"manual": false
 				},
 				"_thrMessageInfo": {
@@ -447,173 +444,6 @@
 					"newLine": true,
 					"type": "staticText",
 					"text": "msghub.i18n.IngestStates.admin.jsonCustom.rules.threshold.info.examples.text",
-					"xs": 12,
-					"sm": 12,
-					"md": 12,
-					"lg": 12,
-					"xl": 12,
-					"style": { "whiteSpace": "pre-wrap" }
-				}
-			}
-		},
-		"freshness": {
-			"type": "panel",
-			"label": "msghub.i18n.IngestStates.admin.jsonCustom.rules.freshness.panel.label",
-			"hidden": "((data['managedMeta-managedMessage']) && ((data['managedMeta-managedBy'] || '').indexOf('IngestStates.') === -1)) || ((data.mode || data['mode']) !== 'freshness')",
-			"items": {
-				"_freshH0": {
-					"type": "header",
-					"size": 2,
-					"text": "msghub.i18n.IngestStates.admin.jsonCustom.rules.freshness.header.text",
-					"xs": 12,
-					"sm": 12,
-					"md": 12,
-					"lg": 12,
-					"xl": 12
-				},
-				"_freshInfo0": {
-					"newLine": true,
-					"type": "staticText",
-					"text": "msghub.i18n.IngestStates.admin.jsonCustom.rules.freshness.info.summary.text",
-					"xs": 12,
-					"sm": 12,
-					"md": 12,
-					"lg": 12,
-					"xl": 12,
-					"style": { "whiteSpace": "pre-wrap" }
-				},
-				"_freshH4Time": {
-					"newLine": true,
-					"type": "header",
-					"size": 4,
-					"text": "msghub.i18n.IngestStates.admin.jsonCustom.rules.freshness.section.timing.header.text",
-					"xs": 12,
-					"sm": 12,
-					"md": 12,
-					"lg": 12,
-					"xl": 12
-				},
-				"_freshInfoTime0": {
-					"newLine": true,
-					"type": "staticText",
-					"text": "msghub.i18n.IngestStates.admin.jsonCustom.rules.freshness.info.timing.text",
-					"xs": 12,
-					"sm": 12,
-					"md": 12,
-					"lg": 12,
-					"xl": 12,
-					"style": { "whiteSpace": "pre-wrap" }
-				},
-				"fresh-everyValue": {
-					"newLine": true,
-					"type": "number",
-					"label": "msghub.i18n.IngestStates.admin.jsonCustom.rules.freshness.field.every.value.label",
-					"help": "msghub.i18n.IngestStates.admin.jsonCustom.rules.freshness.field.every.value.help",
-					"xs": 12,
-					"sm": 6,
-					"md": 3,
-					"lg": 3,
-					"xl": 3,
-					"min": 1,
-					"default": 60
-				},
-				"fresh-everyUnit": {
-					"type": "select",
-					"label": "msghub.i18n.IngestStates.admin.jsonCustom.common.unit.label",
-					"xs": 12,
-					"sm": 6,
-					"md": 3,
-					"lg": 3,
-					"xl": 3,
-					"default": 60,
-					"options": [
-						{
-							"label": "msghub.i18n.IngestStates.admin.jsonCustom.common.unit.option.minutes.label",
-							"value": 60
-						},
-						{
-							"label": "msghub.i18n.IngestStates.admin.jsonCustom.common.unit.option.hours.label",
-							"value": 3600
-						},
-						{
-							"label": "msghub.i18n.IngestStates.admin.jsonCustom.common.unit.option.days.label",
-							"value": 86400
-						}
-					]
-				},
-				"fresh-evaluateBy": {
-					"type": "select",
-					"label": "msghub.i18n.IngestStates.admin.jsonCustom.rules.freshness.field.evaluateBy.label",
-					"help": "msghub.i18n.IngestStates.admin.jsonCustom.rules.freshness.field.evaluateBy.help",
-					"xs": 12,
-					"sm": 12,
-					"md": 6,
-					"lg": 6,
-					"xl": 6,
-					"default": "ts",
-					"options": [
-						{
-							"label": "msghub.i18n.IngestStates.admin.jsonCustom.rules.freshness.field.evaluateBy.option.ts.label",
-							"value": "ts"
-						},
-						{
-							"label": "msghub.i18n.IngestStates.admin.jsonCustom.rules.freshness.field.evaluateBy.option.lc.label",
-							"value": "lc"
-						}
-					]
-				},
-				"_freshH4Message": {
-					"newLine": true,
-					"type": "header",
-					"size": 4,
-					"text": "msghub.i18n.IngestStates.admin.jsonCustom.message.header.text",
-					"xs": 12,
-					"sm": 12,
-					"md": 12,
-					"lg": 12,
-					"xl": 12
-				},
-				"msg-FreshnessId": {
-					"newLine": true,
-					"type": "selectSendTo",
-					"label": "msghub.i18n.IngestStates.admin.jsonCustom.message.field.preset.label",
-					"help": "msghub.i18n.IngestStates.admin.jsonCustom.message.field.preset.help",
-					"xs": 12,
-					"sm": 12,
-					"md": 12,
-					"lg": 12,
-					"xl": 12,
-					"default": "",
-					"command": "ingestStates.presets.selectOptions",
-					"noTranslation": true,
-					"manual": false
-				},
-				"_freshMessageInfo": {
-					"newLine": true,
-					"type": "staticText",
-					"text": "msghub.i18n.IngestStates.admin.jsonCustom.message.field.info.editor.text",
-					"xs": 12,
-					"sm": 12,
-					"md": 12,
-					"lg": 12,
-					"xl": 12,
-					"style": { "whiteSpace": "pre-wrap" }
-				},
-				"_freshH4Examples": {
-					"newLine": true,
-					"type": "header",
-					"size": 4,
-					"text": "msghub.i18n.IngestStates.admin.jsonCustom.rules.freshness.section.examples.header.text",
-					"xs": 12,
-					"sm": 12,
-					"md": 12,
-					"lg": 12,
-					"xl": 12
-				},
-				"_freshExamples0": {
-					"newLine": true,
-					"type": "staticText",
-					"text": "msghub.i18n.IngestStates.admin.jsonCustom.rules.freshness.info.examples.text",
 					"xs": 12,
 					"sm": 12,
 					"md": 12,
@@ -899,14 +729,13 @@
 					"newLine": true,
 					"type": "selectSendTo",
 					"label": "msghub.i18n.IngestStates.admin.jsonCustom.message.field.preset.label",
-					"help": "msghub.i18n.IngestStates.admin.jsonCustom.message.field.preset.help",
 					"xs": 12,
 					"sm": 12,
 					"md": 12,
 					"lg": 12,
 					"xl": 12,
 					"default": "",
-					"command": "ingestStates.presets.selectOptions",
+					"command": "ingestStates.presets.selectOptions.triggered",
 					"noTranslation": true,
 					"manual": false
 				},
@@ -1220,14 +1049,13 @@
 					"newLine": true,
 					"type": "selectSendTo",
 					"label": "msghub.i18n.IngestStates.admin.jsonCustom.message.field.preset.label",
-					"help": "msghub.i18n.IngestStates.admin.jsonCustom.message.field.preset.help",
 					"xs": 12,
 					"sm": 12,
 					"md": 12,
 					"lg": 12,
 					"xl": 12,
 					"default": "",
-					"command": "ingestStates.presets.selectOptions",
+					"command": "ingestStates.presets.selectOptions.nonSettling",
 					"noTranslation": true,
 					"manual": false
 				},
@@ -1540,14 +1368,13 @@
 					"newLine": true,
 					"type": "selectSendTo",
 					"label": "msghub.i18n.IngestStates.admin.jsonCustom.message.field.preset.sessionStartId.label",
-					"help": "msghub.i18n.IngestStates.admin.jsonCustom.message.field.preset.sessionStartId.help",
 					"xs": 12,
 					"sm": 12,
 					"md": 12,
 					"lg": 12,
 					"xl": 12,
 					"default": "",
-					"command": "ingestStates.presets.selectOptions",
+					"command": "ingestStates.presets.selectOptions.session.start",
 					"noTranslation": true,
 					"manual": false
 				},
@@ -1555,14 +1382,13 @@
 					"newLine": true,
 					"type": "selectSendTo",
 					"label": "msghub.i18n.IngestStates.admin.jsonCustom.message.field.preset.sessionEndId.label",
-					"help": "msghub.i18n.IngestStates.admin.jsonCustom.message.field.preset.EndId.helpelp",
 					"xs": 12,
 					"sm": 12,
 					"md": 12,
 					"lg": 12,
 					"xl": 12,
 					"default": "",
-					"command": "ingestStates.presets.selectOptions",
+					"command": "ingestStates.presets.selectOptions.session.end",
 					"noTranslation": true,
 					"manual": false
 				},
@@ -1592,6 +1418,185 @@
 					"newLine": true,
 					"type": "staticText",
 					"text": "msghub.i18n.IngestStates.admin.jsonCustom.rules.session.info.examples.text",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12,
+					"style": { "whiteSpace": "pre-wrap" }
+				}
+			}
+		},
+		"freshness": {
+			"type": "panel",
+			"label": "msghub.i18n.IngestStates.admin.jsonCustom.rules.freshness.panel.label",
+			"hidden": "((data['managedMeta-managedMessage']) && ((data['managedMeta-managedBy'] || '').indexOf('IngestStates.') === -1))",
+			"items": {
+				"_freshH0": {
+					"type": "header",
+					"size": 2,
+					"text": "msghub.i18n.IngestStates.admin.jsonCustom.rules.freshness.header.text",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12
+				},
+				"_modeFreshnessInfo": {
+					"newLine": true,
+					"type": "staticText",
+					"text": "msghub.i18n.IngestStates.admin.jsonCustom.mode.description.freshness.text",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"minRows": 5,
+					"maxRows": 10,
+					"lg": 12,
+					"xl": 12,
+					"style": { "whiteSpace": "pre-wrap" }
+				},
+				"fresh-enable": {
+					"newLine": true,
+					"type": "checkbox",
+					"label": "msghub.i18n.IngestStates.admin.jsonCustom.rules.freshness.field.enable.label",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12,
+					"default": false
+				},
+				"_freshH4Time": {
+					"newLine": true,
+					"type": "header",
+					"size": 4,
+					"text": "msghub.i18n.IngestStates.admin.jsonCustom.rules.freshness.section.timing.header.text",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12
+				},
+				"_freshInfoTime0": {
+					"newLine": true,
+					"type": "staticText",
+					"text": "msghub.i18n.IngestStates.admin.jsonCustom.rules.freshness.info.timing.text",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12,
+					"style": { "whiteSpace": "pre-wrap" }
+				},
+				"fresh-everyValue": {
+					"newLine": true,
+					"type": "number",
+					"label": "msghub.i18n.IngestStates.admin.jsonCustom.rules.freshness.field.every.value.label",
+					"help": "msghub.i18n.IngestStates.admin.jsonCustom.rules.freshness.field.every.value.help",
+					"xs": 12,
+					"sm": 6,
+					"md": 3,
+					"lg": 3,
+					"xl": 3,
+					"min": 1,
+					"default": 60
+				},
+				"fresh-everyUnit": {
+					"type": "select",
+					"label": "msghub.i18n.IngestStates.admin.jsonCustom.common.unit.label",
+					"xs": 12,
+					"sm": 6,
+					"md": 3,
+					"lg": 3,
+					"xl": 3,
+					"default": 60,
+					"options": [
+						{
+							"label": "msghub.i18n.IngestStates.admin.jsonCustom.common.unit.option.minutes.label",
+							"value": 60
+						},
+						{
+							"label": "msghub.i18n.IngestStates.admin.jsonCustom.common.unit.option.hours.label",
+							"value": 3600
+						},
+						{
+							"label": "msghub.i18n.IngestStates.admin.jsonCustom.common.unit.option.days.label",
+							"value": 86400
+						}
+					]
+				},
+				"fresh-evaluateBy": {
+					"type": "select",
+					"label": "msghub.i18n.IngestStates.admin.jsonCustom.rules.freshness.field.evaluateBy.label",
+					"help": "msghub.i18n.IngestStates.admin.jsonCustom.rules.freshness.field.evaluateBy.help",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 6,
+					"xl": 6,
+					"default": "ts",
+					"options": [
+						{
+							"label": "msghub.i18n.IngestStates.admin.jsonCustom.rules.freshness.field.evaluateBy.option.ts.label",
+							"value": "ts"
+						},
+						{
+							"label": "msghub.i18n.IngestStates.admin.jsonCustom.rules.freshness.field.evaluateBy.option.lc.label",
+							"value": "lc"
+						}
+					]
+				},
+				"_freshH4Message": {
+					"newLine": true,
+					"type": "header",
+					"size": 4,
+					"text": "msghub.i18n.IngestStates.admin.jsonCustom.message.header.text",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12
+				},
+				"msg-FreshnessId": {
+					"newLine": true,
+					"type": "selectSendTo",
+					"label": "msghub.i18n.IngestStates.admin.jsonCustom.message.field.preset.label",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12,
+					"default": "",
+					"command": "ingestStates.presets.selectOptions.freshness",
+					"noTranslation": true,
+					"manual": false
+				},
+				"_freshMessageInfo": {
+					"newLine": true,
+					"type": "staticText",
+					"text": "msghub.i18n.IngestStates.admin.jsonCustom.message.field.info.editor.text",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12,
+					"style": { "whiteSpace": "pre-wrap" }
+				},
+				"_freshH4Examples": {
+					"newLine": true,
+					"type": "header",
+					"size": 4,
+					"text": "msghub.i18n.IngestStates.admin.jsonCustom.rules.freshness.section.examples.header.text",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12
+				},
+				"_freshExamples0": {
+					"newLine": true,
+					"type": "staticText",
+					"text": "msghub.i18n.IngestStates.admin.jsonCustom.rules.freshness.info.examples.text",
 					"xs": 12,
 					"sm": 12,
 					"md": 12,
@@ -1631,7 +1636,6 @@
 					"newLine": true,
 					"type": "selectSendTo",
 					"label": "msghub.i18n.IngestStates.admin.jsonCustom.message.field.preset.label",
-					"help": "msghub.i18n.IngestStates.admin.jsonCustom.message.field.preset.help",
 					"xs": 12,
 					"sm": 12,
 					"md": 12,
