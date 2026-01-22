@@ -437,17 +437,6 @@ class Msghub extends utils.Adapter {
 	//  * Using this method requires "common.messagebox" property to be set to true in io-package.json
 	//  * @param {ioBroker.Message} obj
 	//  */
-	// onMessage(obj) {
-	// 	if (typeof obj === 'object' && obj.message) {
-	// 		if (obj.command === 'send') {
-	// 			// e.g. send email or pushover or whatever
-	// 			this.log.info('send command');
-
-	// 			// Send response in callback if required
-	// 			if (obj.callback) this.sendTo(obj.from, obj.command, 'Message received', obj.callback);
-	// 		}
-	// 	}
-	// }
 	async onMessage(obj) {
 		if (!obj || !obj.command) {
 			return;
@@ -456,7 +445,7 @@ class Msghub extends utils.Adapter {
 		const cmd = obj.command;
 		const payload = obj.message;
 
-		this.log?.debug?.(`MsgHub main.js onMessage: '${cmd}' ${JSON.stringify(sanitizeForLog(payload), null, 2)}`);
+		this.log?.silly?.(`MsgHub main.js onMessage: '${cmd}' ${JSON.stringify(sanitizeForLog(payload), null, 2)}`);
 		let result;
 
 		try {
@@ -481,7 +470,7 @@ class Msghub extends utils.Adapter {
 		if (obj.callback) {
 			this.sendTo(obj.from, obj.command, result, obj.callback);
 		}
-		this.log?.debug?.(
+		this.log?.silly?.(
 			`MsgHub main.js onMessage: this.sendTo(${obj.from}, ${obj.command}, ${JSON.stringify(result)}, ${obj.callback})`,
 		);
 	}

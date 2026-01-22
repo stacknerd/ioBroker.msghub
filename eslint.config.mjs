@@ -26,6 +26,7 @@ export default [
 			'i18n-generate.mjs',
 			'admin/tab.js',
 			'admin/tab.*.js',
+			'i18n-mirror-admin-to-runtime.mjs',
 		],
 	},
 	{

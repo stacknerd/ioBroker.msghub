@@ -55,7 +55,7 @@
 					"md": 6,
 					"lg": 6,
 					"xl": 6,
-					"disabled": true
+					"disabled": "true"
 				},
 				"managedMeta-managedSince": {
 					"type": "text",
@@ -65,11 +65,10 @@
 					"md": 6,
 					"lg": 6,
 					"xl": 6,
-					"disabled": true
+					"disabled": "true"
 				},
 				"managedMeta-managedText": {
 					"type": "text",
-					"multiline": true,
 					"label": "msghub.i18n.core.admin.jsonCustom.managedNotice.managedText.label",
 					"help": "msghub.i18n.core.admin.jsonCustom.managedNotice.managedText.help",
 					"minRows": 5,
@@ -80,7 +79,7 @@
 					"md": 12,
 					"lg": 12,
 					"xl": 12,
-					"disabled": true
+					"disabled": "true"
 				}
 			}
 		},
@@ -175,8 +174,6 @@
 					"xs": 12,
 					"sm": 12,
 					"md": 12,
-					"minRows": 5,
-					"maxRows": 10,
 					"lg": 12,
 					"xl": 12,
 					"style": { "whiteSpace": "pre-wrap" }
@@ -1449,8 +1446,6 @@
 					"xs": 12,
 					"sm": 12,
 					"md": 12,
-					"minRows": 5,
-					"maxRows": 10,
 					"lg": 12,
 					"xl": 12,
 					"style": { "whiteSpace": "pre-wrap" }
@@ -1568,7 +1563,9 @@
 					"xl": 12,
 					"default": "",
 					"command": "ingestStates.presets.selectOptions.freshness",
+					"jsonData": "{\"subset\": ${JSON.stringify(data['fresh-evaluateBy'] || '')}}",
 					"noTranslation": true,
+					"alsoDependsOn": ["fresh-evaluateBy"],
 					"manual": false
 				},
 				"_freshMessageInfo": {
@@ -1645,7 +1642,7 @@
 					"command": "ingestStates.presets.selectOptions",
 					"noTranslation": true,
 					"manual": false,
-					"hidden": true
+					"hidden": "true"
 				}
 			}
 		}

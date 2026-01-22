@@ -105,7 +105,7 @@ If your datapoint is assigned to an ioBroker room (`enum.rooms.*`), IngestStates
 Some rule defaults (and your own texts) can include placeholders like:
 
 - `{{m.state-value}}` (current value)
-- `{{m.lastSeenAt|datetime}}` (timestamp as date/time)
+- `{{m.lastSeenAt.val|datetime}}` (timestamp as date/time)
 - `{{m.lastSeenAt|durationSince}}` (“how long ago”)
 
 Formatting note for `durationSince` / `durationUntil`:

@@ -184,6 +184,7 @@ Works for numbers and numeric strings.
 Formats a Unix ms timestamp (or a numeric/date string) as a localized date/time:
 
 ```js
+{{m.lastSeen.val|datetime}}
 {{m.lastSeen.ts|datetime}}
 {{t.createdAt|datetime}}
 ```

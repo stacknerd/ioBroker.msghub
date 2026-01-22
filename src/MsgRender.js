@@ -41,7 +41,7 @@ const { MsgConstants } = require(`${__dirname}/MsgConstants`);
  *
  * Supported filters:
  * - {{m.temperature|num:1}}   -> number formatting with max fraction digits
- * - {{m.lastSeen|datetime}}   -> localized date/time output
+ * - {{m.lastSeen.val|datetime}}   -> localized date/time output (use `.val`/`.ts`; `m.<key>` formats "val unit")
  * - {{m.lastSeenAt|durationSince}} -> duration since a timestamp (relative to server time)
  * - {{m.nextRunAt|durationUntil}}  -> duration until a timestamp (relative to server time)
  * - {{m.temperature|raw}}     -> raw value without unit/locale formatting

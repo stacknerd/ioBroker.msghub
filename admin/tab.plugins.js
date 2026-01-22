@@ -588,8 +588,25 @@
 				.filter(Boolean);
 		}
 
-		function buildFieldInput({ type, key, label, value, help, unit, min, max, step, options, multiOptions }) {
-			const id = `f_${key}_${Math.random().toString(36).slice(2, 8)}`;
+			function buildFieldInput(...args) {
+				const cfg = args && args.length ? args[0] : null;
+				const c = cfg && typeof cfg === 'object' ? cfg : {};
+
+				const type = c && typeof c === 'object' && 'type' in c ? c.type : '';
+				const keyRaw = c && typeof c === 'object' && 'key' in c ? c.key : '';
+				const key = typeof keyRaw === 'string' ? keyRaw : String(keyRaw ?? '');
+
+				const label = c && typeof c === 'object' && 'label' in c ? c.label : '';
+				const value = c && typeof c === 'object' && 'value' in c ? c.value : '';
+				const help = c && typeof c === 'object' && 'help' in c ? c.help : '';
+				const unit = c && typeof c === 'object' && 'unit' in c ? c.unit : '';
+				const min = c && typeof c === 'object' && 'min' in c ? c.min : undefined;
+				const max = c && typeof c === 'object' && 'max' in c ? c.max : undefined;
+				const step = c && typeof c === 'object' && 'step' in c ? c.step : undefined;
+				const options = c && typeof c === 'object' && 'options' in c ? c.options : undefined;
+				const multiOptions = c && typeof c === 'object' && 'multiOptions' in c ? c.multiOptions : undefined;
+
+				const id = `f_${key}_${Math.random().toString(36).slice(2, 8)}`;
 
 			if (type === 'header') {
 				const labelText = typeof label === 'string' ? label.trim() : '';
@@ -1707,14 +1724,14 @@
 
 			const cloneJson = value => JSON.parse(JSON.stringify(value ?? null));
 
-			const defaultPreset = ({ presetId, description, ownedBy = null, kind = 'status', level = 20 } = {}) => ({
-				schema: SCHEMA,
-				presetId: String(presetId || '').trim(),
-				description: typeof description === 'string' ? description : '',
-				ownedBy: typeof ownedBy === 'string' && ownedBy.trim() ? ownedBy.trim() : null,
-				message: {
-					kind,
-					level,
+				const defaultPreset = ({ presetId = '', description = '', ownedBy = '', kind = 'status', level = 20 } = {}) => ({
+					schema: SCHEMA,
+					presetId: String(presetId || '').trim(),
+					description: typeof description === 'string' ? description : '',
+					ownedBy: typeof ownedBy === 'string' && ownedBy.trim() ? ownedBy.trim() : null,
+					message: {
+						kind,
+						level,
 					title: '',
 					text: '',
 					timing: {
@@ -1797,13 +1814,13 @@
 					}
 					const label = typeof o?.label === 'string' ? o.label.trim() : '';
 						next.push(
-							defaultPreset({
-								presetId: id,
-								description: label && label !== id ? label : '',
-								ownedBy: null,
-							}),
-						);
-					}
+								defaultPreset({
+									presetId: id,
+									description: label && label !== id ? label : '',
+									ownedBy: '',
+								}),
+							);
+						}
 
 				presets = next;
 				sortPresets();
@@ -1901,7 +1918,7 @@
 					}
 					setError('');
 					original = null;
-					draft = defaultPreset({ presetId: '', description: '', ownedBy: null, kind: 'status', level: 20 });
+					draft = defaultPreset({ presetId: '', description: '', ownedBy: '', kind: 'status', level: 20 });
 					isNew = true;
 					render();
 				};
@@ -2555,33 +2572,41 @@
 					]),
 				]);
 
-				// Wire field changes into draft
-					const apply = () => {
-						updateDraft({
-							presetId: String(fPresetId.getValue() || '').trim(),
-							description: String(fDescription.getValue() || ''),
-							schema: String(fSchema.getValue() || ''),
-							ownedBy: ownedBy,
+						// Wire field changes into draft
+						const apply = () => {
+							updateDraft({
+								presetId: String(fPresetId?.getValue ? fPresetId.getValue() : '').trim(),
+								description: String(fDescription?.getValue ? fDescription.getValue() : ''),
+								schema: String(fSchema?.getValue ? fSchema.getValue() : ''),
+								ownedBy: ownedBy,
+							});
+							updateMessage({
+								kind: fKind?.getValue ? fKind.getValue() : undefined,
+								level: fLevel?.getValue ? fLevel.getValue() : undefined,
+							});
+							updateMessageNested('title', titleField.getValue());
+							updateMessageNested('text', textField.getValue());
+						updateMessageNested('timing.timeBudget', fTimeBudget?.getValue ? fTimeBudget.getValue() || 0 : 0);
+						updateMessageNested('timing.dueInMs', fDueIn?.getValue ? fDueIn.getValue() || 0 : 0);
+						updateMessageNested('timing.cooldown', fCooldown?.getValue ? fCooldown.getValue() || 0 : 0);
+						updateMessageNested(
+							'timing.remindEvery',
+							fRemindEvery?.getValue ? fRemindEvery.getValue() || 0 : 0,
+						);
+						updateMessageNested('details.task', fDetailsTask?.getValue ? fDetailsTask.getValue() : '');
+						updateMessageNested('details.reason', fDetailsReason?.getValue ? fDetailsReason.getValue() : '');
+						updateMessageNested('details.tools', toolsField.getValue());
+						updateMessageNested('details.consumables', consumablesField.getValue());
+						updateMessageNested('audience.tags', tagsField.getValue());
+						updateMessageNested('audience.channels.include', channelsIncludeField.getValue());
+						updateMessageNested('audience.channels.exclude', channelsExcludeField.getValue());
+						const actions = actionsField.getValue();
+						if (actions !== null) {
+							updateMessageNested('actions', actions);
+						}
+						updatePolicy({
+							resetOnNormal: fResetOnNormal?.getValue ? fResetOnNormal.getValue() === true : false,
 						});
-						updateMessage({ kind: fKind.getValue(), level: fLevel.getValue() });
-						updateMessageNested('title', titleField.getValue());
-						updateMessageNested('text', textField.getValue());
-					updateMessageNested('timing.timeBudget', fTimeBudget.getValue() || 0);
-					updateMessageNested('timing.dueInMs', fDueIn.getValue() || 0);
-					updateMessageNested('timing.cooldown', fCooldown.getValue() || 0);
-					updateMessageNested('timing.remindEvery', fRemindEvery.getValue() || 0);
-					updateMessageNested('details.task', fDetailsTask.getValue());
-					updateMessageNested('details.reason', fDetailsReason.getValue());
-					updateMessageNested('details.tools', toolsField.getValue());
-					updateMessageNested('details.consumables', consumablesField.getValue());
-					updateMessageNested('audience.tags', tagsField.getValue());
-					updateMessageNested('audience.channels.include', channelsIncludeField.getValue());
-					updateMessageNested('audience.channels.exclude', channelsExcludeField.getValue());
-					const actions = actionsField.getValue();
-					if (actions !== null) {
-						updateMessageNested('actions', actions);
-					}
-					updatePolicy({ resetOnNormal: fResetOnNormal.getValue() === true });
 
 					const kind = String(draft?.message?.kind || '');
 					const isTask = kind === 'task';
