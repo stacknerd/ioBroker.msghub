@@ -173,6 +173,7 @@
 	"msghub.i18n.IngestStates.admin.jsonCustom.mode.ruleType.option.session.label": "Session (Start/Stop)",
 	"msghub.i18n.IngestStates.admin.jsonCustom.mode.ruleType.option.threshold.label": "Threshold",
 	"msghub.i18n.IngestStates.admin.jsonCustom.mode.ruleType.option.triggered.label": "Dependency (Trigger)",
+	"msghub.i18n.IngestStates.admin.jsonCustom.preset.custom.label": "Custom",
 	"msghub.i18n.IngestStates.admin.jsonCustom.rules.freshness.field.enable.label": "In addition to other rules, alerts if this object has no update (ts) or no value change (lc) longer than allowed.",
 	"msghub.i18n.IngestStates.admin.jsonCustom.rules.freshness.field.evaluateBy.help": "Which timestamp should be checked?\n- ts: counts every update (even if the value stays the same)\n- lc: counts only actual value changes",
 	"msghub.i18n.IngestStates.admin.jsonCustom.rules.freshness.field.evaluateBy.label": "Timestamp",

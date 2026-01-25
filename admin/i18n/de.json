@@ -173,6 +173,7 @@
 	"msghub.i18n.IngestStates.admin.jsonCustom.mode.ruleType.option.session.label": "Session (Start/Stop)",
 	"msghub.i18n.IngestStates.admin.jsonCustom.mode.ruleType.option.threshold.label": "Schwellenwert",
 	"msghub.i18n.IngestStates.admin.jsonCustom.mode.ruleType.option.triggered.label": "Abhängigkeit (Trigger)",
+	"msghub.i18n.IngestStates.admin.jsonCustom.preset.custom.label": "Eigener",
 	"msghub.i18n.IngestStates.admin.jsonCustom.rules.freshness.field.enable.label": "Meldet zusätzlich zu anderen Regeln, wenn dieses Objekt länger als erlaubt kein Update (ts) oder keine Wertänderung (lc) hatte.",
 	"msghub.i18n.IngestStates.admin.jsonCustom.rules.freshness.field.evaluateBy.help": "Welcher Zeitstempel soll geprüft werden?\n- ts: zählt jedes Update (auch wenn der Wert gleich bleibt)\n- lc: zählt nur echte Wertänderungen",
 	"msghub.i18n.IngestStates.admin.jsonCustom.rules.freshness.field.evaluateBy.label": "Zeitstempel",
