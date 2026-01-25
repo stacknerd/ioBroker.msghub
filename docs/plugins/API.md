@@ -9,7 +9,7 @@ Terminology:
 
 Handler call shapes (for orientation):
 
-- Ingest-side calls: `onStateChange(id, state, ctx)` / `onObjectChange(id, obj, ctx)` (plus `start(ctx)` / `stop(ctx)`).
+- Ingest-side calls: `onStateChange(id, state, ctx)` / `onObjectChange(id, obj, ctx)` / `onAction(actionInfo, ctx)` (plus `start(ctx)` / `stop(ctx)`).
 - Notify-side calls: `onNotifications(event, notificationsArray, ctx)`.
 
 ## Overview table
@@ -83,6 +83,7 @@ Columns:
 | API | `iobroker.files` | `renameFile(metaId, oldPath, newPath)` | ✓ | ✓ | ✓ | ✓ | Rename/move a file within ioBroker file storage (async/callback compatible). | `buildIoBrokerApi()` (`src/MsgHostApi.js`) | `../modules/MsgHostApi.md` |
 | API | `iobroker.files` | `deleteFile(metaId, filePath)` | ✓ | ✓ | ✓ | ✓ | Delete a file within ioBroker file storage (adapter API is `delFile`; facade uses `deleteFile`). | `buildIoBrokerApi()` (`src/MsgHostApi.js`) | `../modules/MsgHostApi.md` |
 | Meta | `host` | `ctx.meta.running` | ✓ | ✓ | ✓ | ✓ | Host runtime flag (best-effort; `true` while host is running). | `MsgIngest` / `MsgNotify` | `../modules/MsgIngest.md`<br>`../modules/MsgNotify.md` |
+| Meta | `host` | `ctx.meta.event` | ✓ |  | ✓ | ✓ | Dispatch event token for action calls (see `MsgConstants.action.events.*`). | `MsgAction` → `MsgIngest` | `../modules/MsgIngest.md`<br>`../modules/MsgAction.md` |
 | Meta | `plugin` | `category` | ✓ | ✓ | ✓ | ✓ | Plugin family category: `ingest | notify | bridge | engage`. | `IoPlugins` (`lib/IoPlugins.js`) | `./IoPlugins.md` |
 | Meta | `plugin` | `type` | ✓ | ✓ | ✓ | ✓ | Plugin type name (example: `NotifyStates`). | `IoPlugins` (`lib/IoPlugins.js`) | `./IoPlugins.md` |
 | Meta | `plugin` | `instanceId` | ✓ | ✓ | ✓ | ✓ | Numeric instance id (usually `0`). | `IoPlugins` (`lib/IoPlugins.js`) | `./IoPlugins.md` |

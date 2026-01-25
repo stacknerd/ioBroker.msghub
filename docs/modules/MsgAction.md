@@ -105,7 +105,8 @@ The central policy check (pure decision):
 Notes:
 
 - Hard delete is **not** done here (see `MsgStore.removeMessage()`).
-- Non-core action types (`open/link/custom`) are currently **not executed** by `MsgAction`.
+- Non-core action types (`open/link/custom`) are accepted by `MsgAction` as **no-ops** (no store mutation) so that
+  integrations and producer plugins can still observe and interpret them.
 
 ---
 
@@ -135,6 +136,19 @@ These rules are enforced consistently:
 - `"due"` dispatch on update is gated by `lifecycle.state === "open"` in `MsgStore`
 
 This prevents “re-notify spam” when a user acknowledges/closes/deletes a message.
+
+---
+
+## Action events to producer plugins
+
+Successful action executions are also dispatched as events to producer plugins:
+
+- `MsgAction` calls `msgStore.msgIngest.dispatchAction(actionInfo, meta)`.
+- Producer plugins can implement `onAction(actionInfo, ctx)` to react to those events.
+- `ctx.meta.event` contains the event token (see `MsgConstants.action.events.*`).
+
+This keeps the core action semantics centralized while allowing ingest plugins to react to user intents without
+introducing ioBroker side effects into the core action layer.
 
 ---
 

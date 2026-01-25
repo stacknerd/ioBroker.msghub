@@ -8,6 +8,7 @@ It defines the allowed values for things like:
 - **Where a message comes from** (`origin.type`)
 - **Supported attachments and actions** (`attachments.type`, `actions.type`)
 - **Notification event names** (`notfication.events.*`)
+- **Action event names** (`action.events.*`)
 
 In short: **If code needs a fixed identifier that becomes part of a message, it should come from `MsgConstants`.**
 
@@ -112,6 +113,12 @@ These event names are used when dispatching notifications via `MsgNotify`:
 
 Naming note: the property is spelled `notfication` (missing the second “i”) because it is part of the current
 public API inside this repo and is referenced from multiple files.
+
+### `action.events` (action event names)
+
+These event names are used for action execution events dispatched to producer plugins via `MsgIngest`:
+
+- `executed` → an action was executed successfully (`MsgAction.execute(...)` returned `true`)
 
 ---
 

@@ -22,6 +22,13 @@ Typical flow:
 4. A plugin may create/update/remove a message using `ctx.api.store.*` (which writes through `MsgStore`).
 5. `MsgStore` persists and triggers downstream effects (archive, notify, render, …).
 
+Additionally, `MsgIngest` also receives **action execution events** from `MsgAction`:
+
+1. An Engage integration executes an action (`ctx.api.action.execute(...)`).
+2. `MsgAction` validates/executes it and patches the message via `MsgStore`.
+3. On success, `MsgAction` calls `msgStore.msgIngest.dispatchAction(...)`.
+4. Producer plugins that implement `onAction(actionInfo, ctx)` receive the event.
+
 ---
 
 ## Core responsibilities
@@ -62,7 +69,7 @@ You can register a plugin in two ways:
 - **Function plugin**: `(id, state, ctx) => void`
   - This is treated as `onStateChange`.
 - **Object plugin**:
-  - `{ start(ctx)?, stop(ctx)?, onStateChange(id, state, ctx)?, onObjectChange(id, obj, ctx)? }`
+  - `{ start(ctx)?, stop(ctx)?, onStateChange(id, state, ctx)?, onObjectChange(id, obj, ctx)?, onAction(actionInfo, ctx)? }`
 
 Notes:
 
@@ -91,6 +98,7 @@ Every dispatch call passes the same context shape:
     - `MsgConstants` values (levels, kinds, origin types, …)
 - `ctx.meta`: dispatch metadata provided by the caller
   - plus `running` (boolean): whether the ingest host is currently started
+  - plus optional `event` for action dispatches (see `MsgConstants.action.events`)
 
 This split is intentional:
 
@@ -139,6 +147,12 @@ Dispatches an ioBroker `objectChange` event to all plugins that implement `onObj
 
 Returns the number of plugins that were called.
 
+### `dispatchAction(actionInfo, meta?)`
+
+Dispatches an executed message action event to all plugins that implement `onAction(actionInfo, ctx)`.
+
+Returns the number of plugins that were called.
+
 ---
 
 ## Design guidelines / invariants
@@ -153,8 +167,9 @@ These rules are what keep `MsgIngest` predictable:
    - Writes happen through `ctx.api.store.*` only.
 
 3. **Stable call shapes**
-   - `onStateChange(id, state, ctx)` and `onObjectChange(id, obj, ctx)` stay stable.
-   - The context is always `ctx = { api, meta }`.
+	- `onStateChange(id, state, ctx)` and `onObjectChange(id, obj, ctx)` stay stable.
+	- `onAction(actionInfo, ctx)` stays stable.
+	- The context is always `ctx = { api, meta }`.
 
 4. **Fault isolation**
    - Plugin errors are caught and logged so one bad plugin cannot break other plugins.

@@ -103,7 +103,7 @@ class MsgIngest {
 	 *
 	 * Handler shapes:
 	 * - Function: `(id, value, ctx) => void` (treated as `onStateChange`)
-	 * - Object: `{ start(ctx)?, stop(ctx)?, onStateChange(id, state, ctx)?, onObjectChange(id, obj, ctx)? }`
+	 * - Object: `{ start(ctx)?, stop(ctx)?, onStateChange(id, state, ctx)?, onObjectChange(id, obj, ctx)?, onAction(actionInfo, ctx)? }`
 	 *
 	 * Notes:
 	 * - Registering the same `id` again overwrites the previous plugin.
@@ -126,11 +126,12 @@ class MsgIngest {
 			typeof handler?.start === 'function' ||
 			typeof handler?.stop === 'function' ||
 			typeof handler?.onStateChange === 'function' ||
-			typeof handler?.onObjectChange === 'function';
+			typeof handler?.onObjectChange === 'function' ||
+			typeof handler?.onAction === 'function';
 
 		if (!hasAny) {
 			throw new Error(
-				'MsgIngest.registerPlugin: handler must be a function or an object with start/stop/onStateChange/onObjectChange',
+				'MsgIngest.registerPlugin: handler must be a function or an object with start/stop/onStateChange/onObjectChange/onAction',
 			);
 		}
 
@@ -155,6 +156,7 @@ class MsgIngest {
 					: null,
 			onObjectChangeFn:
 				typeof handler?.onObjectChange === 'function' ? handler.onObjectChange.bind(handler) : null,
+			onActionFn: typeof handler?.onAction === 'function' ? handler.onAction.bind(handler) : null,
 		};
 
 		this._plugins.set(id, plugin);
@@ -289,6 +291,37 @@ class MsgIngest {
 				plugin.onObjectChangeFn(id, obj, pluginCtx);
 			} catch (e) {
 				this.adapter?.log?.warn?.(`MsgIngest: plugin '${pid}' failed on objectChange: ${e?.message || e}`);
+			}
+		}
+		return called;
+	}
+
+	/**
+	 * Dispatch an action execution event to all registered producer plugins.
+	 *
+	 * `actionInfo` is expected to be a plain object and should minimally contain:
+	 * `{ ref, actionId, type, ts, actor?, payload?, message? }`.
+	 *
+	 * @param {object} actionInfo Action info (see above).
+	 * @param {object} [meta] Dispatch metadata (exposed to plugins via `ctx.meta`).
+	 * @returns {number} Number of plugins that were called.
+	 */
+	dispatchAction(actionInfo, meta = {}) {
+		if (!actionInfo || typeof actionInfo !== 'object') {
+			return 0;
+		}
+		const pluginCtx = this._buildCtx(meta);
+
+		let called = 0;
+		for (const [pid, plugin] of this._plugins.entries()) {
+			if (!plugin.onActionFn) {
+				continue;
+			}
+			try {
+				called += 1;
+				plugin.onActionFn(actionInfo, pluginCtx);
+			} catch (e) {
+				this.adapter?.log?.warn?.(`MsgIngest: plugin '${pid}' failed on action: ${e?.message || e}`);
 			}
 		}
 		return called;

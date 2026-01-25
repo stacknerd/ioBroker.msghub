@@ -39,6 +39,8 @@ For runtime enable/disable + configuration of plugins (including bidirectional `
    - Append-only history via `MsgArchive`
    - Notification dispatch via `MsgNotify` (fan-out to notifier plugins in `lib/`, typically with rendered message views via `MsgRender`)
 7. **Notifier Plugins (delivery)**: Notifier plugins (e.g. `lib/Notify*.js`) receive events from `MsgNotify` and perform the actual delivery (ioBroker states, push, TTS, ...). See [`docs/plugins/README.md`](../plugins/README.md).
+   - In interactive channels (`Engage...`), user intents may execute actions (`MsgAction.execute(...)`).
+   - Successful actions are dispatched as events to producer plugins via `MsgIngest` (`onAction(actionInfo, ctx)`).
 8. **Output (read view)**: On reads, `MsgStore` returns a view; `MsgRender` returns rendered `title`/`text`/`details` (resolving template placeholders from `metrics`/`timing`).
 
 ASCII sketch - WRITE / MUTATE (create/update/delete + side effects):

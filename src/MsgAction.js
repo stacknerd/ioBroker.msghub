@@ -25,12 +25,14 @@ class MsgAction {
 	 * @param {import('@iobroker/adapter-core').AdapterInstance} adapter Adapter instance for logging.
 	 * @param {import('./MsgConstants').MsgConstants} msgConstants Constants (actions + lifecycle states).
 	 * @param {import('./MsgStore').MsgStore} msgStore Store used to patch messages.
+	 * @param {{ hostName?: string }} [options] Options.
 	 */
-	constructor(adapter, msgConstants, msgStore) {
+	constructor(adapter, msgConstants, msgStore, { hostName = 'MsgAction' } = {}) {
 		if (!adapter) {
 			throw new Error('MsgAction: adapter is required');
 		}
 		this.adapter = adapter;
+		this._hostName = typeof hostName === 'string' && hostName.trim() ? hostName.trim() : 'MsgAction';
 
 		if (!msgConstants) {
 			throw new Error('MsgAction: msgConstants is required');
@@ -41,6 +43,28 @@ class MsgAction {
 			throw new Error('MsgAction: msgStore is required');
 		}
 		this.msgStore = msgStore;
+	}
+
+	/**
+	 * Best-effort: broadcast an executed action to producer plugins via MsgIngest.
+	 *
+	 * This is intentionally fire-and-forget and must never affect action execution semantics.
+	 *
+	 * @param {{ ref: string, actionId: string, type: string, ts: number, actor?: string|null, payload?: any, message?: any|null }} actionInfo
+	 *   Action info payload.
+	 * @returns {void}
+	 */
+	_dispatchToIngest(actionInfo) {
+		try {
+			const msgIngest = this.msgStore?.msgIngest;
+			if (!msgIngest || typeof msgIngest.dispatchAction !== 'function') {
+				return;
+			}
+			const event = this.msgConstants?.action?.events?.executed || 'executed';
+			msgIngest.dispatchAction(actionInfo, { event });
+		} catch (e) {
+			this.adapter?.log?.warn?.(`${this._hostName}: action dispatch failed (${e?.message || e})`);
+		}
 	}
 
 	/**
@@ -296,6 +320,18 @@ class MsgAction {
 
 			const type = action.type;
 			const effectivePayload = payload !== undefined ? payload : action.payload;
+			const emitExecuted = () => {
+				const message = this.msgStore?.getMessageByRef?.(msgRef, 'all') || null;
+				this._dispatchToIngest({
+					ref: msgRef,
+					actionId: id,
+					type,
+					ts: now,
+					...(actorProvided ? { actor: normalizedActor } : {}),
+					payload: effectivePayload !== undefined ? effectivePayload : null,
+					message,
+				});
+			};
 			const buildLifecyclePatch = state => ({
 				state,
 				...(actorProvided ? { stateChangedBy: normalizedActor } : {}),
@@ -312,6 +348,7 @@ class MsgAction {
 						noop: true,
 						payload: effectivePayload !== undefined ? effectivePayload : null,
 					});
+					emitExecuted();
 					return true;
 				}
 				const ok = this._patchMessage(msgRef, {
@@ -324,6 +361,9 @@ class MsgAction {
 					payload: effectivePayload !== undefined ? effectivePayload : null,
 					...(ok ? {} : { reason: 'patch_failed' }),
 				});
+				if (ok) {
+					emitExecuted();
+				}
 				return ok;
 			}
 
@@ -335,6 +375,7 @@ class MsgAction {
 						noop: true,
 						payload: effectivePayload !== undefined ? effectivePayload : null,
 					});
+					emitExecuted();
 					return true;
 				}
 				const ok = this._patchMessage(msgRef, {
@@ -347,6 +388,9 @@ class MsgAction {
 					payload: effectivePayload !== undefined ? effectivePayload : null,
 					...(ok ? {} : { reason: 'patch_failed' }),
 				});
+				if (ok) {
+					emitExecuted();
+				}
 				return ok;
 			}
 
@@ -358,6 +402,7 @@ class MsgAction {
 						noop: true,
 						payload: effectivePayload !== undefined ? effectivePayload : null,
 					});
+					emitExecuted();
 					return true;
 				}
 				const ok = this.msgStore?.removeMessage?.(
@@ -370,6 +415,9 @@ class MsgAction {
 					payload: effectivePayload !== undefined ? effectivePayload : null,
 					...(ok ? {} : { reason: 'patch_failed' }),
 				});
+				if (ok) {
+					emitExecuted();
+				}
 				return ok;
 			}
 
@@ -414,6 +462,9 @@ class MsgAction {
 					notifyAt,
 					...(ok ? {} : { reason: 'patch_failed' }),
 				});
+				if (ok) {
+					emitExecuted();
+				}
 				return ok;
 			}
 
@@ -435,6 +486,7 @@ class MsgAction {
 				this.adapter?.log?.debug?.(
 					`MsgAction.execute('${msgRef}'): non-core action.type '${type}' (noop in core)`,
 				);
+				emitExecuted();
 				return true;
 			}
 

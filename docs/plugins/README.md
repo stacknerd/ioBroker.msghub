@@ -154,6 +154,12 @@ Example: ingest plugin skeleton:
 	      // decide: ignore / create / patch
       // writes go through ctx.api.store.*
     },
+		onAction(actionInfo, ctx) {
+			// optional: react to executed message actions (ctx.meta.event === MsgConstants.action.events.executed)
+			// example use cases:
+			// - treat "close" as "done" and update plugin-owned runtime state
+			// - implement plugin-specific behavior for action.type === "custom"
+		},
   };
 }
 

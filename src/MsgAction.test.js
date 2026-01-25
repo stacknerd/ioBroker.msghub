@@ -198,6 +198,64 @@ describe('MsgAction', () => {
 			expect(recorded[0].payload.payload).to.equal(null);
 		});
 
+	it('dispatches executed actions to msgIngest when available', () => {
+		const { adapter } = createAdapter();
+		let dispatched = null;
+		let dispatchedMeta = null;
+		const store = {
+			getMessageByRef: () => ({
+				ref: 'r1',
+				actions: [{ id: 'ack1', type: MsgConstants.actions.type.ack }],
+				lifecycle: { state: MsgConstants.lifecycle.state.open },
+				timing: { notifyAt: 123 },
+			}),
+			updateMessage: () => true,
+			msgIngest: {
+				dispatchAction: (actionInfo, meta) => {
+					dispatched = actionInfo;
+					dispatchedMeta = meta;
+				},
+			},
+		};
+		const msgAction = new MsgAction(adapter, MsgConstants, store);
+
+		withFixedNow(1000, () => {
+			expect(msgAction.execute({ ref: 'r1', actionId: 'ack1' })).to.equal(true);
+		});
+
+		expect(dispatchedMeta).to.deep.equal({ event: MsgConstants.action.events.executed });
+		expect(dispatched).to.include({ ref: 'r1', actionId: 'ack1', type: 'ack', ts: 1000 });
+		expect(dispatched).to.have.property('payload', null);
+		expect(dispatched).to.have.property('message');
+		expect(dispatched.message.ref).to.equal('r1');
+	});
+
+	it('does not dispatch to msgIngest when action execution fails', () => {
+		const { adapter } = createAdapter();
+		let dispatched = 0;
+		const store = {
+			getMessageByRef: () => ({
+				ref: 'r1',
+				actions: [{ id: 'ack1', type: MsgConstants.actions.type.ack }],
+				lifecycle: { state: MsgConstants.lifecycle.state.open },
+				timing: { notifyAt: 123 },
+			}),
+			updateMessage: () => false,
+			msgIngest: {
+				dispatchAction: () => {
+					dispatched += 1;
+				},
+			},
+		};
+		const msgAction = new MsgAction(adapter, MsgConstants, store);
+
+		withFixedNow(1000, () => {
+			expect(msgAction.execute({ ref: 'r1', actionId: 'ack1' })).to.equal(false);
+		});
+
+		expect(dispatched).to.equal(0);
+	});
+
 	it('acks: blocked by policy when message is already acked', () => {
 		const { adapter } = createAdapter();
 		let updates = 0;

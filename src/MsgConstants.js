@@ -68,5 +68,10 @@ const MsgConstants = Object.freeze({
 			expired: 'expired',
 		}),
 	}),
+	action: Object.freeze({
+		events: Object.freeze({
+			executed: 'executed',
+		}),
+	}),
 });
 module.exports = { MsgConstants };
