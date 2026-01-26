@@ -20,6 +20,7 @@ Examples:
 
 - “Warn me if the humidity goes outside 35–60%.”
 - “Warn me if a sensor has not reported anything for 12 hours.”
+- “Remind me every 150 dishwasher cycles (recurring task).”
 - “When a valve turns on, I expect the water meter to increase within 10 minutes.”
 - “My value never settles / keeps drifting for too long.”
 - “Detect a session: started / ended (e.g. washing machine).”
@@ -42,6 +43,7 @@ Examples:
 ### Choosing the right rule type (quick decision help)
 
 - If the problem is “too high/too low / outside a range / wrong boolean”: use **Threshold**.
+- If the problem is “recurring task every X units / every X time”: use **Cycle**.
 - If the problem is “sensor does not report anymore”: use **Freshness**.
 - If the problem is “when A is active, B must react within time X”: use **Dependency (Trigger)**.
 - If the problem is “value never calms down / keeps trending for too long”: use **Non-settling**.
@@ -196,6 +198,32 @@ Examples:
 
 - Temperature sensor: “at least one update every 12 hours”
 - Heartbeat / keepalive: “at least once every 5 minutes”
+
+### Cycle (recurring tasks based on a counter and/or time)
+
+Use Cycle for recurring tasks that are driven by a counter (e.g. operating hours, number of runs, rainfall in mm).
+
+Examples:
+
+- Service every 2000 hours (2000h, 4000h, 6000h, …)
+- Refill dishwasher salt every 150 runs
+
+How it behaves:
+
+- IngestStates maintains a persistent `subCounter` (delta sum) derived from the target counter.
+  - If the source counter increases: `subCounter += (new - old)`
+  - If the source counter decreases/resets: the decrease is ignored for `subCounter`, but the internal baseline is updated.
+- A message is generated when:
+  - `subCounter >= period` (count threshold), and/or
+  - an optional time limit since the last reset expires (whichever comes first).
+- Reset:
+  - Official reset: close the message (MsgHub `close` action).
+  - External reset request: write `subCounter = 0` (ack:false) under the plugin’s own state tree.
+
+Internal states for visualization:
+
+- IngestStates creates its own states under `msghub.<instance>.IngestStates.0.cycle.<targetId>.*`
+  (the `targetId` is used as-is, so the path can be long but stays readable).
 
 ### Dependency (Trigger): “When A happens, B must react”
 

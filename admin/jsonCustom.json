@@ -129,6 +129,10 @@
 							"value": "threshold"
 						},
 						{
+							"label": "msghub.i18n.IngestStates.admin.jsonCustom.mode.ruleType.option.cycle.label",
+							"value": "cycle"
+						},
+						{
 							"label": "msghub.i18n.IngestStates.admin.jsonCustom.mode.ruleType.option.triggered.label",
 							"value": "triggered"
 						},
@@ -178,6 +182,18 @@
 					"xl": 12,
 					"style": { "whiteSpace": "pre-wrap" }
 				},
+				"_modeCycleInfo": {
+					"newLine": true,
+					"hidden": "((data['managedMeta-managedMessage']) && ((data['managedMeta-managedBy'] || '').indexOf('IngestStates.') === -1)) || ((data.mode || data['mode']) !== 'cycle')",
+					"type": "staticText",
+					"text": "msghub.i18n.IngestStates.admin.jsonCustom.mode.description.cycle.text",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12,
+					"style": { "whiteSpace": "pre-wrap" }
+				},
 				"_modeTriggeredInfo": {
 					"newLine": true,
 					"hidden": "((data['managedMeta-managedMessage']) && ((data['managedMeta-managedBy'] || '').indexOf('IngestStates.') === -1)) || ((data.mode || data['mode']) !== 'triggered')",
@@ -207,6 +223,119 @@
 					"hidden": "((data['managedMeta-managedMessage']) && ((data['managedMeta-managedBy'] || '').indexOf('IngestStates.') === -1)) || ((data.mode || data['mode']) !== 'session')",
 					"type": "staticText",
 					"text": "msghub.i18n.IngestStates.admin.jsonCustom.mode.description.session.text",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12,
+					"style": { "whiteSpace": "pre-wrap" }
+				}
+			}
+		},
+		"cycle": {
+			"type": "panel",
+			"label": "msghub.i18n.IngestStates.admin.jsonCustom.rules.cycle.panel.label",
+			"hidden": "((data['managedMeta-managedMessage']) && ((data['managedMeta-managedBy'] || '').indexOf('IngestStates.') === -1)) || ((data.mode || data['mode']) !== 'cycle')",
+			"items": {
+				"_cycH0": {
+					"type": "header",
+					"size": 2,
+					"text": "msghub.i18n.IngestStates.admin.jsonCustom.rules.cycle.header.text",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12
+				},
+				"_cycInfo0": {
+					"newLine": true,
+					"type": "staticText",
+					"text": "msghub.i18n.IngestStates.admin.jsonCustom.rules.cycle.info.text",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12,
+					"style": { "whiteSpace": "pre-wrap" }
+				},
+				"cyc-period": {
+					"newLine": true,
+					"type": "number",
+					"label": "msghub.i18n.IngestStates.admin.jsonCustom.rules.cycle.field.period.label",
+					"help": "msghub.i18n.IngestStates.admin.jsonCustom.rules.cycle.field.period.help",
+					"xs": 12,
+					"sm": 6,
+					"md": 3,
+					"lg": 3,
+					"xl": 3,
+					"min": 0,
+					"default": 25
+				},
+				"cyc-time": {
+					"type": "number",
+					"label": "msghub.i18n.IngestStates.admin.jsonCustom.rules.cycle.field.time.value.label",
+					"help": "msghub.i18n.IngestStates.admin.jsonCustom.rules.cycle.field.time.value.help",
+					"xs": 12,
+					"sm": 3,
+					"md": 3,
+					"lg": 3,
+					"xl": 3,
+					"min": 0,
+					"default": 0
+				},
+				"cyc-timeUnit": {
+					"type": "select",
+					"label": "msghub.i18n.IngestStates.admin.jsonCustom.common.unit.label",
+					"xs": 12,
+					"sm": 3,
+					"md": 3,
+					"lg": 3,
+					"xl": 3,
+					"default": 3600,
+					"options": [
+						{
+							"label": "msghub.i18n.IngestStates.admin.jsonCustom.common.unit.option.minutes.label",
+							"value": 60
+						},
+						{
+							"label": "msghub.i18n.IngestStates.admin.jsonCustom.common.unit.option.hours.label",
+							"value": 3600
+						},
+						{
+							"label": "msghub.i18n.IngestStates.admin.jsonCustom.common.unit.option.days.label",
+							"value": 86400
+						}
+					]
+				},
+				"_cycH4Message": {
+					"newLine": true,
+					"type": "header",
+					"size": 4,
+					"text": "msghub.i18n.IngestStates.admin.jsonCustom.message.header.text",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12
+				},
+				"msg-CycleId": {
+					"newLine": true,
+					"type": "selectSendTo",
+					"label": "msghub.i18n.IngestStates.admin.jsonCustom.message.field.preset.label",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12,
+					"default": "",
+					"command": "ingestStates.presets.selectOptions.cycle",
+					"noTranslation": true,
+					"manual": false
+				},
+				"_cycMessageInfo": {
+					"newLine": true,
+					"type": "staticText",
+					"text": "msghub.i18n.IngestStates.admin.jsonCustom.message.field.info.editor.text",
 					"xs": 12,
 					"sm": 12,
 					"md": 12,
