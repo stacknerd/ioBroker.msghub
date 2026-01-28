@@ -27,6 +27,8 @@
 
 		let cachedConstants = null;
 		let constantsLoadPromise = null;
+		let cachedIngestStatesConstants = null;
+		let ingestStatesConstantsPromise = null;
 
 		function pick(obj, path) {
 			const parts = typeof path === 'string' ? path.split('.') : [];
@@ -53,6 +55,21 @@
 				return cachedConstants;
 			})();
 			return constantsLoadPromise;
+		}
+
+		async function ensureIngestStatesConstantsLoaded() {
+			if (ingestStatesConstantsPromise) {
+				return ingestStatesConstantsPromise;
+			}
+			ingestStatesConstantsPromise = (async () => {
+				try {
+					cachedIngestStatesConstants = await sendTo('admin.ingestStates.constants.get', {});
+				} catch {
+					cachedIngestStatesConstants = null;
+				}
+				return cachedIngestStatesConstants;
+			})();
+			return ingestStatesConstantsPromise;
 		}
 
 		function resolveDynamicOptions(options) {
@@ -936,9 +953,13 @@
 			return ingestStatesSchemaPromise;
 		}
 
-		function renderIngestStatesBulkApply({ instances, schema }) {
+		function renderIngestStatesBulkApply({ instances, schema, ingestConstants }) {
 			const inst = Array.isArray(instances) ? instances.find(x => x?.instanceId === 0) : null;
 			const enabled = inst?.enabled === true;
+			const fallbackDefaults =
+				ingestConstants && typeof ingestConstants.jsonCustomDefaults === 'object'
+					? ingestConstants.jsonCustomDefaults
+					: null;
 
 			const lsKey = `msghub.bulkApply.${adapterNamespace}`;
 			const loadState = () => {
@@ -993,11 +1014,19 @@
 				return (Array.isArray(list) ? list : []).map(v => String(v)).join('|');
 			}
 
-			function collectWarnings(cfg) {
-				const warnings = [];
+				function collectWarnings(cfg) {
+					const warnings = [];
 
-				const mode = readCfg(cfg, 'mode');
-				const allowedModes = ['threshold', 'freshness', 'triggered', 'nonSettling', 'session'];
+					const fields = schema?.fields && typeof schema.fields === 'object' ? schema.fields : {};
+					const mode = readCfg(cfg, 'mode');
+					const modeInfo = fields?.mode && typeof fields.mode === 'object' ? fields.mode : null;
+					const modeOptions = Array.isArray(modeInfo?.options) ? modeInfo.options : [];
+					const allowedModes = modeOptions
+					.filter(v => typeof v === 'string' && v.trim())
+					.map(v => v.trim());
+				if (allowedModes.length === 0) {
+					allowedModes.push('threshold', 'cycle', 'freshness', 'triggered', 'nonSettling', 'session');
+				}
 				const modeStr = typeof mode === 'string' ? mode.trim() : '';
 				if (!modeStr) {
 					warnings.push(`WARNING: missing mode detected. valid options are: ${allowedModes.join('|')}`);
@@ -1014,8 +1043,7 @@
 					}
 				}
 
-				const fields = schema?.fields && typeof schema.fields === 'object' ? schema.fields : {};
-				for (const [key, info] of Object.entries(fields)) {
+					for (const [key, info] of Object.entries(fields)) {
 					if (!info || typeof info !== 'object') {
 						continue;
 					}
@@ -1188,6 +1216,14 @@
 					);
 					lines.push(`- Alerts when the state has no ${evaluateBy} for longer than ${thr || '(not set)'}.`);
 					lines.push('- Actions: ack, snooze (4h), close (only when auto-remove is off).');
+				} else if (mode === 'cycle') {
+					const period = readCfg(cfg, 'cyc-period');
+					const time = formatDurationValueUnit(readCfg(cfg, 'cyc-time'), readCfg(cfg, 'cyc-timeUnit'));
+					lines.push(`- Cycle rule: triggers after ${period || '(period not set)'} steps.`);
+					if (time) {
+						lines.push(`- Resets/periods are aligned to ${time}.`);
+					}
+					lines.push('- Actions: ack, snooze (4h), close (only when auto-remove is off).');
 				} else if (mode === 'triggered') {
 					const windowDur = formatDurationValueUnit(
 						readCfg(cfg, 'trg-windowValue'),
@@ -1239,89 +1275,7 @@
 			const defaultCustom =
 				schema?.defaults && typeof schema.defaults === 'object'
 					? schema.defaults
-					: {
-							enabled: true,
-							mode: 'threshold',
-
-							// Threshold (thr-*)
-							'thr-mode': 'lt',
-							'thr-value': 10,
-							'thr-min': 0,
-							'thr-max': 100,
-							'thr-hysteresis': 0,
-							'thr-minDurationValue': 0,
-							'thr-minDurationUnit': 60,
-
-							// Freshness (fresh-*)
-							'fresh-everyValue': 60,
-							'fresh-everyUnit': 60,
-							'fresh-evaluateBy': 'ts',
-
-							// Triggered / dependency (trg-*)
-							'trg-id': '',
-							'trg-operator': 'eq',
-							'trg-valueType': 'boolean',
-							'trg-valueBool': true,
-							'trg-valueNumber': 0,
-							'trg-valueString': '',
-							'trg-windowValue': 5,
-							'trg-windowUnit': 60,
-							'trg-expectation': 'changed',
-							'trg-minDelta': 0,
-							'trg-threshold': 0,
-
-							// Non-settling (nonset-*)
-							'nonset-profile': 'activity',
-							'nonset-minDelta': 0,
-							'nonset-maxContinuousValue': 180,
-							'nonset-maxContinuousUnit': 60,
-							'nonset-quietGapValue': 15,
-							'nonset-quietGapUnit': 60,
-							'nonset-direction': 'up',
-							'nonset-trendWindowValue': 6,
-							'nonset-trendWindowUnit': 3600,
-							'nonset-minTotalDelta': 0,
-
-							// Session (sess-*)
-							'sess-onOffId': '',
-							'sess-onOffActive': 'truthy',
-							'sess-onOffValue': 'true',
-							'sess-startThreshold': 50,
-							'sess-startMinHoldValue': 0,
-							'sess-startMinHoldUnit': 1,
-							'sess-stopThreshold': 15,
-							'sess-stopDelayValue': 5,
-							'sess-stopDelayUnit': 60,
-							'sess-cancelStopIfAboveStopThreshold': true,
-							'sess-energyCounterId': '',
-							'sess-pricePerKwhId': '',
-
-							// Message (msg-*)
-							'msg-kind': 'status',
-							'msg-level': 10,
-							'msg-title': '',
-							'msg-text': '',
-							'msg-consumables': '',
-							'msg-tools': '',
-							'msg-reason': '',
-							'msg-task': '',
-							'msg-audienceTags': '',
-							'msg-audienceChannels': '',
-							'msg-cooldownValue': 60,
-							'msg-cooldownUnit': 60,
-							'msg-remindValue': 0,
-							'msg-remindUnit': 3600,
-							'msg-resetOnNormal': true,
-
-							// Session start message (msg-sessionStart*)
-							'msg-sessionStartEnabled': false,
-							'msg-sessionStartKind': 'status',
-							'msg-sessionStartLevel': 10,
-							'msg-sessionStartTitle': '',
-							'msg-sessionStartText': '',
-							'msg-sessionStartAudienceTags': '',
-							'msg-sessionStartAudienceChannels': '',
-						};
+					: fallbackDefaults || { enabled: true, mode: 'threshold' };
 
 			const elCustom = h('textarea', {
 				class: 'msghub-bulk-apply-textarea',
@@ -1704,8 +1658,25 @@
 			]);
 		}
 
-		function renderIngestStatesMessagePresetsTool() {
-			const SCHEMA = 'msghub.IngestStatesMessagePreset.v1';
+		function renderIngestStatesMessagePresetsTool(options) {
+			const root = options && typeof options === 'object' ? options : null;
+			const ingestConstants =
+				root && root.ingestConstants && typeof root.ingestConstants === 'object'
+					? root.ingestConstants
+					: null;
+			const presetSchema =
+				ingestConstants && typeof ingestConstants.presetSchema === 'string' ? ingestConstants.presetSchema : '';
+			const presetTemplate =
+				ingestConstants && typeof ingestConstants.presetTemplateV1 === 'object'
+					? ingestConstants.presetTemplateV1
+					: null;
+
+			if (!presetSchema || !presetTemplate) {
+				return h('div', {
+					class: 'msghub-error',
+					text: 'Preset editor unavailable: IngestStates constants not loaded.',
+				});
+			}
 
 			const isPresetId = value => {
 				const s = typeof value === 'string' ? value.trim() : '';
@@ -1724,46 +1695,48 @@
 
 			const cloneJson = value => JSON.parse(JSON.stringify(value ?? null));
 
-				const defaultPreset = ({ presetId = '', description = '', ownedBy = '', kind = 'status', level = 20 } = {}) => ({
-					schema: SCHEMA,
-					presetId: String(presetId || '').trim(),
-					description: typeof description === 'string' ? description : '',
-					ownedBy: typeof ownedBy === 'string' && ownedBy.trim() ? ownedBy.trim() : null,
-					message: {
-						kind,
-						level,
-					title: '',
-					text: '',
-					timing: {
-						timeBudget: 0,
-						dueInMs: 0,
-						cooldown: 0,
-						remindEvery: 0,
-					},
-					details: {
-						task: '',
-						reason: '',
-						tools: [],
-						consumables: [],
-					},
-					audience: {
-						tags: [],
-						channels: { include: [], exclude: [] },
-					},
-					actions: [],
-				},
-				policy: {
-					resetOnNormal: true,
-				},
-				ui: {
-					timingUnits: {
-						timeBudgetUnit: 60000,
-						dueInUnit: 3600000,
-						cooldownUnit: 1000,
-						remindEveryUnit: 3600000,
-					},
-				},
-			});
+			const buildPresetBase = () => cloneJson(presetTemplate);
+
+			const defaultPreset = ({ presetId = '', description = '', ownedBy = '', kind = 'status', level = 20 } = {}) => {
+				const preset = buildPresetBase();
+				preset.schema = presetSchema;
+				preset.presetId = String(presetId || '').trim();
+				preset.description = typeof description === 'string' ? description : '';
+				preset.ownedBy = typeof ownedBy === 'string' && ownedBy.trim() ? ownedBy.trim() : null;
+				if (!preset.message || typeof preset.message !== 'object') {
+					preset.message = {};
+				}
+				preset.message.kind = kind;
+				preset.message.level = level;
+				preset.message.title = typeof preset.message.title === 'string' ? preset.message.title : '';
+				preset.message.text = typeof preset.message.text === 'string' ? preset.message.text : '';
+					if (!preset.message.timing || typeof preset.message.timing !== 'object') {
+						preset.message.timing = { timeBudget: 0, dueInMs: 0, expiresInMs: 0, cooldown: 0, remindEvery: 0 };
+					}
+				if (!preset.message.details || typeof preset.message.details !== 'object') {
+					preset.message.details = { task: '', reason: '', tools: [], consumables: [] };
+				}
+				if (!preset.message.audience || typeof preset.message.audience !== 'object') {
+					preset.message.audience = { tags: [], channels: { include: [], exclude: [] } };
+				}
+				if (!Array.isArray(preset.message.actions)) {
+					preset.message.actions = [];
+				}
+				if (!preset.policy || typeof preset.policy !== 'object') {
+					preset.policy = { resetOnNormal: true };
+				}
+				if (!preset.ui || typeof preset.ui !== 'object') {
+					preset.ui = {
+						timingUnits: {
+							timeBudgetUnit: 60000,
+							dueInUnit: 3600000,
+							cooldownUnit: 1000,
+							remindEveryUnit: 3600000,
+						},
+					};
+				}
+				return preset;
+			};
 
 			let presets = [];
 
@@ -1969,8 +1942,8 @@
 				if (!draft || typeof draft !== 'object') {
 					return 'Invalid preset';
 				}
-				if (draft.schema !== SCHEMA) {
-					return `Invalid schema (expected '${SCHEMA}')`;
+				if (draft.schema !== presetSchema) {
+					return `Invalid schema (expected '${presetSchema}')`;
 				}
 				if (!isPresetId(draft.presetId)) {
 					return 'Invalid presetId (allowed: A-Z a-z 0-9 _ -)';
@@ -2310,26 +2283,41 @@
 				}
 				fields.push(fTimeBudget);
 
-				const fDueIn = buildFieldInput({
-					type: 'number',
-					key: 'timing_dueInMs',
-					label: 'Due in',
-					value: draft?.message?.timing?.dueInMs,
-					unit: 'ms',
-				});
+					const fDueIn = buildFieldInput({
+						type: 'number',
+						key: 'timing_dueInMs',
+						label: 'Due in',
+						value: draft?.message?.timing?.dueInMs,
+						unit: 'ms',
+					});
 				if (fDueIn?.input) {
 					fDueIn.input.disabled = disabled;
 				}
 				if (fDueIn?.select) {
 					fDueIn.select.disabled = disabled;
 				}
-				fields.push(fDueIn);
+					fields.push(fDueIn);
 
-				const fCooldown = buildFieldInput({
-					type: 'number',
-					key: 'timing_cooldown',
-					label: 'Cooldown',
-					value: draft?.message?.timing?.cooldown,
+					const fExpiresIn = buildFieldInput({
+						type: 'number',
+						key: 'timing_expiresInMs',
+						label: 'Expires in',
+						value: draft?.message?.timing?.expiresInMs,
+						unit: 'ms',
+					});
+					if (fExpiresIn?.input) {
+						fExpiresIn.input.disabled = disabled;
+					}
+					if (fExpiresIn?.select) {
+						fExpiresIn.select.disabled = disabled;
+					}
+					fields.push(fExpiresIn);
+
+					const fCooldown = buildFieldInput({
+						type: 'number',
+						key: 'timing_cooldown',
+						label: 'Cooldown',
+						value: draft?.message?.timing?.cooldown,
 					unit: 'ms',
 				});
 				if (fCooldown?.input) {
@@ -2588,6 +2576,7 @@
 							updateMessageNested('text', textField.getValue());
 						updateMessageNested('timing.timeBudget', fTimeBudget?.getValue ? fTimeBudget.getValue() || 0 : 0);
 						updateMessageNested('timing.dueInMs', fDueIn?.getValue ? fDueIn.getValue() || 0 : 0);
+						updateMessageNested('timing.expiresInMs', fExpiresIn?.getValue ? fExpiresIn.getValue() || 0 : 0);
 						updateMessageNested('timing.cooldown', fCooldown?.getValue ? fCooldown.getValue() || 0 : 0);
 						updateMessageNested(
 							'timing.remindEvery',
@@ -2634,10 +2623,12 @@
 				// Timing fields
 				watch(fTimeBudget.input);
 				watch(fTimeBudget.select);
-				watch(fDueIn.input);
-				watch(fDueIn.select);
-				watch(fCooldown.input);
-				watch(fCooldown.select);
+					watch(fDueIn.input);
+					watch(fDueIn.select);
+					watch(fExpiresIn.input);
+					watch(fExpiresIn.select);
+					watch(fCooldown.input);
+					watch(fCooldown.select);
 				watch(fRemindEvery.input);
 				watch(fRemindEvery.select);
 
@@ -2678,12 +2669,20 @@
 			return el;
 		}
 
-		function renderIngestStatesTools({ instances, schema }) {
+		function renderIngestStatesTools({ instances, schema, ingestConstants }) {
 			const body = h('div', { class: 'msghub-tools-root' });
 
 			const tabs = [
-				{ id: 'bulk', label: 'Batch edit', render: () => renderIngestStatesBulkApply({ instances, schema }) },
-				{ id: 'presets', label: 'Message presets', render: () => renderIngestStatesMessagePresetsTool() },
+				{
+					id: 'bulk',
+					label: 'Batch edit',
+					render: () => renderIngestStatesBulkApply({ instances, schema, ingestConstants }),
+				},
+				{
+					id: 'presets',
+					label: 'Message presets',
+					render: () => renderIngestStatesMessagePresetsTool({ ingestConstants }),
+				},
 			];
 
 			let activeId = 'bulk';
@@ -2803,7 +2802,8 @@
 					.then(async () => {
 						await ensureConstantsLoaded();
 						const schema = await ensureIngestStatesSchema();
-						body.replaceChildren(renderIngestStatesTools({ instances: instList, schema }));
+						const ingestConstants = await ensureIngestStatesConstantsLoaded();
+						body.replaceChildren(renderIngestStatesTools({ instances: instList, schema, ingestConstants }));
 					})
 					.catch(err => {
 						body.replaceChildren(

@@ -119,6 +119,34 @@ Formatting note for `durationSince` / `durationUntil`:
 
 Tip: start with defaults. Only customize title/text once the rule behavior is correct.
 
+#### Metrics reference (by rule type)
+
+Metrics are available in templates as `{{m.<metricKey>}}`.
+
+- `{{m.<metricKey>}}` renders the value + unit when possible
+- `{{m.<metricKey>.val}}` renders the raw value
+- `{{m.<metricKey>.unit}}` renders the unit
+
+All timestamp metrics use **milliseconds** (ms) since epoch.
+
+Domain timestamps live in the message timing, not in metrics:
+
+- `timing.startAt`: planned/actual start (set by the rule when known)
+- `timing.endAt`: planned/actual end (used by Session end)
+- `timing.dueAt`: deadline derived from preset `dueInMs` (relative to `startAt`)
+
+These are useful for UI sorting/filters. For text templates, prefer metrics like
+`{{m.session-start|datetime}}` or `{{m.cycle-timeBasedDueAt.val|durationUntil}}`.
+
+| Rule | Metrics (keys) | Meaning (short) |
+| --- | --- | --- |
+| Threshold | `state-name`, `state-value`, `state-min`, `state-max` | Name/value of the target; recovery bounds used to clear the message. |
+| Freshness | `state-name`, `state-value`, `state-ts`, `state-lc` | Name/value; last update (`ts`) and last change (`lc`) timestamps. |
+| Cycle | `state-name`, `cycle-lastResetAt`, `cycle-subCounter`, `cycle-period?`, `cycle-remaining?`, `cycle-timeMs?`, `cycle-timeBasedDueAt?` | Name; last reset; progress since reset; optional count/time targets and next time-based due timestamp. |
+| Triggered | `state-value`, `trigger-value` | Current value of target and trigger (for debugging expectation failures). |
+| Non-settling | `state-value`, `trendStartedAt`, `trendStartValue`, `trendMin`, `trendMax`, `trendMinToMax`, `trendDir` | Trend/activity diagnostics: when instability started, min/max span, and direction. |
+| Session | `session-start`, `session-startval`, `session-counter`, `session-cost` | Session start time, counter baseline, delta since start, and computed cost. |
+
 ---
 
 ## 1.1 Rule types (explained with examples)

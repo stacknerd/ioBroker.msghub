@@ -862,7 +862,9 @@
 					"xl": 12,
 					"default": "",
 					"command": "ingestStates.presets.selectOptions.triggered",
+					"jsonData": "{\"subset\": ${JSON.stringify(data['trg-expectation'] || '')}}",
 					"noTranslation": true,
+					"alsoDependsOn": ["trg-expectation"],
 					"manual": false
 				},
 				"_trgMessageInfo": {
@@ -1182,7 +1184,9 @@
 					"xl": 12,
 					"default": "",
 					"command": "ingestStates.presets.selectOptions.nonSettling",
+					"jsonData": "{\"subset\": ${JSON.stringify(data['nonset-profile'] || '')}}",
 					"noTranslation": true,
+					"alsoDependsOn": ["nonset-profile"],
 					"manual": false
 				},
 				"_nsMessageInfo": {
