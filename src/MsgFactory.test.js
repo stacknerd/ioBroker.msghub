@@ -175,6 +175,29 @@ function buildBase(overrides = {}) {
 		});
 		});
 
+		describe('icon', () => {
+			it('normalizes icon (trim, remove control chars, max length 10)', () => {
+				const { factory, logs } = makeFactory();
+				const msg = factory.createMessage(buildBase({ icon: '  A\tB\nC\u0007D  ' }));
+				expect(msg.icon).to.equal('A B C D');
+				expect(logs.warn).to.have.length(0);
+			});
+
+			it('truncates icon to max length 10 and logs a warning', () => {
+				const { factory, logs } = makeFactory();
+				const msg = factory.createMessage(buildBase({ icon: 'ABCDEFGHIJKL' }));
+				expect(msg.icon).to.equal('ABCDEFGHIJ');
+				expect(logs.warn.some(l => String(l).includes(`'icon' truncated`))).to.equal(true);
+			});
+
+			it('omits icon when invalid', () => {
+				const { factory } = makeFactory();
+				const msg = factory.createMessage(buildBase({ icon: 123 }));
+				expect(msg).to.be.an('object');
+				expect(msg).to.not.have.property('icon');
+			});
+		});
+
 		describe('lifecycle', () => {
 			it('defaults lifecycle.state to open', () => {
 				const { factory } = makeFactory();
@@ -502,6 +525,17 @@ describe('MsgFactory.applyPatch', () => {
 
 		expect(updated.title).to.equal('Test title');
 		expect(updated.timing.updatedAt).to.equal(undefined);
+	});
+
+	it('patches icon and clears it with null', () => {
+		const { factory } = makeFactory();
+		const msg = factory.createMessage(buildBase({ icon: '🌡️' }));
+
+		const updated = factory.applyPatch(msg, { icon: ' 12345678901 ' });
+		expect(updated.icon).to.equal('1234567890');
+
+		const cleared = factory.applyPatch(updated, { icon: null });
+		expect(cleared).to.not.have.property('icon');
 	});
 
 	it('sets updatedAt when timing.endAt changes', () => {

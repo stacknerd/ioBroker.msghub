@@ -192,9 +192,8 @@ Gate check-in/check-out:
 
 For each matching message, the plugin sends:
 
-- `message`: `message.text` with HTML tags removed
-- `title`: `<display.titleFullPrefix> <message.title>` (trimmed; empty when `message.title` is empty)
-  - If `message.title` is empty, the `display.textFullPrefix` (if present) is prepended to the Pushover `message` instead.
+- `message`: `message.display.text` (trimmed; falls back to `message.text` when missing), with HTML tags removed
+- `title`: `message.display.title` (trimmed; falls back to `<message.icon> <message.title>` when missing)
 - `priority`: fixed mapping by `message.level`:
   - `none` / `info` → `-2`
   - `notice` → `-1`

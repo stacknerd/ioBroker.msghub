@@ -14,7 +14,8 @@ This is the canonical field set used by MsgHub (grouped for readability; optiona
 Message {
   ref: string
 
-  // Presentation (required)
+  // Presentation
+  icon?: string
   title: string
   text: string
 
@@ -124,12 +125,10 @@ Message {
   // Presentation helpers (view-only; optional)
   // Computed by the renderer on output and not intended to be persisted by producers.
   display?: {
-    titleLevelPrefix: string
-    titleKindPrefix: string
-    titleFullPrefix: string
-    textLevelPrefix: string
-    textKindPrefix: string
-    textFullPrefix: string
+    icon: string
+    title: string
+    text: string
+    renderedDataTs?: number
   }
 }
 ```
@@ -153,14 +152,17 @@ Best practice:
 
 ---
 
-## Presentation: `title` and `text`
+## Presentation: `icon`, `title` and `text`
 
-`title` and `text` are the primary, human-facing fields:
+`icon`, `title` and `text` are the primary, human-facing presentation fields:
 
+- `icon` (optional): a small icon token for quick scanning (usually an emoji, but any short string is allowed).
 - `title`: short headline (UI list rows, notification subject)
 - `text`: free-form description (UI details, notification body, TTS input)
 
-Both fields are required when creating a message and are replaced as-is when patched.
+`title` and `text` are required when creating a message and are replaced as-is when patched.
+`icon` is optional; when present it should stay short (MsgFactory normalizes it and caps it to 10 characters) so it does
+not turn into an alternative title.
 
 ---
 
@@ -344,7 +346,7 @@ Messages can track coarse completion state in `progress`:
 
 Messages may include optional, structured details in `details`.
 
-Unlike `title` and `text` (which are the primary, human-facing presentation fields), `details` is meant to carry **plain, explicit hints**
+Unlike `icon`, `title` and `text` (which are the primary, human-facing presentation fields), `details` is meant to carry **plain, explicit hints**
 that downstream logic can consume without having to parse or reinterpret prose. Typical use cases are templates, TTS phrasing, grouping, or later AI enhancements.
 
 Shape:

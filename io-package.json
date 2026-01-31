@@ -43,15 +43,8 @@
 			"uk": "центр для всіх ваших повідомлень, завдань і сповіщень",
 			"zh-cn": "所有消息、任务和通知的中心"
 		},
-		"authors": [
-			"Ben <iobroker@hiddenplaces.eu>"
-		],
-		"keywords": [
-			"template",
-			"automation",
-			"IoT",
-			"integration"
-		],
+		"authors": ["Ben <iobroker@hiddenplaces.eu>"],
+		"keywords": ["template", "automation", "IoT", "integration"],
 		"licenseInformation": {
 			"type": "free",
 			"license": "MIT"
@@ -71,9 +64,7 @@
 		"messagebox": true,
 		"dataFolder": "files/msghub.%INSTANCE%",
 		"supportCustoms": true,
-		"encryptedNative": [
-			"aiOpenAiApiKey"
-		],
+		"encryptedNative": ["aiOpenAiApiKey"],
 		"adminUI": {
 			"custom": "json",
 			"config": "json",
@@ -108,8 +99,6 @@
 		]
 	},
 	"native": {
-		"option1": true,
-		"option2": "42",
 		"aiEnabled": false,
 		"aiProvider": "openai",
 		"aiOpenAiApiKey": "",
@@ -121,8 +110,8 @@
 		"aiPurposeModelOverrides": "[]",
 		"aiTimeoutMs": 30000,
 		"aiMaxConcurrency": 2,
-			"aiRpm": 0,
-			"aiCacheTtlMs": 0,
+		"aiRpm": 0,
+		"aiCacheTtlMs": 0,
 		"createI18nReport": false,
 		"keepPreviousWeeks": 3,
 		"archiveMaxBatchSize": 200,
@@ -134,9 +123,14 @@
 		"rollupKeepDays": 400,
 		"writeIntervalMs": 10000,
 		"locale": "de-DE",
+		"quietHoursEnabled": true,
+		"quietHoursStart": "22:00",
+		"quietHoursEnd": "06:00",
+		"quietHoursMaxLevel": 40,
+		"quietHoursSpreadMin": 60,
 		"prefixLevelNone": "",
-		"prefixLevelInfo": "ℹ️",
-		"prefixLevelNotice": "🔔",
+		"prefixLevelInfo": "",
+		"prefixLevelNotice": "",
 		"prefixLevelWarning": "⚠️",
 		"prefixLevelError": "❌",
 		"prefixLevelCritical": "🛑",
@@ -145,8 +139,13 @@
 		"prefixKindAppointment": "📅",
 		"prefixKindShoppinglist": "🛒",
 		"prefixKindInventorylist": "📦",
-		"prefixFullOrder": "kindLevel"
-		},
+		"renderTitleTemplate": "{{icon}} {{title}}",
+		"renderTextTemplate": "{{levelPrefix}} {{text}}",
+		"renderIconTemplate": "{{icon}}",
+		"aiTestPurpose": "ai-test",
+		"aiTestQuality": "balanced",
+		"aiTestPrompt": "Respond with a short sentence: Hi, i am Message Hub! who are you?"
+	},
 	"objects": [],
 	"instanceObjects": []
 }

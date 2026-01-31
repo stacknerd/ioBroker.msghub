@@ -19,25 +19,22 @@ describe('MsgRender', () => {
 		return { title, text, details, metrics, timing };
 	}
 
-		it('renders a basic metric with unit', () => {
-			const renderer = createRenderer({ locale });
-			const metrics = buildMetrics([['temperature', { val: 21.75, unit: 'C', ts: Date.UTC(2025, 0, 1) }]]);
-			const msg = createMessage({ title: 'Temp {{m.temperature}}', metrics });
+	it('renders a basic metric with unit', () => {
+		const renderer = createRenderer({ locale });
+		const metrics = buildMetrics([['temperature', { val: 21.75, unit: 'C', ts: Date.UTC(2025, 0, 1) }]]);
+		const msg = createMessage({ title: 'Temp {{m.temperature}}', metrics });
 
-			const out = renderer.renderMessage(msg);
-				const nf = new Intl.NumberFormat(locale, { maximumFractionDigits: 2 });
+		const out = renderer.renderMessage(msg);
+		const nf = new Intl.NumberFormat(locale, { maximumFractionDigits: 2 });
 
-				expect(out.title).to.equal(`Temp ${nf.format(21.75)} C`);
-				expect(out).to.have.property('display');
-				expect(out.display).to.include({
-					titleLevelPrefix: '',
-					titleKindPrefix: '',
-					titleFullPrefix: '',
-					textLevelPrefix: '',
-					textKindPrefix: '',
-					textFullPrefix: '',
-				});
-			});
+		expect(out.title).to.equal(`Temp ${nf.format(21.75)} C`);
+		expect(out).to.have.property('display');
+		expect(out.display).to.include({
+			icon: '',
+			title: `Temp ${nf.format(21.75)} C`,
+			text: '',
+		});
+	});
 
 		it('tracks display.renderedDataTs for metrics that were actually rendered', () => {
 			const renderer = createRenderer({ locale });
@@ -79,31 +76,58 @@ describe('MsgRender', () => {
 			expect(out.display).to.not.have.property('renderedDataTs');
 		});
 
-			it('computes display prefixes from render config', () => {
-				const renderer = createRenderer({
-					locale,
-					render: {
-						prefixes: {
-						fullPrefixOrder: 'levelKind',
-						level: { warning: 'WARNUNG' },
-						kind: { task: 'TASK' },
-					},
+	it('renders display.title/text/icon from render templates', () => {
+		const renderer = createRenderer({
+			locale,
+			render: {
+				prefixes: {
+					level: { warning: 'WARNUNG' },
+					kind: { task: 'TASK' },
 				},
-			});
-			const msg = createMessage({ title: 'Hello', text: 'World' });
-			msg.kind = 'task';
-			msg.level = MsgConstants.level.warning;
-
-			const out = renderer.renderMessage(msg);
-			expect(out.display).to.include({
-				titleLevelPrefix: 'WARNUNG',
-				titleKindPrefix: 'TASK',
-				titleFullPrefix: 'WARNUNG TASK',
-				textLevelPrefix: 'WARNUNG',
-				textKindPrefix: 'TASK',
-				textFullPrefix: 'WARNUNG TASK',
-			});
+				templates: {
+					titleTemplate: '{{levelPrefix}} {{kindPrefix}} {{icon}} {{title}}',
+					textTemplate: '{{text}}',
+					iconTemplate: '{{icon}}',
+				},
+			},
 		});
+		const msg = createMessage({ title: 'Hello', text: 'World' });
+		msg.kind = 'task';
+		msg.level = MsgConstants.level.warning;
+		msg.icon = 'X';
+
+		const out = renderer.renderMessage(msg);
+		expect(out.display).to.deep.equal({
+			icon: 'X',
+			title: 'WARNUNG TASK X Hello',
+			text: 'World',
+		});
+		expect(out.display).to.not.have.property('titleFullPrefix');
+	});
+
+	it('allows d.* and t.* in display templates', () => {
+		const renderer = createRenderer({
+			locale,
+			render: {
+				templates: {
+					titleTemplate: '{{d.location}} - {{title}} @{{t.createdAt|datetime}}',
+					textTemplate: '{{text}}',
+					iconTemplate: '{{icon}}',
+				},
+			},
+		});
+		const createdAt = Date.UTC(2025, 0, 1, 10, 30, 0);
+		const msg = createMessage({
+			title: 'Hello',
+			text: 'World',
+			details: { location: 'Kitchen' },
+			timing: { createdAt },
+		});
+
+		const out = renderer.renderMessage(msg);
+		const df = new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' });
+		expect(out.display.title).to.equal(`Kitchen - Hello @${df.format(new Date(createdAt))}`);
+	});
 
 	it('renders explicit val, unit, and ts fields', () => {
 		const renderer = createRenderer({ locale });

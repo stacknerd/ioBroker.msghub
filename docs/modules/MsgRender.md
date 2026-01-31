@@ -44,18 +44,24 @@ Instead of rebuilding the entire title/text every time, a message can contain te
 
 `MsgRender` renders these fields:
 
-- `title` from `msg.title`
-- `text` from `msg.text`
+- `title` from `msg.title` (Stage 1)
+- `text` from `msg.text` (Stage 1)
 - `details` from selected `msg.details` fields
-- `display` (view-only) from message classification and render config
+- `display` (view-only) from Stage-2 render templates
 
-The `display` block is intended for presentation helpers (e.g. prefix tokens) and is not part of the canonical persisted message.
+The `display` block is intended for presentation helpers and is not part of the canonical persisted message.
 
 Additionally, `MsgRender` may attach view-only freshness metadata:
 
 - `display.renderedDataTs` (optional, unix ms): maximum `ts` of metric entries that were actually resolved while rendering
   templates in `title` / `text` / rendered `details` fields. When no metrics are rendered (or no usable `ts` exists),
   this field is omitted.
+
+Stage-2 display output fields:
+
+- `display.icon`: rendered icon string (Stage 2)
+- `display.title`: rendered title string (Stage 2)
+- `display.text`: rendered text string (Stage 2)
 
 Only a small subset of `details` is rendered on purpose (predictability and safety):
 
@@ -71,6 +77,12 @@ All other `details` keys (and non-string values) are left unchanged.
 A placeholder always uses this shape:
 
 `{{ <path> | <filter> | <filter> ... }}`
+
+MsgRender evaluates templates in two stages:
+
+- Stage 1 (message field rendering): templates inside `msg.title`, `msg.text` and selected `msg.details.*` are resolved.
+- Stage 2 (display composition): admin-configured templates compose `display.title`, `display.text`, `display.icon`
+  from Stage-1 strings plus selected fields.
 
 Examples:
 
@@ -144,6 +156,25 @@ Consumables: {{details.consumables}}
 ```
 
 ---
+
+## Stage 2 templates (display composition)
+
+Stage-2 templates are configured in the adapter instance config and are applied after Stage 1.
+
+Available base placeholders:
+
+- `{{title}}`: the Stage-1 rendered message title
+- `{{text}}`: the Stage-1 rendered message text
+- `{{icon}}`: `msg.icon` (canonical icon token; may be empty)
+- `{{kindPrefix}}`: configured prefix token for this message kind
+- `{{levelPrefix}}`: configured prefix token for this message level
+
+Additionally allowed:
+
+- `{{t.*}}` / `{{timing.*}}`: reads from `msg.timing`
+- `{{d.*}}` / `{{details.*}}`: reads from `msg.details` (after Stage-1 details rendering)
+
+Supported filters are the same as Stage 1.
 
 ## Resolution rules (important behavior)
 

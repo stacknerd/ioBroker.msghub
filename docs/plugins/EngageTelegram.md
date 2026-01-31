@@ -212,7 +212,14 @@ Dispatch:
 
 - Only `event === 'due'` is sent as a new Telegram message.
 - Message text uses `parse_mode: 'HTML'`.
-  - MsgHub `message.title` and `message.text` are treated as plain text and escaped.
+  - By default, the plugin uses the renderer-enhanced fields:
+    - `message.display.title`
+    - `message.display.text`
+  - Fallback: if `display.*` is missing, the plugin uses raw fields:
+    - `message.title`
+    - `message.text`
+    - and (optionally) prefixes the title with `message.icon`
+  - Title/text are treated as plain text and escaped.
   - Some command responses (from i18n) intentionally contain lightweight HTML (underline/italics).
 - `disable_notification` is derived from `disableNotificationUpToLevel`.
 - Buttons are rendered as `reply_markup.inline_keyboard` (menu entry point).

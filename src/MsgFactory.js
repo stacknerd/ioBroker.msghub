@@ -34,6 +34,7 @@
  *   ref: string                   // internal unique ID (stable; auto-generated when omitted)
  *
  *   // Presentation
+ *   icon?: string                 // optional small icon token (producer-owned; normalized; max length 10)
  *   title: string                 // UI headline (e.g., "Hallway")
  *   text: string                  // free-form description
  *
@@ -205,6 +206,7 @@ class MsgFactory {
 	 *
 	 * @param {object} [options] Raw message fields.
 	 * @param {string} [options.ref] Stable, printable identifier for the message (required unless auto-ref is used).
+	 * @param {string} [options.icon] Optional small icon token (e.g. emoji); normalized to max length 10.
 	 * @param {string} [options.title] Human readable title shown in the UI (required).
 	 * @param {string} [options.text] Main message body text (required).
 	 * @param {number} [options.level] Severity level from msgconst.level (required).
@@ -224,6 +226,7 @@ class MsgFactory {
 	 */
 	createMessage({
 		ref,
+		icon,
 		title,
 		text,
 		level,
@@ -274,6 +277,7 @@ class MsgFactory {
 			const normOrigin = this._normalizeMsgOrigin(origin);
 			const normTitle = this._normalizeMsgString(title, 'title', { required: true });
 			const normText = this._normalizeMsgString(text, 'text', { required: true });
+			const normIcon = this._normalizeMsgIcon(icon);
 			const normLevel = this._normalizeMsgEnum(level, this.levelValueSet, 'level', { required: true });
 			const normDetails = this._normalizeMsgDetails(details);
 
@@ -281,6 +285,7 @@ class MsgFactory {
 			// or `undefined` (meaning: omit the field entirely).
 			const msg = {
 				ref: this._resolveMsgRef(ref, { kind: normkind, origin: normOrigin, title: normTitle }),
+				icon: normIcon,
 				title: normTitle,
 				text: normText,
 				level: normLevel,
@@ -411,6 +416,7 @@ class MsgFactory {
 	 * @param {object} [patch] Partial update payload.
 	 * @param {string} [patch.title] Updated title (required when provided).
 	 * @param {string} [patch.text] Updated text (required when provided).
+	 * @param {string|null} [patch.icon] Updated icon token (string) or null to remove.
 	 * @param {number} [patch.level] Updated severity level (required when provided).
 	 * @param {string} [patch.ref] Message ref (must match existing ref).
 	 * @param {string} [patch.kind] Message kind (must match existing kind).
@@ -536,6 +542,11 @@ class MsgFactory {
 				markUserVisibleChange(existing.text, value);
 				updated.text = value;
 			}
+			if (has('icon')) {
+				const value = patch.icon === null ? undefined : this._normalizeMsgIcon(patch.icon);
+				markUserVisibleChange(existing.icon, value);
+				updated.icon = value;
+			}
 			if (has('level')) {
 				const value = this._normalizeMsgEnum(patch.level, this.levelValueSet, 'level', { required: true });
 				markUserVisibleChange(existing.level, value);
@@ -654,6 +665,14 @@ class MsgFactory {
 			return false;
 		}
 
+		if (
+			Object.prototype.hasOwnProperty.call(message, 'icon') &&
+			message.icon !== undefined &&
+			typeof message.icon !== 'string'
+		) {
+			return false;
+		}
+
 		return true;
 	}
 
@@ -703,6 +722,41 @@ class MsgFactory {
 			return fallback;
 		}
 		return text;
+	}
+
+	/**
+	 * Normalizes an optional icon token.
+	 *
+	 * Notes:
+	 * - This is intentionally strict and small: icons should not turn into "alternative titles".
+	 * - We cap by unicode codepoints to keep emoji sequences intact as much as possible.
+	 *
+	 * @param {any} value Input icon value.
+	 * @returns {string|undefined} Normalized icon value or undefined.
+	 */
+	_normalizeMsgIcon(value) {
+		if (value === undefined || value === null) {
+			return undefined;
+		}
+		const raw = this._normalizeMsgString(value, 'icon', { fallback: undefined });
+		if (!raw) {
+			return undefined;
+		}
+		let withoutControls = '';
+		for (const ch of raw) {
+			const cp = ch.codePointAt(0);
+			withoutControls += cp !== undefined && (cp <= 0x1f || cp === 0x7f) ? ' ' : ch;
+		}
+		let icon = withoutControls.replace(/\s+/g, ' ').trim();
+		if (!icon) {
+			return undefined;
+		}
+		const parts = Array.from(icon);
+		if (parts.length > 10) {
+			this.adapter?.log?.warn?.(`MsgFactory: 'icon' truncated to 10 characters`);
+			icon = parts.slice(0, 10).join('');
+		}
+		return icon || undefined;
 	}
 
 	/**

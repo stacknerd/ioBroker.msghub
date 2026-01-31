@@ -52,12 +52,13 @@ const MsgConfig = Object.freeze({
 	 * @param {object} [params.msgConstants] MsgConstants (levels/kinds); used for normalization later.
 	 * @param {number} [params.notifierIntervalMs] Effective notifier interval (used for quiet hours validation later).
 	 * @param {object} [params.log] Optional logger facade (supports `error|warn|info|debug`).
-	 * @returns {{ corePrivate: { quietHours: object|null }, pluginPublic: { quietHours: object|null }, errors: ReadonlyArray<string> }} Normalized config bundle.
+	 * @returns {{ corePrivate: { quietHours: object|null, render: object }, pluginPublic: { quietHours: object|null, render: object }, errors: ReadonlyArray<string> }} Normalized config bundle.
 	 */
 	normalize({ adapterConfig: _adapterConfig, msgConstants: _msgConstants, notifierIntervalMs: _ms, log: _log } = {}) {
 		const errors = [];
 		const adapterConfig = _adapterConfig && typeof _adapterConfig === 'object' ? _adapterConfig : {};
 		const notifierIntervalMs = typeof _ms === 'number' ? _ms : Number(_ms);
+		const msgConstants = _msgConstants && typeof _msgConstants === 'object' ? _msgConstants : null;
 		const log = _log && typeof _log === 'object' ? _log : null;
 
 		/**
@@ -182,15 +183,94 @@ const MsgConfig = Object.freeze({
 			});
 		};
 
+		/**
+		 * Normalize render configuration.
+		 *
+		 * Notes:
+		 * - Prefix tokens are normalized as trimmed strings; empty strings disable a prefix.
+		 * - Templates are normalized as trimmed strings; empty strings fall back to defaults.
+		 *
+		 * @returns {object} Render config (core-private).
+		 */
+		const normalizeRender = () => {
+			const normalizeToken = value => {
+				if (value == null) {
+					return '';
+				}
+				const s = typeof value === 'string' ? value : String(value);
+				return s.trim();
+			};
+
+			const normalizeTemplate = (value, fallback) => {
+				if (value == null) {
+					return fallback;
+				}
+				const s = typeof value === 'string' ? value : String(value);
+				const t = s.trim();
+				return t || fallback;
+			};
+
+			const titleTemplateDefault = '{{icon}} {{title}}';
+			const textTemplateDefault = '{{levelPrefix}} {{text}}';
+			const iconTemplateDefault = '{{icon}}';
+
+			const prefixes = Object.freeze({
+				level: Object.freeze({
+					none: normalizeToken(adapterConfig?.prefixLevelNone),
+					info: normalizeToken(adapterConfig?.prefixLevelInfo),
+					notice: normalizeToken(adapterConfig?.prefixLevelNotice),
+					warning: normalizeToken(adapterConfig?.prefixLevelWarning),
+					error: normalizeToken(adapterConfig?.prefixLevelError),
+					critical: normalizeToken(adapterConfig?.prefixLevelCritical),
+				}),
+				kind: Object.freeze({
+					task: normalizeToken(adapterConfig?.prefixKindTask),
+					status: normalizeToken(adapterConfig?.prefixKindStatus),
+					appointment: normalizeToken(adapterConfig?.prefixKindAppointment),
+					shoppinglist: normalizeToken(adapterConfig?.prefixKindShoppinglist),
+					inventorylist: normalizeToken(adapterConfig?.prefixKindInventorylist),
+				}),
+			});
+
+			const templates = Object.freeze({
+				titleTemplate: normalizeTemplate(adapterConfig?.renderTitleTemplate, titleTemplateDefault),
+				textTemplate: normalizeTemplate(adapterConfig?.renderTextTemplate, textTemplateDefault),
+				iconTemplate: normalizeTemplate(adapterConfig?.renderIconTemplate, iconTemplateDefault),
+				helpText:
+					typeof adapterConfig?.renderTemplateHelpText === 'string'
+						? adapterConfig.renderTemplateHelpText
+						: '',
+			});
+
+			const kinds = msgConstants?.kind && typeof msgConstants.kind === 'object' ? msgConstants.kind : null;
+			const levels = msgConstants?.level && typeof msgConstants.level === 'object' ? msgConstants.level : null;
+
+			return Object.freeze({
+				prefixes,
+				templates,
+				// Include constants snapshots so downstream code can build derived tokens (kindPrefix/levelPrefix).
+				// This is intentionally shallow and stable.
+				...(kinds ? { kind: Object.freeze({ ...kinds }) } : {}),
+				...(levels ? { level: Object.freeze({ ...levels }) } : {}),
+			});
+		};
+
 		const quietHours = normalizeQuietHours();
+		const render = normalizeRender();
 
 		const corePrivate = Object.freeze({
 			quietHours,
+			render,
 		});
 
 		// Separate copy to keep the plugin-facing snapshot isolated from core-private objects.
 		const pluginPublic = Object.freeze({
 			quietHours: quietHours ? Object.freeze({ ...quietHours }) : null,
+			render: Object.freeze({
+				// Whitelist-only: allow plugins to read the effective presentation config.
+				prefixes: render?.prefixes || null,
+				templates: render?.templates || null,
+			}),
 		});
 
 		return Object.freeze({ corePrivate, pluginPublic, errors: Object.freeze(errors) });

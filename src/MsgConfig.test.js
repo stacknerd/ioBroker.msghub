@@ -34,6 +34,8 @@ describe('MsgConfig', () => {
 			expect(Object.isFrozen(res.pluginPublic)).to.equal(true);
 			expect(Object.isFrozen(res.corePrivate.quietHours)).to.equal(true);
 			expect(Object.isFrozen(res.pluginPublic.quietHours)).to.equal(true);
+			expect(res.corePrivate).to.have.property('render');
+			expect(res.pluginPublic).to.have.property('render');
 		});
 
 		it('disabled when notifierIntervalMs <= 0', () => {
@@ -133,5 +135,38 @@ describe('MsgConfig', () => {
 			expect(res.errors).to.include('quietHours.disabled.spreadDoesNotFit');
 		});
 	});
-});
 
+	describe('render normalization', () => {
+			it('normalizes prefixes and templates with expected defaults', () => {
+				const res = MsgConfig.normalize({
+					adapterConfig: {
+						quietHoursEnabled: false,
+						prefixLevelWarning: ' ⚠️ ',
+						prefixKindTask: '✅',
+						renderTitleTemplate: ' {{icon}} {{title}} ',
+						renderTextTemplate: '',
+						renderIconTemplate: null,
+					},
+					notifierIntervalMs: 10_000,
+				});
+
+			expect(res.errors).to.deep.equal([]);
+
+			expect(res.corePrivate.render).to.have.nested.property('prefixes.level.warning', '⚠️');
+			expect(res.corePrivate.render).to.have.nested.property('prefixes.kind.task', '✅');
+
+			expect(res.corePrivate.render).to.have.nested.property('templates.titleTemplate', '{{icon}} {{title}}');
+			// empty/invalid => defaults
+			expect(res.corePrivate.render).to.have.nested.property('templates.textTemplate', '{{levelPrefix}} {{text}}');
+			expect(res.corePrivate.render).to.have.nested.property('templates.iconTemplate', '{{icon}}');
+
+			expect(Object.isFrozen(res.corePrivate.render)).to.equal(true);
+			expect(Object.isFrozen(res.corePrivate.render.prefixes)).to.equal(true);
+			expect(Object.isFrozen(res.corePrivate.render.templates)).to.equal(true);
+
+			expect(res.pluginPublic.render).to.be.an('object');
+			expect(res.pluginPublic.render.prefixes).to.equal(res.corePrivate.render.prefixes);
+			expect(res.pluginPublic.render.templates).to.equal(res.corePrivate.render.templates);
+		});
+	});
+});

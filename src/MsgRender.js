@@ -82,58 +82,173 @@ class MsgRender {
 	}
 
 	/**
-	 * Build view-only display prefix tokens for a message (no mutation).
+	 * Normalize a value for single-line display usage.
 	 *
-	 * @param {object} msg Message object.
-	 * @returns {{ titleLevelPrefix: string, titleKindPrefix: string, titleFullPrefix: string, textLevelPrefix: string, textKindPrefix: string, textFullPrefix: string }} Display tokens.
+	 * @param {any} value Input value.
+	 * @returns {string} Normalized string.
 	 */
-	_buildDisplay(msg) {
-		const getToken = v => {
-			if (v == null) {
-				return '';
-			}
-			const s = typeof v === 'string' ? v : String(v);
-			return s.trim();
-		};
+	_normalizeInline(value) {
+		return String(value || '')
+			.replace(/\s+/g, ' ')
+			.trim();
+	}
 
-		const prefixes = this.render?.prefixes;
-		const levelPrefixes = prefixes?.level && typeof prefixes.level === 'object' ? prefixes.level : null;
-		const kindPrefixes = prefixes?.kind && typeof prefixes.kind === 'object' ? prefixes.kind : null;
+	/**
+	 * Normalize a value for multi-line display usage.
+	 *
+	 * @param {any} value Input value.
+	 * @returns {string} Normalized string.
+	 */
+	_normalizeMultiline(value) {
+		const raw = String(value || '').replace(/\r\n/g, '\n');
+		return raw
+			.replace(/[ \t]+/g, ' ')
+			.replace(/ *\n */g, '\n')
+			.trim();
+	}
 
+	/**
+	 * Resolve a configured kind prefix token for this message.
+	 *
+	 * @param {object} msg Message.
+	 * @returns {string} Prefix token (trimmed) or empty string.
+	 */
+	_getKindPrefix(msg) {
+		const kindKey = typeof msg?.kind === 'string' ? msg.kind.trim() : '';
+		const kindPrefixes =
+			this.render?.prefixes?.kind && typeof this.render.prefixes.kind === 'object'
+				? this.render.prefixes.kind
+				: null;
+		if (!kindKey || !kindPrefixes) {
+			return '';
+		}
+		const v = kindPrefixes[kindKey];
+		return typeof v === 'string' ? v.trim() : v == null ? '' : String(v).trim();
+	}
+
+	/**
+	 * Resolve a configured level prefix token for this message.
+	 *
+	 * @param {object} msg Message.
+	 * @returns {string} Prefix token (trimmed) or empty string.
+	 */
+	_getLevelPrefix(msg) {
+		const levelPrefixes =
+			this.render?.prefixes?.level && typeof this.render.prefixes.level === 'object'
+				? this.render.prefixes.level
+				: null;
+		if (!levelPrefixes) {
+			return '';
+		}
 		const levelValue = typeof msg?.level === 'number' ? msg.level : Number(msg?.level);
 		const levelKey = Number.isFinite(levelValue) ? this._levelKeyByValue.get(levelValue) || '' : '';
-		const kindKey = typeof msg?.kind === 'string' ? msg.kind.trim() : '';
-
-		const titleLevelPrefix = getToken(levelKey && levelPrefixes ? levelPrefixes[levelKey] : '');
-		const titleKindPrefix = getToken(kindKey && kindPrefixes ? kindPrefixes[kindKey] : '');
-		const fullPrefixOrderRaw = prefixes?.fullPrefixOrder;
-		const fullPrefixOrder = typeof fullPrefixOrderRaw === 'string' ? fullPrefixOrderRaw.trim() : '';
-		let fullTokens;
-		switch (fullPrefixOrder) {
-			case 'levelKind':
-				fullTokens = [titleLevelPrefix, titleKindPrefix];
-				break;
-			case 'kind':
-				fullTokens = [titleKindPrefix];
-				break;
-			case 'level':
-				fullTokens = [titleLevelPrefix];
-				break;
-			case 'kindLevel':
-			default:
-				fullTokens = [titleKindPrefix, titleLevelPrefix];
-				break;
+		if (!levelKey) {
+			return '';
 		}
-		const titleFullPrefix = fullTokens.filter(Boolean).join(' ').trim();
+		const v = levelPrefixes[levelKey];
+		return typeof v === 'string' ? v.trim() : v == null ? '' : String(v).trim();
+	}
 
-		return {
-			titleLevelPrefix,
-			titleKindPrefix,
-			titleFullPrefix,
-			textLevelPrefix: titleLevelPrefix,
-			textKindPrefix: titleKindPrefix,
-			textFullPrefix: titleFullPrefix,
-		};
+	/**
+	 * Stage-2: render a display template against a restricted context.
+	 *
+	 * Allowed:
+	 * - Base tokens: title/text/icon/kindPrefix/levelPrefix
+	 * - Timing: t.* / timing.*
+	 * - Details: d.* / details.*
+	 *
+	 * @param {string} input Template string.
+	 * @param {object} ctx Context.
+	 * @returns {string} Rendered string.
+	 */
+	_renderDisplayTemplate(input, ctx) {
+		if (typeof input !== 'string' || input.indexOf('{{') === -1) {
+			return input;
+		}
+		return input.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_, expr) => {
+			const val = this._evalExprDisplay(expr, ctx);
+			return val == null ? '' : String(val);
+		});
+	}
+
+	/**
+	 * Evaluate a Stage-2 display expression with optional pipe filters.
+	 *
+	 * @param {string} expr Expression like "title|default:--".
+	 * @param {object} ctx Render context (timing/details + tokens + locale).
+	 * @returns {any} The evaluated value after all filters are applied.
+	 */
+	_evalExprDisplay(expr, ctx) {
+		const parts = String(expr || '')
+			.split('|')
+			.map(s => s.trim())
+			.filter(Boolean);
+		if (parts.length === 0) {
+			return '';
+		}
+
+		const base = parts.shift();
+		if (!base) {
+			return '';
+		}
+
+		const rawIndex = parts.findIndex(part => part.split(':')[0].trim() === 'raw');
+		const wantsRaw = rawIndex !== -1;
+		const wantsDuration = parts.some(part => {
+			const n = part.split(':')[0].trim();
+			return n === 'durationSince' || n === 'durationUntil';
+		});
+		const filters = wantsRaw ? parts.filter(part => part.split(':')[0].trim() !== 'raw') : parts;
+		let val = this._resolvePathDisplay(base, ctx, { raw: wantsRaw || wantsDuration });
+
+		for (const raw of filters) {
+			const idx = raw.indexOf(':');
+			const name = idx === -1 ? raw : raw.slice(0, idx).trim();
+			const arg = idx === -1 ? undefined : raw.slice(idx + 1).trim();
+			val = this._applyFilter(name, arg, val, ctx);
+		}
+
+		return val;
+	}
+
+	/**
+	 * Resolve a Stage-2 display template path.
+	 *
+	 * @param {string} path Template path.
+	 * @param {object} ctx Render context (timing/details + tokens + locale).
+	 * @param {object} [_options] Resolution options (kept for symmetry with stage-1; currently unused).
+	 * @returns {any} Resolved value or undefined.
+	 */
+	_resolvePathDisplay(path, ctx, _options = {}) {
+		const bits = String(path || '').split('.');
+		const head = bits[0];
+		if (head === 'm' || head === 'metrics') {
+			// Stage-2 does not resolve metrics.
+			return undefined;
+		}
+		if (head === 't' || head === 'timing') {
+			return this._resolveTiming(bits.slice(1), ctx);
+		}
+		if (head === 'd' || head === 'details') {
+			return this._resolveDetails(bits.slice(1), ctx);
+		}
+		if (head === 'title') {
+			return ctx.tokens?.title;
+		}
+		if (head === 'text') {
+			return ctx.tokens?.text;
+		}
+		if (head === 'icon') {
+			return ctx.tokens?.icon;
+		}
+		if (head === 'kindPrefix') {
+			return ctx.tokens?.kindPrefix;
+		}
+		if (head === 'levelPrefix') {
+			return ctx.tokens?.levelPrefix;
+		}
+		// No other roots in stage-2.
+		return undefined;
 	}
 
 	/**
@@ -179,8 +294,55 @@ class MsgRender {
 			out.details = this.renderDetails(msg.details, { msg, locale: lc, captureMetricTs });
 		}
 
-		const display = this._buildDisplay(msg);
-		out.display = renderedDataTs == null ? display : { ...display, renderedDataTs };
+		// Stage-2: build display fields based on admin templates (render config).
+		const templates =
+			this.render?.templates && typeof this.render.templates === 'object' ? this.render.templates : null;
+		const titleTemplateRaw = templates?.titleTemplate;
+		const textTemplateRaw = templates?.textTemplate;
+		const iconTemplateRaw = templates?.iconTemplate;
+		const titleTemplate =
+			typeof titleTemplateRaw === 'string' && titleTemplateRaw.trim()
+				? titleTemplateRaw.trim()
+				: '{{icon}} {{title}}';
+		const textTemplate =
+			typeof textTemplateRaw === 'string' && textTemplateRaw.trim()
+				? textTemplateRaw.trim()
+				: '{{levelPrefix}} {{text}}';
+		const iconTemplate =
+			typeof iconTemplateRaw === 'string' && iconTemplateRaw.trim() ? iconTemplateRaw.trim() : '{{icon}}';
+
+		const kindPrefix = this._getKindPrefix(msg);
+		const levelPrefix = this._getLevelPrefix(msg);
+		const baseIcon = typeof out.icon === 'string' ? out.icon : '';
+		const baseTitle = typeof out.title === 'string' ? out.title : '';
+		const baseText = typeof out.text === 'string' ? out.text : '';
+
+		const ctx2 = {
+			tokens: {
+				title: baseTitle,
+				text: baseText,
+				icon: baseIcon,
+				kindPrefix,
+				levelPrefix,
+			},
+			timing: msg && msg.timing && typeof msg.timing === 'object' ? msg.timing : null,
+			details: out && out.details && typeof out.details === 'object' ? out.details : null,
+			locale: lc,
+			// Stage-2 is layout only: do not capture metric timestamps here.
+			captureMetricTs: null,
+		};
+
+		const displayIconRaw = this._renderDisplayTemplate(iconTemplate, ctx2);
+		const displayTitleRaw = this._renderDisplayTemplate(titleTemplate, ctx2);
+		const displayTextRaw = this._renderDisplayTemplate(textTemplate, ctx2);
+
+		const display = Object.freeze({
+			icon: this._normalizeInline(displayIconRaw),
+			title: this._normalizeInline(displayTitleRaw),
+			text: this._normalizeMultiline(displayTextRaw),
+			...(renderedDataTs == null ? {} : { renderedDataTs }),
+		});
+		out.display = display;
 
 		return out;
 	}

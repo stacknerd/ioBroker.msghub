@@ -160,50 +160,6 @@ class Msghub extends utils.Adapter {
 
 		this.msgFactory = new MsgFactory(this, this.msgConstants);
 		const config = this.config || {};
-		const normalizePrefix = value => {
-			if (value == null) {
-				return '';
-			}
-			const s = typeof value === 'string' ? value : String(value);
-			return s.trim();
-		};
-		const normalizeFullPrefixOrder = value => {
-			if (value == null) {
-				return 'kindLevel';
-			}
-			const s = typeof value === 'string' ? value : String(value);
-			const normalized = s.trim().replace(/\s+/g, '').toLowerCase();
-			if (normalized === 'levelkind') {
-				return 'levelKind';
-			}
-			if (normalized === 'kind') {
-				return 'kind';
-			}
-			if (normalized === 'level') {
-				return 'level';
-			}
-			return 'kindLevel';
-		};
-		const render = Object.freeze({
-			prefixes: Object.freeze({
-				fullPrefixOrder: normalizeFullPrefixOrder(config.prefixFullOrder),
-				level: Object.freeze({
-					none: normalizePrefix(config.prefixLevelNone),
-					info: normalizePrefix(config.prefixLevelInfo),
-					notice: normalizePrefix(config.prefixLevelNotice),
-					warning: normalizePrefix(config.prefixLevelWarning),
-					error: normalizePrefix(config.prefixLevelError),
-					critical: normalizePrefix(config.prefixLevelCritical),
-				}),
-				kind: Object.freeze({
-					task: normalizePrefix(config.prefixKindTask),
-					status: normalizePrefix(config.prefixKindStatus),
-					appointment: normalizePrefix(config.prefixKindAppointment),
-					shoppinglist: normalizePrefix(config.prefixKindShoppinglist),
-					inventorylist: normalizePrefix(config.prefixKindInventorylist),
-				}),
-			}),
-		});
 
 		const msgAi = createMsgAiFromConfig(this, this.config);
 		this.msgAi = msgAi;
@@ -293,6 +249,7 @@ class Msghub extends utils.Adapter {
 		// This is intentionally read-only and schema-versioned.
 		this._msgConfigPublic = Object.freeze({ schemaVersion: MsgConfig.schemaVersion, ...msgCfg.pluginPublic });
 		const quietHours = msgCfg.corePrivate.quietHours;
+		const render = msgCfg.corePrivate.render;
 
 		this.msgStore = new MsgStore(this, this.msgConstants, this.msgFactory, {
 			pruneIntervalMs,
