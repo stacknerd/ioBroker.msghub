@@ -605,25 +605,25 @@
 				.filter(Boolean);
 		}
 
-			function buildFieldInput(...args) {
-				const cfg = args && args.length ? args[0] : null;
-				const c = cfg && typeof cfg === 'object' ? cfg : {};
+		function buildFieldInput(...args) {
+			const cfg = args && args.length ? args[0] : null;
+			const c = cfg && typeof cfg === 'object' ? cfg : {};
 
-				const type = c && typeof c === 'object' && 'type' in c ? c.type : '';
-				const keyRaw = c && typeof c === 'object' && 'key' in c ? c.key : '';
-				const key = typeof keyRaw === 'string' ? keyRaw : String(keyRaw ?? '');
+			const type = c && typeof c === 'object' && 'type' in c ? c.type : '';
+			const keyRaw = c && typeof c === 'object' && 'key' in c ? c.key : '';
+			const key = typeof keyRaw === 'string' ? keyRaw : String(keyRaw ?? '');
 
-				const label = c && typeof c === 'object' && 'label' in c ? c.label : '';
-				const value = c && typeof c === 'object' && 'value' in c ? c.value : '';
-				const help = c && typeof c === 'object' && 'help' in c ? c.help : '';
-				const unit = c && typeof c === 'object' && 'unit' in c ? c.unit : '';
-				const min = c && typeof c === 'object' && 'min' in c ? c.min : undefined;
-				const max = c && typeof c === 'object' && 'max' in c ? c.max : undefined;
-				const step = c && typeof c === 'object' && 'step' in c ? c.step : undefined;
-				const options = c && typeof c === 'object' && 'options' in c ? c.options : undefined;
-				const multiOptions = c && typeof c === 'object' && 'multiOptions' in c ? c.multiOptions : undefined;
+			const label = c && typeof c === 'object' && 'label' in c ? c.label : '';
+			const value = c && typeof c === 'object' && 'value' in c ? c.value : '';
+			const help = c && typeof c === 'object' && 'help' in c ? c.help : '';
+			const unit = c && typeof c === 'object' && 'unit' in c ? c.unit : '';
+			const min = c && typeof c === 'object' && 'min' in c ? c.min : undefined;
+			const max = c && typeof c === 'object' && 'max' in c ? c.max : undefined;
+			const step = c && typeof c === 'object' && 'step' in c ? c.step : undefined;
+			const options = c && typeof c === 'object' && 'options' in c ? c.options : undefined;
+			const multiOptions = c && typeof c === 'object' && 'multiOptions' in c ? c.multiOptions : undefined;
 
-				const id = `f_${key}_${Math.random().toString(36).slice(2, 8)}`;
+			const id = `f_${key}_${Math.random().toString(36).slice(2, 8)}`;
 
 			if (type === 'header') {
 				const labelText = typeof label === 'string' ? label.trim() : '';
@@ -1014,16 +1014,14 @@
 				return (Array.isArray(list) ? list : []).map(v => String(v)).join('|');
 			}
 
-				function collectWarnings(cfg) {
-					const warnings = [];
+			function collectWarnings(cfg) {
+				const warnings = [];
 
-					const fields = schema?.fields && typeof schema.fields === 'object' ? schema.fields : {};
-					const mode = readCfg(cfg, 'mode');
-					const modeInfo = fields?.mode && typeof fields.mode === 'object' ? fields.mode : null;
-					const modeOptions = Array.isArray(modeInfo?.options) ? modeInfo.options : [];
-					const allowedModes = modeOptions
-					.filter(v => typeof v === 'string' && v.trim())
-					.map(v => v.trim());
+				const fields = schema?.fields && typeof schema.fields === 'object' ? schema.fields : {};
+				const mode = readCfg(cfg, 'mode');
+				const modeInfo = fields?.mode && typeof fields.mode === 'object' ? fields.mode : null;
+				const modeOptions = Array.isArray(modeInfo?.options) ? modeInfo.options : [];
+				const allowedModes = modeOptions.filter(v => typeof v === 'string' && v.trim()).map(v => v.trim());
 				if (allowedModes.length === 0) {
 					allowedModes.push('threshold', 'cycle', 'freshness', 'triggered', 'nonSettling', 'session');
 				}
@@ -1043,7 +1041,7 @@
 					}
 				}
 
-					for (const [key, info] of Object.entries(fields)) {
+				for (const [key, info] of Object.entries(fields)) {
 					if (!info || typeof info !== 'object') {
 						continue;
 					}
@@ -1661,9 +1659,7 @@
 		function renderIngestStatesMessagePresetsTool(options) {
 			const root = options && typeof options === 'object' ? options : null;
 			const ingestConstants =
-				root && root.ingestConstants && typeof root.ingestConstants === 'object'
-					? root.ingestConstants
-					: null;
+				root && root.ingestConstants && typeof root.ingestConstants === 'object' ? root.ingestConstants : null;
 			const presetSchema =
 				ingestConstants && typeof ingestConstants.presetSchema === 'string' ? ingestConstants.presetSchema : '';
 			const presetTemplate =
@@ -1697,7 +1693,13 @@
 
 			const buildPresetBase = () => cloneJson(presetTemplate);
 
-			const defaultPreset = ({ presetId = '', description = '', ownedBy = '', kind = 'status', level = 20 } = {}) => {
+			const defaultPreset = ({
+				presetId = '',
+				description = '',
+				ownedBy = '',
+				kind = 'status',
+				level = 20,
+			} = {}) => {
 				const preset = buildPresetBase();
 				preset.schema = presetSchema;
 				preset.presetId = String(presetId || '').trim();
@@ -1708,11 +1710,12 @@
 				}
 				preset.message.kind = kind;
 				preset.message.level = level;
+				preset.message.icon = typeof preset.message.icon === 'string' ? preset.message.icon : '';
 				preset.message.title = typeof preset.message.title === 'string' ? preset.message.title : '';
 				preset.message.text = typeof preset.message.text === 'string' ? preset.message.text : '';
-					if (!preset.message.timing || typeof preset.message.timing !== 'object') {
-						preset.message.timing = { timeBudget: 0, dueInMs: 0, expiresInMs: 0, cooldown: 0, remindEvery: 0 };
-					}
+				if (!preset.message.timing || typeof preset.message.timing !== 'object') {
+					preset.message.timing = { timeBudget: 0, dueInMs: 0, expiresInMs: 0, cooldown: 0, remindEvery: 0 };
+				}
 				if (!preset.message.details || typeof preset.message.details !== 'object') {
 					preset.message.details = { task: '', reason: '', tools: [], consumables: [] };
 				}
@@ -1786,14 +1789,14 @@
 						continue;
 					}
 					const label = typeof o?.label === 'string' ? o.label.trim() : '';
-						next.push(
-								defaultPreset({
-									presetId: id,
-									description: label && label !== id ? label : '',
-									ownedBy: '',
-								}),
-							);
-						}
+					next.push(
+						defaultPreset({
+							presetId: id,
+							description: label && label !== id ? label : '',
+							ownedBy: '',
+						}),
+					);
+				}
 
 				presets = next;
 				sortPresets();
@@ -1885,16 +1888,16 @@
 					});
 			};
 
-				const createNew = () => {
-					if (!confirmDiscardIfNeeded()) {
-						return;
-					}
-					setError('');
-					original = null;
-					draft = defaultPreset({ presetId: '', description: '', ownedBy: '', kind: 'status', level: 20 });
-					isNew = true;
-					render();
-				};
+			const createNew = () => {
+				if (!confirmDiscardIfNeeded()) {
+					return;
+				}
+				setError('');
+				original = null;
+				draft = defaultPreset({ presetId: '', description: '', ownedBy: '', kind: 'status', level: 20 });
+				isNew = true;
+				render();
+			};
 
 			const duplicateSelected = () => {
 				if (!confirmDiscardIfNeeded()) {
@@ -1904,14 +1907,14 @@
 					toast('No preset selected');
 					return;
 				}
-					setError('');
-					original = null;
-					draft = cloneJson(draft);
-					draft.presetId = '';
-					draft.ownedBy = null;
-					isNew = true;
-					render();
-				};
+				setError('');
+				original = null;
+				draft = cloneJson(draft);
+				draft.presetId = '';
+				draft.ownedBy = null;
+				isNew = true;
+				render();
+			};
 
 			const deleteSelected = () => {
 				const id = String(selectedId || '').trim();
@@ -2143,7 +2146,8 @@
 					return;
 				}
 
-				const ownedBy = typeof draft?.ownedBy === 'string' && draft.ownedBy.trim() ? draft.ownedBy.trim() : null;
+				const ownedBy =
+					typeof draft?.ownedBy === 'string' && draft.ownedBy.trim() ? draft.ownedBy.trim() : null;
 				const disabled = !!ownedBy || saving === true;
 
 				const fields = [];
@@ -2240,6 +2244,23 @@
 					};
 				})();
 
+				const iconField = (() => {
+					const id = `f_icon_${Math.random().toString(36).slice(2, 8)}`;
+					const input = h('input', { type: 'text', id, value: draft?.message?.icon ?? '' });
+					if (disabled) {
+						input.disabled = true;
+					}
+					return {
+						input,
+						getValue: () => input.value,
+						wrapper: h('div', { class: 'input-field msghub-field' }, [
+							input,
+							h('label', { for: id, text: 'Icon' }),
+							h('div', { class: 'msghub-muted', text: 'Optional. Usually an emoji.' }),
+						]),
+					};
+				})();
+
 				const textField = (() => {
 					const id = `f_text_${Math.random().toString(36).slice(2, 8)}`;
 					const textarea = h('textarea', {
@@ -2265,6 +2286,7 @@
 				})();
 
 				fields.push(titleField);
+				fields.push(iconField);
 				fields.push(textField);
 
 				fields.push(buildFieldInput({ type: 'header', key: '_h_timing', label: 'Timing' }));
@@ -2283,41 +2305,41 @@
 				}
 				fields.push(fTimeBudget);
 
-					const fDueIn = buildFieldInput({
-						type: 'number',
-						key: 'timing_dueInMs',
-						label: 'Due in',
-						value: draft?.message?.timing?.dueInMs,
-						unit: 'ms',
-					});
+				const fDueIn = buildFieldInput({
+					type: 'number',
+					key: 'timing_dueInMs',
+					label: 'Due in',
+					value: draft?.message?.timing?.dueInMs,
+					unit: 'ms',
+				});
 				if (fDueIn?.input) {
 					fDueIn.input.disabled = disabled;
 				}
 				if (fDueIn?.select) {
 					fDueIn.select.disabled = disabled;
 				}
-					fields.push(fDueIn);
+				fields.push(fDueIn);
 
-					const fExpiresIn = buildFieldInput({
-						type: 'number',
-						key: 'timing_expiresInMs',
-						label: 'Expires in',
-						value: draft?.message?.timing?.expiresInMs,
-						unit: 'ms',
-					});
-					if (fExpiresIn?.input) {
-						fExpiresIn.input.disabled = disabled;
-					}
-					if (fExpiresIn?.select) {
-						fExpiresIn.select.disabled = disabled;
-					}
-					fields.push(fExpiresIn);
+				const fExpiresIn = buildFieldInput({
+					type: 'number',
+					key: 'timing_expiresInMs',
+					label: 'Expires in',
+					value: draft?.message?.timing?.expiresInMs,
+					unit: 'ms',
+				});
+				if (fExpiresIn?.input) {
+					fExpiresIn.input.disabled = disabled;
+				}
+				if (fExpiresIn?.select) {
+					fExpiresIn.select.disabled = disabled;
+				}
+				fields.push(fExpiresIn);
 
-					const fCooldown = buildFieldInput({
-						type: 'number',
-						key: 'timing_cooldown',
-						label: 'Cooldown',
-						value: draft?.message?.timing?.cooldown,
+				const fCooldown = buildFieldInput({
+					type: 'number',
+					key: 'timing_cooldown',
+					label: 'Cooldown',
+					value: draft?.message?.timing?.cooldown,
 					unit: 'ms',
 				});
 				if (fCooldown?.input) {
@@ -2546,56 +2568,57 @@
 						? h('div', { class: 'msghub-muted', text: 'Saving…' })
 						: null;
 
-					const wrapper = h('div', { class: 'row' }, [
-						h('div', { class: 'col s12' }, [
-							ownedBy
-								? h('div', {
-										class: 'msghub-muted',
-										text: `This is a default preset owned by '${ownedBy}' (view-only in this editor).`,
-									})
-								: null,
-							elError,
-							...fields.map(f => f.wrapper),
+				const wrapper = h('div', { class: 'row' }, [
+					h('div', { class: 'col s12' }, [
+						ownedBy
+							? h('div', {
+									class: 'msghub-muted',
+									text: `This is a default preset owned by '${ownedBy}' (view-only in this editor).`,
+								})
+							: null,
+						elError,
+						...fields.map(f => f.wrapper),
 						h('div', { class: 'msghub-actions msghub-actions--inline' }, [btnSave, btnAbort]),
 					]),
 				]);
 
-						// Wire field changes into draft
-						const apply = () => {
-							updateDraft({
-								presetId: String(fPresetId?.getValue ? fPresetId.getValue() : '').trim(),
-								description: String(fDescription?.getValue ? fDescription.getValue() : ''),
-								schema: String(fSchema?.getValue ? fSchema.getValue() : ''),
-								ownedBy: ownedBy,
-							});
-							updateMessage({
-								kind: fKind?.getValue ? fKind.getValue() : undefined,
-								level: fLevel?.getValue ? fLevel.getValue() : undefined,
-							});
-							updateMessageNested('title', titleField.getValue());
-							updateMessageNested('text', textField.getValue());
-						updateMessageNested('timing.timeBudget', fTimeBudget?.getValue ? fTimeBudget.getValue() || 0 : 0);
-						updateMessageNested('timing.dueInMs', fDueIn?.getValue ? fDueIn.getValue() || 0 : 0);
-						updateMessageNested('timing.expiresInMs', fExpiresIn?.getValue ? fExpiresIn.getValue() || 0 : 0);
-						updateMessageNested('timing.cooldown', fCooldown?.getValue ? fCooldown.getValue() || 0 : 0);
-						updateMessageNested(
-							'timing.remindEvery',
-							fRemindEvery?.getValue ? fRemindEvery.getValue() || 0 : 0,
-						);
-						updateMessageNested('details.task', fDetailsTask?.getValue ? fDetailsTask.getValue() : '');
-						updateMessageNested('details.reason', fDetailsReason?.getValue ? fDetailsReason.getValue() : '');
-						updateMessageNested('details.tools', toolsField.getValue());
-						updateMessageNested('details.consumables', consumablesField.getValue());
-						updateMessageNested('audience.tags', tagsField.getValue());
-						updateMessageNested('audience.channels.include', channelsIncludeField.getValue());
-						updateMessageNested('audience.channels.exclude', channelsExcludeField.getValue());
-						const actions = actionsField.getValue();
-						if (actions !== null) {
-							updateMessageNested('actions', actions);
-						}
-						updatePolicy({
-							resetOnNormal: fResetOnNormal?.getValue ? fResetOnNormal.getValue() === true : false,
-						});
+				// Wire field changes into draft
+				const apply = () => {
+					updateDraft({
+						presetId: String(fPresetId?.getValue ? fPresetId.getValue() : '').trim(),
+						description: String(fDescription?.getValue ? fDescription.getValue() : ''),
+						schema: String(fSchema?.getValue ? fSchema.getValue() : ''),
+						ownedBy: ownedBy,
+					});
+					updateMessage({
+						kind: fKind?.getValue ? fKind.getValue() : undefined,
+						level: fLevel?.getValue ? fLevel.getValue() : undefined,
+					});
+					updateMessageNested('title', titleField.getValue());
+					updateMessageNested('icon', iconField.getValue());
+					updateMessageNested('text', textField.getValue());
+					updateMessageNested('timing.timeBudget', fTimeBudget?.getValue ? fTimeBudget.getValue() || 0 : 0);
+					updateMessageNested('timing.dueInMs', fDueIn?.getValue ? fDueIn.getValue() || 0 : 0);
+					updateMessageNested('timing.expiresInMs', fExpiresIn?.getValue ? fExpiresIn.getValue() || 0 : 0);
+					updateMessageNested('timing.cooldown', fCooldown?.getValue ? fCooldown.getValue() || 0 : 0);
+					updateMessageNested(
+						'timing.remindEvery',
+						fRemindEvery?.getValue ? fRemindEvery.getValue() || 0 : 0,
+					);
+					updateMessageNested('details.task', fDetailsTask?.getValue ? fDetailsTask.getValue() : '');
+					updateMessageNested('details.reason', fDetailsReason?.getValue ? fDetailsReason.getValue() : '');
+					updateMessageNested('details.tools', toolsField.getValue());
+					updateMessageNested('details.consumables', consumablesField.getValue());
+					updateMessageNested('audience.tags', tagsField.getValue());
+					updateMessageNested('audience.channels.include', channelsIncludeField.getValue());
+					updateMessageNested('audience.channels.exclude', channelsExcludeField.getValue());
+					const actions = actionsField.getValue();
+					if (actions !== null) {
+						updateMessageNested('actions', actions);
+					}
+					updatePolicy({
+						resetOnNormal: fResetOnNormal?.getValue ? fResetOnNormal.getValue() === true : false,
+					});
 
 					const kind = String(draft?.message?.kind || '');
 					const isTask = kind === 'task';
@@ -2618,17 +2641,18 @@
 				watch(fKind.input);
 				watch(fLevel.input);
 				watch(titleField.input);
+				watch(iconField.input);
 				watch(textField.textarea);
 
 				// Timing fields
 				watch(fTimeBudget.input);
 				watch(fTimeBudget.select);
-					watch(fDueIn.input);
-					watch(fDueIn.select);
-					watch(fExpiresIn.input);
-					watch(fExpiresIn.select);
-					watch(fCooldown.input);
-					watch(fCooldown.select);
+				watch(fDueIn.input);
+				watch(fDueIn.select);
+				watch(fExpiresIn.input);
+				watch(fExpiresIn.select);
+				watch(fCooldown.input);
+				watch(fCooldown.select);
 				watch(fRemindEvery.input);
 				watch(fRemindEvery.select);
 

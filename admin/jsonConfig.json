@@ -299,33 +299,31 @@
 					"newLine": true,
 					"xs": 12,
 					"sm": 12,
-					"md": 12,
-					"lg": 12,
-					"xl": 12
+					"md": 6,
+					"lg": 6,
+					"xl": 4
 				},
 				"renderTextTemplate": {
 					"type": "text",
 					"label": "msghub.i18n.core.admin.jsonConfig.render.renderTextTemplate.label",
 					"help": "msghub.i18n.core.admin.jsonConfig.render.renderTextTemplate.help",
 					"default": "{{levelPrefix}} {{text}}",
-					"newLine": true,
 					"xs": 12,
 					"sm": 12,
-					"md": 12,
-					"lg": 12,
-					"xl": 12
+					"md": 6,
+					"lg": 6,
+					"xl": 4
 				},
 				"renderIconTemplate": {
 					"type": "text",
 					"label": "msghub.i18n.core.admin.jsonConfig.render.renderIconTemplate.label",
 					"help": "msghub.i18n.core.admin.jsonConfig.render.renderIconTemplate.help",
 					"default": "{{icon}}",
-					"newLine": true,
 					"xs": 12,
 					"sm": 12,
-					"md": 12,
-					"lg": 12,
-					"xl": 12
+					"md": 6,
+					"lg": 6,
+					"xl": 4
 				},
 				"_renderTemplateHelpText": {
 					"type": "staticText",
