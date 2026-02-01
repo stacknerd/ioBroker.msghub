@@ -71,6 +71,7 @@
 			let total = 0;
 			let pages = 1;
 			let lastMeta = null;
+			let serverTz = null;
 
 			let pageIndex = 1;
 			let pageSize = 50;
@@ -115,12 +116,56 @@
 			};
 
 		let jsonPre = null;
-		function ensureJsonPre() {
+			function ensureJsonPre() {
 			if (jsonPre) {
 				return jsonPre;
 			}
 
-			const pre = h('pre', { class: 'msghub-overlay-pre' });
+			const pre = h('pre', { class: 'msghub-overlay-pre msghub-messages-json' });
+
+			function escapeText(s) {
+				return typeof s === 'string' ? s : s == null ? '' : String(s);
+			}
+
+			function pad2(n) {
+				return String(n).padStart(2, '0');
+			}
+
+			function formatLocal(d) {
+				try {
+					const y = d.getFullYear();
+					const m = pad2(d.getMonth() + 1);
+					const day = pad2(d.getDate());
+					const hh = pad2(d.getHours());
+					const mm = pad2(d.getMinutes());
+					const ss = pad2(d.getSeconds());
+					return `${y}-${m}-${day} ${hh}:${mm}:${ss}`;
+				} catch (_e) {
+					return '';
+				}
+			}
+
+			function formatInTimeZone(d, tz) {
+				const tzSafe = typeof tz === 'string' ? tz.trim() : '';
+				if (!tzSafe) {
+					return '';
+				}
+				try {
+					const fmt = new Intl.DateTimeFormat('sv-SE', {
+						timeZone: tzSafe,
+						year: 'numeric',
+						month: '2-digit',
+						day: '2-digit',
+						hour: '2-digit',
+						minute: '2-digit',
+						second: '2-digit',
+						hour12: false,
+					});
+					return String(fmt.format(d)).replace('T', ' ');
+				} catch (_e) {
+					return '';
+				}
+			}
 
 			function parseTimestampToken(token) {
 				if (typeof token !== 'string' || !token) {
@@ -149,8 +194,201 @@
 				if (Number.isNaN(d.getTime())) {
 					return null;
 				}
-				return { ms, date: d };
-			}
+					return { ms, date: d };
+				}
+
+				function parseEpochNumber(n) {
+					if (typeof n !== 'number' || !Number.isFinite(n) || n <= 0) {
+						return null;
+					}
+					if (Math.trunc(n) !== n) {
+						return null;
+					}
+					const s = String(Math.trunc(n));
+					// Heuristic: 10 digits => unix seconds, otherwise treat as unix ms.
+					const ms = s.length === 10 ? n * 1000 : n;
+					if (ms < 946684800000 || ms > 4102444800000) {
+						return null;
+					}
+					const d = new Date(ms);
+					if (Number.isNaN(d.getTime())) {
+						return null;
+					}
+					return { ms, date: d };
+				}
+
+				function makeTimestampComment(n) {
+					const parsed = parseEpochNumber(n);
+					if (!parsed) {
+						return '';
+					}
+					const local = formatLocal(parsed.date);
+					const utc = parsed.date.toISOString();
+					const server = serverTz ? formatInTimeZone(parsed.date, serverTz) : '';
+					if (server) {
+						return `${server} (${serverTz}) | ${utc} (UTC)`;
+					}
+					return `${local} (local) | ${utc} (UTC)`;
+				}
+
+				function isDurationKey(key) {
+					if (key === 'forMs') {
+						return true;
+					}
+					return typeof key === 'string' && key.endsWith('Ms');
+				}
+
+				function formatDurationMs(ms) {
+					const n = typeof ms === 'number' && Number.isFinite(ms) ? ms : Number(ms);
+					if (!Number.isFinite(n)) {
+						return '';
+					}
+					const sign = n < 0 ? '-' : '';
+					let rest = Math.abs(Math.trunc(n));
+					const parts = [];
+					const day = 24 * 60 * 60 * 1000;
+					const hour = 60 * 60 * 1000;
+					const min = 60 * 1000;
+					const sec = 1000;
+
+					const d = Math.floor(rest / day);
+					if (d) {
+						parts.push(`${d}d`);
+						rest -= d * day;
+					}
+					const h = Math.floor(rest / hour);
+					if (h) {
+						parts.push(`${h}h`);
+						rest -= h * hour;
+					}
+					const m = Math.floor(rest / min);
+					if (m) {
+						parts.push(`${m}min`);
+						rest -= m * min;
+					}
+					const s = Math.floor(rest / sec);
+					if (s) {
+						parts.push(`${s}s`);
+						rest -= s * sec;
+					}
+					if (!parts.length) {
+						parts.push(`${rest}ms`);
+					}
+					return `${sign}${parts.join(' ')}`;
+				}
+
+				function resolveAnnotation(pathParts, key, value) {
+					const vNum = typeof value === 'number' && Number.isFinite(value) ? value : null;
+					if (vNum === null) {
+						return '';
+					}
+					if (key === 'level') {
+						const label = getLevelLabel(vNum);
+						if (label && label !== String(vNum)) {
+							return label;
+						}
+					}
+
+					// Timing block: anything not ending in "At" is treated as duration (ms).
+					const parts = Array.isArray(pathParts) ? pathParts : [];
+					if (parts.length === 1 && parts[0] === 'timing' && typeof key === 'string' && !key.endsWith('At')) {
+						const d = formatDurationMs(vNum);
+						return d || '';
+					}
+
+					// Generic duration keys
+					if (isDurationKey(key)) {
+						const d = formatDurationMs(vNum);
+						return d || '';
+					}
+
+					// Otherwise: treat plausible epoch as timestamp
+					return makeTimestampComment(vNum);
+				}
+
+				function appendSpan(parent, className, text) {
+					const el = document.createElement('span');
+					if (className) {
+						el.className = className;
+					}
+					el.textContent = escapeText(text);
+					parent.appendChild(el);
+				}
+
+				function renderAnnotated(value, pathParts = [], indent = 0) {
+					const IND = '  ';
+
+					const renderValue = (val, p, level, isInline) => {
+						if (val === null) {
+							appendSpan(pre, 'msghub-json-null', 'null');
+							return;
+						}
+						if (typeof val === 'string') {
+							appendSpan(pre, 'msghub-json-string', JSON.stringify(val));
+							return;
+						}
+						if (typeof val === 'number') {
+							appendSpan(pre, 'msghub-json-number', String(val));
+							return;
+						}
+						if (typeof val === 'boolean') {
+							appendSpan(pre, 'msghub-json-bool', val ? 'true' : 'false');
+							return;
+						}
+						if (Array.isArray(val)) {
+							if (val.length === 0) {
+								appendSpan(pre, 'msghub-json-punct', '[]');
+								return;
+							}
+							appendSpan(pre, 'msghub-json-punct', '[');
+							appendSpan(pre, '', '\n');
+							for (let i = 0; i < val.length; i++) {
+								appendSpan(pre, '', IND.repeat(level + 1));
+								renderValue(val[i], p.concat(String(i)), level + 1, false);
+								if (i < val.length - 1) {
+									appendSpan(pre, 'msghub-json-punct', ',');
+								}
+								appendSpan(pre, '', '\n');
+							}
+							appendSpan(pre, '', IND.repeat(level));
+							appendSpan(pre, 'msghub-json-punct', ']');
+							return;
+						}
+						if (val && typeof val === 'object') {
+							const entries = Object.entries(val);
+							if (entries.length === 0) {
+								appendSpan(pre, 'msghub-json-punct', '{}');
+								return;
+							}
+							appendSpan(pre, 'msghub-json-punct', '{');
+							appendSpan(pre, '', '\n');
+							for (let i = 0; i < entries.length; i++) {
+								const [k, v] = entries[i];
+								appendSpan(pre, '', IND.repeat(level + 1));
+								appendSpan(pre, 'msghub-json-key', JSON.stringify(k));
+								appendSpan(pre, 'msghub-json-punct', ': ');
+								renderValue(v, p.concat(k), level + 1, false);
+
+								const comment = resolveAnnotation(p, k, v);
+								if (i < entries.length - 1) {
+									appendSpan(pre, 'msghub-json-punct', ',');
+								}
+								if (comment) {
+									appendSpan(pre, 'msghub-json-comment', ` // ${comment}`);
+								}
+								appendSpan(pre, '', '\n');
+							}
+							appendSpan(pre, '', IND.repeat(level));
+							appendSpan(pre, 'msghub-json-punct', '}');
+							return;
+						}
+						appendSpan(pre, 'msghub-json-null', JSON.stringify(val));
+					};
+
+					// reset target and render
+					pre.replaceChildren();
+					renderValue(value, pathParts, indent, false);
+				}
 
 			function getNumberTokenAtPoint(rootEl, x, y) {
 				const doc = rootEl?.ownerDocument || document;
@@ -262,6 +500,8 @@
 				pre.removeAttribute('title');
 			});
 
+			pre.__msghubRenderAnnotated = renderAnnotated;
+
 			jsonPre = pre;
 			return jsonPre;
 		}
@@ -269,7 +509,11 @@
 		function openMessageJson(msg) {
 			const pre = ensureJsonPre();
 			try {
-				pre.textContent = JSON.stringify(msg, null, 2);
+				if (typeof pre.__msghubRenderAnnotated === 'function') {
+					pre.__msghubRenderAnnotated(msg, [], 0);
+				} else {
+					pre.textContent = JSON.stringify(msg, null, 2);
+				}
 			} catch (e) {
 				pre.textContent = String(e?.message || e);
 			}
@@ -968,6 +1212,7 @@
 					const meta = isObject(lastMeta) ? lastMeta : {};
 					const generatedAt = formatTs(meta.generatedAt) || 'n/a';
 					const tz = typeof meta.tz === 'string' && meta.tz.trim() ? meta.tz.trim() : null;
+					serverTz = tz;
 					metaEl.replaceChildren(
 						h('div', { text: `generatedAt: ${generatedAt}` }),
 						h('div', { text: tz ? `tz: ${tz}` : 'tz: n/a' }),
