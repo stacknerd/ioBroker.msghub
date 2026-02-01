@@ -4,3 +4,46 @@
    Add panel-specific styles here, always scoped:
    .msghub-root .msghub-messages ... */
 
+.msghub-root .msghub-messages-json .msghub-json-key {
+	color: #0451a5;
+}
+.msghub-root .msghub-messages-json .msghub-json-string {
+	color: #a31515;
+}
+.msghub-root .msghub-messages-json .msghub-json-number {
+	color: #098658;
+}
+.msghub-root .msghub-messages-json .msghub-json-bool {
+	color: #0000ff;
+}
+.msghub-root .msghub-messages-json .msghub-json-null {
+	color: #0000ff;
+}
+.msghub-root .msghub-messages-json .msghub-json-punct {
+	color: #000000;
+}
+.msghub-root .msghub-messages-json .msghub-json-comment {
+	color: #008000;
+}
+
+html[data-msghub-theme='dark'] .msghub-root .msghub-messages-json .msghub-json-key {
+	color: #9cdcfe;
+}
+html[data-msghub-theme='dark'] .msghub-root .msghub-messages-json .msghub-json-string {
+	color: #ce9178;
+}
+html[data-msghub-theme='dark'] .msghub-root .msghub-messages-json .msghub-json-number {
+	color: #b5cea8;
+}
+html[data-msghub-theme='dark'] .msghub-root .msghub-messages-json .msghub-json-bool {
+	color: #569cd6;
+}
+html[data-msghub-theme='dark'] .msghub-root .msghub-messages-json .msghub-json-null {
+	color: #569cd6;
+}
+html[data-msghub-theme='dark'] .msghub-root .msghub-messages-json .msghub-json-punct {
+	color: #d4d4d4;
+}
+html[data-msghub-theme='dark'] .msghub-root .msghub-messages-json .msghub-json-comment {
+	color: #6a9955;
+}
