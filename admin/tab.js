@@ -532,6 +532,25 @@ const setConnStatus = isOnline => {
 	elements.connection.classList.add(isOnline ? 'online' : 'offline');
 };
 
+let connOnline = false;
+
+function applyStaticI18n() {
+	for (const el of document.querySelectorAll('[data-i18n]')) {
+		const key = String(el.getAttribute('data-i18n') || '').trim();
+		if (!key) {
+			continue;
+		}
+		el.textContent = pickText(key);
+	}
+}
+
+function setConnTextFromState() {
+	const key = connOnline
+		? 'msghub.i18n.core.admin.ui.connection.connected.text'
+		: 'msghub.i18n.core.admin.ui.connection.disconnected.text';
+	setConnText(t(key, adapterInstance));
+}
+
 let pluginsSection = null;
 let statsSection = null;
 let messagesSection = null;
@@ -566,12 +585,20 @@ async function initSectionsIfAvailable() {
 
 window.addEventListener('DOMContentLoaded', () => {
 	initTabs();
+	void ensureAdminI18nLoaded().then(() => {
+		applyStaticI18n();
+		setConnTextFromState();
+	});
 	void initSectionsIfAvailable();
 });
 
 socket.on('connect', () => {
-	setConnText(`connected (${adapterInstance})`);
+	connOnline = true;
 	setConnStatus(true);
+	void ensureAdminI18nLoaded().then(() => {
+		applyStaticI18n();
+		setConnTextFromState();
+	});
 	void initSectionsIfAvailable();
 	pluginsSection?.onConnect?.();
 	statsSection?.onConnect?.();
@@ -579,6 +606,10 @@ socket.on('connect', () => {
 });
 
 socket.on('disconnect', () => {
-	setConnText('disconnected');
+	connOnline = false;
 	setConnStatus(false);
+	void ensureAdminI18nLoaded().then(() => {
+		applyStaticI18n();
+		setConnTextFromState();
+	});
 });

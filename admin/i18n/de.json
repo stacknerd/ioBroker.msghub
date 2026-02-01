@@ -1,4 +1,9 @@
 {
+	"msghub.i18n.core.admin.ui.tabs.stats.label": "Statistiken",
+	"msghub.i18n.core.admin.ui.tabs.messages.label": "Messages",
+	"msghub.i18n.core.admin.ui.tabs.plugins.label": "Plugin-Konfiguration",
+	"msghub.i18n.core.admin.ui.connection.connected.text": "Verbunden · %s",
+	"msghub.i18n.core.admin.ui.connection.disconnected.text": "Nicht verbunden",
 	"msghub.i18n.core.admin.common.MsgConstants.kind.appointment.label": "Termin",
 	"msghub.i18n.core.admin.common.MsgConstants.kind.inventorylist.label": "Inventarliste",
 	"msghub.i18n.core.admin.common.MsgConstants.kind.shoppinglist.label": "Einkaufsliste",

@@ -7,163 +7,182 @@
  */
 
 .msghub-root {
-  /* Theme tokens (keep minimal; panels/modules consume these) */
-  --msghub-bg: #ffffff;
-  --msghub-text: rgba(0, 0, 0, 0.87);
-  --msghub-muted: rgba(0, 0, 0, 0.60);
-  --msghub-border: rgba(0, 0, 0, 0.12);
+	/* Theme tokens (keep minimal; panels/modules consume these) */
+	--msghub-bg: rgb(255 255 255);
+	--msghub-text: rgb(0 0 0 / 0.87);
+	--msghub-muted: rgb(0 0 0 / 0.6);
+	--msghub-border: rgb(0 0 0 / 0.12);
 
-  --msghub-accent: #26a69a; /* materialize teal */
-  --msghub-danger: #d32f2f;
+	--msghub-accent: rgb(51 153 204);
+	--msghub-ok: rgb(38 166 154);
+	--msghub-ok-dim: rgb(38 166 154 / 0.1);
+	--msghub-warning: rgb(230 145 56);
+	--msghub-warning-dim: rgb(230 145 56 / 0.1);
+	--msghub-danger: rgb(211 47 47);
+	--msghub-danger-dim: rgb(211 47 47 / 0.1);
 
-  --msghub-radius: 4px;
+	/* Typography (central presets; avoid ad-hoc font-weight/size usage) */
+	--msghub-font-sans:
+		system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, 'Apple Color Emoji', 'Segoe UI Emoji';
+	--msghub-font-mono:
+		ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
 
-  /* Density (base scale; can be overridden centrally later) */
-  --msghub-space-1: 4px;
-  --msghub-space-2: 8px;
-  --msghub-space-3: 12px;
-  --msghub-space-4: 16px;
+	--msghub-fw-light: 400;
+	--msghub-fw-med: 600;
+	--msghub-fw-bold: 700;
+
+	--msghub-fs-sm: 12px;
+	--msghub-fs-md: 14px;
+	--msghub-fs-lg: 16px;
+	--msghub-fs-xl: 18px;
+
+	--msghub-lh-tight: 1.2;
+	--msghub-lh-normal: 1.4;
+	--msghub-lh-solid: 1;
+
+	--msghub-font-header: normal var(--msghub-fw-bold) var(--msghub-fs-xl) / var(--msghub-lh-normal)
+		var(--msghub-font-sans);
+	--msghub-font-body: normal var(--msghub-fw-light) var(--msghub-fs-md) / var(--msghub-lh-normal)
+		var(--msghub-font-sans);
+	--msghub-font-tab: normal var(--msghub-fw-med) var(--msghub-fs-lg) / var(--msghub-lh-tight) var(--msghub-font-sans);
+	--msghub-font-badge: normal var(--msghub-fw-bold) var(--msghub-fs-sm) / var(--msghub-lh-solid)
+		var(--msghub-font-sans);
+
+	/* Surfaces / effects (keep all color literals in this token section) */
+	--msghub-surface-hover: rgb(0 0 0 / 0.04);
+	--msghub-shadow-md: rgb(0 0 0 / 0.16);
+
+	--msghub-radius: 4px;
+
+	/* Density (base scale; can be overridden centrally later) */
+	--msghub-space-1: 4px;
+	--msghub-space-2: 6px;
+	--msghub-space-3: 10px;
+	--msghub-space-4: 14px;
 }
 
-html[data-msghub-theme="dark"] .msghub-root {
-  --msghub-bg: #121212;
-  --msghub-text: rgba(255, 255, 255, 0.88);
-  --msghub-muted: rgba(255, 255, 255, 0.64);
-  --msghub-border: rgba(255, 255, 255, 0.16);
+html[data-msghub-theme='dark'] .msghub-root {
+	--msghub-bg: rgb(18 18 18);
+	--msghub-text: rgb(255 255 255 / 0.88);
+	--msghub-muted: rgb(255 255 255 / 0.64);
+	--msghub-border: rgb(255 255 255 / 0.08);
 
-  --msghub-accent: #2dd4bf;
-  --msghub-danger: #ef5350;
+	--msghub-accent: rgb(51 153 204);
+	--msghub-ok: rgb(45 212 191);
+	--msghub-ok-dim: rgb(45 212 191 / 0.14);
+	--msghub-warning: rgb(255 170 90);
+	--msghub-warning-dim: rgb(255 170 90 / 0.16);
+	--msghub-danger: rgb(239 83 80);
+	--msghub-danger-dim: rgb(239 83 80 / 0.14);
+
+	--msghub-surface-hover: rgb(255 255 255 / 0.1);
+	--msghub-shadow-md: rgb(0 0 0 / 0.4);
 }
 
-html[data-msghub-theme="dark"] { color-scheme: dark; }
-html:not([data-msghub-theme="dark"]) { color-scheme: light; }
+html[data-msghub-theme='dark'] {
+	color-scheme: dark;
+}
+html:not([data-msghub-theme='dark']) {
+	color-scheme: light;
+}
+
+html,
+body {
+	height: 100%;
+}
+body {
+	margin: 0;
+	overflow: hidden;
+}
 
 /* Base */
 .msghub-root,
-.msghub-root * { box-sizing: border-box; }
-
-.msghub-root {
-  background: var(--msghub-bg);
-  color: var(--msghub-text);
-  padding: var(--msghub-space-3);
-  font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+.msghub-root * {
+	box-sizing: border-box;
 }
 
-.msghub-muted { color: var(--msghub-muted); }
+.msghub-root {
+	background: var(--msghub-bg);
+	color: var(--msghub-text);
+	height: 100vh;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+	padding: var(--msghub-space-3);
+	font: var(--msghub-font-body);
+}
 
-.msghub-root a { color: inherit; }
+.msghub-root a {
+	color: inherit;
+}
 
-/* Primary navigation (tabs) */
+/* Primary navigation (tabs) + connection status */
 .msghub-tabs {
-  display: flex;
-  align-items: center;
-  gap: 0;
-  border: 1px solid var(--msghub-border);
-  border-radius: var(--msghub-radius);
-  overflow: hidden;
-  margin-bottom: var(--msghub-space-3);
+	display: flex;
+	align-items: center;
+	gap: var(--msghub-space-2);
+	padding: var(--msghub-space-2);
+	border: 1px solid var(--msghub-border);
+	border-radius: var(--msghub-radius);
+	margin-bottom: var(--msghub-space-3);
 }
 
 .msghub-tab {
-  flex: 1 1 0;
-  min-width: 0;
-  padding: 10px 12px;
-  text-align: center;
-  text-decoration: none;
-  border-right: 1px solid var(--msghub-border);
-  background: transparent;
-  font-weight: 600;
+	display: inline-flex;
+	align-items: center;
+	padding: 6px 10px;
+	border-radius: var(--msghub-radius);
+	text-decoration: none;
+	font: var(--msghub-font-tab);
+	white-space: nowrap;
 }
 
-.msghub-tab:last-child { border-right: 0; }
+.msghub-tab:hover {
+	background: var(--msghub-surface-hover);
+}
 
 .msghub-tab.is-active {
-  background: rgba(0, 0, 0, 0.06);
+	background: transparent;
+	color: var(--msghub-accent);
 }
 
-html[data-msghub-theme="dark"] .msghub-tab.is-active {
-  background: rgba(255, 255, 255, 0.10);
+.msghub-tab.is-active:hover {
+	background: transparent;
 }
 
-.msghub-tab:focus {
-  outline: 2px solid var(--msghub-accent);
-  outline-offset: -2px;
-}
-
-.msghub-panel[hidden] { display: none !important; }
-
-/* Header (kept minimal; should not outshine main navigation) */
-.msghub-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--msghub-space-3);
-  margin-bottom: var(--msghub-space-3);
-}
-
-.msghub-header h5 {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 600;
-  line-height: 1.2;
+.msghub-tabs-spacer {
+	flex: 1 1 auto;
+	min-width: 0;
 }
 
 #msghub-connection {
-  padding: 4px 8px;
-  border-radius: 999px;
-  border: 1px solid var(--msghub-border);
-  font-size: 12px;
-  line-height: 1;
+	padding: 5px 10px;
+	border-radius: 999px;
+	border: 1px solid var(--msghub-border);
+	font: var(--msghub-font-badge);
+	white-space: nowrap;
 }
 
 #msghub-connection.online {
-  color: var(--msghub-accent);
-  border-color: var(--msghub-accent);
+	color: var(--msghub-ok);
+	border-color: var(--msghub-ok);
+	background: var(--msghub-ok-dim);
 }
 
 #msghub-connection.offline {
-  color: var(--msghub-danger);
-  border-color: var(--msghub-danger);
+	color: var(--msghub-danger);
+	border-color: var(--msghub-danger);
+	background: var(--msghub-danger-dim);
 }
 
-/* Reusable helpers */
-.msghub-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-end;
-  gap: var(--msghub-space-2);
+.msghub-panel[hidden] {
+	display: none !important;
 }
 
-.msghub-error {
-  border: 1px solid var(--msghub-danger);
-  color: var(--msghub-danger);
-  padding: var(--msghub-space-2) var(--msghub-space-3);
-  border-radius: var(--msghub-radius);
-}
-
-.msghub-mono {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-}
-
-/* Toasts (Materialize replacement) */
-.msghub-toast-host {
-  position: fixed;
-  inset: auto 0 var(--msghub-space-3) 0;
-  z-index: 9999;
-  display: flex;
-  justify-content: center;
-  pointer-events: none;
-}
-
-.msghub-toast {
-  pointer-events: auto;
-  max-width: min(720px, calc(100% - 24px));
-  border: 1px solid var(--msghub-border);
-  border-radius: var(--msghub-radius);
-  background: var(--msghub-bg);
-  color: var(--msghub-text);
-  padding: var(--msghub-space-2) var(--msghub-space-3);
-  font-size: 13px;
-  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.16);
+.msghub-panel {
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow: auto;
+	overflow-x: hidden;
+	scrollbar-gutter: stable;
 }
