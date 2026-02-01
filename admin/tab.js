@@ -5,7 +5,6 @@
 'use strict';
 
 const win = /** @type {any} */ (window);
-const M = win.M;
 const io = win.io;
 
 function parseQuery() {
@@ -244,6 +243,121 @@ function detectTheme() {
 
 applyTheme(detectTheme());
 
+function ensureUiShim() {
+	if (win.M && typeof win.M === 'object') {
+		return win.M;
+	}
+
+	/** @type {HTMLDivElement | null} */
+	let toastHost = null;
+
+	const ensureToastHost = () => {
+		if (toastHost) {
+			return toastHost;
+		}
+		toastHost = document.createElement('div');
+		toastHost.className = 'msghub-toast-host';
+		document.body.appendChild(toastHost);
+		return toastHost;
+	};
+
+	const toast = opts => {
+		const html = typeof opts === 'string' ? opts : String(opts?.html ?? '');
+		const host = ensureToastHost();
+		const el = document.createElement('div');
+		el.className = 'msghub-toast';
+		el.textContent = html;
+		host.replaceChildren(el);
+		window.setTimeout(() => {
+			try {
+				if (host.firstChild === el) {
+					host.replaceChildren();
+				}
+			} catch {
+				// ignore
+			}
+		}, 2500);
+	};
+
+	// Minimal compatibility surface for existing code.
+	const shim = {
+		toast: ({ html }) => toast({ html }),
+		updateTextFields: () => undefined,
+	};
+	win.M = shim;
+	return shim;
+}
+
+function initTabs() {
+	const tabs = Array.from(document.querySelectorAll('.msghub-tab'));
+	if (!tabs.length) {
+		return;
+	}
+
+	const getTargetId = tab => {
+		const href = tab.getAttribute('href') || '';
+		return href.startsWith('#') ? href.slice(1) : '';
+	};
+
+	const panels = new Map();
+	for (const tab of tabs) {
+		const id = getTargetId(tab);
+		if (!id) {
+			continue;
+		}
+		const el = document.getElementById(id);
+		if (el) {
+			panels.set(id, el);
+		}
+	}
+
+	const setActive = id => {
+		for (const tab of tabs) {
+			const tid = getTargetId(tab);
+			const isActive = tid === id;
+			tab.classList.toggle('is-active', isActive);
+			tab.setAttribute('aria-selected', isActive ? 'true' : 'false');
+			tab.setAttribute('tabindex', isActive ? '0' : '-1');
+		}
+		for (const [pid, panel] of panels.entries()) {
+			panel.toggleAttribute('hidden', pid !== id);
+		}
+	};
+
+	const initial = (() => {
+		const h = String(location.hash || '');
+		const candidate = h.startsWith('#') ? h.slice(1) : '';
+		if (candidate && panels.has(candidate)) {
+			return candidate;
+		}
+		const fromMarkup = tabs.find(t => t.classList.contains('is-active')) || null;
+		const fromMarkupId = fromMarkup ? getTargetId(fromMarkup) : '';
+		if (fromMarkupId && panels.has(fromMarkupId)) {
+			return fromMarkupId;
+		}
+		const fallback = 'tab-plugins';
+		return panels.has(fallback) ? fallback : panels.keys().next().value;
+	})();
+
+	setActive(initial);
+
+	for (const tab of tabs) {
+		tab.addEventListener('click', e => {
+			e.preventDefault();
+			const id = getTargetId(tab);
+			if (!id || !panels.has(id)) {
+				return;
+			}
+			try {
+				history.replaceState(null, '', `#${id}`);
+			} catch {
+				// ignore
+			}
+			setActive(id);
+		});
+	}
+}
+
 window.addEventListener('message', ev => {
 	const dataRaw = ev?.data;
 	let data = null;
@@ -389,6 +503,8 @@ const elements = Object.freeze({
 	messagesRoot: document.getElementById('messages-root'),
 });
 
+const M = ensureUiShim();
+
 const ctx = Object.freeze({
 	args,
 	adapterInstance,
@@ -449,7 +565,7 @@ async function initSectionsIfAvailable() {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
-	M.Tabs.init(document.querySelectorAll('.tabs'), {});
+	initTabs();
 	void initSectionsIfAvailable();
 });
 
