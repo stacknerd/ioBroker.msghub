@@ -143,9 +143,9 @@ These are useful for UI sorting/filters. For text templates, prefer metrics like
 | Threshold | `state-name`, `state-value`, `state-min`, `state-max` | Name/value of the target; recovery bounds used to clear the message. |
 | Freshness | `state-name`, `state-value`, `state-ts`, `state-lc` | Name/value; last update (`ts`) and last change (`lc`) timestamps. |
 | Cycle | `state-name`, `cycle-lastResetAt`, `cycle-subCounter`, `cycle-period?`, `cycle-remaining?`, `cycle-timeMs?`, `cycle-timeBasedDueAt?` | Name; last reset; progress since reset; optional count/time targets and next time-based due timestamp. |
-| Triggered | `state-value`, `trigger-value` | Current value of target and trigger (for debugging expectation failures). |
-| Non-settling | `state-value`, `trendStartedAt`, `trendStartValue`, `trendMin`, `trendMax`, `trendMinToMax`, `trendDir` | Trend/activity diagnostics: when instability started, min/max span, and direction. |
-| Session | `session-start`, `session-startval`, `session-counter`, `session-cost` | Session start time, counter baseline, delta since start, and computed cost. |
+| Triggered | `state-name`, `state-value`, `trigger-value` | Name and current value of target plus trigger value (for debugging expectation failures). |
+| Non-settling | `state-name`, `state-value`, `trendStartedAt`, `trendStartValue`, `trendMin`, `trendMax`, `trendMinToMax`, `trendDir` | Name/value plus trend/activity diagnostics: when instability started, min/max span, and direction. |
+| Session | `state-name`, `session-start`, `session-startval`, `session-counter`, `session-cost` | Name plus session start time, counter baseline, delta since start, and computed cost. |
 
 ---
 
