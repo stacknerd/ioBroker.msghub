@@ -3,7 +3,7 @@
  * Governance:
  * - Base only: tokens + generic rules used across panels/modules
  * - No panel-specific styling here (use tab.<panel>.css / tab.<panel>.<module>.css)
- * - Keep it boring: prioritize density, legibility, and consistency with ioBroker Admin/Materialize
+ * - Keep it boring: prioritize density, legibility, and consistency with ioBroker Admin
  */
 
 .msghub-root {
@@ -12,6 +12,7 @@
 	--msghub-text: rgb(0 0 0 / 0.87);
 	--msghub-muted: rgb(0 0 0 / 0.6);
 	--msghub-border: rgb(0 0 0 / 0.12);
+	--msghub-backdrop: rgb(140 140 140 / 0.55);
 
 	--msghub-accent: rgb(51 153 204);
 	--msghub-ok: rgb(38 166 154);
@@ -66,6 +67,7 @@ html[data-msghub-theme='dark'] .msghub-root {
 	--msghub-text: rgb(255 255 255 / 0.88);
 	--msghub-muted: rgb(255 255 255 / 0.64);
 	--msghub-border: rgb(255 255 255 / 0.08);
+	--msghub-backdrop: rgb(0 0 0 / 0.65);
 
 	--msghub-accent: rgb(51 153 204);
 	--msghub-ok: rgb(45 212 191);
@@ -117,7 +119,7 @@ body {
 }
 
 /* Primary navigation (tabs) + connection status */
-.msghub-tabs {
+.msghub-root .msghub-tabs {
 	display: flex;
 	align-items: center;
 	gap: var(--msghub-space-2);
@@ -127,7 +129,7 @@ body {
 	margin-bottom: var(--msghub-space-3);
 }
 
-.msghub-tab {
+.msghub-root .msghub-tab {
 	display: inline-flex;
 	align-items: center;
 	padding: 6px 10px;
@@ -137,25 +139,25 @@ body {
 	white-space: nowrap;
 }
 
-.msghub-tab:hover {
+.msghub-root .msghub-tab:hover {
 	background: var(--msghub-surface-hover);
 }
 
-.msghub-tab.is-active {
+.msghub-root .msghub-tab.is-active {
 	background: transparent;
 	color: var(--msghub-accent);
 }
 
-.msghub-tab.is-active:hover {
+.msghub-root .msghub-tab.is-active:hover {
 	background: transparent;
 }
 
-.msghub-tabs-spacer {
+.msghub-root .msghub-tabs-spacer {
 	flex: 1 1 auto;
 	min-width: 0;
 }
 
-#msghub-connection {
+.msghub-root #msghub-connection {
 	padding: 5px 10px;
 	border-radius: 999px;
 	border: 1px solid var(--msghub-border);
@@ -163,26 +165,146 @@ body {
 	white-space: nowrap;
 }
 
-#msghub-connection.online {
+.msghub-root #msghub-connection.online {
 	color: var(--msghub-ok);
 	border-color: var(--msghub-ok);
 	background: var(--msghub-ok-dim);
 }
 
-#msghub-connection.offline {
+.msghub-root #msghub-connection.offline {
 	color: var(--msghub-danger);
 	border-color: var(--msghub-danger);
 	background: var(--msghub-danger-dim);
 }
 
-.msghub-panel[hidden] {
+.msghub-root .msghub-panel[hidden] {
 	display: none !important;
 }
 
-.msghub-panel {
+.msghub-root .msghub-panel {
 	flex: 1 1 auto;
 	min-height: 0;
 	overflow: auto;
 	overflow-x: hidden;
 	scrollbar-gutter: stable;
+}
+
+/* States */
+.msghub-root .is-hidden {
+	display: none !important;
+}
+
+.msghub-root.is-modal-open .msghub-panel {
+	overflow: hidden;
+}
+
+/* Universal UI infrastructure */
+.msghub-root .msghub-toast-host {
+	position: fixed;
+	right: var(--msghub-space-3);
+	bottom: var(--msghub-space-3);
+	z-index: 1200;
+	display: flex;
+	flex-direction: column;
+	gap: var(--msghub-space-2);
+	align-items: flex-end;
+	pointer-events: none;
+}
+
+.msghub-root .msghub-toast {
+	pointer-events: auto;
+	max-width: min(520px, calc(100vw - 2 * var(--msghub-space-3)));
+	background: var(--msghub-bg);
+	color: var(--msghub-text);
+	border: 1px solid var(--msghub-border);
+	border-radius: var(--msghub-radius);
+	box-shadow: 0 6px 18px var(--msghub-shadow-md);
+	padding: var(--msghub-space-2) var(--msghub-space-3);
+	font: var(--msghub-font-body);
+}
+
+.msghub-root .msghub-overlay-backdrop,
+.msghub-root .msghub-dialog-backdrop {
+	position: fixed;
+	inset: 0;
+	z-index: 1100;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: var(--msghub-space-3);
+	background: var(--msghub-backdrop);
+}
+
+.msghub-root .msghub-overlay-backdrop {
+	z-index: 1050;
+}
+
+.msghub-root .msghub-overlay,
+.msghub-root .msghub-dialog {
+	width: min(980px, 100%);
+	max-height: min(86vh, 100%);
+	background: var(--msghub-bg);
+	color: var(--msghub-text);
+	border: 1px solid var(--msghub-border);
+	border-radius: var(--msghub-radius);
+	box-shadow: 0 10px 28px var(--msghub-shadow-md);
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+}
+
+.msghub-root .msghub-dialog {
+	width: min(520px, 100%);
+	max-height: min(70vh, 100%);
+}
+
+.msghub-root .msghub-overlay-head {
+	display: flex;
+	align-items: center;
+	gap: var(--msghub-space-2);
+	padding: var(--msghub-space-2) var(--msghub-space-3);
+	border-bottom: 1px solid var(--msghub-border);
+}
+
+.msghub-root .msghub-overlay-title {
+	flex: 1 1 auto;
+	min-width: 0;
+	font: var(--msghub-font-tab);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.msghub-root .msghub-overlay-body {
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow: auto;
+	padding: var(--msghub-space-3);
+}
+
+.msghub-root .msghub-dialog-title {
+	margin: 0;
+	padding: var(--msghub-space-3) var(--msghub-space-3) 0 var(--msghub-space-3);
+	font: var(--msghub-font-tab);
+}
+
+.msghub-root .msghub-dialog-body {
+	padding: var(--msghub-space-2) var(--msghub-space-3);
+	overflow: auto;
+}
+
+.msghub-root .msghub-dialog-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: var(--msghub-space-2);
+	padding: var(--msghub-space-2) var(--msghub-space-3) var(--msghub-space-3) var(--msghub-space-3);
+	border-top: 1px solid var(--msghub-border);
+}
+
+.msghub-root .msghub-overlay-body pre {
+	margin: 0;
+	font-family: var(--msghub-font-mono);
+	font-size: var(--msghub-fs-sm);
+	line-height: var(--msghub-lh-normal);
+	white-space: pre;
 }

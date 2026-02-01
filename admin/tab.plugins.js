@@ -8,7 +8,7 @@
 	/** @type {any} */
 	const win = /** @type {any} */ (window);
 
-	function initPluginConfigSection(ctx) {
+		function initPluginConfigSection(ctx) {
 		const elRoot = ctx?.elements?.pluginsRoot;
 		if (!elRoot) {
 			throw new Error('MsghubAdminTabPlugins: missing pluginsRoot element');
@@ -23,7 +23,7 @@
 		const sendTo = ctx.sendTo;
 		const h = ctx.h;
 		const pickText = ctx.pickText;
-		const M = ctx.M;
+		const ui = ctx.ui;
 
 		let cachedConstants = null;
 		let constantsLoadPromise = null;
@@ -102,6 +102,14 @@
 				fallbackLabel: k,
 			}));
 		}
+
+		const toast = message => {
+			try {
+				ui?.toast?.(String(message));
+			} catch {
+				// ignore
+			}
+		};
 
 		const CATEGORY_ORDER = Object.freeze(['ingest', 'notify', 'bridge', 'engage']);
 		const CATEGORY_TITLES = Object.freeze({
@@ -184,145 +192,13 @@
 			);
 		}
 
-		let deleteModalApi = null;
-		function ensureDeleteModal() {
-			if (deleteModalApi) {
-				return deleteModalApi;
+		const confirmDialog = opts => {
+			if (ui?.dialog?.confirm) {
+				return ui.dialog.confirm(opts);
 			}
-
-			const mount = document.querySelector('.msghub-root') || document.body;
-
-			const titleId = 'msghub-dialog-delete-title';
-			const descId = 'msghub-dialog-delete-desc';
-
-			const el = h(
-				'div',
-				{ id: 'msghub-dialog-delete-instance', class: 'msghub-dialog-backdrop', 'aria-hidden': 'true' },
-				[
-					h(
-						'div',
-						{
-							class: 'msghub-dialog',
-							role: 'dialog',
-							'aria-modal': 'true',
-							'aria-labelledby': titleId,
-							'aria-describedby': descId,
-						},
-						[
-							h('h6', { id: titleId, class: 'msghub-dialog-title', text: 'Delete instance?' }),
-							h('p', {
-								id: descId,
-								class: 'msghub-muted',
-								text: 'Options of this instance will be lost and states will be deleted.',
-							}),
-							h('div', { class: 'msghub-dialog-actions' }, [
-								h('a', {
-									href: '#',
-									class: 'btn-flat',
-									id: 'msghub-dialog-delete-cancel',
-									text: 'Cancel',
-								}),
-								h('a', {
-									href: '#',
-									class: 'btn red',
-									id: 'msghub-dialog-delete-confirm',
-									text: 'Delete',
-								}),
-							]),
-						],
-					),
-				],
-			);
-
-			mount.appendChild(el);
-
-			let pendingResolve = null;
-			let prevOverflow = null;
-
-			const setOpen = isOpen => {
-				el.classList.toggle('is-open', isOpen);
-				el.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
-				if (isOpen) {
-					try {
-						prevOverflow = document.body.style.overflow;
-						document.body.style.overflow = 'hidden';
-					} catch {
-						// ignore
-					}
-				} else {
-					try {
-						document.body.style.overflow = prevOverflow || '';
-					} catch {
-						// ignore
-					}
-					prevOverflow = null;
-				}
-			};
-
-			const close = ok => {
-				if (typeof pendingResolve === 'function') {
-					const r = pendingResolve;
-					pendingResolve = null;
-					setOpen(false);
-					r(ok === true);
-					return;
-				}
-				setOpen(false);
-			};
-
-			const btnCancel = el.querySelector('#msghub-dialog-delete-cancel');
-			if (btnCancel) {
-				btnCancel.addEventListener('click', e => {
-					e.preventDefault();
-					close(false);
-				});
-			}
-
-			const btnConfirm = el.querySelector('#msghub-dialog-delete-confirm');
-			if (btnConfirm) {
-				btnConfirm.addEventListener('click', e => {
-					e.preventDefault();
-					close(true);
-				});
-			}
-
-			el.addEventListener('click', e => {
-				if (e?.target === el) {
-					close(false);
-				}
-			});
-
-			document.addEventListener('keydown', e => {
-				if (el.classList.contains('is-open') && (e.key === 'Escape' || e.key === 'Esc')) {
-					e.preventDefault();
-					close(false);
-				}
-			});
-
-			deleteModalApi = {
-				confirm: () =>
-					new Promise(resolve => {
-						if (typeof pendingResolve === 'function') {
-							resolve(false);
-							return;
-						}
-						pendingResolve = resolve;
-						setOpen(true);
-						try {
-							if (btnCancel?.blur) {
-								btnCancel.blur();
-							}
-							if (btnConfirm?.focus) {
-								btnConfirm.focus();
-							}
-						} catch {
-							// ignore
-						}
-					}),
-			};
-
-			return deleteModalApi;
-		}
+			const text = typeof opts?.text === 'string' && opts.text.trim() ? opts.text : String(opts?.title || '');
+			return Promise.resolve(window.confirm(text));
+		};
 
 		function appendInlineCodeAware(parent, text) {
 			const s = String(text ?? '');
@@ -441,111 +317,14 @@
 			return root;
 		}
 
-		let readmeModalApi = null;
-		function ensureReadmeModal() {
-			if (readmeModalApi) {
-				return readmeModalApi;
-			}
-
-			const mount = document.querySelector('.msghub-root') || document.body;
-
-			const titleId = 'msghub-dialog-readme-title';
-			const bodyId = 'msghub-dialog-readme-body';
-
-			const el = h(
-				'div',
-				{ id: 'msghub-dialog-plugin-readme', class: 'msghub-dialog-backdrop', 'aria-hidden': 'true' },
-				[
-					h(
-						'div',
-						{
-							class: 'msghub-dialog msghub-dialog--readme',
-							role: 'dialog',
-							'aria-modal': 'true',
-							'aria-labelledby': titleId,
-						},
-						[
-							h('h6', { id: titleId, class: 'msghub-dialog-title', text: 'Plugin guide' }),
-							h('div', { id: bodyId, class: 'msghub-dialog-body' }),
-							h('div', { class: 'msghub-dialog-actions' }, [
-								h('a', {
-									href: '#',
-									class: 'btn-flat',
-									id: 'msghub-dialog-readme-close',
-									text: 'Close',
-								}),
-							]),
-						],
-					),
-				],
-			);
-
-			mount.appendChild(el);
-
-			let prevOverflow = null;
-
-			const setOpen = isOpen => {
-				el.classList.toggle('is-open', isOpen);
-				el.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
-				if (isOpen) {
-					try {
-						prevOverflow = document.body.style.overflow;
-						document.body.style.overflow = 'hidden';
-					} catch {
-						// ignore
-					}
-				} else {
-					try {
-						document.body.style.overflow = prevOverflow || '';
-					} catch {
-						// ignore
-					}
-					prevOverflow = null;
-				}
-			};
-
-			const close = () => setOpen(false);
-
-			const btnClose = el.querySelector('#msghub-dialog-readme-close');
-			if (btnClose) {
-				btnClose.addEventListener('click', e => {
-					e.preventDefault();
-					close();
-				});
-			}
-
-			el.addEventListener('click', e => {
-				if (e?.target === el) {
-					close();
-				}
+		const openViewer = opts => {
+			const title = typeof opts?.title === 'string' ? opts.title : '';
+			const bodyEl = opts?.bodyEl;
+			ui?.overlayLarge?.open?.({
+				title: title && title.trim() ? title.trim() : 'Viewer',
+				bodyEl: bodyEl || h('p', { class: 'msghub-muted', text: 'No content available.' }),
 			});
-
-			document.addEventListener('keydown', e => {
-				if (el.classList.contains('is-open') && (e.key === 'Escape' || e.key === 'Esc')) {
-					e.preventDefault();
-					close();
-				}
-			});
-
-			readmeModalApi = {
-				open: opts => {
-					const title = typeof opts?.title === 'string' ? opts.title : '';
-					const bodyEl = opts?.bodyEl;
-					const t = title && title.trim() ? title.trim() : 'Plugin guide';
-					const titleEl = el.querySelector(`#${titleId}`);
-					if (titleEl) {
-						titleEl.textContent = t;
-					}
-					const body = el.querySelector(`#${bodyId}`);
-					if (body) {
-						body.replaceChildren(bodyEl || h('p', { class: 'msghub-muted', text: 'No guide available.' }));
-					}
-					setOpen(true);
-				},
-			};
-
-			return readmeModalApi;
-		}
+		};
 
 		let pluginReadmesByType = new Map();
 		let pluginReadmesLoadPromise = null;
@@ -681,7 +460,7 @@
 							.map(o => String(o.value))
 							.filter(Boolean)
 							.join(','),
-					wrapper: h('div', { class: 'input-field msghub-field msghub-field-select' }, [
+					wrapper: h('div', { class: 'msghub-field msghub-field-select' }, [
 						input,
 						h('label', { for: id, text: label || key }),
 						help ? h('div', { class: 'msghub-muted', text: help }) : null,
@@ -739,7 +518,7 @@
 						}
 						return raw;
 					},
-					wrapper: h('div', { class: 'input-field msghub-field msghub-field-select' }, [
+					wrapper: h('div', { class: 'msghub-field msghub-field-select' }, [
 						input,
 						h('label', { for: id, text: label || key }),
 						help ? h('div', { class: 'msghub-muted', text: help }) : null,
@@ -829,7 +608,7 @@
 							const factor = getTimeFactor(select.value);
 							return Math.round(n * factor);
 						},
-						wrapper: h('div', { class: 'input-field msghub-field msghub-field-time' }, [
+						wrapper: h('div', { class: 'msghub-field msghub-field-time' }, [
 							h('div', { class: 'msghub-field-time-row' }, [input, select]),
 							h('label', { for: id, text: label || key }),
 							help ? h('div', { class: 'msghub-muted', text: help }) : null,
@@ -866,7 +645,7 @@
 						const n = Number(raw);
 						return Number.isFinite(n) ? n : null;
 					},
-					wrapper: h('div', { class: 'input-field msghub-field msghub-field-number' }, [
+					wrapper: h('div', { class: 'msghub-field msghub-field-number' }, [
 						input,
 						suffix,
 						h('label', { for: id, text: label || key }),
@@ -879,7 +658,7 @@
 			return {
 				input,
 				getValue: () => input.value,
-				wrapper: h('div', { class: 'input-field msghub-field' }, [
+				wrapper: h('div', { class: 'msghub-field' }, [
 					input,
 					h('label', { for: id, text: label || key }),
 					help ? h('div', { class: 'msghub-muted', text: help }) : null,
@@ -1358,36 +1137,34 @@
 
 			const setBusy = (busy, btns) => {
 				for (const b of btns) {
-					b.classList.toggle('disabled', busy === true);
+					b.disabled = busy === true;
 				}
 			};
 
-			const btnLoad = h('a', {
-				class: 'btn-flat',
-				href: '#',
+			const btnLoad = h('button', {
+				type: 'button',
 				text: 'Load from object',
 			});
 
-			const btnGenerateEmpty = h('a', {
-				class: 'btn-flat',
-				href: '#',
+			const btnGenerateEmpty = h('button', {
+				type: 'button',
 				text: 'Generate empty',
 			});
 
-			const btnPreview = h('a', {
-				class: 'btn',
-				href: '#',
+			const btnPreview = h('button', {
+				type: 'button',
 				text: 'Generate preview',
 			});
 
-			const btnApply = h('a', {
-				class: 'btn disabled',
-				href: '#',
+			const btnApply = h('button', {
+				type: 'button',
+				disabled: true,
+				'aria-disabled': 'true',
 				text: 'Apply settings',
 			});
 
 			const setApplyEnabled = ok => {
-				btnApply.classList.toggle('disabled', ok !== true);
+				btnApply.disabled = ok !== true;
 				btnApply.setAttribute('aria-disabled', ok === true ? 'false' : 'true');
 			};
 
@@ -1431,11 +1208,7 @@
 					return true;
 				}
 				setStatus('IngestStates is disabled. Enable the plugin to use Bulk Apply.');
-				try {
-					M.toast({ html: 'IngestStates is disabled. Enable the plugin to use Bulk Apply.' });
-				} catch {
-					// ignore
-				}
+				toast('IngestStates is disabled. Enable the plugin to use Bulk Apply.');
 				return false;
 			};
 
@@ -1528,7 +1301,7 @@
 				if (!ensureEnabledOrWarn()) {
 					return;
 				}
-				if (btnApply.classList.contains('disabled')) {
+				if (btnApply.disabled) {
 					return;
 				}
 				const pattern = String(elPattern.value || '').trim();
@@ -1547,7 +1320,15 @@
 					return;
 				}
 				const count = Number(lastPreview?.willChange) || 0;
-				if (!window.confirm(`Apply MsgHub Custom config to ${count} object(s) as previewed?`)) {
+				if (
+					!(await confirmDialog({
+						title: 'Apply bulk changes?',
+						text: `Apply MsgHub Custom config to ${count} object(s) as previewed?`,
+						danger: true,
+						confirmText: 'Apply',
+						cancelText: 'Cancel',
+					}))
+				) {
 					return;
 				}
 
@@ -1563,11 +1344,7 @@
 						`Done: updated=${res.updated}, unchanged=${res.unchanged}, errors=${(res.errors || []).length}`,
 					);
 					setPreview(null);
-					try {
-						M.toast({ html: `Bulk apply done: updated=${res.updated}` });
-					} catch {
-						// ignore
-					}
+					toast(`Bulk apply done: updated=${res.updated}`);
 				} catch (err) {
 					setStatus(`Apply failed: ${String(err?.message || err)}`);
 				} finally {
@@ -1589,21 +1366,18 @@
 				}),
 				h('div', { class: 'msghub-bulk-step' }, [
 					h('div', { class: 'msghub-bulk-step-title', text: 'Step 1: get the base config' }),
-					h('div', { class: 'row' }, [
-						h('div', { class: 'input-field col s12 m8' }, [
+					h('div', null, [
+						h('div', { class: 'msghub-field' }, [
 							elSource,
 							h('label', { class: 'active', text: 'Import from existing config (object id)' }),
 						]),
-						h('div', { class: 'col s12 m4 msghub-actions msghub-actions--inline' }, [
-							btnLoad,
-							btnGenerateEmpty,
-						]),
+						h('div', { class: 'msghub-actions msghub-actions--inline' }, [btnLoad, btnGenerateEmpty]),
 					]),
 				]),
 				h('div', { class: 'msghub-bulk-step' }, [
 					h('div', { class: 'msghub-bulk-step-title', text: 'Step 2: define target' }),
-					h('div', { class: 'row' }, [
-						h('div', { class: 'input-field col s12' }, [
+					h('div', null, [
+						h('div', { class: 'msghub-field' }, [
 							elPattern,
 							h('label', {
 								class: 'active',
@@ -1614,11 +1388,11 @@
 				]),
 				h('div', { class: 'msghub-bulk-step' }, [
 					h('div', { class: 'msghub-bulk-step-title', text: 'Step 3: review / modify settings' }),
-					h('div', { class: 'row' }, [
-						h('div', { class: 'col s12' }, [
+					h('div', null, [
+						h('div', null, [
 							h('div', { class: 'msghub-bulk-apply-cols' }, [
 								h('div', { class: 'msghub-bulk-apply-col' }, [
-									h('div', { class: 'input-field' }, [
+									h('div', { class: 'msghub-field' }, [
 										elCustom,
 										h('label', {
 											class: 'active',
@@ -1627,31 +1401,29 @@
 									]),
 								]),
 								h('div', { class: 'msghub-bulk-apply-col' }, [
-									h('div', { class: 'input-field' }, [
+									h('div', { class: 'msghub-field' }, [
 										elDescription,
 										h('label', { class: 'active', text: 'Output of rule description' }),
 									]),
 								]),
 							]),
 						]),
-						h('div', { class: 'col s12' }, [
+						h('div', null, [
 							h('label', null, [elReplace, h('span', { text: ' ' }), elReplaceLabel]),
 						]),
 					]),
 				]),
 				h('div', { class: 'msghub-bulk-step' }, [
 					h('div', { class: 'msghub-bulk-step-title', text: 'Step 4: generate preview' }),
-					h('div', { class: 'row' }, [
-						h('div', { class: 'col s12 msghub-actions msghub-actions--inline' }, [btnPreview]),
-						h('div', { class: 'col s12' }, [elStatus]),
-						h('div', { class: 'col s12' }, [elPreview]),
+					h('div', null, [
+						h('div', { class: 'msghub-actions msghub-actions--inline' }, [btnPreview]),
+						h('div', null, [elStatus]),
+						h('div', null, [elPreview]),
 					]),
 				]),
 				h('div', { class: 'msghub-bulk-step' }, [
 					h('div', { class: 'msghub-bulk-step-title', text: 'Step 5: apply settings' }),
-					h('div', { class: 'row' }, [
-						h('div', { class: 'col s12 msghub-actions msghub-actions--inline' }, [btnApply]),
-					]),
+					h('div', null, [h('div', { class: 'msghub-actions msghub-actions--inline' }, [btnApply])]),
 				]),
 			]);
 		}
@@ -1808,7 +1580,7 @@
 
 				const desired = typeof selectPresetId === 'string' ? selectPresetId.trim() : '';
 				if (desired && presets.some(p => p?.presetId === desired)) {
-					setSelected(desired);
+					await setSelected(desired);
 				} else {
 					render();
 				}
@@ -1829,13 +1601,12 @@
 
 			const toast = msg => {
 				try {
-					// Helpful during development: always log, even if Materialize toast is visually broken.
 					console.warn(`Msghub presets: ${String(msg || '')}`);
 				} catch {
 					// ignore
 				}
 				try {
-					M.toast({ html: String(msg || '') });
+					ui?.toast?.(String(msg || ''));
 				} catch {
 					// ignore
 				}
@@ -1845,15 +1616,21 @@
 				lastError = typeof msg === 'string' ? msg : msg == null ? '' : String(msg);
 			};
 
-			const confirmDiscardIfNeeded = () => {
+			const confirmDiscardIfNeeded = async () => {
 				if (!isDirty()) {
 					return true;
 				}
-				return window.confirm('Discard unsaved changes?');
+				return await confirmDialog({
+					title: 'Discard changes?',
+					text: 'Discard unsaved changes?',
+					danger: true,
+					confirmText: 'Discard',
+					cancelText: 'Cancel',
+				});
 			};
 
-			const setSelected = presetId => {
-				if (!confirmDiscardIfNeeded()) {
+			const setSelected = async presetId => {
+				if (!(await confirmDiscardIfNeeded())) {
 					return;
 				}
 				const nextId = String(presetId || '').trim();
@@ -1863,33 +1640,30 @@
 				setError('');
 				presetLoading = true;
 				render();
-				Promise.resolve()
-					.then(() => loadPreset(nextId))
-					.then(preset => {
-						if (!preset) {
-							const msg = `Preset '${nextId}' could not be loaded`;
-							setError(msg);
-							toast(msg);
-							return;
-						}
-						selectedId = nextId;
-						original = cloneJson(preset);
-						draft = cloneJson(original);
-						isNew = false;
-					})
-					.catch(e => {
-						const msg = String(e?.message || e);
+				try {
+					const preset = await loadPreset(nextId);
+					if (!preset) {
+						const msg = `Preset '${nextId}' could not be loaded`;
 						setError(msg);
 						toast(msg);
-					})
-					.finally(() => {
-						presetLoading = false;
-						render();
-					});
+						return;
+					}
+					selectedId = nextId;
+					original = cloneJson(preset);
+					draft = cloneJson(original);
+					isNew = false;
+				} catch (e) {
+					const msg = String(e?.message || e);
+					setError(msg);
+					toast(msg);
+				} finally {
+					presetLoading = false;
+					render();
+				}
 			};
 
-			const createNew = () => {
-				if (!confirmDiscardIfNeeded()) {
+			const createNew = async () => {
+				if (!(await confirmDiscardIfNeeded())) {
 					return;
 				}
 				setError('');
@@ -1899,8 +1673,8 @@
 				render();
 			};
 
-			const duplicateSelected = () => {
-				if (!confirmDiscardIfNeeded()) {
+			const duplicateSelected = async () => {
+				if (!(await confirmDiscardIfNeeded())) {
 					return;
 				}
 				if (!original || typeof original !== 'object') {
@@ -1916,12 +1690,20 @@
 				render();
 			};
 
-			const deleteSelected = () => {
+			const deleteSelected = async () => {
 				const id = String(selectedId || '').trim();
 				if (!id) {
 					return;
 				}
-				if (!window.confirm(`Delete preset '${id}'?`)) {
+				if (
+					!(await confirmDialog({
+						title: 'Delete preset?',
+						text: `Delete preset '${id}'?`,
+						danger: true,
+						confirmText: 'Delete',
+						cancelText: 'Cancel',
+					}))
+				) {
 					return;
 				}
 				setError('');
@@ -2059,22 +1841,16 @@
 			const renderList = () => {
 				sortPresets();
 
-				const btnNew = h('a', {
-					class: 'btn-small',
-					href: '#',
+				const btnNew = h('button', {
+					type: 'button',
 					title: 'New',
-					onclick: e => {
-						e.preventDefault();
-						createNew();
-					},
+					onclick: () => void createNew(),
 					text: '+',
 				});
-				const btnReload = h('a', {
-					class: 'btn-small btn-flat',
-					href: '#',
+				const btnReload = h('button', {
+					type: 'button',
 					title: 'Reload',
 					onclick: e => {
-						e.preventDefault();
 						void loadList().catch(err => {
 							const msg = String(err?.message || err);
 							setError(msg);
@@ -2083,24 +1859,16 @@
 					},
 					text: '⟳',
 				});
-				const btnDup = h('a', {
-					class: 'btn-small btn-flat',
-					href: '#',
+				const btnDup = h('button', {
+					type: 'button',
 					title: 'Duplicate',
-					onclick: e => {
-						e.preventDefault();
-						duplicateSelected();
-					},
+					onclick: () => void duplicateSelected(),
 					text: '⧉',
 				});
-				const btnDel = h('a', {
-					class: 'btn-small btn-flat red-text',
-					href: '#',
+				const btnDel = h('button', {
+					type: 'button',
 					title: 'Delete',
-					onclick: e => {
-						e.preventDefault();
-						deleteSelected();
-					},
+					onclick: () => void deleteSelected(),
 					text: '×',
 				});
 
@@ -2118,13 +1886,10 @@
 						'div',
 						{ class: 'msghub-tools-presets-list-items', style: 'max-height: 60vh; overflow: auto;' },
 						presets.map(p =>
-							h('a', {
+							h('button', {
+								type: 'button',
 								class: `msghub-tools-presets-item${p?.presetId === selectedId && !isNew ? ' active' : ''}`,
-								href: '#',
-								onclick: e => {
-									e.preventDefault();
-									setSelected(p.presetId);
-								},
+								onclick: () => void setSelected(p.presetId),
 								text: presetLabel(p),
 							}),
 						),
@@ -2237,7 +2002,7 @@
 					return {
 						input,
 						getValue: () => input.value,
-						wrapper: h('div', { class: 'input-field msghub-field' }, [
+						wrapper: h('div', { class: 'msghub-field' }, [
 							input,
 							h('label', { for: id, text: 'Title' }),
 						]),
@@ -2253,7 +2018,7 @@
 					return {
 						input,
 						getValue: () => input.value,
-						wrapper: h('div', { class: 'input-field msghub-field' }, [
+						wrapper: h('div', { class: 'msghub-field' }, [
 							input,
 							h('label', { for: id, text: 'Icon' }),
 							h('div', { class: 'msghub-muted', text: 'Optional. Usually an emoji.' }),
@@ -2265,7 +2030,7 @@
 					const id = `f_text_${Math.random().toString(36).slice(2, 8)}`;
 					const textarea = h('textarea', {
 						id,
-						class: 'materialize-textarea',
+						class: '',
 						text: draft?.message?.text ?? '',
 					});
 					if (disabled) {
@@ -2274,7 +2039,7 @@
 					return {
 						textarea,
 						getValue: () => textarea.value,
-						wrapper: h('div', { class: 'input-field msghub-field' }, [
+						wrapper: h('div', { class: 'msghub-field' }, [
 							textarea,
 							h('label', { for: id, text: 'Text' }),
 							h('div', {
@@ -2401,7 +2166,7 @@
 					return {
 						input,
 						getValue: () => parseCsvList(input.value),
-						wrapper: h('div', { class: 'input-field msghub-field' }, [
+						wrapper: h('div', { class: 'msghub-field' }, [
 							input,
 							h('label', { for: id, text: 'Tools (CSV)' }),
 						]),
@@ -2420,7 +2185,7 @@
 					return {
 						input,
 						getValue: () => parseCsvList(input.value),
-						wrapper: h('div', { class: 'input-field msghub-field' }, [
+						wrapper: h('div', { class: 'msghub-field' }, [
 							input,
 							h('label', { for: id, text: 'Consumables (CSV)' }),
 						]),
@@ -2443,7 +2208,7 @@
 					return {
 						input,
 						getValue: () => parseCsvList(input.value),
-						wrapper: h('div', { class: 'input-field msghub-field' }, [
+						wrapper: h('div', { class: 'msghub-field' }, [
 							input,
 							h('label', { for: id, text: 'Tags (CSV)' }),
 						]),
@@ -2462,7 +2227,7 @@
 					return {
 						input,
 						getValue: () => parseCsvList(input.value),
-						wrapper: h('div', { class: 'input-field msghub-field' }, [
+						wrapper: h('div', { class: 'msghub-field' }, [
 							input,
 							h('label', { for: id, text: 'Channels include (CSV)' }),
 						]),
@@ -2481,7 +2246,7 @@
 					return {
 						input,
 						getValue: () => parseCsvList(input.value),
-						wrapper: h('div', { class: 'input-field msghub-field' }, [
+						wrapper: h('div', { class: 'msghub-field' }, [
 							input,
 							h('label', { for: id, text: 'Channels exclude (CSV)' }),
 						]),
@@ -2496,7 +2261,7 @@
 					const id = `f_actions_${Math.random().toString(36).slice(2, 8)}`;
 					const textarea = h('textarea', {
 						id,
-						class: 'materialize-textarea',
+						class: '',
 						text: JSON.stringify(draft?.message?.actions || [], null, 2),
 					});
 					if (disabled) {
@@ -2516,7 +2281,7 @@
 								return null;
 							}
 						},
-						wrapper: h('div', { class: 'input-field msghub-field' }, [
+						wrapper: h('div', { class: 'msghub-field' }, [
 							textarea,
 							h('label', { for: id, text: 'Actions array' }),
 							h('div', { class: 'msghub-muted', text: 'Optional; must be valid JSON array.' }),
@@ -2537,28 +2302,16 @@
 				}
 				fields.push(fResetOnNormal);
 
-				const btnSave = h('a', {
-					class: `btn${disabled ? ' disabled' : ''}`,
-					href: '#',
-					onclick: e => {
-						e.preventDefault();
-						if (disabled) {
-							return;
-						}
-						saveDraft();
-					},
+				const btnSave = h('button', {
+					type: 'button',
+					disabled: disabled ? true : undefined,
+					onclick: () => saveDraft(),
 					text: 'Save',
 				});
-				const btnAbort = h('a', {
-					class: `btn-flat${saving ? ' disabled' : ''}`,
-					href: '#',
-					onclick: e => {
-						e.preventDefault();
-						if (saving) {
-							return;
-						}
-						abortEdit();
-					},
+				const btnAbort = h('button', {
+					type: 'button',
+					disabled: saving ? true : undefined,
+					onclick: () => abortEdit(),
 					text: 'Cancel',
 				});
 
@@ -2568,8 +2321,8 @@
 						? h('div', { class: 'msghub-muted', text: 'Saving…' })
 						: null;
 
-				const wrapper = h('div', { class: 'row' }, [
-					h('div', { class: 'col s12' }, [
+				const wrapper = h('div', null, [
+					h('div', null, [
 						ownedBy
 							? h('div', {
 									class: 'msghub-muted',
@@ -2790,7 +2543,7 @@
 						? renderMarkdownLite(readme.md)
 						: h('p', { class: 'msghub-muted', text: 'No guide available.' }),
 				]);
-				ensureReadmeModal().open({
+				openViewer({
 					title: `${label.primary} · User Guide`,
 					bodyEl: body,
 				});
@@ -2800,24 +2553,16 @@
 				const hasInst0 = instList.some(i => i?.type === 'IngestStates' && i?.instanceId === 0);
 				const inst0 = instList.find(i => i?.type === 'IngestStates' && i?.instanceId === 0) || null;
 				if (!hasInst0) {
-					try {
-						M.toast({ html: 'IngestStates has no instance yet. Create and enable it first.' });
-					} catch {
-						// ignore
-					}
+					toast('IngestStates has no instance yet. Create and enable it first.');
 					return;
 				}
 				if (inst0?.enabled !== true) {
-					try {
-						M.toast({ html: 'IngestStates is disabled. Enable the plugin to use Tools.' });
-					} catch {
-						// ignore
-					}
+					toast('IngestStates is disabled. Enable the plugin to use Tools.');
 					return;
 				}
 
 				const body = h('div', null, [h('p', { class: 'msghub-muted', text: 'Loading tools…' })]);
-				ensureReadmeModal().open({
+				openViewer({
 					title: `${label.primary} · Tools`,
 					bodyEl: body,
 				});
@@ -2839,7 +2584,7 @@
 					});
 			};
 
-			const header = h('div', { class: 'card-content msghub-card-head' }, [
+			const header = h('div', { class: 'msghub-card-head' }, [
 				h('div', { class: 'msghub-card-headrow' }, [
 					h('div', { class: 'msghub-card-headleft' }, [
 						h('div', {
@@ -2848,33 +2593,25 @@
 							title: statusTitle,
 							'aria-label': statusTitle,
 						}),
-						h('span', { class: 'card-title', text: label.primary }),
+						h('span', { class: 'msghub-card-title', text: label.primary }),
 					]),
 					h('div', { class: 'msghub-card-headright' }, [
-						h('a', {
-							class: `msghub-info-btn${hasReadme ? '' : ' disabled'}`,
-							href: '#',
+						h('button', {
+							class: 'msghub-info-btn',
+							type: 'button',
+							disabled: hasReadme ? undefined : true,
 							title: hasReadme ? 'User guide' : 'No user guide available',
 							'aria-label': hasReadme ? 'User guide' : 'No user guide available',
-							onclick: e => {
-								e.preventDefault();
-								if (!hasReadme) {
-									return;
-								}
-								openReadme();
-							},
+							onclick: () => openReadme(),
 							text: 'i',
 						}),
 						plugin?.type === 'IngestStates'
-							? h('a', {
+							? h('button', {
 									class: 'msghub-tools-btn',
-									href: '#',
+									type: 'button',
 									title: 'Tools',
 									'aria-label': 'Tools',
-									onclick: e => {
-										e.preventDefault();
-										openTools();
-									},
+									onclick: () => openTools(),
 									text: 'Tools',
 								})
 							: null,
@@ -2885,17 +2622,15 @@
 				desc ? h('p', { class: 'msghub-muted', text: desc }) : null,
 			]);
 
-			const body = h('div', { class: 'card-content' });
+			const body = h('div', { class: 'msghub-card-body' });
 			const canAdd = plugin.supportsMultiple === true ? true : instList.length === 0;
 
 			const actions = h('div', { class: 'msghub-actions' }, []);
 			if (canAdd) {
 				actions.appendChild(
-					h('a', {
-						class: 'btn',
-						href: '#',
-						onclick: async e => {
-							e.preventDefault();
+					h('button', {
+						type: 'button',
+						onclick: async () => {
 							await sendTo('admin.plugins.createInstance', {
 								category: plugin.category,
 								type: plugin.type,
@@ -2909,9 +2644,9 @@
 
 			if (instList.length > 1) {
 				const setAll = async enabled => {
-					const links = Array.from(actions.querySelectorAll('a'));
-					for (const a of links) {
-						a.classList.add('disabled');
+					const buttons = Array.from(actions.querySelectorAll('button'));
+					for (const btn of buttons) {
+						btn.disabled = true;
 					}
 					try {
 						for (const inst of instList) {
@@ -2923,37 +2658,23 @@
 						}
 						await refreshPlugin(plugin.type);
 					} finally {
-						for (const a of links) {
-							a.classList.remove('disabled');
+						for (const btn of buttons) {
+							btn.disabled = false;
 						}
 					}
 				};
 
 				actions.appendChild(
-					h('a', {
-						class: 'btn-flat',
-						href: '#',
-						onclick: async e => {
-							e.preventDefault();
-							if (e.currentTarget?.classList?.contains('disabled')) {
-								return;
-							}
-							await setAll(true);
-						},
+					h('button', {
+						type: 'button',
+						onclick: async () => await setAll(true),
 						text: 'Enable all',
 					}),
 				);
 				actions.appendChild(
-					h('a', {
-						class: 'btn-flat',
-						href: '#',
-						onclick: async e => {
-							e.preventDefault();
-							if (e.currentTarget?.classList?.contains('disabled')) {
-								return;
-							}
-							await setAll(false);
-						},
+					h('button', {
+						type: 'button',
+						onclick: async () => await setAll(false),
 						text: 'Disable all',
 					}),
 				);
@@ -2966,24 +2687,16 @@
 					}
 				};
 				actions.appendChild(
-					h('a', {
-						class: 'btn-flat',
-						href: '#',
-						onclick: e => {
-							e.preventDefault();
-							setAllInstances(true);
-						},
+					h('button', {
+						type: 'button',
+						onclick: () => setAllInstances(true),
 						text: 'Expand instances',
 					}),
 				);
 				actions.appendChild(
-					h('a', {
-						class: 'btn-flat',
-						href: '#',
-						onclick: e => {
-							e.preventDefault();
-							setAllInstances(false);
-						},
+					h('button', {
+						type: 'button',
+						onclick: () => setAllInstances(false),
 						text: 'Collapse instances',
 					}),
 				);
@@ -3052,26 +2765,30 @@
 							text: 'Options',
 						}),
 					);
-				}
-				headActions.appendChild(
-					h('a', {
-						class: 'btn-flat red-text',
-						href: '#',
-						onclick: async e => {
-							e.preventDefault();
-							const ok = await ensureDeleteModal().confirm();
-							if (!ok) {
-								return;
-							}
-							await sendTo('admin.plugins.deleteInstance', {
-								type: plugin.type,
-								instanceId: inst.instanceId,
-							});
-							await refreshPlugin(plugin.type);
-						},
-						text: 'Delete',
-					}),
-				);
+					}
+					headActions.appendChild(
+						h('button', {
+							type: 'button',
+							onclick: async () => {
+								const ok = await confirmDialog({
+									title: 'Delete instance?',
+									text: 'Options of this instance will be lost and states will be deleted.',
+									danger: true,
+									confirmText: 'Delete',
+									cancelText: 'Cancel',
+								});
+								if (!ok) {
+									return;
+								}
+								await sendTo('admin.plugins.deleteInstance', {
+									type: plugin.type,
+									instanceId: inst.instanceId,
+								});
+								await refreshPlugin(plugin.type);
+							},
+							text: 'Delete',
+						}),
+					);
 
 				const wantsChannel = plugin.supportsChannelRouting === true;
 				let channelRow = null;
@@ -3104,7 +2821,7 @@
 						} catch (e) {
 							channelInput.value = prev;
 							channelInput.setAttribute('data-prev', prev);
-							M.toast({ html: `Failed to save channel: ${String(e?.message || e)}` });
+							toast(`Failed to save channel: ${String(e?.message || e)}`);
 						}
 					};
 
@@ -3152,7 +2869,7 @@
 						if (!saveBtn) {
 							return;
 						}
-						saveBtn.classList.toggle('disabled', enabled !== true);
+						saveBtn.disabled = enabled !== true;
 						saveBtn.setAttribute('aria-disabled', enabled === true ? 'false' : 'true');
 					};
 
@@ -3220,27 +2937,27 @@
 						fieldsContainer.appendChild(wrapper);
 					}
 
-					saveBtn = h('a', {
-						class: 'btn disabled',
-						href: '#',
-						onclick: async e => {
-							e.preventDefault();
-							if (saveBtn.classList.contains('disabled')) {
-								return;
-							}
-							const patch = {};
-							for (const [k, info] of Object.entries(inputs)) {
-								patch[k] = info.getValue();
-							}
-							await sendTo('admin.plugins.updateInstance', {
-								type: plugin.type,
-								instanceId: inst.instanceId,
-								nativePatch: patch,
-							});
-							await refreshPlugin(plugin.type);
-						},
-						text: 'Save options',
-					});
+						saveBtn = h('button', {
+							type: 'button',
+							disabled: true,
+							'aria-disabled': 'true',
+							onclick: async () => {
+								if (saveBtn.disabled) {
+									return;
+								}
+								const patch = {};
+								for (const [k, info] of Object.entries(inputs)) {
+									patch[k] = info.getValue();
+								}
+								await sendTo('admin.plugins.updateInstance', {
+									type: plugin.type,
+									instanceId: inst.instanceId,
+									nativePatch: patch,
+								});
+								await refreshPlugin(plugin.type);
+							},
+							text: 'Save options',
+						});
 
 					updateDirtyUi();
 
@@ -3255,21 +2972,17 @@
 			const catClass = typeof plugin?.category === 'string' ? `msghub-plugin-${cssSafe(plugin.category)}` : '';
 			const multiClass = plugin.supportsMultiple === true ? 'msghub-plugin--multi' : 'msghub-plugin--single';
 
-			return h(
-				'div',
-				{ class: `card msghub-plugin-card ${catClass} ${multiClass}`.trim(), 'data-plugin-type': plugin.type },
-				[
-					h('input', {
-						class: 'msghub-acc-input',
-						type: 'checkbox',
-						id: accId,
-						checked: isExpanded === true ? '' : undefined,
-					}),
-					header,
-					body,
-				],
-			);
-		}
+				return h('div', { class: `msghub-card msghub-plugin-card ${catClass} ${multiClass}`.trim(), 'data-plugin-type': plugin.type }, [
+						h('input', {
+							class: 'msghub-acc-input',
+							type: 'checkbox',
+							id: accId,
+							checked: isExpanded === true ? '' : undefined,
+						}),
+						header,
+						body,
+					]);
+			}
 
 		let cachedPluginsWithUi = [];
 
@@ -3318,30 +3031,26 @@
 						h('p', { class: 'msghub-muted', text: 'No plugins with Admin UI schema found yet.' }),
 					);
 				} else {
-					const globalActions = h('div', { class: 'msghub-actions msghub-actions--global' }, [
-						h('a', {
-							class: 'btn-flat',
-							href: '#',
-							onclick: e => {
-								e.preventDefault();
-								for (const el of elRoot.querySelectorAll('.msghub-plugin-card > .msghub-acc-input')) {
-									el.checked = true;
-								}
-							},
-							text: 'Expand all plugins',
-						}),
-						h('a', {
-							class: 'btn-flat',
-							href: '#',
-							onclick: e => {
-								e.preventDefault();
-								for (const el of elRoot.querySelectorAll('.msghub-plugin-card > .msghub-acc-input')) {
-									el.checked = false;
-								}
-							},
-							text: 'Collapse all plugins',
-						}),
-					]);
+						const globalActions = h('div', { class: 'msghub-actions msghub-actions--global' }, [
+							h('button', {
+								type: 'button',
+								onclick: () => {
+									for (const el of elRoot.querySelectorAll('.msghub-plugin-card > .msghub-acc-input')) {
+										el.checked = true;
+									}
+								},
+								text: 'Expand all plugins',
+							}),
+							h('button', {
+								type: 'button',
+								onclick: () => {
+									for (const el of elRoot.querySelectorAll('.msghub-plugin-card > .msghub-acc-input')) {
+										el.checked = false;
+									}
+								},
+								text: 'Collapse all plugins',
+							}),
+						]);
 					fragment.appendChild(globalActions);
 
 					const byCategory = new Map();
@@ -3383,7 +3092,6 @@
 				}
 
 				elRoot.replaceChildren(fragment);
-				M.updateTextFields();
 			} catch (e) {
 				elRoot.replaceChildren(
 					h('div', {
@@ -3424,7 +3132,6 @@
 					return refreshAll();
 				}
 				existing.replaceWith(nextCard);
-				M.updateTextFields();
 			} catch (e) {
 				return refreshAll();
 			}

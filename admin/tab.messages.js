@@ -46,7 +46,7 @@
 	}
 
 		function initMessagesSection(ctx) {
-			const { sendTo, h, M, elements } = ctx;
+			const { sendTo, h, elements, ui } = ctx;
 			const root = elements.messagesRoot;
 			if (!root) {
 				throw new Error('MsghubAdminTabMessages: missing messagesRoot element');
@@ -108,112 +108,65 @@
 
 			const toast = message => {
 				try {
-					M.toast({ html: String(message) });
-				} catch (_err) {
-				// ignore
+					ui?.toast?.(String(message));
+				} catch {
+					// ignore
+				}
+			};
+
+		let jsonPre = null;
+		function ensureJsonPre() {
+			if (jsonPre) {
+				return jsonPre;
 			}
-		};
 
-		let overlay = null;
-		function ensureOverlay() {
-			if (overlay) {
-				return overlay;
-			}
+			const pre = h('pre', { class: 'msghub-overlay-pre' });
 
-			const mount = document.querySelector('.msghub-root') || document.body;
-			const el = h('div', { class: 'msghub-overlay', 'aria-hidden': 'true' }, [
-				h('div', { class: 'msghub-overlay-card', role: 'dialog', 'aria-modal': 'true' }, [
-					h('div', { class: 'msghub-overlay-head' }, [
-						h('div', { class: 'msghub-overlay-title', text: 'Message JSON' }),
-						h('a', { href: '#', class: 'btn-flat', id: 'msghub-overlay-close', text: 'Close' }),
-					]),
-					h('pre', { class: 'msghub-overlay-pre', id: 'msghub-overlay-pre' }),
-				]),
-			]);
-
-			mount.appendChild(el);
-
-				const btn = el.querySelector('#msghub-overlay-close');
-				const pre = el.querySelector('#msghub-overlay-pre');
-
-				function parseTimestampToken(token) {
-					if (typeof token !== 'string' || !token) {
-						return null;
-					}
-					if (token.length < 10 || token.length > 17) {
-						return null;
-					}
-					if (!/^\d+$/.test(token)) {
-						return null;
-					}
-					const n = Number(token);
-					if (!Number.isFinite(n) || n <= 0) {
-						return null;
-					}
-
-					// Heuristic: 10 digits => unix seconds, otherwise treat as unix ms.
-					const ms = token.length === 10 ? n * 1000 : n;
-
-					// Plausibility window: 2000-01-01 .. 2100-01-01 (keeps false positives low).
-					if (ms < 946684800000 || ms > 4102444800000) {
-						return null;
-					}
-
-					const d = new Date(ms);
-					if (Number.isNaN(d.getTime())) {
-						return null;
-					}
-					return { ms, date: d };
+			function parseTimestampToken(token) {
+				if (typeof token !== 'string' || !token) {
+					return null;
+				}
+				if (token.length < 10 || token.length > 17) {
+					return null;
+				}
+				if (!/^\d+$/.test(token)) {
+					return null;
+				}
+				const n = Number(token);
+				if (!Number.isFinite(n) || n <= 0) {
+					return null;
 				}
 
-				function getNumberTokenAtPoint(rootEl, x, y) {
-					const doc = rootEl?.ownerDocument || document;
+				// Heuristic: 10 digits => unix seconds, otherwise treat as unix ms.
+				const ms = token.length === 10 ? n * 1000 : n;
 
-					const pos = doc.caretPositionFromPoint?.(x, y);
-					if (pos && pos.offsetNode && typeof pos.offset === 'number') {
-						const node = pos.offsetNode;
-						if (!node || node.nodeType !== Node.TEXT_NODE || typeof node.textContent !== 'string') {
-							return '';
-						}
-						const text = node.textContent;
-						let i = Math.max(0, Math.min(pos.offset, text.length));
-						if (i > 0 && i === text.length) {
-							i -= 1;
-						}
+				// Plausibility window: 2000-01-01 .. 2100-01-01 (keeps false positives low).
+				if (ms < 946684800000 || ms > 4102444800000) {
+					return null;
+				}
 
-						const isDigit = ch => ch >= '0' && ch <= '9';
-						if (!isDigit(text[i]) && i > 0 && isDigit(text[i - 1])) {
-							i -= 1;
-						}
-						if (!isDigit(text[i])) {
-							return '';
-						}
+				const d = new Date(ms);
+				if (Number.isNaN(d.getTime())) {
+					return null;
+				}
+				return { ms, date: d };
+			}
 
-						let start = i;
-						let end = i + 1;
-						while (start > 0 && isDigit(text[start - 1])) {
-							start -= 1;
-						}
-						while (end < text.length && isDigit(text[end])) {
-							end += 1;
-						}
-						return text.slice(start, end);
-					}
+			function getNumberTokenAtPoint(rootEl, x, y) {
+				const doc = rootEl?.ownerDocument || document;
 
-					const range = doc.caretRangeFromPoint?.(x, y);
-					const node = range?.startContainer;
-					const offset = range?.startOffset;
+				const pos = doc.caretPositionFromPoint?.(x, y);
+				if (pos && pos.offsetNode && typeof pos.offset === 'number') {
+					const node = pos.offsetNode;
 					if (!node || node.nodeType !== Node.TEXT_NODE || typeof node.textContent !== 'string') {
 						return '';
 					}
-					if (typeof offset !== 'number') {
-						return '';
-					}
 					const text = node.textContent;
-					let i = Math.max(0, Math.min(offset, text.length));
+					let i = Math.max(0, Math.min(pos.offset, text.length));
 					if (i > 0 && i === text.length) {
 						i -= 1;
 					}
+
 					const isDigit = ch => ch >= '0' && ch <= '9';
 					if (!isDigit(text[i]) && i > 0 && isDigit(text[i - 1])) {
 						i -= 1;
@@ -221,6 +174,7 @@
 					if (!isDigit(text[i])) {
 						return '';
 					}
+
 					let start = i;
 					let end = i + 1;
 					while (start > 0 && isDigit(text[start - 1])) {
@@ -232,93 +186,94 @@
 					return text.slice(start, end);
 				}
 
-				const setOpen = isOpen => {
-					el.classList.toggle('is-open', isOpen);
-					el.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
-				};
-
-			const close = () => setOpen(false);
-			if (btn) {
-				btn.addEventListener('click', e => {
-					e.preventDefault();
-					close();
-				});
+				const range = doc.caretRangeFromPoint?.(x, y);
+				const node = range?.startContainer;
+				const offset = range?.startOffset;
+				if (!node || node.nodeType !== Node.TEXT_NODE || typeof node.textContent !== 'string') {
+					return '';
+				}
+				if (typeof offset !== 'number') {
+					return '';
+				}
+				const text = node.textContent;
+				let i = Math.max(0, Math.min(offset, text.length));
+				if (i > 0 && i === text.length) {
+					i -= 1;
+				}
+				const isDigit = ch => ch >= '0' && ch <= '9';
+				if (!isDigit(text[i]) && i > 0 && isDigit(text[i - 1])) {
+					i -= 1;
+				}
+				if (!isDigit(text[i])) {
+					return '';
+				}
+				let start = i;
+				let end = i + 1;
+				while (start > 0 && isDigit(text[start - 1])) {
+					start -= 1;
+				}
+				while (end < text.length && isDigit(text[end])) {
+					end += 1;
+				}
+				return text.slice(start, end);
 			}
-			el.addEventListener('click', e => {
-				if (e?.target === el) {
-					close();
-				}
-			});
-				document.addEventListener('keydown', e => {
-					if (el.classList.contains('is-open') && (e.key === 'Escape' || e.key === 'Esc')) {
-						e.preventDefault();
-						close();
-					}
-				});
 
-				if (pre) {
-					let lastTooltipToken = '';
-					let rafPending = false;
-					let pendingEvent = null;
+			let lastTooltipToken = '';
+			let rafPending = false;
+			let pendingEvent = null;
 
-					const applyTooltip = e => {
-						rafPending = false;
-						const ev = e || pendingEvent;
-						pendingEvent = null;
-						if (!ev || !el.classList.contains('is-open')) {
-							return;
-						}
-
-						const token = getNumberTokenAtPoint(pre, ev.clientX, ev.clientY);
-						if (token === lastTooltipToken) {
-							return;
-						}
-						lastTooltipToken = token;
-
-						const parsed = parseTimestampToken(token);
-						if (!parsed) {
-							pre.removeAttribute('title');
-							return;
-						}
-
-						const local = parsed.date.toLocaleString();
-						const iso = parsed.date.toISOString();
-						pre.setAttribute('title', `${local}\n${iso}`);
-					};
-
-					pre.addEventListener('mousemove', e => {
-						pendingEvent = e;
-						if (rafPending) {
-							return;
-						}
-						rafPending = true;
-						requestAnimationFrame(() => applyTooltip());
-					});
-					pre.addEventListener('mouseleave', () => {
-						lastTooltipToken = '';
-						pendingEvent = null;
-						rafPending = false;
-						pre.removeAttribute('title');
-					});
+			const applyTooltip = e => {
+				rafPending = false;
+				const ev = e || pendingEvent;
+				pendingEvent = null;
+				if (!ev || !ui?.overlayLarge?.isOpen?.()) {
+					return;
 				}
 
-				overlay = {
-					open: msg => {
-						try {
-							const text = JSON.stringify(msg, null, 2);
-						if (pre) {
-							pre.textContent = text;
-						}
-					} catch (e) {
-						if (pre) {
-							pre.textContent = String(e?.message || e);
-						}
-					}
-					setOpen(true);
-				},
-				close,
+				const token = getNumberTokenAtPoint(pre, ev.clientX, ev.clientY);
+				if (token === lastTooltipToken) {
+					return;
+				}
+				lastTooltipToken = token;
+
+				const parsed = parseTimestampToken(token);
+				if (!parsed) {
+					pre.removeAttribute('title');
+					return;
+				}
+
+				const local = parsed.date.toLocaleString();
+				const iso = parsed.date.toISOString();
+				pre.setAttribute('title', `${local}\n${iso}`);
 			};
-			return overlay;
+
+			pre.addEventListener('mousemove', e => {
+				pendingEvent = e;
+				if (rafPending) {
+					return;
+				}
+				rafPending = true;
+				requestAnimationFrame(() => applyTooltip());
+			});
+			pre.addEventListener('mouseleave', () => {
+				lastTooltipToken = '';
+				pendingEvent = null;
+				rafPending = false;
+				pre.removeAttribute('title');
+			});
+
+			jsonPre = pre;
+			return jsonPre;
+		}
+
+		function openMessageJson(msg) {
+			const pre = ensureJsonPre();
+			try {
+				pre.textContent = JSON.stringify(msg, null, 2);
+			} catch (e) {
+				pre.textContent = String(e?.message || e);
+			}
+			ui?.overlayLarge?.open?.({ title: 'Message JSON', bodyEl: pre });
 		}
 
 		function getConstantsEnum(path) {
@@ -480,11 +435,9 @@
 			el.appendChild(
 				h('div', { class: 'msghub-popover-head' }, [
 					h('div', { class: 'msghub-popover-title', text: title }),
-					h('a', {
-						href: '#',
-						class: 'btn-flat',
+					h('button', {
+						type: 'button',
 						onclick: e => {
-							e.preventDefault();
 							closePopover();
 						},
 						text: '×',
@@ -493,24 +446,24 @@
 			);
 
 			el.appendChild(
-				h('div', { class: 'msghub-popover-controls' }, [
-					h('div', { class: 'msghub-popover-sortrow' }, [
-						h('button', {
-							class: 'btn-flat msghub-popover-sort',
-							type: 'button',
-							'data-sort': 'asc',
-							onclick: () => setSort('asc'),
-							text: t('Sort ascending', 'Aufsteigend sortieren'),
-						}),
-						h('button', {
-							class: 'btn-flat msghub-popover-sort',
-							type: 'button',
-							'data-sort': 'desc',
-							onclick: () => setSort('desc'),
-							text: t('Sort descending', 'Absteigend sortieren'),
-						}),
+					h('div', { class: 'msghub-popover-controls' }, [
+						h('div', { class: 'msghub-popover-sortrow' }, [
+							h('button', {
+								class: 'msghub-popover-sort',
+								type: 'button',
+								'data-sort': 'asc',
+								onclick: () => setSort('asc'),
+								text: t('Sort ascending', 'Aufsteigend sortieren'),
+							}),
+							h('button', {
+								class: 'msghub-popover-sort',
+								type: 'button',
+								'data-sort': 'desc',
+								onclick: () => setSort('desc'),
+								text: t('Sort descending', 'Absteigend sortieren'),
+							}),
+						]),
 					]),
-				]),
 			);
 
 			el.appendChild(h('div', { class: 'msghub-popover-body' }));
@@ -628,11 +581,9 @@
 			el.appendChild(
 				h('div', { class: 'msghub-popover-head' }, [
 					h('div', { class: 'msghub-popover-title', text: title }),
-					h('a', {
-						href: '#',
-						class: 'btn-flat',
+					h('button', {
+						type: 'button',
 						onclick: e => {
-							e.preventDefault();
 							closePopover();
 						},
 						text: '×',
@@ -640,40 +591,38 @@
 				]),
 			);
 			el.appendChild(
-				h('div', { class: 'msghub-popover-controls' }, [
-					h('div', { class: 'msghub-popover-actions' }, [
-						h('button', {
-							class: 'btn-flat',
-							type: 'button',
-							onclick: () => {
-								for (const v of options || []) {
-									selected.add(v);
+					h('div', { class: 'msghub-popover-controls' }, [
+						h('div', { class: 'msghub-popover-actions' }, [
+							h('button', {
+								type: 'button',
+								onclick: () => {
+									for (const v of options || []) {
+										selected.add(v);
 								}
 								renderList();
 							},
-							text: t('Select all', 'Alle anwählen'),
-						}),
-						h('button', {
-							class: 'btn-flat',
-							type: 'button',
-							onclick: () => {
-								selected.clear();
-								renderList();
+								text: t('Select all', 'Alle anwählen'),
+							}),
+							h('button', {
+								type: 'button',
+								onclick: () => {
+									selected.clear();
+									renderList();
 							},
-							text: t('Select none', 'Alle abwählen'),
-						}),
-					]),
+								text: t('Select none', 'Alle abwählen'),
+							}),
+						]),
 					sortableField
 						? h('div', { class: 'msghub-popover-sortrow' }, [
 								h('button', {
-									class: 'btn-flat msghub-popover-sort',
+									class: 'msghub-popover-sort',
 									type: 'button',
 									'data-sort': 'asc',
 									onclick: () => setSort('asc'),
 									text: t('Sort ascending', 'Aufsteigend sortieren'),
 								}),
 								h('button', {
-									class: 'btn-flat msghub-popover-sort',
+									class: 'msghub-popover-sort',
 									type: 'button',
 									'data-sort': 'desc',
 									onclick: () => setSort('desc'),
@@ -683,7 +632,7 @@
 						: null,
 					h('div', { class: 'msghub-popover-footer' }, [
 						h('div', { class: 'msghub-popover-selected msghub-muted', text: selectionLabel() }),
-						h('button', { class: 'btn', type: 'button', onclick: applyAndReload, text: t('Apply', 'Übernehmen') }),
+						h('button', { type: 'button', onclick: applyAndReload, text: t('Apply', 'Übernehmen') }),
 					]),
 				]),
 			);
@@ -745,7 +694,7 @@
 					return h(
 						'tr',
 						{
-							ondblclick: () => ensureOverlay().open(msg),
+							ondblclick: () => openMessageJson(msg),
 						},
 						[
 							...(checkboxCell ? [checkboxCell] : []),
@@ -767,16 +716,16 @@
 			}
 
 			const actions = h('div', { class: 'msghub-actions' });
-			const refreshBtn = h('button', { class: 'btn', type: 'button', text: 'Refresh' });
-			const deleteBtn = h('button', { class: 'btn msghub-danger', type: 'button', text: 'Delete' });
-			const autoBtn = h('button', { class: 'btn-flat', type: 'button', text: 'Auto: on' });
+			const refreshBtn = h('button', { type: 'button', text: 'Refresh' });
+			const deleteBtn = h('button', { class: 'msghub-danger', type: 'button', text: 'Delete' });
+			const autoBtn = h('button', { type: 'button', text: 'Auto: on' });
 			actions.appendChild(refreshBtn);
 			actions.appendChild(deleteBtn);
 			actions.appendChild(autoBtn);
 
 			const sizeOptions = [10, 25, 50, 100, 250];
-			const prevBtn = h('button', { class: 'btn-flat', type: 'button', text: 'Prev' });
-			const nextBtn = h('button', { class: 'btn-flat', type: 'button', text: 'Next' });
+			const prevBtn = h('button', { type: 'button', text: 'Prev' });
+			const nextBtn = h('button', { type: 'button', text: 'Next' });
 			const pageInfoEl = h('div', { class: 'msghub-muted', text: 'Page 1 / 1' });
 			const pageSizeSelect = h(
 				'select',
@@ -802,18 +751,14 @@
 			]);
 
 			const head = h('div', { class: 'msghub-messages-head' }, [actions, paging]);
-			const progress = h(
-				'div',
-				{ class: 'msghub-progress is-hidden' },
-				h('div', { class: 'progress' }, h('div', { class: 'indeterminate' })),
-			);
+			const progress = h('div', { class: 'msghub-progress is-hidden' }, h('div', { class: 'msghub-muted', text: 'Loading…' }));
 			const errorEl = h('div', { class: 'msghub-error' });
 			const metaEl = h('div', { class: 'msghub-muted msghub-messages-meta' });
 			const emptyEl = h('div', { class: 'msghub-muted', text: t('No messages.', 'Keine Messages.') });
 			emptyEl.style.display = 'none';
 
 			const tableWrap = h('div', { class: 'msghub-table-wrap' });
-			const tableEl = h('table', { class: 'striped highlight msghub-table' });
+			const tableEl = h('table', { class: 'msghub-table' });
 			const theadEl = h('thead');
 			const tbodyEl = h('tbody');
 			tableEl.appendChild(theadEl);
@@ -836,7 +781,7 @@
 
 			const makeSortBtn = (field, title, label) => {
 				const btn = h('button', {
-					class: 'btn-flat msghub-th-sort',
+					class: 'msghub-th-sort',
 					type: 'button',
 					onclick: e => {
 						e.preventDefault();
@@ -850,7 +795,7 @@
 
 			const makeFilterBtn = (key, title, label, getOptions) => {
 				const btn = h('button', {
-					class: 'btn-flat msghub-th-filter',
+					class: 'msghub-th-filter',
 					type: 'button',
 					onclick: e => {
 						e.preventDefault();
@@ -927,8 +872,7 @@
 				if (popover?.el) {
 					return false;
 				}
-				const overlayEl = document.querySelector('.msghub-overlay');
-				if (overlayEl && overlayEl.classList.contains('is-open')) {
+				if (ui?.overlayLarge?.isOpen?.()) {
 					return false;
 				}
 				return true;
@@ -1117,12 +1061,19 @@
 				if (refs.length === 0) {
 					return;
 				}
-				const ok = win.confirm(
-					t(
-						`Are you sure you want to delete ${refs.length} messages?`,
-						`Sicher, dass du ${refs.length} Nachrichten löschen möchtest?`,
-					),
+				const text = t(
+					`Are you sure you want to delete ${refs.length} messages?`,
+					`Sicher, dass du ${refs.length} Nachrichten löschen möchtest?`,
 				);
+				const ok = ui?.dialog?.confirm
+					? await ui.dialog.confirm({
+							title: t('Delete messages?', 'Nachrichten löschen?'),
+							text,
+							danger: true,
+							confirmText: 'Delete',
+							cancelText: 'Cancel',
+						})
+					: win.confirm(text);
 				if (!ok) {
 					return;
 				}
