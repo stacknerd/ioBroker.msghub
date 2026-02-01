@@ -13,7 +13,90 @@ const { MsgConstants } = require(`${__dirname}/src/MsgConstants`);
 const { MsgConfig } = require(`${__dirname}/src/MsgConfig`);
 const { MsgStore } = require(`${__dirname}/src/MsgStore`);
 const { MsgAi } = require(`${__dirname}/src/MsgAi`);
-const { createI18nReporter, buildI18nRuntime } = require(`${__dirname}/i18nReporter`);
+
+function buildI18nRuntime(params) {
+	const p = params && typeof params === 'object' && !Array.isArray(params) ? params : {};
+	const { adapter, baseI18n, locale, i18nlocale, lang, debug } = p;
+
+	const getI18nFns = i18n => {
+		const translateFn =
+			typeof i18n?.t === 'function'
+				? i18n.t
+				: typeof i18n?.translate === 'function'
+					? i18n.translate
+					: typeof i18n?.default?.t === 'function'
+						? i18n.default.t
+						: typeof i18n?.default?.translate === 'function'
+							? i18n.default.translate
+							: null;
+
+		const getTranslatedObjectFn =
+			typeof i18n?.getTranslatedObject === 'function'
+				? i18n.getTranslatedObject
+				: typeof i18n?.default?.getTranslatedObject === 'function'
+					? i18n.default.getTranslatedObject
+					: null;
+
+		return { translateFn, getTranslatedObjectFn };
+	};
+
+	const fixTranslatedObject = (getTranslatedObjectFn, text, strings = []) => {
+		let obj = typeof getTranslatedObjectFn === 'function' ? getTranslatedObjectFn(text, '%s') : { en: String(text) };
+		if (!obj || typeof obj !== 'object') {
+			obj = { en: String(text) };
+		}
+		for (const lang of Object.keys(obj)) {
+			let s = obj[lang];
+			for (const arg of strings) {
+				s = s.replace('%s', String(arg));
+			}
+			obj[lang] = s;
+		}
+		return obj;
+	};
+
+	const { translateFn, getTranslatedObjectFn } = getI18nFns(baseI18n);
+
+	if (!translateFn) {
+		adapter?.log?.warn?.(
+			'I18n: adapter-core did not provide a translate function (I18n.t/I18n.translate); falling back to identity translation',
+		);
+	}
+
+	const i18n = baseI18n
+		? Object.freeze({
+				t: (...args) => {
+					const [key, options] = args;
+					if (debug === true) {
+						adapter?.log?.debug?.(
+							`MsgHub main.js: [i18n.t] key=${JSON.stringify(key)} opts=${JSON.stringify(options ?? {})}`,
+						);
+					}
+					if (translateFn) {
+						return translateFn(...args);
+					}
+					return String(key);
+				},
+				getTranslatedObject: (...args) => {
+					const ret = fixTranslatedObject(getTranslatedObjectFn, args[0], args.slice(1));
+					if (debug === true) {
+						adapter?.log?.debug?.(
+							`MsgHub main.js: [i18n.getTranslatedObject] args=${JSON.stringify(args)} ret=${JSON.stringify(ret, null, 2)}`,
+						);
+					}
+
+					// The real function is currently broken and returns wrong strings in some environments.
+					// Until this gets fixed in ioBroker core, we keep using this workaround.
+					return ret;
+				},
+				locale,
+				i18nlocale,
+				lang,
+			})
+		: null;
+
+	return { i18n };
+}
 
 function decryptIfPossible(adapter, value) {
 	const raw = typeof value === 'string' ? value.trim() : '';
@@ -97,9 +180,6 @@ class Msghub extends utils.Adapter {
 
 		// AdminTab command facade (initialized in onReady)
 		this._adminTab = null;
-
-		// Optional i18n runtime reporter (initialized in _i18ninit)
-		this._i18nReporter = null;
 	}
 
 	/**
@@ -181,12 +261,6 @@ class Msghub extends utils.Adapter {
 		} catch (error) {
 			this.log?.error?.(`Error during unloading: ${error.message}`);
 		} finally {
-			try {
-				this._i18nReporter?.dispose?.();
-				this._i18nReporter?.flush?.().catch(() => undefined);
-			} catch {
-				// ignore
-			}
 			// Best-effort cleanup (compact mode): drop any direct messagebox handler.
 			try {
 				this._msgPlugins?.clearMessageboxHandler?.();
@@ -365,17 +439,14 @@ class Msghub extends utils.Adapter {
 		await utils.I18n.init(__dirname, i18nlocale);
 		this.log?.debug?.(`MsgHub main.js config locale: ${locale} (time and date) / ${i18nlocale} (i18n)`);
 
-		const { i18n, reporter } = buildI18nRuntime({
+		const { i18n } = buildI18nRuntime({
 			adapter: this,
 			baseI18n: utils.I18n,
 			locale,
 			i18nlocale,
 			lang,
-			createReport: this.config?.createI18nReport === true,
-			createI18nReporter,
 			debug: _i18ndebug,
 		});
-		this._i18nReporter = reporter;
 		this.i18n = i18n;
 	}
 }

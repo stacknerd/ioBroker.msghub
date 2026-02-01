@@ -18,18 +18,6 @@
 					"md": 6,
 					"lg": 4,
 					"xl": 4
-				},
-				"createI18nReport": {
-					"type": "checkbox",
-					"label": "msghub.i18n.core.admin.jsonConfig.general.createI18nReport.label",
-					"help": "msghub.i18n.core.admin.jsonConfig.general.createI18nReport.help",
-					"default": false,
-					"newLine": true,
-					"xs": 12,
-					"sm": 12,
-					"md": 12,
-					"lg": 12,
-					"xl": 12
 				}
 			}
 		},

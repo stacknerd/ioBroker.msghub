@@ -74,8 +74,6 @@
 	"msghub.i18n.core.admin.jsonConfig.archive.maxBatchSize.help": "Max. wartende Archiv-Events pro Message-Ref bevor ein Flush erzwungen wird.",
 	"msghub.i18n.core.admin.jsonConfig.archive.maxBatchSize.label": "maxBatchSize (Stück)",
 	"msghub.i18n.core.admin.jsonConfig.archive.panel.label": "Archiv",
-	"msghub.i18n.core.admin.jsonConfig.general.createI18nReport.help": "Entwicklungshelfer: schreibt einen Runtime-Report über verwendete + fehlende i18n-Keys in den ioBroker Dateispeicher (msghub.0/data/i18nReport.json).",
-	"msghub.i18n.core.admin.jsonConfig.general.createI18nReport.label": "i18n-Report-Datei erstellen",
 	"msghub.i18n.core.admin.jsonConfig.general.locale.help": "Locale für Zahlen-/Datumsformatierung (z.B. de-DE, en-US).",
 	"msghub.i18n.core.admin.jsonConfig.general.locale.label": "Locale",
 	"msghub.i18n.core.admin.jsonConfig.general.locale.placeholder": "de-DE",

@@ -40,18 +40,17 @@
     "typescript": "~5.9.3"
   },
   "main": "main.js",
-  "files": [
-    "admin{,/!(lib)/**}/!(tsconfig|tsconfig.*|.eslintrc).{json,json5}",
-    "admin{,/!(lib)/**}/*.{html,css,png,svg,jpg,js}",
-    "i18n/",
-    "lib/",
-    "src/",
-    "www/",
-    "io-package.json",
-    "LICENSE",
-    "main.js",
-    "i18nReporter.js"
-  ],
+	"files": [
+		"admin{,/!(lib)/**}/!(tsconfig|tsconfig.*|.eslintrc).{json,json5}",
+		"admin{,/!(lib)/**}/*.{html,css,png,svg,jpg,js}",
+		"i18n/",
+		"lib/",
+		"src/",
+		"www/",
+		"io-package.json",
+		"LICENSE",
+		"main.js"
+	],
   "scripts": {
     "docs:generate": "node generate-doc-index.mjs",
     "docs:check": "node generate-doc-index.mjs --check",
