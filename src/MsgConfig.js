@@ -49,15 +49,17 @@ const MsgConfig = Object.freeze({
 	 *
 	 * @param {object} params Params.
 	 * @param {object} [params.adapterConfig] Raw ioBroker adapter config (`this.config` in `main.js`).
+	 * @param {object} [params.decrypted] Optional decrypted secrets (main.js handles decryption).
+	 * @param {string} [params.decrypted.aiOpenAiApiKey] Decrypted OpenAI API key.
 	 * @param {object} [params.msgConstants] MsgConstants (levels/kinds); used for normalization later.
-	 * @param {number} [params.notifierIntervalMs] Effective notifier interval (used for quiet hours validation later).
 	 * @param {object} [params.log] Optional logger facade (supports `error|warn|info|debug`).
-	 * @returns {{ corePrivate: { quietHours: object|null, render: object }, pluginPublic: { quietHours: object|null, render: object }, errors: ReadonlyArray<string> }} Normalized config bundle.
+	 * @returns {{ corePrivate: object, pluginPublic: object, errors: ReadonlyArray<string> }} Normalized config bundle.
 	 */
-	normalize({ adapterConfig: _adapterConfig, msgConstants: _msgConstants, notifierIntervalMs: _ms, log: _log } = {}) {
+	normalize(params = {}) {
 		const errors = [];
+		const { adapterConfig: _adapterConfig, decrypted: _decrypted, msgConstants: _msgConstants, log: _log } = params;
 		const adapterConfig = _adapterConfig && typeof _adapterConfig === 'object' ? _adapterConfig : {};
-		const notifierIntervalMs = typeof _ms === 'number' ? _ms : Number(_ms);
+		const decrypted = _decrypted && typeof _decrypted === 'object' ? _decrypted : {};
 		const msgConstants = _msgConstants && typeof _msgConstants === 'object' ? _msgConstants : null;
 		const log = _log && typeof _log === 'object' ? _log : null;
 
@@ -104,6 +106,164 @@ const MsgConfig = Object.freeze({
 			return Number(m[1]) * 60 + Number(m[2]);
 		};
 
+		const safeTrunc = value => {
+			const n = typeof value === 'number' ? value : Number(value);
+			return Number.isFinite(n) ? Math.trunc(n) : null;
+		};
+
+		/**
+		 * Normalize store configuration.
+		 *
+		 * This intentionally centralizes the effective defaults (single source of truth).
+		 *
+		 * @returns {{ pruneIntervalMs: number, notifierIntervalMs: number, hardDeleteAfterMs: number, hardDeleteIntervalMs: number, hardDeleteBacklogIntervalMs: number, hardDeleteBatchSize: number, hardDeleteStartupDelayMs: number, deleteClosedIntervalMs: number }} Store config.
+		 */
+		const normalizeStore = () => {
+			const pruneIntervalSec = Math.max(0, safeTrunc(adapterConfig?.pruneIntervalSec) ?? 30);
+			const notifierIntervalSec = Math.max(0, safeTrunc(adapterConfig?.notifierIntervalSec) ?? 10);
+			const hardDeleteAfterHours = Math.max(0, safeTrunc(adapterConfig?.hardDeleteAfterHours) ?? 72);
+			const hardDeleteIntervalMs = Math.max(
+				0,
+				safeTrunc(adapterConfig?.hardDeleteIntervalMs) ?? 1000 * 60 * 60 * 4,
+			);
+			const hardDeleteBacklogIntervalMs = Math.max(
+				0,
+				safeTrunc(adapterConfig?.hardDeleteBacklogIntervalMs) ?? 1000 * 5,
+			);
+			const hardDeleteBatchSize = Math.max(1, safeTrunc(adapterConfig?.hardDeleteBatchSize) ?? 50);
+			const hardDeleteStartupDelaySec = Math.max(0, safeTrunc(adapterConfig?.hardDeleteStartupDelaySec) ?? 60);
+			const deleteClosedIntervalMs = Math.max(0, safeTrunc(adapterConfig?.deleteClosedIntervalMs) ?? 1000 * 10);
+
+			return Object.freeze({
+				pruneIntervalMs: pruneIntervalSec * 1000,
+				notifierIntervalMs: notifierIntervalSec * 1000,
+				hardDeleteAfterMs: hardDeleteAfterHours * 60 * 60 * 1000,
+				hardDeleteIntervalMs,
+				hardDeleteBacklogIntervalMs,
+				hardDeleteBatchSize,
+				hardDeleteStartupDelayMs: hardDeleteStartupDelaySec * 1000,
+				deleteClosedIntervalMs,
+			});
+		};
+
+		/**
+		 * Normalize storage configuration.
+		 *
+		 * @returns {{ writeIntervalMs: number }} Storage config.
+		 */
+		const normalizeStorage = () => {
+			const writeIntervalMs = Math.max(0, safeTrunc(adapterConfig?.writeIntervalMs) ?? 10_000);
+			return Object.freeze({ writeIntervalMs });
+		};
+
+		/**
+		 * Normalize archive configuration.
+		 *
+		 * @returns {{ keepPreviousWeeks: number, flushIntervalMs: number, maxBatchSize: number }} Archive config.
+		 */
+		const normalizeArchive = () => {
+			const keepPreviousWeeks = Math.max(0, safeTrunc(adapterConfig?.keepPreviousWeeks) ?? 3);
+			const archiveFlushIntervalSec = Math.max(0, safeTrunc(adapterConfig?.archiveFlushIntervalSec) ?? 10);
+			const archiveMaxBatchSize = Math.max(1, safeTrunc(adapterConfig?.archiveMaxBatchSize) ?? 200);
+
+			return Object.freeze({
+				keepPreviousWeeks,
+				flushIntervalMs: archiveFlushIntervalSec * 1000,
+				maxBatchSize: archiveMaxBatchSize,
+			});
+		};
+
+		/**
+		 * Normalize stats configuration.
+		 *
+		 * @returns {{ rollupKeepDays: number }} Stats config.
+		 */
+		const normalizeStats = () => {
+			const rollupKeepDays = Math.max(1, safeTrunc(adapterConfig?.rollupKeepDays) ?? 400);
+			return Object.freeze({ rollupKeepDays });
+		};
+
+		/**
+		 * Normalize AI configuration (best-effort; secrets are provided via `params.decrypted`).
+		 *
+		 * @returns {object} AI config for MsgAi constructor.
+		 */
+		const normalizeAi = () => {
+			const c = adapterConfig && typeof adapterConfig === 'object' ? adapterConfig : {};
+			const apiKeyRaw =
+				typeof decrypted?.aiOpenAiApiKey === 'string'
+					? decrypted.aiOpenAiApiKey
+					: typeof c.aiOpenAiApiKey === 'string'
+						? c.aiOpenAiApiKey
+						: '';
+
+			const parseJsonArray = (value, label) => {
+				const text = typeof value === 'string' ? value.trim() : '';
+				if (!text) {
+					return [];
+				}
+				try {
+					const parsed = JSON.parse(text);
+					if (Array.isArray(parsed)) {
+						return parsed;
+					}
+					pushError(`ai.invalidJson.${label}`, `MsgConfig: AI config ${label} is not an array (ignored)`);
+					return [];
+				} catch {
+					pushError(`ai.invalidJson.${label}`, `MsgConfig: AI config invalid JSON for ${label} (ignored)`);
+					return [];
+				}
+			};
+
+			const normalizePurposeModelOverrides = list => {
+				if (!Array.isArray(list)) {
+					return [];
+				}
+				const out = [];
+				for (const row of list) {
+					const purpose = typeof row?.purpose === 'string' ? row.purpose.trim().toLowerCase() : '';
+					const model = typeof row?.model === 'string' ? row.model.trim() : '';
+					if (!purpose || !model) {
+						continue;
+					}
+					const qualityRaw = typeof row?.quality === 'string' ? row.quality.trim().toLowerCase() : '';
+					const quality =
+						qualityRaw === 'fast' || qualityRaw === 'balanced' || qualityRaw === 'best' ? qualityRaw : null;
+					out.push(Object.freeze({ purpose, quality, model }));
+				}
+				return out;
+			};
+
+			const rawOverrides = parseJsonArray(c.aiPurposeModelOverrides, 'aiPurposeModelOverrides');
+			const purposeModelOverrides = Object.freeze(normalizePurposeModelOverrides(rawOverrides));
+
+			return Object.freeze({
+				enabled: c.aiEnabled === true,
+				provider: c.aiProvider,
+				openai: Object.freeze({
+					apiKey: String(apiKeyRaw || '').trim(),
+					baseUrl: c.aiOpenAiBaseUrl,
+					model: c.aiOpenAiModelBalanced || c.aiOpenAiModel,
+					modelsByQuality: Object.freeze({
+						fast: c.aiOpenAiModelFast,
+						balanced: c.aiOpenAiModelBalanced || c.aiOpenAiModel,
+						best: c.aiOpenAiModelBest,
+					}),
+					purposeModelOverrides,
+				}),
+				timeoutMs: c.aiTimeoutMs,
+				maxConcurrency: c.aiMaxConcurrency,
+				rpm: c.aiRpm,
+				cacheTtlMs: c.aiCacheTtlMs,
+			});
+		};
+
+		const store = normalizeStore();
+		const storage = normalizeStorage();
+		const archive = normalizeArchive();
+		const stats = normalizeStats();
+		const ai = normalizeAi();
+
 		/**
 		 * Normalize quiet hours configuration (effective config).
 		 *
@@ -120,7 +280,7 @@ const MsgConfig = Object.freeze({
 			if (!enabled) {
 				return null;
 			}
-			if (!Number.isFinite(notifierIntervalMs) || notifierIntervalMs <= 0) {
+			if (!Number.isFinite(store.notifierIntervalMs) || store.notifierIntervalMs <= 0) {
 				pushError(
 					'quietHours.disabled.notifierIntervalMs',
 					'MsgConfig: quiet hours require notifierIntervalMs > 0 (feature disabled)',
@@ -259,6 +419,11 @@ const MsgConfig = Object.freeze({
 		const render = normalizeRender();
 
 		const corePrivate = Object.freeze({
+			store,
+			storage,
+			archive,
+			stats,
+			ai,
 			quietHours,
 			render,
 		});
@@ -270,6 +435,19 @@ const MsgConfig = Object.freeze({
 				// Whitelist-only: allow plugins to read the effective presentation config.
 				prefixes: render?.prefixes || null,
 				templates: render?.templates || null,
+			}),
+			ai: Object.freeze({
+				enabled: ai?.enabled === true,
+				provider: ai?.provider,
+				openai: Object.freeze({
+					model: ai?.openai?.model,
+					modelsByQuality: ai?.openai?.modelsByQuality,
+					purposeModelOverrides: ai?.openai?.purposeModelOverrides,
+				}),
+				timeoutMs: ai?.timeoutMs,
+				maxConcurrency: ai?.maxConcurrency,
+				rpm: ai?.rpm,
+				cacheTtlMs: ai?.cacheTtlMs,
 			}),
 		});
 

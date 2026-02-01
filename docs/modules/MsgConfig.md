@@ -28,7 +28,7 @@ This works, but it has downsides:
 
 `MsgConfig` exposes a single entry point:
 
-- `MsgConfig.normalize({ adapterConfig, msgConstants, notifierIntervalMs, log })`
+- `MsgConfig.normalize({ adapterConfig, decrypted, msgConstants, log })`
 
 It returns a frozen bundle:
 
@@ -43,19 +43,27 @@ version: it helps evolve the model deliberately and keeps plugin-facing usage ex
 
 ---
 
-## Field list (minimal scope, stage 1)
+## Field list (current scope)
 
 ### `corePrivate`
 
+- `corePrivate.store`: normalized store timers / maintenance settings (e.g. notifier/prune/hard-delete).
+- `corePrivate.storage`: normalized persistence settings.
+- `corePrivate.archive`: normalized archive settings.
+- `corePrivate.stats`: normalized stats/rollup settings.
+- `corePrivate.ai`: normalized AI config for `MsgAi` (includes decrypted secrets).
 - `corePrivate.quietHours`:
   - `null` when quiet hours are disabled (feature off or invalid config)
   - or `{ enabled, startMin, endMin, maxLevel, spreadMs }` (all numeric minutes/ms)
+- `corePrivate.render`: normalized presentation config (prefixes + templates).
 
 ### `pluginPublic`
 
 - `pluginPublic.quietHours`:
   - same *field set* as `corePrivate.quietHours`
   - but as a **separate, frozen copy** (no shared references with `corePrivate`)
+- `pluginPublic.render`: whitelisted presentation config snapshot (prefixes + templates).
+- `pluginPublic.ai`: whitelisted AI config snapshot (**no secrets**).
 
 ### `errors`
 

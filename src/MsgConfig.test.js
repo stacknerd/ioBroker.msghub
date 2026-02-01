@@ -9,13 +9,13 @@ describe('MsgConfig', () => {
 		it('valid quiet hours produce normalized config', () => {
 			const res = MsgConfig.normalize({
 				adapterConfig: {
+					notifierIntervalSec: 10,
 					quietHoursEnabled: true,
 					quietHoursStart: '22:00',
 					quietHoursEnd: '06:00',
 					quietHoursMaxLevel: 20,
 					quietHoursSpreadMin: 0,
 				},
-				notifierIntervalMs: 10_000,
 			});
 
 			expect(res.errors).to.deep.equal([]);
@@ -41,13 +41,13 @@ describe('MsgConfig', () => {
 		it('disabled when notifierIntervalMs <= 0', () => {
 			const res = MsgConfig.normalize({
 				adapterConfig: {
+					notifierIntervalSec: 0,
 					quietHoursEnabled: true,
 					quietHoursStart: '22:00',
 					quietHoursEnd: '06:00',
 					quietHoursMaxLevel: 20,
 					quietHoursSpreadMin: 0,
 				},
-				notifierIntervalMs: 0,
 			});
 
 			expect(res.corePrivate.quietHours).to.equal(null);
@@ -58,13 +58,13 @@ describe('MsgConfig', () => {
 		it('disabled when start == end', () => {
 			const res = MsgConfig.normalize({
 				adapterConfig: {
+					notifierIntervalSec: 10,
 					quietHoursEnabled: true,
 					quietHoursStart: '22:00',
 					quietHoursEnd: '22:00',
 					quietHoursMaxLevel: 20,
 					quietHoursSpreadMin: 0,
 				},
-				notifierIntervalMs: 10_000,
 			});
 
 			expect(res.corePrivate.quietHours).to.equal(null);
@@ -74,13 +74,13 @@ describe('MsgConfig', () => {
 		it('disabled when start/end invalid', () => {
 			const res = MsgConfig.normalize({
 				adapterConfig: {
+					notifierIntervalSec: 10,
 					quietHoursEnabled: true,
 					quietHoursStart: '25:00',
 					quietHoursEnd: '06:00',
 					quietHoursMaxLevel: 20,
 					quietHoursSpreadMin: 0,
 				},
-				notifierIntervalMs: 10_000,
 			});
 
 			expect(res.corePrivate.quietHours).to.equal(null);
@@ -90,13 +90,13 @@ describe('MsgConfig', () => {
 		it('disabled when maxLevel/spread invalid', () => {
 			const res = MsgConfig.normalize({
 				adapterConfig: {
+					notifierIntervalSec: 10,
 					quietHoursEnabled: true,
 					quietHoursStart: '22:00',
 					quietHoursEnd: '06:00',
 					quietHoursMaxLevel: 'nope',
 					quietHoursSpreadMin: 0,
 				},
-				notifierIntervalMs: 10_000,
 			});
 
 			expect(res.corePrivate.quietHours).to.equal(null);
@@ -106,13 +106,13 @@ describe('MsgConfig', () => {
 		it('disabled when freeMin < 240', () => {
 			const res = MsgConfig.normalize({
 				adapterConfig: {
+					notifierIntervalSec: 10,
 					quietHoursEnabled: true,
 					quietHoursStart: '00:00',
 					quietHoursEnd: '20:30',
 					quietHoursMaxLevel: 20,
 					quietHoursSpreadMin: 0,
 				},
-				notifierIntervalMs: 10_000,
 			});
 
 			expect(res.corePrivate.quietHours).to.equal(null);
@@ -122,13 +122,13 @@ describe('MsgConfig', () => {
 		it('disabled when spreadMin > freeMin', () => {
 			const res = MsgConfig.normalize({
 				adapterConfig: {
+					notifierIntervalSec: 10,
 					quietHoursEnabled: true,
 					quietHoursStart: '22:00',
 					quietHoursEnd: '06:00',
 					quietHoursMaxLevel: 20,
 					quietHoursSpreadMin: 1000,
 				},
-				notifierIntervalMs: 10_000,
 			});
 
 			expect(res.corePrivate.quietHours).to.equal(null);
@@ -137,18 +137,17 @@ describe('MsgConfig', () => {
 	});
 
 	describe('render normalization', () => {
-			it('normalizes prefixes and templates with expected defaults', () => {
-				const res = MsgConfig.normalize({
-					adapterConfig: {
-						quietHoursEnabled: false,
-						prefixLevelWarning: ' ⚠️ ',
-						prefixKindTask: '✅',
-						renderTitleTemplate: ' {{icon}} {{title}} ',
-						renderTextTemplate: '',
-						renderIconTemplate: null,
-					},
-					notifierIntervalMs: 10_000,
-				});
+		it('normalizes prefixes and templates with expected defaults', () => {
+			const res = MsgConfig.normalize({
+				adapterConfig: {
+					quietHoursEnabled: false,
+					prefixLevelWarning: ' ⚠️ ',
+					prefixKindTask: '✅',
+					renderTitleTemplate: ' {{icon}} {{title}} ',
+					renderTextTemplate: '',
+					renderIconTemplate: null,
+				},
+			});
 
 			expect(res.errors).to.deep.equal([]);
 
@@ -167,6 +166,26 @@ describe('MsgConfig', () => {
 			expect(res.pluginPublic.render).to.be.an('object');
 			expect(res.pluginPublic.render.prefixes).to.equal(res.corePrivate.render.prefixes);
 			expect(res.pluginPublic.render.templates).to.equal(res.corePrivate.render.templates);
+		});
+	});
+
+	describe('ai normalization', () => {
+		it('does not expose secrets via pluginPublic', () => {
+			const res = MsgConfig.normalize({
+				adapterConfig: {
+					aiEnabled: true,
+					aiProvider: 'openai',
+					aiOpenAiApiKey: 'should-not-leak',
+					aiOpenAiBaseUrl: 'https://internal.example/v1',
+				},
+				decrypted: { aiOpenAiApiKey: 'sk-test-1234567890' },
+			});
+
+			expect(res.corePrivate).to.have.nested.property('ai.openai.apiKey', 'sk-test-1234567890');
+			expect(res.pluginPublic).to.have.property('ai');
+			expect(res.pluginPublic.ai).to.have.property('openai');
+			expect(res.pluginPublic.ai.openai).to.not.have.property('apiKey');
+			expect(res.pluginPublic.ai.openai).to.not.have.property('baseUrl');
 		});
 	});
 });

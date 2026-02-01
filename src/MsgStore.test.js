@@ -108,8 +108,22 @@ function createStore({
 	const { msgRender: defaultRender } = createRenderer();
 	const msgFactory = factory || createFactory();
 
-	const store = new MsgStore(adapter || defaultAdapter, msgConstants || MsgConstants, msgFactory, {
+	const defaultStoreCfg = {
+		pruneIntervalMs: 30_000,
 		notifierIntervalMs: 0,
+		hardDeleteAfterMs: 1000 * 60 * 60 * 24 * 3,
+		hardDeleteIntervalMs: 1000 * 60 * 60 * 4,
+		hardDeleteBacklogIntervalMs: 1000 * 5,
+		hardDeleteBatchSize: 50,
+		hardDeleteStartupDelayMs: 1000 * 60,
+		deleteClosedIntervalMs: 1000 * 10,
+	};
+
+	const store = new MsgStore(adapter || defaultAdapter, msgConstants || MsgConstants, msgFactory, {
+		store: defaultStoreCfg,
+		storage: {},
+		archive: {},
+		stats: {},
 		initialMessages: messages,
 		...(options || {}),
 	});
@@ -636,7 +650,19 @@ describe('MsgStore', () => {
 			const { msgRender } = createRenderer();
 			const msgFactory = {};
 			const store = new MsgStore(adapter, MsgConstants, msgFactory, {
-				notifierIntervalMs: 0,
+				store: {
+					pruneIntervalMs: 30_000,
+					notifierIntervalMs: 0,
+					hardDeleteAfterMs: 1000 * 60 * 60 * 24 * 3,
+					hardDeleteIntervalMs: 1000 * 60 * 60 * 4,
+					hardDeleteBacklogIntervalMs: 1000 * 5,
+					hardDeleteBatchSize: 50,
+					hardDeleteStartupDelayMs: 1000 * 60,
+					deleteClosedIntervalMs: 1000 * 10,
+				},
+				storage: {},
+				archive: {},
+				stats: {},
 				initialMessages: [{ ref: 'r1', level: 10 }],
 			});
 			store.msgStorage = storage;
@@ -1061,7 +1087,18 @@ describe('MsgStore', () => {
 			const { store } = createStore({
 				messages,
 				msgArchive,
-				options: { hardDeleteAfterMs: 1000, hardDeleteIntervalMs: 0, hardDeleteStartupDelayMs: 0 },
+				options: {
+					store: {
+						pruneIntervalMs: 30_000,
+						notifierIntervalMs: 0,
+						hardDeleteAfterMs: 1000,
+						hardDeleteIntervalMs: 0,
+						hardDeleteBacklogIntervalMs: 1000 * 5,
+						hardDeleteBatchSize: 50,
+						hardDeleteStartupDelayMs: 0,
+						deleteClosedIntervalMs: 1000 * 10,
+					},
+				},
 			});
 			store.lastPruneAt = now - store.pruneIntervalMs - 1;
 
@@ -1091,7 +1128,18 @@ describe('MsgStore', () => {
 			const { store } = createStore({
 				messages,
 				msgArchive,
-				options: { hardDeleteAfterMs: 1000, hardDeleteIntervalMs: 0, hardDeleteStartupDelayMs: 60_000 },
+				options: {
+					store: {
+						pruneIntervalMs: 30_000,
+						notifierIntervalMs: 0,
+						hardDeleteAfterMs: 1000,
+						hardDeleteIntervalMs: 0,
+						hardDeleteBacklogIntervalMs: 1000 * 5,
+						hardDeleteBatchSize: 50,
+						hardDeleteStartupDelayMs: 60_000,
+						deleteClosedIntervalMs: 1000 * 10,
+					},
+				},
 			});
 			store.lastPruneAt = now - store.pruneIntervalMs - 1;
 
@@ -1128,11 +1176,16 @@ describe('MsgStore', () => {
 				messages,
 				msgArchive,
 				options: {
-					hardDeleteAfterMs: 1000,
-					hardDeleteIntervalMs: 0,
-					hardDeleteStartupDelayMs: 0,
-					hardDeleteBatchSize: 1,
-					hardDeleteBacklogIntervalMs: 0,
+					store: {
+						pruneIntervalMs: 30_000,
+						notifierIntervalMs: 0,
+						hardDeleteAfterMs: 1000,
+						hardDeleteIntervalMs: 0,
+						hardDeleteBacklogIntervalMs: 0,
+						hardDeleteBatchSize: 1,
+						hardDeleteStartupDelayMs: 0,
+						deleteClosedIntervalMs: 1000 * 10,
+					},
 				},
 			});
 			store.lastPruneAt = now - store.pruneIntervalMs - 1;

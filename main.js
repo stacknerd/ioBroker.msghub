@@ -53,20 +53,6 @@ function decryptIfPossible(adapter, value) {
 	}
 }
 
-function parseJsonArrayWithWarn(adapter, value, label) {
-	const text = typeof value === 'string' ? value.trim() : '';
-	if (!text) {
-		return [];
-	}
-	try {
-		const parsed = JSON.parse(text);
-		return Array.isArray(parsed) ? parsed : [];
-	} catch (e) {
-		adapter?.log?.warn?.(`MsgAi config: invalid JSON for ${label} (${e?.message || e})`);
-		return [];
-	}
-}
-
 const REDACT_KEYS = new Set(['apiKey', 'token', 'password', 'aiOpenAiApiKey']);
 function sanitizeForLog(value) {
 	const isObject = v => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -82,33 +68,6 @@ function sanitizeForLog(value) {
 		}
 	}
 	return out;
-}
-
-function createMsgAiFromConfig(adapter, config) {
-	const c = config && typeof config === 'object' ? config : {};
-	return new MsgAi(adapter, {
-		enabled: c.aiEnabled === true,
-		provider: c.aiProvider,
-		openai: {
-			apiKey: decryptIfPossible(adapter, c.aiOpenAiApiKey),
-			baseUrl: c.aiOpenAiBaseUrl,
-			model: c.aiOpenAiModelBalanced || c.aiOpenAiModel,
-			modelsByQuality: {
-				fast: c.aiOpenAiModelFast,
-				balanced: c.aiOpenAiModelBalanced || c.aiOpenAiModel,
-				best: c.aiOpenAiModelBest,
-			},
-			purposeModelOverrides: parseJsonArrayWithWarn(
-				adapter,
-				c.aiPurposeModelOverrides,
-				'aiPurposeModelOverrides',
-			),
-		},
-		timeoutMs: c.aiTimeoutMs,
-		maxConcurrency: c.aiMaxConcurrency,
-		rpm: c.aiRpm,
-		cacheTtlMs: c.aiCacheTtlMs,
-	});
 }
 
 // Load your modules here, e.g.:
@@ -161,107 +120,26 @@ class Msghub extends utils.Adapter {
 		this.msgFactory = new MsgFactory(this, this.msgConstants);
 		const config = this.config || {};
 
-		const msgAi = createMsgAiFromConfig(this, this.config);
-		this.msgAi = msgAi;
-
-		const keepPreviousWeeksRaw = this.config?.keepPreviousWeeks;
-		const keepPreviousWeeksParsed =
-			typeof keepPreviousWeeksRaw === 'number' ? keepPreviousWeeksRaw : Number(keepPreviousWeeksRaw);
-		const keepPreviousWeeks = Number.isFinite(keepPreviousWeeksParsed)
-			? Math.max(0, Math.trunc(keepPreviousWeeksParsed))
-			: undefined;
-
-		const pruneIntervalSecRaw = this.config?.pruneIntervalSec;
-		const pruneIntervalSecParsed =
-			typeof pruneIntervalSecRaw === 'number' ? pruneIntervalSecRaw : Number(pruneIntervalSecRaw);
-		const pruneIntervalMs = Number.isFinite(pruneIntervalSecParsed)
-			? Math.max(0, Math.trunc(pruneIntervalSecParsed)) * 1000
-			: undefined;
-
-		const notifierIntervalSecRaw = config?.notifierIntervalSec;
-		const notifierIntervalSecParsed =
-			typeof notifierIntervalSecRaw === 'number' ? notifierIntervalSecRaw : Number(notifierIntervalSecRaw);
-		const notifierIntervalMs = Number.isFinite(notifierIntervalSecParsed)
-			? Math.max(0, Math.trunc(notifierIntervalSecParsed)) * 1000
-			: undefined;
-		const notifierIntervalMsEffective = notifierIntervalMs === undefined ? 10_000 : notifierIntervalMs;
-
-		const hardDeleteAfterHoursRaw = this.config?.hardDeleteAfterHours;
-		const hardDeleteAfterHoursParsed =
-			typeof hardDeleteAfterHoursRaw === 'number' ? hardDeleteAfterHoursRaw : Number(hardDeleteAfterHoursRaw);
-		const hardDeleteAfterMs = Number.isFinite(hardDeleteAfterHoursParsed)
-			? Math.max(0, Math.trunc(hardDeleteAfterHoursParsed)) * 60 * 60 * 1000
-			: undefined;
-
-		const hardDeleteBatchSizeRaw = this.config?.hardDeleteBatchSize;
-		const hardDeleteBatchSizeParsed =
-			typeof hardDeleteBatchSizeRaw === 'number' ? hardDeleteBatchSizeRaw : Number(hardDeleteBatchSizeRaw);
-		const hardDeleteBatchSize = Number.isFinite(hardDeleteBatchSizeParsed)
-			? Math.max(1, Math.trunc(hardDeleteBatchSizeParsed))
-			: undefined;
-
-		const hardDeleteStartupDelaySecRaw = this.config?.hardDeleteStartupDelaySec;
-		const hardDeleteStartupDelaySecParsed =
-			typeof hardDeleteStartupDelaySecRaw === 'number'
-				? hardDeleteStartupDelaySecRaw
-				: Number(hardDeleteStartupDelaySecRaw);
-		const hardDeleteStartupDelayMs = Number.isFinite(hardDeleteStartupDelaySecParsed)
-			? Math.max(0, Math.trunc(hardDeleteStartupDelaySecParsed)) * 1000
-			: undefined;
-
-		const archiveFlushIntervalSecRaw = this.config?.archiveFlushIntervalSec;
-		const archiveFlushIntervalSecParsed =
-			typeof archiveFlushIntervalSecRaw === 'number'
-				? archiveFlushIntervalSecRaw
-				: Number(archiveFlushIntervalSecRaw);
-		const flushIntervalMs = Number.isFinite(archiveFlushIntervalSecParsed)
-			? Math.max(0, Math.trunc(archiveFlushIntervalSecParsed)) * 1000
-			: undefined;
-
-		const archiveMaxBatchSizeRaw = this.config?.archiveMaxBatchSize;
-		const archiveMaxBatchSizeParsed =
-			typeof archiveMaxBatchSizeRaw === 'number' ? archiveMaxBatchSizeRaw : Number(archiveMaxBatchSizeRaw);
-		const maxBatchSize = Number.isFinite(archiveMaxBatchSizeParsed)
-			? Math.max(1, Math.trunc(archiveMaxBatchSizeParsed))
-			: undefined;
-
-		const rollupKeepDaysRaw = this.config?.rollupKeepDays;
-		const rollupKeepDaysParsed =
-			typeof rollupKeepDaysRaw === 'number' ? rollupKeepDaysRaw : Number(rollupKeepDaysRaw);
-		const rollupKeepDays = Number.isFinite(rollupKeepDaysParsed)
-			? Math.max(1, Math.trunc(rollupKeepDaysParsed))
-			: undefined;
-
-		const writeIntervalMsRaw = this.config?.writeIntervalMs;
-		const writeIntervalMsParsed =
-			typeof writeIntervalMsRaw === 'number' ? writeIntervalMsRaw : Number(writeIntervalMsRaw);
-		const writeIntervalMs = Number.isFinite(writeIntervalMsParsed)
-			? Math.max(0, Math.trunc(writeIntervalMsParsed))
-			: undefined;
-
 		const msgCfg = MsgConfig.normalize({
 			adapterConfig: config,
+			decrypted: { aiOpenAiApiKey: decryptIfPossible(this, config?.aiOpenAiApiKey) },
 			msgConstants: this.msgConstants,
-			notifierIntervalMs: notifierIntervalMsEffective,
 			log: this.log,
 		});
 		// Expose the plugin-facing config snapshot via adapter for `ctx.api.config`.
 		// This is intentionally read-only and schema-versioned.
 		this._msgConfigPublic = Object.freeze({ schemaVersion: MsgConfig.schemaVersion, ...msgCfg.pluginPublic });
-		const quietHours = msgCfg.corePrivate.quietHours;
-		const render = msgCfg.corePrivate.render;
+
+		const msgAi = new MsgAi(this, msgCfg.corePrivate.ai);
+		this.msgAi = msgAi;
 
 		this.msgStore = new MsgStore(this, this.msgConstants, this.msgFactory, {
-			pruneIntervalMs,
-			...(notifierIntervalMs !== undefined ? { notifierIntervalMs } : {}),
-			hardDeleteAfterMs,
-			hardDeleteBatchSize,
-			hardDeleteStartupDelayMs,
-			...(quietHours ? { quietHours } : {}),
-			render,
-			archive: { keepPreviousWeeks, flushIntervalMs, maxBatchSize },
-			storage: { writeIntervalMs },
-			stats: { rollupKeepDays },
+			store: msgCfg.corePrivate.store,
+			storage: msgCfg.corePrivate.storage,
+			archive: msgCfg.corePrivate.archive,
+			stats: msgCfg.corePrivate.stats,
+			quietHours: msgCfg.corePrivate.quietHours,
+			render: msgCfg.corePrivate.render,
 			ai: msgAi,
 		});
 		await this.msgStore.init();
@@ -318,23 +196,6 @@ class Msghub extends utils.Adapter {
 			callback();
 		}
 	}
-
-	// If you need to react to object changes, uncomment the following block and the corresponding line in the constructor.
-	// You also need to subscribe to the objects with `this.subscribeObjects`, similar to `this.subscribeStates`.
-	// /**
-	//  * Is called if a subscribed object changes
-	//  * @param {string} id
-	//  * @param {ioBroker.Object | null | undefined} obj
-	//  */
-	// onObjectChange(id, obj) {
-	// 	if (obj) {
-	// 		// The object was changed
-	// 		this.log.info(`object ${id} changed: ${JSON.stringify(obj)}`);
-	// 	} else {
-	// 		// The object was deleted
-	// 		this.log.info(`object ${id} deleted`);
-	// 	}
-	// }
 
 	/**
 	 * Is called if a subscribed object changes

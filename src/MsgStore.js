@@ -89,40 +89,24 @@ class MsgStore {
 	 * @param {import('@iobroker/adapter-core').AdapterInstance & { locale?: string }} adapter Adapter instance for logging and utilities.
 	 * @param {import('./MsgConstants').MsgConstants} msgConstants Centralized enum-like constants.
 	 * @param {import('./MsgFactory').MsgFactory} msgFactory Factory used for patching/validation.
-	 * @param {object} [options] Optional configuration.
+	 * @param {object} options Configuration.
 	 * @param {Array<object>} [options.initialMessages] Initial in-memory message list (primarily for tests/imports).
-	 * @param {number} [options.pruneIntervalMs] Expiration scan throttle in ms (default: 30000).
-	 * @param {number} [options.notifierIntervalMs] Due-notification polling interval in ms (default: 10000, 0 disables).
-	 * @param {number} [options.hardDeleteAfterMs] After this time in "deleted"/"expired", messages are hard-deleted (default: 259200000).
-	 * @param {number} [options.hardDeleteIntervalMs] Interval for checking hard-deletes (default: 14400000).
-	 * @param {number} [options.hardDeleteBatchSize] Max messages hard-deleted per run (default: 50).
-	 * @param {number} [options.hardDeleteBacklogIntervalMs] Interval for processing a hard-delete backlog (default: 5000).
-	 * @param {number} [options.hardDeleteStartupDelayMs] Delay hard-deletes after startup to reduce I/O spikes (default: 60000).
-	 * @param {number} [options.deleteClosedIntervalMs] Interval for checking for closed messages (default: 10000).
-	 * @param {object} [options.storage] Options forwarded to `MsgStorage` (e.g. `baseDir`, `fileName`, `writeIntervalMs`).
-	 * @param {object} [options.archive] Options forwarded to `MsgArchive` (e.g. `baseDir`, `fileExtension`, `flushIntervalMs`).
-	 * @param {object} [options.stats] Options forwarded to `MsgStats` (e.g. `rollupKeepDays`).
+	 * @param {{ pruneIntervalMs: number, notifierIntervalMs: number, hardDeleteAfterMs: number, hardDeleteIntervalMs: number, hardDeleteBacklogIntervalMs: number, hardDeleteBatchSize: number, hardDeleteStartupDelayMs: number, deleteClosedIntervalMs: number }} options.store
+	 *   Normalized store config (source of truth: MsgConfig).
+	 * @param {object} options.storage Normalized storage config (source of truth: MsgConfig).
+	 * @param {object} options.archive Normalized archive config (source of truth: MsgConfig).
+	 * @param {object} options.stats Normalized stats config (source of truth: MsgConfig).
 	 * @param {any} [options.render] Render-related options forwarded to `MsgRender` (e.g. prefix configuration).
-	 * @param {{ enabled: boolean, startMin: number, endMin: number, maxLevel: number, spreadMs: number }} [options.quietHours] Optional quiet-hours configuration (fully normalized by `main.js`).
+	 * @param {{ enabled: boolean, startMin: number, endMin: number, maxLevel: number, spreadMs: number }} [options.quietHours] Optional quiet-hours configuration (fully normalized by `MsgConfig`).
 	 * @param {() => number} [options.quietHoursRandomFn] Optional random function injection (tests).
 	 * @param {any} [options.ai] Optional AI helper instance.
 	 */
-	constructor(adapter, msgConstants, msgFactory, options = {}) {
-		const {
-			initialMessages = [],
-			pruneIntervalMs = 30000,
-			notifierIntervalMs = 10000,
-			hardDeleteAfterMs = 1000 * 60 * 60 * 24 * 3,
-			hardDeleteIntervalMs = 1000 * 60 * 60 * 4,
-			hardDeleteBatchSize = 50,
-			hardDeleteBacklogIntervalMs = 1000 * 5,
-			hardDeleteStartupDelayMs = 1000 * 60,
-			deleteClosedIntervalMs = 1000 * 10,
-			storage = {},
-			archive = {},
-			stats = {},
-			ai = null,
-		} = options || {};
+	constructor(adapter, msgConstants, msgFactory, options) {
+		const opt = options && typeof options === 'object' && !Array.isArray(options) ? options : null;
+		if (!opt) {
+			throw new Error('MsgStore: options is required');
+		}
+		const { initialMessages = [], store, storage, archive, stats, ai = null } = opt;
 
 		if (!adapter) {
 			throw new Error('MsgStore: adapter is required');
@@ -139,15 +123,77 @@ class MsgStore {
 		}
 		this.msgFactory = msgFactory;
 
+		const isObject = v => !!v && typeof v === 'object' && !Array.isArray(v);
+		if (!isObject(store)) {
+			throw new Error('MsgStore: options.store is required');
+		}
+		if (!isObject(storage)) {
+			throw new Error('MsgStore: options.storage is required');
+		}
+		if (!isObject(archive)) {
+			throw new Error('MsgStore: options.archive is required');
+		}
+		if (!isObject(stats)) {
+			throw new Error('MsgStore: options.stats is required');
+		}
+
+		const requireFinite = (value, label) => {
+			if (typeof value !== 'number' || !Number.isFinite(value)) {
+				throw new Error(`MsgStore: options.store.${label} must be a finite number`);
+			}
+			return value;
+		};
+
+		// Pruning and notification timers (timer starts in `init()`).
+		this.lastPruneAt = 0;
+		this.pruneIntervalMs = Math.max(0, Math.trunc(requireFinite(store.pruneIntervalMs, 'pruneIntervalMs')));
+		this.notifierIntervalMs = Math.max(
+			0,
+			Math.trunc(requireFinite(store.notifierIntervalMs, 'notifierIntervalMs')),
+		);
+
+		// Hard-delete scheduling (timer starts in `init()`).
+		this._keepDeletedAndExpiredFilesMs = Math.max(
+			0,
+			Math.trunc(requireFinite(store.hardDeleteAfterMs, 'hardDeleteAfterMs')),
+		);
+		this._hardDeleteIntervalMs = Math.max(
+			0,
+			Math.trunc(requireFinite(store.hardDeleteIntervalMs, 'hardDeleteIntervalMs')),
+		);
+		this._lastHardDeleteAt = 0;
+		this._hardDeleteBatchSize = Math.max(
+			1,
+			Math.trunc(requireFinite(store.hardDeleteBatchSize, 'hardDeleteBatchSize')),
+		);
+		this._hardDeleteBacklogIntervalMs = Math.max(
+			0,
+			Math.trunc(requireFinite(store.hardDeleteBacklogIntervalMs, 'hardDeleteBacklogIntervalMs')),
+		);
+		this._hardDeleteStartupDelayMs = Math.max(
+			0,
+			Math.trunc(requireFinite(store.hardDeleteStartupDelayMs, 'hardDeleteStartupDelayMs')),
+		);
+		this._hardDeleteDisabledUntil = 0;
+		this._hardDeleteTimer = null;
+		this._hardDeleteTimerDueAt = 0;
+
+		// Closed-message cleanup (not user-configurable yet).
+		this._deleteClosedIntervalMs = Math.max(
+			0,
+			Math.trunc(requireFinite(store.deleteClosedIntervalMs, 'deleteClosedIntervalMs')),
+		);
+		this._lastDeleteClosedAt = 0;
+
 		// File persistence (initialized in `init()`).
 		this.msgStorage = new MsgStorage(this.adapter, {
 			baseDir: 'data',
 			fileName: 'messages.json',
-			...(storage || {}),
+			...storage,
 		});
 
 		// Append-only archive (initialized in `init()`).
-		this.msgArchive = new MsgArchive(this.adapter, { baseDir: 'data/archive', ...(archive || {}) });
+		this.msgArchive = new MsgArchive(this.adapter, { baseDir: 'data/archive', ...archive });
 
 		// View rendering (pure transformation; no I/O).
 		this.msgRender = new MsgRender(this.adapter, { locale: this.adapter?.locale, render: options?.render || null });
@@ -165,37 +211,14 @@ class MsgStore {
 		this.msgActions = new MsgAction(this.adapter, this.msgConstants, this);
 
 		// Stats (read-only insights + rollups).
-		this.msgStats = new MsgStats(this.adapter, this.msgConstants, this, stats || {});
+		this.msgStats = new MsgStats(this.adapter, this.msgConstants, this, stats);
 
 		// Pruning and notification timers (timer starts in `init()`).
-		this.lastPruneAt = 0;
-		this.pruneIntervalMs = pruneIntervalMs;
-		this.notifierIntervalMs = notifierIntervalMs;
 		this._quietHours = options?.quietHours || null;
 		this._quietHoursRandomFn =
 			typeof options?.quietHoursRandomFn === 'function' ? options.quietHoursRandomFn : Math.random;
 		this._notifyTimer = null;
 		this._initialized = false;
-		this._keepDeletedAndExpiredFilesMs = hardDeleteAfterMs;
-		this._hardDeleteIntervalMs = hardDeleteIntervalMs;
-		this._lastHardDeleteAt = 0;
-		this._hardDeleteBatchSize =
-			typeof hardDeleteBatchSize === 'number' && Number.isFinite(hardDeleteBatchSize)
-				? Math.max(1, Math.trunc(hardDeleteBatchSize))
-				: 50;
-		this._hardDeleteBacklogIntervalMs =
-			typeof hardDeleteBacklogIntervalMs === 'number' && Number.isFinite(hardDeleteBacklogIntervalMs)
-				? Math.max(0, Math.trunc(hardDeleteBacklogIntervalMs))
-				: 1000 * 5;
-		this._hardDeleteStartupDelayMs =
-			typeof hardDeleteStartupDelayMs === 'number' && Number.isFinite(hardDeleteStartupDelayMs)
-				? Math.max(0, Math.trunc(hardDeleteStartupDelayMs))
-				: 0;
-		this._hardDeleteDisabledUntil = 0;
-		this._hardDeleteTimer = null;
-		this._hardDeleteTimerDueAt = 0;
-		this._deleteClosedIntervalMs = deleteClosedIntervalMs;
-		this._lastDeleteClosedAt = 0;
 
 		this.adapter?.log?.info?.(
 			`MsgStore initialized: pruneIntervalMs=${this.pruneIntervalMs}ms, notifierIntervalMs=${this.notifierIntervalMs}ms`,
