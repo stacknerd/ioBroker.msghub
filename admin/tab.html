@@ -16,15 +16,12 @@
 
 	<body>
 		<div class="msghub-root">
-			<div class="msghub-header">
-				<h5>MsgHub</h5>
-				<div class="msghub-muted offline" id="msghub-connection">disconnected</div>
-			</div>
-
 			<nav class="msghub-tabs" role="tablist" aria-label="MsgHub">
-				<a class="msghub-tab" href="#tab-stats" role="tab" aria-controls="tab-stats">Stats</a>
-				<a class="msghub-tab" href="#tab-messages" role="tab" aria-controls="tab-messages">Messages</a>
-				<a class="msghub-tab is-active" href="#tab-plugins" role="tab" aria-controls="tab-plugins">Plugin Config</a>
+				<a class="msghub-tab" href="#tab-stats" role="tab" aria-controls="tab-stats" data-i18n="msghub.i18n.core.admin.ui.tabs.stats.label">Stats</a>
+				<a class="msghub-tab" href="#tab-messages" role="tab" aria-controls="tab-messages" data-i18n="msghub.i18n.core.admin.ui.tabs.messages.label">Messages</a>
+				<a class="msghub-tab is-active" href="#tab-plugins" role="tab" aria-controls="tab-plugins" data-i18n="msghub.i18n.core.admin.ui.tabs.plugins.label">Plugin Config</a>
+				<div class="msghub-tabs-spacer" aria-hidden="true"></div>
+				<div class="offline" id="msghub-connection">…</div>
 			</nav>
 
 			<div id="tab-stats" class="msghub-panel msghub-stats" role="tabpanel">
