@@ -50,9 +50,9 @@
 		if (entries.length === 0) {
 			return null;
 		}
-		return h('div', { class: 'card' }, [
-			h('div', { class: 'card-content' }, [
-				h('div', { class: 'card-title', text: title }),
+		return h('div', { class: 'msghub-card' }, [
+			h('div', { class: 'msghub-card-body' }, [
+				h('div', { class: 'msghub-card-title', text: title }),
 				h(
 					'div',
 					{ class: 'msghub-stats-grid' },
@@ -122,9 +122,9 @@
 			value: total > 0 ? `${s.value} (${Math.round((s.value / total) * 100)}%)` : String(s.value),
 		}));
 
-		return h('div', { class: 'card' }, [
-			h('div', { class: 'card-content' }, [
-				h('div', { class: 'card-title', text: title }),
+		return h('div', { class: 'msghub-card' }, [
+			h('div', { class: 'msghub-card-body' }, [
+				h('div', { class: 'msghub-card-title', text: title }),
 				h('div', { class: 'msghub-ring-wrap' }, [
 					h('div', { class: 'msghub-ring', style: `background:${bg}` }, [
 						h('div', { class: 'msghub-ring-center' }, [
@@ -194,9 +194,9 @@
 
 	function renderScheduleChart(h, title, bucket) {
 		const { total, node } = renderScheduleBody(h, bucket, { showLegend: true });
-		return h('div', { class: 'card' }, [
-			h('div', { class: 'card-content' }, [
-				h('div', { class: 'card-title', text: title }),
+		return h('div', { class: 'msghub-card' }, [
+			h('div', { class: 'msghub-card-body' }, [
+				h('div', { class: 'msghub-card-title', text: title }),
 				h('div', { class: 'msghub-sched-meta msghub-muted', text: `total: ${total}` }),
 				node,
 			]),
@@ -213,9 +213,9 @@
 			return null;
 		}
 
-		return h('div', { class: 'card' }, [
-			h('div', { class: 'card-content' }, [
-				h('div', { class: 'card-title', text: 'Schedule by kind' }),
+		return h('div', { class: 'msghub-card' }, [
+			h('div', { class: 'msghub-card-body' }, [
+				h('div', { class: 'msghub-card-title', text: 'Schedule by kind' }),
 				h('div', { class: 'msghub-sched-legend' }, [
 					renderLegend(h, [
 						{ label: 'overdue', color: 'var(--msghub-danger)', value: '' },
@@ -252,7 +252,7 @@
 	}
 
 	function initStatsSection(ctx) {
-		const { sendTo, h, M, elements } = ctx;
+		const { sendTo, h, elements, ui } = ctx;
 		const root = elements.statsRoot;
 		if (!root) {
 			throw new Error('MsghubAdminTabStats: missing statsRoot element');
@@ -271,23 +271,19 @@
 
 		const toast = message => {
 			try {
-				M.toast({ html: String(message) });
-			} catch (_err) {
+				ui?.toast?.(String(message));
+			} catch {
 				// ignore
 			}
 		};
 
 		const actions = h('div', { class: 'msghub-actions' });
-		const refreshBtn = h('button', { class: 'btn', type: 'button', text: 'Refresh' });
-		const autoBtn = h('button', { class: 'btn-flat', type: 'button', text: 'Auto: on' });
+		const refreshBtn = h('button', { type: 'button', text: 'Refresh' });
+		const autoBtn = h('button', { type: 'button', text: 'Auto: on' });
 		actions.appendChild(refreshBtn);
 		actions.appendChild(autoBtn);
 
-		const progress = h(
-			'div',
-			{ class: 'msghub-progress is-hidden' },
-			h('div', { class: 'progress' }, h('div', { class: 'indeterminate' })),
-		);
+		const progress = h('div', { class: 'msghub-progress is-hidden' }, h('div', { class: 'msghub-muted', text: 'Loading…' }));
 		const errorEl = h('div', { class: 'msghub-error' });
 		const metaEl = h('div', { class: 'msghub-muted msghub-stats-meta' });
 		const contentEl = h('div', { class: 'msghub-stats-content' });
@@ -342,9 +338,9 @@
 				}
 
 				nodes.push(
-					h('div', { class: 'card' }, [
-						h('div', { class: 'card-content' }, [
-							h('div', { class: 'card-title', text: 'Done (transition → closed)' }),
+					h('div', { class: 'msghub-card' }, [
+						h('div', { class: 'msghub-card-body' }, [
+							h('div', { class: 'msghub-card-title', text: 'Done (transition → closed)' }),
 							h('div', { class: 'msghub-stats-grid' }, [
 								renderTile(h, 'today', String(done?.today?.total ?? 0)),
 								renderTile(h, 'thisWeek', String(done?.thisWeek?.total ?? 0)),
@@ -366,9 +362,9 @@
 				const pending = isObject(archive.pending) ? archive.pending : {};
 
 				nodes.push(
-					h('div', { class: 'card' }, [
-						h('div', { class: 'card-content' }, [
-							h('div', { class: 'card-title', text: 'Persistent Storage' }),
+					h('div', { class: 'msghub-card' }, [
+						h('div', { class: 'msghub-card-body' }, [
+							h('div', { class: 'msghub-card-title', text: 'Persistent Storage' }),
 							h('div', { class: 'msghub-stats-grid' }, [
 								renderTile(h, 'lastPersistedAt', formatTs(storage.lastPersistedAt)),
 								renderTile(h, 'lastPersistedBytes', formatBytes(storage.lastPersistedBytes)),
@@ -378,7 +374,7 @@
 					]),
 				);
 
-				const computeBtn = h('button', { class: 'btn-flat', type: 'button', text: 'Compute archive size' });
+				const computeBtn = h('button', { type: 'button', text: 'Compute archive size' });
 				if (archiveSizeLoading) {
 					computeBtn.classList.add('msghub-btn-loading');
 				}
@@ -389,9 +385,9 @@
 				});
 
 				nodes.push(
-					h('div', { class: 'card' }, [
-						h('div', { class: 'card-content' }, [
-							h('div', { class: 'card-title', text: 'Archive' }),
+					h('div', { class: 'msghub-card' }, [
+						h('div', { class: 'msghub-card-body' }, [
+							h('div', { class: 'msghub-card-title', text: 'Archive' }),
 							h('div', { class: 'msghub-actions' }, [computeBtn]),
 							h('div', { class: 'msghub-stats-grid' }, [
 								renderTile(h, 'keepPreviousWeeks', String(archive.keepPreviousWeeks ?? 0)),

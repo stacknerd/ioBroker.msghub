@@ -243,49 +243,279 @@ function detectTheme() {
 
 applyTheme(detectTheme());
 
-function ensureUiShim() {
-	if (win.M && typeof win.M === 'object') {
-		return win.M;
-	}
+function createUi() {
+	const root = document.querySelector('.msghub-root');
 
-	/** @type {HTMLDivElement | null} */
-	let toastHost = null;
+	const toastHost =
+		document.getElementById('msghub-toast-host') ||
+		(() => {
+			const el = document.createElement('div');
+			el.id = 'msghub-toast-host';
+			el.className = 'msghub-toast-host is-hidden';
+			el.setAttribute('aria-hidden', 'true');
+			el.setAttribute('aria-live', 'polite');
+			el.setAttribute('aria-atomic', 'true');
+			el.setAttribute('aria-relevant', 'additions text');
+			(root || document.body).appendChild(el);
+			return el;
+		})();
 
-	const ensureToastHost = () => {
-		if (toastHost) {
-			return toastHost;
+	const overlayBackdrop =
+		document.getElementById('msghub-overlay-large') ||
+		(() => {
+			const el = document.createElement('div');
+			el.id = 'msghub-overlay-large';
+			el.className = 'msghub-overlay-backdrop is-hidden';
+			el.setAttribute('aria-hidden', 'true');
+			(root || document.body).appendChild(el);
+			return el;
+		})();
+	const overlayTitle = /** @type {HTMLElement | null} */ (document.getElementById('msghub-overlay-large-title'));
+	const overlayBody = /** @type {HTMLElement | null} */ (document.getElementById('msghub-overlay-large-body'));
+	const overlayClose = /** @type {HTMLButtonElement | null} */ (document.getElementById('msghub-overlay-large-close'));
+
+	const dialogBackdrop =
+		document.getElementById('msghub-dialog-small') ||
+		(() => {
+			const el = document.createElement('div');
+			el.id = 'msghub-dialog-small';
+			el.className = 'msghub-dialog-backdrop is-hidden';
+			el.setAttribute('aria-hidden', 'true');
+			(root || document.body).appendChild(el);
+			return el;
+		})();
+	const dialogTitle = /** @type {HTMLElement | null} */ (document.getElementById('msghub-dialog-small-title'));
+	const dialogBody = /** @type {HTMLElement | null} */ (document.getElementById('msghub-dialog-small-body'));
+	const dialogBtnCancel = /** @type {HTMLButtonElement | null} */ (document.getElementById('msghub-dialog-small-cancel'));
+	const dialogBtnConfirm = /** @type {HTMLButtonElement | null} */ (document.getElementById('msghub-dialog-small-confirm'));
+
+	const setRootModalOpen = isOpen => {
+		if (root) {
+			root.classList.toggle('is-modal-open', isOpen);
 		}
-		toastHost = document.createElement('div');
-		toastHost.className = 'msghub-toast-host';
-		document.body.appendChild(toastHost);
-		return toastHost;
 	};
 
+	// Toasts
 	const toast = opts => {
-		const html = typeof opts === 'string' ? opts : String(opts?.html ?? '');
-		const host = ensureToastHost();
+		const text = typeof opts === 'string' ? opts : String(opts?.text ?? opts?.html ?? '');
+		const timeoutMsRaw = typeof opts === 'object' && opts ? opts.timeoutMs : undefined;
+		const timeoutMs = Number.isFinite(Number(timeoutMsRaw)) ? Math.max(250, Math.trunc(Number(timeoutMsRaw))) : 2500;
+		if (!text.trim()) {
+			return;
+		}
+
 		const el = document.createElement('div');
 		el.className = 'msghub-toast';
-		el.textContent = html;
-		host.replaceChildren(el);
+		el.textContent = text;
+		toastHost.appendChild(el);
+		toastHost.classList.remove('is-hidden');
+		toastHost.setAttribute('aria-hidden', 'false');
+
 		window.setTimeout(() => {
 			try {
-				if (host.firstChild === el) {
-					host.replaceChildren();
+				el.remove();
+				if (!toastHost.childElementCount) {
+					toastHost.classList.add('is-hidden');
+					toastHost.setAttribute('aria-hidden', 'true');
 				}
 			} catch {
 				// ignore
 			}
-		}, 2500);
+		}, timeoutMs);
 	};
 
-	// Minimal compatibility surface for existing code.
-	const shim = {
-		toast: ({ html }) => toast({ html }),
-		updateTextFields: () => undefined,
+	// Large overlay (viewer)
+	let overlayIsOpen = false;
+	let overlayPrevActive = /** @type {HTMLElement | null} */ (null);
+
+	const overlaySetOpen = isOpen => {
+		overlayIsOpen = isOpen;
+		overlayBackdrop.classList.toggle('is-hidden', !isOpen);
+		overlayBackdrop.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+		setRootModalOpen(isOpen || dialogIsOpen);
 	};
-	win.M = shim;
-	return shim;
+
+	const overlayCloseFn = () => {
+		if (!overlayIsOpen) {
+			return;
+		}
+		overlaySetOpen(false);
+		if (overlayBody) {
+			overlayBody.replaceChildren();
+		}
+		try {
+			overlayPrevActive?.focus?.();
+		} catch {
+			// ignore
+		}
+		overlayPrevActive = null;
+	};
+
+	const overlayOpen = opts => {
+		const title = typeof opts?.title === 'string' ? opts.title : '';
+		const bodyEl = opts?.bodyEl;
+
+		overlayPrevActive = /** @type {HTMLElement | null} */ (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+		if (overlayTitle) {
+			overlayTitle.textContent = title || '';
+		}
+		if (overlayBody) {
+			if (bodyEl instanceof Node) {
+				overlayBody.replaceChildren(bodyEl);
+			} else if (typeof opts?.bodyText === 'string') {
+				overlayBody.textContent = opts.bodyText;
+			} else {
+				overlayBody.replaceChildren();
+			}
+		}
+		overlaySetOpen(true);
+		try {
+			overlayClose?.focus?.();
+		} catch {
+			// ignore
+		}
+	};
+
+	if (overlayClose) {
+		overlayClose.addEventListener('click', () => overlayCloseFn());
+	}
+	overlayBackdrop.addEventListener('click', e => {
+		if (e?.target === overlayBackdrop) {
+			overlayCloseFn();
+		}
+	});
+
+	// Small dialog (confirm/prompt)
+	let dialogIsOpen = false;
+	let dialogPrevActive = /** @type {HTMLElement | null} */ (null);
+	/** @type {(ok: boolean) => void | null} */
+	let dialogPendingResolve = null;
+
+	const dialogSetOpen = isOpen => {
+		dialogIsOpen = isOpen;
+		dialogBackdrop.classList.toggle('is-hidden', !isOpen);
+		dialogBackdrop.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+		setRootModalOpen(isOpen || overlayIsOpen);
+	};
+
+	const dialogCloseFn = ok => {
+		if (!dialogIsOpen) {
+			return;
+		}
+		dialogSetOpen(false);
+		if (typeof dialogPendingResolve === 'function') {
+			const r = dialogPendingResolve;
+			dialogPendingResolve = null;
+			r(ok === true);
+		}
+		if (dialogBody) {
+			dialogBody.replaceChildren();
+		}
+		try {
+			dialogPrevActive?.focus?.();
+		} catch {
+			// ignore
+		}
+		dialogPrevActive = null;
+	};
+
+	if (dialogBtnCancel) {
+		dialogBtnCancel.addEventListener('click', () => dialogCloseFn(false));
+	}
+	if (dialogBtnConfirm) {
+		dialogBtnConfirm.addEventListener('click', () => dialogCloseFn(true));
+	}
+	dialogBackdrop.addEventListener('click', e => {
+		if (e?.target === dialogBackdrop) {
+			dialogCloseFn(false);
+		}
+	});
+
+	document.addEventListener('keydown', e => {
+		if (e.key !== 'Escape' && e.key !== 'Esc') {
+			return;
+		}
+		if (dialogIsOpen) {
+			e.preventDefault();
+			dialogCloseFn(false);
+			return;
+		}
+		if (overlayIsOpen) {
+			e.preventDefault();
+			overlayCloseFn();
+		}
+	});
+
+	document.addEventListener('msghub:tabSwitch', () => {
+		overlayCloseFn();
+		dialogCloseFn(false);
+	});
+
+	const confirm = opts =>
+		new Promise(resolve => {
+			if (typeof dialogPendingResolve === 'function') {
+				resolve(false);
+				return;
+			}
+
+			dialogPrevActive = /** @type {HTMLElement | null} */ (
+				document.activeElement instanceof HTMLElement ? document.activeElement : null
+			);
+
+			const title = typeof opts?.title === 'string' ? opts.title : '';
+			const text = typeof opts?.text === 'string' ? opts.text : '';
+			const bodyEl = opts?.bodyEl;
+			const confirmText = typeof opts?.confirmText === 'string' ? opts.confirmText : 'OK';
+			const cancelText = typeof opts?.cancelText === 'string' ? opts.cancelText : 'Cancel';
+			const isDanger = opts?.danger === true;
+
+			if (dialogTitle) {
+				dialogTitle.textContent = title || '';
+			}
+			if (dialogBody) {
+				if (bodyEl instanceof Node) {
+					dialogBody.replaceChildren(bodyEl);
+				} else {
+					dialogBody.textContent = text;
+				}
+			}
+			if (dialogBtnConfirm) {
+				dialogBtnConfirm.textContent = confirmText;
+				dialogBtnConfirm.classList.toggle('msghub-danger', isDanger);
+			}
+			if (dialogBtnCancel) {
+				dialogBtnCancel.textContent = cancelText;
+			}
+
+			dialogPendingResolve = resolve;
+			dialogSetOpen(true);
+			try {
+				dialogBtnCancel?.blur?.();
+				dialogBtnConfirm?.focus?.();
+			} catch {
+				// ignore
+			}
+		});
+
+	const closeAll = () => {
+		overlayCloseFn();
+		dialogCloseFn(false);
+	};
+
+	return Object.freeze({
+		toast,
+		overlayLarge: Object.freeze({
+			open: overlayOpen,
+			close: overlayCloseFn,
+			isOpen: () => overlayIsOpen,
+		}),
+		dialog: Object.freeze({
+			confirm,
+			close: dialogCloseFn,
+			isOpen: () => dialogIsOpen,
+		}),
+		closeAll,
+	});
 }
 
 function initTabs() {
@@ -311,6 +541,8 @@ function initTabs() {
 		}
 	}
 
+	let activeId = '';
+
 	const setActive = id => {
 		for (const tab of tabs) {
 			const tid = getTargetId(tab);
@@ -322,6 +554,14 @@ function initTabs() {
 		for (const [pid, panel] of panels.entries()) {
 			panel.toggleAttribute('hidden', pid !== id);
 		}
+		if (activeId && activeId !== id) {
+			try {
+				document.dispatchEvent(new CustomEvent('msghub:tabSwitch', { detail: { from: activeId, to: id } }));
+			} catch {
+				// ignore
+			}
+		}
+		activeId = id;
 	};
 
 	const initial = (() => {
@@ -503,7 +743,7 @@ const elements = Object.freeze({
 	messagesRoot: document.getElementById('messages-root'),
 });
 
-const M = ensureUiShim();
+const ui = createUi();
 
 const ctx = Object.freeze({
 	args,
@@ -513,7 +753,7 @@ const ctx = Object.freeze({
 	h,
 	t,
 	pickText,
-	M,
+	ui,
 	lang,
 	elements,
 });
