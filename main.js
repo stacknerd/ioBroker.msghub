@@ -41,7 +41,8 @@ function buildI18nRuntime(params) {
 	};
 
 	const fixTranslatedObject = (getTranslatedObjectFn, text, strings = []) => {
-		let obj = typeof getTranslatedObjectFn === 'function' ? getTranslatedObjectFn(text, '%s') : { en: String(text) };
+		let obj =
+			typeof getTranslatedObjectFn === 'function' ? getTranslatedObjectFn(text, '%s') : { en: String(text) };
 		if (!obj || typeof obj !== 'object') {
 			obj = { en: String(text) };
 		}
