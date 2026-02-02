@@ -320,6 +320,13 @@
 			return !document.hidden && !!tab && tab.offsetParent !== null;
 		};
 
+		const stopAuto = () => {
+			if (autoTimer) {
+				clearTimeout(autoTimer);
+				autoTimer = null;
+			}
+		};
+
 		const setProgressVisible = isVisible => {
 			progress.classList.toggle('is-hidden', !isVisible);
 		};
@@ -492,11 +499,11 @@
 		}
 
 		const scheduleAuto = () => {
-			if (autoTimer) {
-				clearTimeout(autoTimer);
-				autoTimer = null;
-			}
+			stopAuto();
 			if (!autoRefresh) {
+				return;
+			}
+			if (!isTabVisible()) {
 				return;
 			}
 			autoTimer = setTimeout(() => {
@@ -522,6 +529,22 @@
 		document.addEventListener('visibilitychange', () => {
 			if (autoRefresh && isTabVisible() && !loading) {
 				loadStats({ archiveSize: false, silent: true, source: 'auto' }).catch(() => undefined);
+			}
+			scheduleAuto();
+		});
+
+		document.addEventListener('msghub:tabSwitch', e => {
+			const from = String(e?.detail?.from || '');
+			const to = String(e?.detail?.to || '');
+			if (from === 'tab-stats' && to && to !== 'tab-stats') {
+				stopAuto();
+				return;
+			}
+			if (to === 'tab-stats') {
+				if (autoRefresh && isTabVisible() && !loading) {
+					loadStats({ archiveSize: false, silent: true, source: 'auto' }).catch(() => undefined);
+				}
+				scheduleAuto();
 			}
 		});
 

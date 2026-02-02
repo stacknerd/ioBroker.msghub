@@ -1125,6 +1125,13 @@
 				return !document.hidden && !!tab && tab.offsetParent !== null;
 			};
 
+			const stopAuto = () => {
+				if (autoTimer) {
+					clearTimeout(autoTimer);
+					autoTimer = null;
+				}
+			};
+
 			const canAutoRefresh = () => {
 				if (!isTabVisible()) {
 					return false;
@@ -1376,11 +1383,11 @@
 			win.setInterval(() => applyExpertMode(detectExpertMode()), 1500);
 
 			const scheduleAuto = () => {
-				if (autoTimer) {
-					clearTimeout(autoTimer);
-					autoTimer = null;
-				}
+				stopAuto();
 				if (!autoRefresh) {
+					return;
+				}
+				if (!isTabVisible()) {
 					return;
 				}
 				autoTimer = setTimeout(() => {
@@ -1415,6 +1422,22 @@
 			document.addEventListener('visibilitychange', () => {
 				if (autoRefresh && canAutoRefresh()) {
 					loadMessages({ keepPopover: true, silent: true }).catch(() => undefined);
+				}
+				scheduleAuto();
+			});
+
+			document.addEventListener('msghub:tabSwitch', e => {
+				const from = String(e?.detail?.from || '');
+				const to = String(e?.detail?.to || '');
+				if (from === 'tab-messages' && to && to !== 'tab-messages') {
+					stopAuto();
+					return;
+				}
+				if (to === 'tab-messages') {
+					if (autoRefresh && canAutoRefresh()) {
+						loadMessages({ keepPopover: true, silent: true }).catch(() => undefined);
+					}
+					scheduleAuto();
 				}
 			});
 
