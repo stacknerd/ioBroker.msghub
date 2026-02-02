@@ -253,6 +253,44 @@ describe('AdminTab UI', function () {
 		}
 	});
 
+	it('panel/module css is tokens-only (no hardcoded colors)', async function () {
+		const files = await fs.readdir(adminDir);
+		const cssFiles = files
+			.filter(f => f.endsWith('.css'))
+			.map(f => path.join(adminDir, f))
+			.filter(f => path.basename(f) !== 'tab.css');
+
+		const violations = [];
+		const reHex = /#[0-9a-fA-F]{3,8}\b/g;
+		const reRgb = /\brgba?\s*\(/gi;
+		const reHsl = /\bhsla?\s*\(/gi;
+
+		for (const file of cssFiles) {
+			const relPath = path.relative(repoRoot, file);
+			const text = await fs.readFile(file, 'utf8');
+			const lineStarts = computeLineStarts(text);
+
+			let m;
+			while ((m = reHex.exec(text))) {
+				const pos = lineColFromIndex(lineStarts, m.index);
+				violations.push({ file: relPath, line: pos.line, col: pos.col, context: `hardcoded color '${m[0]}'` });
+			}
+			while ((m = reRgb.exec(text))) {
+				const pos = lineColFromIndex(lineStarts, m.index);
+				violations.push({ file: relPath, line: pos.line, col: pos.col, context: `hardcoded color function '${m[0]}'` });
+			}
+			while ((m = reHsl.exec(text))) {
+				const pos = lineColFromIndex(lineStarts, m.index);
+				violations.push({ file: relPath, line: pos.line, col: pos.col, context: `hardcoded color function '${m[0]}'` });
+			}
+		}
+
+		if (violations.length) {
+			const msg = violations.map(v => `- ${v.file}:${v.line}:${v.col} ${v.context}`).join('\n');
+			assert.fail(`Hardcoded colors found in panel/module CSS (use tokens from admin/tab.css):\n${msg}\nTotal: ${violations.length}`);
+		}
+	});
+
 	it('registry is consistent (panels, compositions, assets)', async function () {
 		const tabJsPath = path.join(adminDir, 'tab.js');
 		const src = await fs.readFile(tabJsPath, 'utf8');

@@ -22,6 +22,30 @@
 	--msghub-danger: rgb(211 47 47);
 	--msghub-danger-dim: rgb(211 47 47 / 0.1);
 
+	/* Chart palette (data viz; used by stats panel). */
+	--msghub-chart-1: rgb(38 166 154);
+	--msghub-chart-2: rgb(66 165 245);
+	--msghub-chart-3: rgb(171 71 188);
+	--msghub-chart-4: rgb(255 167 38);
+	--msghub-chart-5: rgb(239 83 80);
+	--msghub-chart-6: rgb(141 110 99);
+	--msghub-chart-7: rgb(38 198 218);
+	--msghub-chart-8: rgb(124 179 66);
+	--msghub-chart-9: rgb(255 112 67);
+	--msghub-chart-10: rgb(92 107 192);
+	--msghub-chart-11: rgb(216 27 96);
+	--msghub-chart-12: rgb(253 216 53);
+	--msghub-chart-neutral: rgb(207 216 220);
+
+	/* Syntax highlighting (message JSON viewer). */
+	--msghub-syntax-key: rgb(4 81 165);
+	--msghub-syntax-string: rgb(163 21 21);
+	--msghub-syntax-number: rgb(9 134 88);
+	--msghub-syntax-bool: rgb(0 0 255);
+	--msghub-syntax-null: rgb(0 0 255);
+	--msghub-syntax-punct: rgb(0 0 0);
+	--msghub-syntax-comment: rgb(0 128 0);
+
 	/* Typography (central presets; avoid ad-hoc font-weight/size usage) */
 	--msghub-font-sans:
 		system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, 'Apple Color Emoji', 'Segoe UI Emoji';
@@ -76,6 +100,28 @@ html[data-msghub-theme='dark'] .msghub-root {
 	--msghub-warning-dim: rgb(255 170 90 / 0.16);
 	--msghub-danger: rgb(239 83 80);
 	--msghub-danger-dim: rgb(239 83 80 / 0.14);
+
+	--msghub-chart-1: rgb(45 212 191);
+	--msghub-chart-2: rgb(96 165 250);
+	--msghub-chart-3: rgb(192 132 252);
+	--msghub-chart-4: rgb(255 170 90);
+	--msghub-chart-5: rgb(239 83 80);
+	--msghub-chart-6: rgb(168 138 126);
+	--msghub-chart-7: rgb(34 211 238);
+	--msghub-chart-8: rgb(163 230 53);
+	--msghub-chart-9: rgb(251 146 60);
+	--msghub-chart-10: rgb(129 140 248);
+	--msghub-chart-11: rgb(244 114 182);
+	--msghub-chart-12: rgb(253 224 71);
+	--msghub-chart-neutral: rgb(77 88 94);
+
+	--msghub-syntax-key: rgb(156 220 254);
+	--msghub-syntax-string: rgb(206 145 120);
+	--msghub-syntax-number: rgb(181 206 168);
+	--msghub-syntax-bool: rgb(86 156 214);
+	--msghub-syntax-null: rgb(86 156 214);
+	--msghub-syntax-punct: rgb(212 212 212);
+	--msghub-syntax-comment: rgb(106 153 85);
 
 	--msghub-surface-hover: rgb(255 255 255 / 0.1);
 	--msghub-shadow-md: rgb(0 0 0 / 0.4);
