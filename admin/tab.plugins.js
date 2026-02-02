@@ -20,15 +20,16 @@
 				? ctx.adapterInstance.trim()
 				: `msghub.${adapterInstance}`;
 
-		const sendTo = ctx.sendTo;
-		const h = ctx.h;
-		const pickText = ctx.pickText;
-		const ui = ctx.ui;
+			const api = ctx.api;
+			const constantsApi = api?.constants;
+			const pluginsApi = api?.plugins;
+			const ingestStatesApi = api?.ingestStates;
+			const h = ctx.h;
+			const pickText = ctx.pickText;
+			const ui = api?.ui || ctx.ui;
 
 		let cachedConstants = null;
-		let constantsLoadPromise = null;
 		let cachedIngestStatesConstants = null;
-		let ingestStatesConstantsPromise = null;
 
 		function pick(obj, path) {
 			const parts = typeof path === 'string' ? path.split('.') : [];
@@ -43,33 +44,33 @@
 		}
 
 		async function ensureConstantsLoaded() {
-			if (constantsLoadPromise) {
-				return constantsLoadPromise;
-			}
-			constantsLoadPromise = (async () => {
-				try {
-					cachedConstants = await sendTo('admin.constants.get', {});
-				} catch {
-					cachedConstants = null;
-				}
+			if (cachedConstants) {
 				return cachedConstants;
-			})();
-			return constantsLoadPromise;
+			}
+			try {
+				if (!constantsApi?.get) {
+					throw new Error('Constants API is not available');
+				}
+				cachedConstants = await constantsApi.get();
+			} catch {
+				cachedConstants = null;
+			}
+			return cachedConstants;
 		}
 
 		async function ensureIngestStatesConstantsLoaded() {
-			if (ingestStatesConstantsPromise) {
-				return ingestStatesConstantsPromise;
-			}
-			ingestStatesConstantsPromise = (async () => {
-				try {
-					cachedIngestStatesConstants = await sendTo('admin.ingestStates.constants.get', {});
-				} catch {
-					cachedIngestStatesConstants = null;
-				}
+			if (cachedIngestStatesConstants) {
 				return cachedIngestStatesConstants;
-			})();
-			return ingestStatesConstantsPromise;
+			}
+			try {
+				if (!ingestStatesApi?.constants?.get) {
+					throw new Error('IngestStates constants API is not available');
+				}
+				cachedIngestStatesConstants = await ingestStatesApi.constants.get();
+			} catch {
+				cachedIngestStatesConstants = null;
+			}
+			return cachedIngestStatesConstants;
 		}
 
 		function resolveDynamicOptions(options) {
@@ -723,7 +724,10 @@
 				return ingestStatesSchemaPromise;
 			}
 			ingestStatesSchemaPromise = (async () => {
-				const schema = await sendTo('admin.ingestStates.schema.get', {});
+				if (!ingestStatesApi?.schema?.get) {
+					throw new Error('IngestStates schema API is not available');
+				}
+				const schema = await ingestStatesApi.schema.get();
 				if (!schema || typeof schema !== 'object') {
 					throw new Error('Invalid schema response');
 				}
@@ -1225,7 +1229,10 @@
 				setBusy(true, [btnLoad, btnPreview, btnApply]);
 				setStatus('Loading…');
 				try {
-					const res = await sendTo('admin.ingestStates.custom.read', { id });
+					if (!ingestStatesApi?.custom?.read) {
+						throw new Error('IngestStates custom API is not available');
+					}
+					const res = await ingestStatesApi.custom.read({ id });
 					if (!res?.custom) {
 						setStatus('No MsgHub Custom config found on that object.');
 						return;
@@ -1279,7 +1286,10 @@
 				setStatus('Previewing…');
 				invalidatePreview();
 				try {
-					const res = await sendTo('admin.ingestStates.bulkApply.preview', {
+					if (!ingestStatesApi?.bulkApply?.preview) {
+						throw new Error('IngestStates bulkApply API is not available');
+					}
+					const res = await ingestStatesApi.bulkApply.preview({
 						pattern,
 						custom,
 						replace: elReplace.checked === true,
@@ -1335,7 +1345,10 @@
 				setBusy(true, [btnLoad, btnPreview, btnApply]);
 				setStatus('Applying…');
 				try {
-					const res = await sendTo('admin.ingestStates.bulkApply.apply', {
+					if (!ingestStatesApi?.bulkApply?.apply) {
+						throw new Error('IngestStates bulkApply API is not available');
+					}
+					const res = await ingestStatesApi.bulkApply.apply({
 						pattern,
 						custom,
 						replace: elReplace.checked === true,
@@ -1551,7 +1564,10 @@
 				listLoading = true;
 				render();
 
-				const opts = await sendTo('admin.ingestStates.presets.list', {});
+				if (!ingestStatesApi?.presets?.list) {
+					throw new Error('IngestStates presets API is not available');
+				}
+				const opts = await ingestStatesApi.presets.list();
 				const items = Array.isArray(opts) ? opts : [];
 
 				const next = [];
@@ -1591,7 +1607,10 @@
 				if (!isPresetId(id)) {
 					return null;
 				}
-				const res = await sendTo('admin.ingestStates.presets.get', { presetId: id });
+				if (!ingestStatesApi?.presets?.get) {
+					throw new Error('IngestStates presets API is not available');
+				}
+				const res = await ingestStatesApi.presets.get({ presetId: id });
 				const preset = res?.preset;
 				if (!preset || typeof preset !== 'object') {
 					return null;
@@ -1709,10 +1728,15 @@
 				setError('');
 				saving = true;
 				render();
-				Promise.resolve()
-					.then(() => sendTo('admin.ingestStates.presets.delete', { presetId: id }))
-					.then(() => loadList())
-					.catch(e => {
+					Promise.resolve()
+						.then(() => {
+							if (!ingestStatesApi?.presets?.delete) {
+								throw new Error('IngestStates presets API is not available');
+							}
+							return ingestStatesApi.presets.delete({ presetId: id });
+						})
+						.then(() => loadList())
+						.catch(e => {
 						const msg = String(e?.message || e);
 						setError(msg);
 						toast(msg);
@@ -1762,7 +1786,7 @@
 				setError('');
 				saving = true;
 				render();
-				Promise.resolve()
+					Promise.resolve()
 					.then(() => {
 						try {
 							console.debug('Msghub presets: upsert start', { presetId: draft?.presetId });
@@ -1770,8 +1794,13 @@
 							// ignore
 						}
 					})
-					.then(() => sendTo('admin.ingestStates.presets.upsert', { preset: cloneJson(draft) }))
-					.then(() => loadList({ selectPresetId: draft.presetId }))
+						.then(() => {
+							if (!ingestStatesApi?.presets?.upsert) {
+								throw new Error('IngestStates presets API is not available');
+							}
+							return ingestStatesApi.presets.upsert({ preset: cloneJson(draft) });
+						})
+						.then(() => loadList({ selectPresetId: draft.presetId }))
 					.then(() => {
 						try {
 							console.debug('Msghub presets: upsert ok', { presetId: draft?.presetId });
@@ -2627,16 +2656,19 @@
 
 			const actions = h('div', { class: 'msghub-actions' }, []);
 			if (canAdd) {
-				actions.appendChild(
-					h('button', {
-						type: 'button',
-						onclick: async () => {
-							await sendTo('admin.plugins.createInstance', {
-								category: plugin.category,
-								type: plugin.type,
-							});
-							await refreshPlugin(plugin.type);
-						},
+					actions.appendChild(
+						h('button', {
+							type: 'button',
+							onclick: async () => {
+								if (!pluginsApi?.createInstance) {
+									throw new Error('Plugins API is not available');
+								}
+								await pluginsApi.createInstance({
+									category: plugin.category,
+									type: plugin.type,
+								});
+								await refreshPlugin(plugin.type);
+							},
 						text: 'Add instance',
 					}),
 				);
@@ -2648,15 +2680,18 @@
 					for (const btn of buttons) {
 						btn.disabled = true;
 					}
-					try {
-						for (const inst of instList) {
-							await sendTo('admin.plugins.setEnabled', {
-								type: plugin.type,
-								instanceId: inst.instanceId,
-								enabled,
-							});
-						}
-						await refreshPlugin(plugin.type);
+						try {
+							for (const inst of instList) {
+								if (!pluginsApi?.setEnabled) {
+									throw new Error('Plugins API is not available');
+								}
+								await pluginsApi.setEnabled({
+									type: plugin.type,
+									instanceId: inst.instanceId,
+									enabled,
+								});
+							}
+							await refreshPlugin(plugin.type);
 					} finally {
 						for (const btn of buttons) {
 							btn.disabled = false;
@@ -2723,7 +2758,10 @@
 
 				enabledInput.addEventListener('change', async () => {
 					try {
-						await sendTo('admin.plugins.setEnabled', {
+						if (!pluginsApi?.setEnabled) {
+							throw new Error('Plugins API is not available');
+						}
+						await pluginsApi.setEnabled({
 							type: plugin.type,
 							instanceId: inst.instanceId,
 							enabled: enabledInput.checked,
@@ -2780,7 +2818,10 @@
 								if (!ok) {
 									return;
 								}
-								await sendTo('admin.plugins.deleteInstance', {
+								if (!pluginsApi?.deleteInstance) {
+									throw new Error('Plugins API is not available');
+								}
+								await pluginsApi.deleteInstance({
 									type: plugin.type,
 									instanceId: inst.instanceId,
 								});
@@ -2804,21 +2845,24 @@
 					channelInput.value = initialChannel;
 					channelInput.setAttribute('data-prev', initialChannel);
 
-					const saveChannel = async () => {
+						const saveChannel = async () => {
 						const prev = channelInput.getAttribute('data-prev') || '';
 						const next = String(channelInput.value || '').trim();
 						if (next === prev) {
 							return;
 						}
-						try {
-							channelInput.setAttribute('data-prev', next);
-							await sendTo('admin.plugins.updateInstance', {
-								type: plugin.type,
-								instanceId: inst.instanceId,
-								nativePatch: { channel: next || null },
-							});
-							await refreshPlugin(plugin.type);
-						} catch (e) {
+							try {
+								channelInput.setAttribute('data-prev', next);
+								if (!pluginsApi?.updateInstance) {
+									throw new Error('Plugins API is not available');
+								}
+								await pluginsApi.updateInstance({
+									type: plugin.type,
+									instanceId: inst.instanceId,
+									nativePatch: { channel: next || null },
+								});
+								await refreshPlugin(plugin.type);
+							} catch (e) {
 							channelInput.value = prev;
 							channelInput.setAttribute('data-prev', prev);
 							toast(`Failed to save channel: ${String(e?.message || e)}`);
@@ -2941,21 +2985,24 @@
 							type: 'button',
 							disabled: true,
 							'aria-disabled': 'true',
-							onclick: async () => {
-								if (saveBtn.disabled) {
-									return;
-								}
-								const patch = {};
-								for (const [k, info] of Object.entries(inputs)) {
-									patch[k] = info.getValue();
-								}
-								await sendTo('admin.plugins.updateInstance', {
-									type: plugin.type,
-									instanceId: inst.instanceId,
-									nativePatch: patch,
-								});
-								await refreshPlugin(plugin.type);
-							},
+								onclick: async () => {
+									if (saveBtn.disabled) {
+										return;
+									}
+									const patch = {};
+									for (const [k, info] of Object.entries(inputs)) {
+										patch[k] = info.getValue();
+									}
+									if (!pluginsApi?.updateInstance) {
+										throw new Error('Plugins API is not available');
+									}
+									await pluginsApi.updateInstance({
+										type: plugin.type,
+										instanceId: inst.instanceId,
+										nativePatch: patch,
+									});
+									await refreshPlugin(plugin.type);
+								},
 							text: 'Save options',
 						});
 
@@ -3011,12 +3058,15 @@
 			return null;
 		}
 
-		async function refreshAll() {
-			try {
-				await ensureConstantsLoaded();
-				const expandedById = captureAccordionState();
-				const { plugins } = await sendTo('admin.plugins.getCatalog', {});
-				const { instances } = await sendTo('admin.plugins.listInstances', {});
+			async function refreshAll() {
+				try {
+					await ensureConstantsLoaded();
+					const expandedById = captureAccordionState();
+					if (!pluginsApi?.getCatalog || !pluginsApi?.listInstances) {
+						throw new Error('Plugins API is not available');
+					}
+					const { plugins } = await pluginsApi.getCatalog();
+					const { instances } = await pluginsApi.listInstances();
 
 				const readmesByType = await ensurePluginReadmesLoaded();
 
@@ -3102,7 +3152,7 @@
 			}
 		}
 
-		async function refreshPlugin(type) {
+			async function refreshPlugin(type) {
 			if (!type) {
 				return refreshAll();
 			}
@@ -3112,11 +3162,14 @@
 				return refreshAll();
 			}
 
-			try {
-				const expandedById = captureAccordionState();
-				const { instances } = await sendTo('admin.plugins.listInstances', {});
-				const byType = buildInstancesByType(instances);
-				const readmesByType = await ensurePluginReadmesLoaded();
+				try {
+					const expandedById = captureAccordionState();
+					if (!pluginsApi?.listInstances) {
+						throw new Error('Plugins API is not available');
+					}
+					const { instances } = await pluginsApi.listInstances();
+					const byType = buildInstancesByType(instances);
+					const readmesByType = await ensurePluginReadmesLoaded();
 
 				const nextCard = renderPluginCard({
 					plugin,

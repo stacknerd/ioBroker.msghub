@@ -4,6 +4,7 @@
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const fs = require('node:fs/promises');
+const vm = require('node:vm');
 
 const repoRoot = path.resolve(__dirname, '..');
 const adminDir = __dirname;
@@ -249,6 +250,123 @@ describe('AdminTab UI', function () {
 		if (violations.length) {
 			const msg = violations.map(v => `- ${v.file}:${v.line}:${v.col} ${v.context}`).join('\n');
 			assert.fail(`Materialize usage found in admin UI:\n${msg}\nTotal: ${violations.length}`);
+		}
+	});
+
+	it('registry is consistent (panels, compositions, assets)', async function () {
+		const tabJsPath = path.join(adminDir, 'tab.js');
+		const src = await fs.readFile(tabJsPath, 'utf8');
+
+		const idx = src.indexOf('MsghubAdminTabRegistry');
+		assert.ok(idx >= 0, 'Expected MsghubAdminTabRegistry to exist in admin/tab.js');
+
+		const start = src.lastIndexOf('(() => {', idx);
+		assert.ok(start >= 0, 'Expected registry IIFE start in admin/tab.js');
+
+		const end = src.indexOf('})();', idx);
+		assert.ok(end >= 0, 'Expected registry IIFE end in admin/tab.js');
+
+		const snippet = src.slice(start, end + '})();'.length);
+		const sandbox = { window: {}, win: null, console: { debug() {}, info() {}, warn() {}, error() {} } };
+		sandbox.win = sandbox.window;
+		vm.runInNewContext(snippet, sandbox, { filename: 'admin/tab.js (registry snippet)' });
+
+		const registry = sandbox.window.MsghubAdminTabRegistry;
+		assert.ok(registry && typeof registry === 'object', 'Expected registry to be an object');
+		assert.ok(registry.panels && typeof registry.panels === 'object', 'Expected registry.panels');
+		assert.ok(registry.compositions && typeof registry.compositions === 'object', 'Expected registry.compositions');
+
+		const panels = registry.panels;
+		const compositions = registry.compositions;
+
+		const mountIds = new Set();
+		for (const [id, def] of Object.entries(panels)) {
+			assert.ok(id && typeof id === 'string', 'Panel id must be a string');
+			assert.ok(def && typeof def === 'object', `Panel '${id}' must be an object`);
+			assert.equal(def.id, id, `Panel '${id}' must have matching .id`);
+			assert.ok(typeof def.mountId === 'string' && def.mountId.trim(), `Panel '${id}' must have mountId`);
+			assert.ok(typeof def.initGlobal === 'string' && def.initGlobal.trim(), `Panel '${id}' must have initGlobal`);
+			assert.ok(def.assets && typeof def.assets === 'object', `Panel '${id}' must have assets`);
+			assert.ok(Array.isArray(def.assets.css), `Panel '${id}' assets.css must be array`);
+			assert.ok(Array.isArray(def.assets.js), `Panel '${id}' assets.js must be array`);
+
+			assert.ok(!mountIds.has(def.mountId), `Duplicate mountId '${def.mountId}'`);
+			mountIds.add(def.mountId);
+
+			for (const rel of [...def.assets.css, ...def.assets.js]) {
+				assert.ok(typeof rel === 'string' && rel.trim(), `Panel '${id}' asset entries must be strings`);
+				const full = path.join(adminDir, rel);
+				try {
+					await fs.access(full);
+				} catch {
+					assert.fail(`Missing asset for panel '${id}': ${rel}`);
+				}
+			}
+		}
+
+		for (const [cid, comp] of Object.entries(compositions)) {
+			assert.ok(cid && typeof cid === 'string', 'Composition id must be a string');
+			assert.ok(comp && typeof comp === 'object', `Composition '${cid}' must be an object`);
+			assert.equal(comp.id, cid, `Composition '${cid}' must have matching .id`);
+			assert.ok(comp.layout === 'tabs' || comp.layout === 'single', `Composition '${cid}' has invalid layout`);
+			assert.ok(Array.isArray(comp.panels), `Composition '${cid}' must have panels[]`);
+
+			for (const pid of comp.panels) {
+				assert.ok(typeof pid === 'string' && pid.trim(), `Composition '${cid}' panel ids must be strings`);
+				assert.ok(panels[pid], `Composition '${cid}' references unknown panel '${pid}'`);
+			}
+
+			assert.ok(typeof comp.defaultPanel === 'string' && comp.defaultPanel.trim(), `Composition '${cid}' must have defaultPanel`);
+			assert.ok(
+				comp.panels.includes(comp.defaultPanel),
+				`Composition '${cid}' defaultPanel '${comp.defaultPanel}' must be in panels[]`,
+			);
+
+			if (comp.deviceMode != null) {
+				assert.ok(
+					comp.deviceMode === 'pc' || comp.deviceMode === 'mobile' || comp.deviceMode === 'screenOnly',
+					`Composition '${cid}' has invalid deviceMode`,
+				);
+			}
+		}
+	});
+
+	it('does not use admin sendTo outside the API layer', async function () {
+		const files = await listFilesRecursive(adminDir);
+		const candidates = files.filter(f => {
+			if (f.endsWith('.test.js')) {
+				return false;
+			}
+			return path.extname(f).toLowerCase() === '.js';
+		});
+
+		const violations = [];
+		for (const file of candidates) {
+			if (path.basename(file) === 'tab.js') {
+				continue;
+			}
+			const relPath = path.relative(repoRoot, file);
+			const text = await fs.readFile(file, 'utf8');
+			const lineStarts = computeLineStarts(text);
+
+			const needle1 = "sendTo('admin";
+			const idx1 = text.indexOf(needle1);
+			if (idx1 >= 0) {
+				const pos = lineColFromIndex(lineStarts, idx1);
+				violations.push({ file: relPath, line: pos.line, col: pos.col, context: `found ${needle1}` });
+			}
+
+			const needle2 = 'ctx.sendTo';
+			const idx2 = text.indexOf(needle2);
+			if (idx2 >= 0) {
+				const pos = lineColFromIndex(lineStarts, idx2);
+				violations.push({ file: relPath, line: pos.line, col: pos.col, context: `found ${needle2}` });
+			}
+		}
+
+		if (violations.length) {
+			const lines = violations.map(v => `${v.file}:${v.line}:${v.col} ${v.context}`).join('\n');
+			assert.fail(`Forbidden direct backend calls in panels:\n${lines}`);
 		}
 	});
 });

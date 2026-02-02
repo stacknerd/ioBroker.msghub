@@ -7,6 +7,241 @@
 const win = /** @type {any} */ (window);
 const io = win.io;
 
+/**
+ * AdminTab UI registry (Phase 1 Contracts)
+ *
+ * Single source of truth for:
+ * - Panels (ids, mount points, assets, init entry)
+ * - Compositions/views (layout + panel list + deviceMode)
+ *
+ * Intentionally bundler/framework-free and attached to `window`.
+ */
+(() => {
+	if (win.MsghubAdminTabRegistry) {
+		return;
+	}
+
+	const panels = Object.freeze({
+		stats: Object.freeze({
+			id: 'stats',
+			mountId: 'stats-root',
+			titleKey: 'msghub.i18n.core.admin.ui.tabs.stats.label',
+			initGlobal: 'MsghubAdminTabStats',
+			assets: Object.freeze({
+				css: Object.freeze(['tab.stats.css']),
+				js: Object.freeze(['tab.stats.js']),
+			}),
+		}),
+
+		messages: Object.freeze({
+			id: 'messages',
+			mountId: 'messages-root',
+			titleKey: 'msghub.i18n.core.admin.ui.tabs.messages.label',
+			initGlobal: 'MsghubAdminTabMessages',
+			assets: Object.freeze({
+				css: Object.freeze(['tab.messages.css']),
+				js: Object.freeze(['tab.messages.js']),
+			}),
+		}),
+
+		plugins: Object.freeze({
+			id: 'plugins',
+			mountId: 'plugins-root',
+			titleKey: 'msghub.i18n.core.admin.ui.tabs.plugins.label',
+			initGlobal: 'MsghubAdminTabPlugins',
+			assets: Object.freeze({
+				css: Object.freeze(['tab.plugins.css', 'tab.plugins.tools.ingeststates.css']),
+				js: Object.freeze(['tab.plugins.js']),
+			}),
+		}),
+	});
+
+	const compositions = Object.freeze({
+		adminTab: Object.freeze({
+			id: 'adminTab',
+			layout: 'tabs',
+			panels: Object.freeze(['stats', 'messages', 'plugins']),
+			defaultPanel: 'plugins',
+			deviceMode: 'pc',
+		}),
+		dashboardStats: Object.freeze({
+			id: 'dashboardStats',
+			layout: 'single',
+			panels: Object.freeze(['stats']),
+			defaultPanel: 'stats',
+			deviceMode: 'screenOnly',
+		}),
+	});
+
+	win.MsghubAdminTabRegistry = Object.freeze({ panels, compositions });
+})();
+
+function createNotSupportedError(message) {
+	const err = new Error(String(message || 'Not supported'));
+	err.name = 'NotSupportedError';
+	// @ts-ignore - non-standard, used as a lightweight discriminator
+	err.code = 'NOT_SUPPORTED';
+	return err;
+}
+
+function createAsyncCache(fetchFn, { maxAgeMs = Infinity } = {}) {
+	let value = undefined;
+	let hasValue = false;
+	let pending = null;
+	let fetchedAt = 0;
+
+	const isFresh = () => {
+		if (!hasValue) {
+			return false;
+		}
+		if (maxAgeMs === Infinity) {
+			return true;
+		}
+		const age = Date.now() - fetchedAt;
+		return age >= 0 && age <= maxAgeMs;
+	};
+
+	const invalidate = () => {
+		value = undefined;
+		hasValue = false;
+		pending = null;
+		fetchedAt = 0;
+	};
+
+	const get = () => {
+		if (isFresh()) {
+			return Promise.resolve(value);
+		}
+		if (pending) {
+			return pending;
+		}
+		pending = Promise.resolve()
+			.then(() => fetchFn())
+			.then(v => {
+				value = v;
+				hasValue = true;
+				fetchedAt = Date.now();
+				pending = null;
+				return v;
+			})
+			.catch(err => {
+				// Do not poison the cache on errors; allow retry.
+				pending = null;
+				throw err;
+			});
+		return pending;
+	};
+
+	return Object.freeze({ get, invalidate });
+}
+
+function createAdminApi({ sendTo, socket, adapterInstance, lang, t, ui }) {
+	const registry = win.MsghubAdminTabRegistry || null;
+	const viewIdRaw = document?.documentElement?.getAttribute?.('data-msghub-view') || '';
+	const viewId = String(viewIdRaw || '').trim() || 'adminTab';
+	const composition =
+		registry && registry.compositions && typeof registry.compositions === 'object' ? registry.compositions[viewId] : null;
+	const panelIds = Array.isArray(composition?.panels) ? composition.panels.filter(Boolean).map(v => String(v)) : [];
+	const defaultPanelId = typeof composition?.defaultPanel === 'string' ? composition.defaultPanel : '';
+
+	const logPrefix = `msghub:${viewId}`;
+	const log = Object.freeze({
+		debug: (...args) => console.debug(logPrefix, ...args),
+		info: (...args) => console.info(logPrefix, ...args),
+		warn: (...args) => console.warn(logPrefix, ...args),
+		error: (...args) => console.error(logPrefix, ...args),
+	});
+
+	const i18n = Object.freeze({
+		lang: () => String(lang || 'en'),
+		t: (key, ...args) => t(String(key ?? ''), ...args),
+	});
+
+	const uiApi = Object.freeze({
+		toast: opts => ui?.toast?.(opts),
+		overlayLarge: ui?.overlayLarge || Object.freeze({ open: () => {}, close: () => {}, isOpen: () => false }),
+		dialog: ui?.dialog || Object.freeze({ confirm: () => Promise.resolve(false), close: () => {}, isOpen: () => false }),
+		closeAll: () => ui?.closeAll?.(),
+	});
+
+	const host = Object.freeze({
+		viewId,
+		layout: composition?.layout || 'tabs',
+		deviceMode: composition?.deviceMode || 'pc',
+		panels: Object.freeze(panelIds),
+		defaultPanel: defaultPanelId,
+		adapterInstance,
+		isConnected: () => !!socket?.connected,
+	});
+
+	const notSupported = method => {
+		throw createNotSupportedError(method);
+	};
+
+	const constantsCache = createAsyncCache(() => sendTo('admin.constants.get', {}), { maxAgeMs: Infinity });
+	const ingestStatesConstantsCache = createAsyncCache(() => sendTo('admin.ingestStates.constants.get', {}), { maxAgeMs: Infinity });
+
+	const constants = Object.freeze({
+		get: () => constantsCache.get(),
+		invalidate: () => constantsCache.invalidate(),
+	});
+
+	const stats = Object.freeze({
+		get: params => sendTo('admin.stats.get', params || {}),
+	});
+
+	const messages = Object.freeze({
+		query: params => sendTo('admin.messages.query', params || {}),
+		delete: refs => sendTo('admin.messages.delete', { refs }),
+	});
+
+	const plugins = Object.freeze({
+		getCatalog: () => sendTo('admin.plugins.getCatalog', {}),
+		listInstances: () => sendTo('admin.plugins.listInstances', {}),
+		createInstance: params => sendTo('admin.plugins.createInstance', params || {}),
+		updateInstance: params => sendTo('admin.plugins.updateInstance', params || {}),
+		setEnabled: params => sendTo('admin.plugins.setEnabled', params || {}),
+		deleteInstance: params => sendTo('admin.plugins.deleteInstance', params || {}),
+	});
+
+	const ingestStates = Object.freeze({
+		constants: Object.freeze({
+			get: () => ingestStatesConstantsCache.get(),
+			invalidate: () => ingestStatesConstantsCache.invalidate(),
+		}),
+		schema: Object.freeze({
+			get: () => sendTo('admin.ingestStates.schema.get', {}),
+		}),
+		custom: Object.freeze({
+			read: params => sendTo('admin.ingestStates.custom.read', params || {}),
+		}),
+		bulkApply: Object.freeze({
+			preview: params => sendTo('admin.ingestStates.bulkApply.preview', params || {}),
+			apply: params => sendTo('admin.ingestStates.bulkApply.apply', params || {}),
+		}),
+		presets: Object.freeze({
+			list: () => sendTo('admin.ingestStates.presets.list', {}),
+			get: params => sendTo('admin.ingestStates.presets.get', params || {}),
+			delete: params => sendTo('admin.ingestStates.presets.delete', params || {}),
+			upsert: params => sendTo('admin.ingestStates.presets.upsert', params || {}),
+		}),
+	});
+
+	// Stable API surface: Panels should use ctx.api.* and not talk to sendTo/socket directly.
+	return Object.freeze({
+		i18n,
+		ui: uiApi,
+		log,
+		host,
+		constants,
+		stats,
+		messages,
+		plugins,
+		ingestStates,
+		notSupported,
+	});
+}
+
 function parseQuery() {
 	const q = (window.location.search || '').replace(/^\?/, '').replace(/#.*$/, '');
 	const out = {};
@@ -518,7 +753,7 @@ function createUi() {
 	});
 }
 
-function initTabs() {
+function initTabs({ defaultPanelId = '' } = {}) {
 	const tabs = Array.from(document.querySelectorAll('.msghub-tab'));
 	if (!tabs.length) {
 		return;
@@ -575,7 +810,7 @@ function initTabs() {
 		if (fromMarkupId && panels.has(fromMarkupId)) {
 			return fromMarkupId;
 		}
-		const fallback = 'tab-plugins';
+		const fallback = defaultPanelId ? `tab-${String(defaultPanelId)}` : 'tab-plugins';
 		return panels.has(fallback) ? fallback : panels.keys().next().value;
 	})();
 
@@ -721,6 +956,196 @@ function h(tag, attrs, children) {
 	return el;
 }
 
+function getRegistry() {
+	const r = win.MsghubAdminTabRegistry;
+	return r && typeof r === 'object' ? r : null;
+}
+
+function getActiveComposition() {
+	const registry = getRegistry();
+	const viewIdRaw = document?.documentElement?.getAttribute?.('data-msghub-view') || '';
+	const viewId = String(viewIdRaw || '').trim() || 'adminTab';
+	const comp =
+		registry && registry.compositions && typeof registry.compositions === 'object' ? registry.compositions[viewId] : null;
+	return comp && typeof comp === 'object' ? comp : null;
+}
+
+function buildLayoutFromRegistry() {
+	const registry = getRegistry();
+	const comp = getActiveComposition() || { layout: 'tabs', panels: [], defaultPanel: '' };
+	const layout = comp.layout === 'single' ? 'single' : 'tabs';
+	const panelIds = Array.isArray(comp.panels) ? comp.panels.map(v => String(v)) : [];
+	const defaultPanelId = typeof comp.defaultPanel === 'string' ? comp.defaultPanel : '';
+
+	const root = document.querySelector('.msghub-root');
+	const layoutHost = document.getElementById('msghub-layout') || root;
+	if (!layoutHost) {
+		return { layout, panelIds, defaultPanelId };
+	}
+
+	const getPanelDef = id => {
+		const panels = registry?.panels && typeof registry.panels === 'object' ? registry.panels : null;
+		const p = panels ? panels[id] : null;
+		return p && typeof p === 'object' ? p : null;
+	};
+
+	const fragment = document.createDocumentFragment();
+
+	if (layout === 'tabs') {
+		const nav = h('nav', { class: 'msghub-tabs', role: 'tablist', 'aria-label': 'MsgHub' });
+		for (const pid of panelIds) {
+			const def = getPanelDef(pid);
+			if (!def) {
+				continue;
+			}
+			const tabId = `tab-${pid}`;
+			nav.appendChild(
+				h('a', {
+					class: `msghub-tab${pid === defaultPanelId ? ' is-active' : ''}`,
+					href: `#${tabId}`,
+					role: 'tab',
+					'aria-controls': tabId,
+					'data-i18n': def.titleKey || '',
+					text: pid,
+				}),
+			);
+		}
+		fragment.appendChild(nav);
+	}
+
+	for (const pid of panelIds) {
+		const def = getPanelDef(pid);
+		if (!def) {
+			continue;
+		}
+		const tabId = `tab-${pid}`;
+		const mountId = String(def.mountId || '').trim();
+		const panel = h('div', {
+			id: tabId,
+			class: `msghub-panel msghub-${pid}`,
+			role: 'tabpanel',
+		});
+		if (mountId) {
+			panel.appendChild(h('div', { id: mountId }));
+		}
+		fragment.appendChild(panel);
+	}
+
+	layoutHost.replaceChildren(fragment);
+	return { layout, panelIds, defaultPanelId };
+}
+
+function loadCssFiles(files) {
+	const list = (Array.isArray(files) ? files : []).map(x => String(x || '').trim()).filter(Boolean);
+	if (list.length === 0) {
+		return Promise.resolve({ failed: [] });
+	}
+	const head = document.head || document.getElementsByTagName('head')[0];
+	const existing = new Set(Array.from(document.querySelectorAll('link[rel="stylesheet"]')).map(l => l.getAttribute('href') || ''));
+
+	const loads = [];
+	const failed = [];
+	for (const href of list) {
+		if (existing.has(href)) {
+			continue;
+		}
+		existing.add(href);
+		loads.push(
+			new Promise(resolve => {
+				const link = document.createElement('link');
+				link.rel = 'stylesheet';
+				link.href = href;
+				link.onload = () => resolve(undefined);
+				link.onerror = () => {
+					failed.push(href);
+					resolve(undefined);
+				};
+				head.appendChild(link);
+			}),
+		);
+	}
+	return Promise.all(loads).then(() => ({ failed }));
+}
+
+function loadJsFilesSequential(files) {
+	const list = (Array.isArray(files) ? files : []).map(x => String(x || '').trim()).filter(Boolean);
+	if (list.length === 0) {
+		return Promise.resolve();
+	}
+	const head = document.head || document.getElementsByTagName('head')[0];
+	const existing = new Set(Array.from(document.querySelectorAll('script[src]')).map(s => s.getAttribute('src') || ''));
+
+	const loadOne = src =>
+		new Promise((resolve, reject) => {
+			if (existing.has(src)) {
+				return resolve(undefined);
+			}
+			existing.add(src);
+			const script = document.createElement('script');
+			script.src = src;
+			script.async = false;
+			script.defer = false;
+			script.onload = () => resolve(undefined);
+			script.onerror = () => reject(new Error(`Failed to load script: ${src}`));
+			head.appendChild(script);
+		});
+
+	let chain = Promise.resolve();
+	for (const src of list) {
+		chain = chain.then(() => loadOne(src));
+	}
+	return chain;
+}
+
+function computeAssetsForComposition(panelIds) {
+	const registry = getRegistry();
+	const panels = registry?.panels && typeof registry.panels === 'object' ? registry.panels : null;
+	const css = [];
+	const js = [];
+
+	for (const pid of panelIds || []) {
+		const def = panels ? panels[pid] : null;
+		if (!def || typeof def !== 'object') {
+			continue;
+		}
+		const assets = def.assets && typeof def.assets === 'object' ? def.assets : null;
+		const cssList = Array.isArray(assets?.css) ? assets.css : [];
+		const jsList = Array.isArray(assets?.js) ? assets.js : [];
+		for (const c of cssList) {
+			const s = String(c || '').trim();
+			if (s && !css.includes(s)) {
+				css.push(s);
+			}
+		}
+		for (const s0 of jsList) {
+			const s = String(s0 || '').trim();
+			if (s && !js.includes(s)) {
+				js.push(s);
+			}
+		}
+	}
+
+	return { css, js };
+}
+
+function getPanelDefinition(panelId) {
+	const registry = getRegistry();
+	const panels = registry?.panels && typeof registry.panels === 'object' ? registry.panels : null;
+	const def = panels ? panels[panelId] : null;
+	return def && typeof def === 'object' ? def : null;
+}
+
+function renderPanelBootError(panelId, err) {
+	const panelEl = document.getElementById(`tab-${panelId}`);
+	if (!panelEl) {
+		return;
+	}
+	const msg = String(err?.message || err || 'Unknown error');
+	panelEl.replaceChildren(
+		h('div', { class: 'msghub-error', text: `Failed to load panel '${panelId}'.\n${msg}` }),
+	);
+}
+
 function pickText(value) {
 	if (typeof value === 'string') {
 		const s = value;
@@ -737,19 +1162,30 @@ function pickText(value) {
 }
 
 const elements = Object.freeze({
-	connection: document.getElementById('msghub-connection'),
-	pluginsRoot: document.getElementById('plugins-root'),
-	statsRoot: document.getElementById('stats-root'),
-	messagesRoot: document.getElementById('messages-root'),
+	get connection() {
+		return document.getElementById('msghub-connection');
+	},
+	get pluginsRoot() {
+		return document.getElementById('plugins-root');
+	},
+	get statsRoot() {
+		return document.getElementById('stats-root');
+	},
+	get messagesRoot() {
+		return document.getElementById('messages-root');
+	},
 });
 
 const ui = createUi();
+
+const api = createAdminApi({ sendTo, socket, adapterInstance, lang, t, ui });
 
 const ctx = Object.freeze({
 	args,
 	adapterInstance,
 	socket,
 	sendTo,
+	api,
 	h,
 	t,
 	pickText,
@@ -761,6 +1197,22 @@ const ctx = Object.freeze({
 const setConnText = text => {
 	if (elements.connection) {
 		elements.connection.textContent = text;
+	}
+};
+
+const setConnLayout = (layout, deviceMode) => {
+	const el = elements.connection;
+	const l = layout === 'single' ? 'single' : 'tabs';
+	const d = deviceMode === 'mobile' || deviceMode === 'screenOnly' ? deviceMode : 'pc';
+	try {
+		document.documentElement.setAttribute('data-msghub-layout', l);
+		document.documentElement.setAttribute('data-msghub-device', d);
+	} catch {
+		// ignore
+	}
+	if (el) {
+		el.removeAttribute('data-msghub-layout');
+		el.removeAttribute('data-msghub-device');
 	}
 };
 
@@ -791,58 +1243,134 @@ function setConnTextFromState() {
 	setConnText(t(key, adapterInstance));
 }
 
-let pluginsSection = null;
-let statsSection = null;
-let messagesSection = null;
+const panelSections = new Map();
 
-async function initSectionsIfAvailable() {
-	await ensureAdminI18nLoaded();
-
-	const pluginsApi = win.MsghubAdminTabPlugins;
-	if (!pluginsSection && pluginsApi?.init) {
-		pluginsSection = pluginsApi.init(ctx);
-		if (socket?.connected) {
-			pluginsSection?.onConnect?.();
-		}
+function initPanelById(panelId) {
+	const id = String(panelId || '').trim();
+	if (!id) {
+		return null;
+	}
+	if (panelSections.has(id)) {
+		return panelSections.get(id) || null;
 	}
 
-	const statsApi = win.MsghubAdminTabStats;
-	if (!statsSection && statsApi?.init) {
-		statsSection = statsApi.init(ctx);
-		if (socket?.connected) {
-			statsSection?.onConnect?.();
-		}
+	const def = getPanelDefinition(id);
+	if (!def) {
+		throw new Error(`Unknown panel '${id}'`);
+	}
+	const initGlobal = String(def.initGlobal || '').trim();
+	if (!initGlobal) {
+		throw new Error(`Panel '${id}' is missing initGlobal`);
 	}
 
-	const messagesApi = win.MsghubAdminTabMessages;
-	if (!messagesSection && messagesApi?.init) {
-		messagesSection = messagesApi.init(ctx);
-		if (socket?.connected) {
-			messagesSection?.onConnect?.();
+	const panelApi = win[initGlobal];
+	if (!panelApi?.init) {
+		throw new Error(`Panel '${id}' did not register '${initGlobal}.init'`);
+	}
+
+	const mountId = String(def.mountId || '').trim();
+	const mountEl = mountId ? document.getElementById(mountId) : null;
+	if (mountId && !mountEl) {
+		throw new Error(`Panel '${id}' mountId '${mountId}' is missing in DOM`);
+	}
+
+	const section = panelApi.init(ctx);
+	panelSections.set(id, section || null);
+	return section || null;
+}
+
+async function initPanelsForComposition(panelIds) {
+	const list = Array.isArray(panelIds) ? panelIds : [];
+	for (const panelId of list) {
+		const def = getPanelDefinition(panelId);
+		if (!def) {
+			continue;
+		}
+		const assets = def.assets && typeof def.assets === 'object' ? def.assets : null;
+		const jsList = Array.isArray(assets?.js) ? assets.js : [];
+
+		try {
+			await loadJsFilesSequential(jsList);
+		} catch (err) {
+			renderPanelBootError(panelId, err);
+			try {
+				ui?.toast?.(String(err?.message || err));
+			} catch {
+				// ignore
+			}
+			continue;
+		}
+
+		try {
+			const section = initPanelById(panelId);
+			if (section && socket?.connected) {
+				section?.onConnect?.();
+			}
+		} catch (err) {
+			renderPanelBootError(panelId, err);
+			try {
+				ui?.toast?.(String(err?.message || err));
+			} catch {
+				// ignore
+			}
 		}
 	}
 }
 
+let bootPromise = null;
+
+function ensureBooted() {
+	if (bootPromise) {
+		return bootPromise;
+	}
+	bootPromise = Promise.resolve()
+		.then(async () => {
+			const { layout, panelIds, defaultPanelId } = buildLayoutFromRegistry();
+			const comp = getActiveComposition();
+			setConnLayout(layout, comp?.deviceMode);
+			const assets = computeAssetsForComposition(panelIds);
+
+			await ensureAdminI18nLoaded();
+			const cssRes = await loadCssFiles(assets.css);
+			if (cssRes?.failed?.length) {
+				ui?.toast?.(`Failed to load CSS: ${cssRes.failed.join(', ')}`);
+			}
+
+			applyStaticI18n();
+			setConnTextFromState();
+
+			if (layout === 'tabs') {
+				initTabs({ defaultPanelId });
+			}
+
+			await initPanelsForComposition(panelIds);
+		})
+		.catch(err => {
+			try {
+				ui?.toast?.(String(err?.message || err));
+			} catch {
+				// ignore
+			}
+		});
+	return bootPromise;
+}
+
 window.addEventListener('DOMContentLoaded', () => {
-	initTabs();
-	void ensureAdminI18nLoaded().then(() => {
-		applyStaticI18n();
-		setConnTextFromState();
-	});
-	void initSectionsIfAvailable();
+	void ensureBooted();
 });
 
 socket.on('connect', () => {
 	connOnline = true;
 	setConnStatus(true);
-	void ensureAdminI18nLoaded().then(() => {
+	void ensureBooted().then(() => {
 		applyStaticI18n();
 		setConnTextFromState();
 	});
-	void initSectionsIfAvailable();
-	pluginsSection?.onConnect?.();
-	statsSection?.onConnect?.();
-	messagesSection?.onConnect?.();
+	void ensureBooted().then(() => {
+		for (const section of panelSections.values()) {
+			section?.onConnect?.();
+		}
+	});
 });
 
 socket.on('disconnect', () => {

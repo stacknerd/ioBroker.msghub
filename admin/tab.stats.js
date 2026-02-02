@@ -252,7 +252,9 @@
 	}
 
 	function initStatsSection(ctx) {
-		const { sendTo, h, elements, ui } = ctx;
+		const { api, h, elements } = ctx;
+		const statsApi = api?.stats;
+		const ui = api?.ui || ctx.ui;
 		const root = elements.statsRoot;
 		if (!root) {
 			throw new Error('MsghubAdminTabStats: missing statsRoot element');
@@ -444,7 +446,10 @@
 			setProgressVisible(loading && !silentLoading);
 
 			try {
-				lastStats = await sendTo('admin.stats.get', {
+				if (!statsApi?.get) {
+					throw new Error('Stats API is not available');
+				}
+				lastStats = await statsApi.get({
 					include: {
 						archiveSize: archiveSize === true,
 						archiveSizeMaxAgeMs: 10 * 60 * 1000,
