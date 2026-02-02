@@ -115,13 +115,14 @@
 				}
 			};
 
-		let jsonPre = null;
+			let jsonPre = null;
 			function ensureJsonPre() {
-			if (jsonPre) {
-				return jsonPre;
-			}
+				if (jsonPre) {
+					return jsonPre;
+				}
 
-			const pre = h('pre', { class: 'msghub-overlay-pre msghub-messages-json' });
+				// Line-based JSON viewer: allows wrapping after the "key": prefix without horizontal scrolling.
+				const pre = h('div', { class: 'msghub-overlay-pre msghub-messages-json' });
 
 			function escapeText(s) {
 				return typeof s === 'string' ? s : s == null ? '' : String(s);
@@ -318,76 +319,88 @@
 				function renderAnnotated(value, pathParts = [], indent = 0) {
 					const IND = '  ';
 
-					const renderValue = (val, p, level, isInline) => {
+					const createLine = level => {
+						const lineEl = document.createElement('div');
+						lineEl.className = 'msghub-json-line';
+						const prefixEl = document.createElement('span');
+						prefixEl.className = 'msghub-json-prefix';
+						const valueEl = document.createElement('span');
+						valueEl.className = 'msghub-json-value';
+
+						prefixEl.appendChild(document.createTextNode(IND.repeat(level)));
+						lineEl.appendChild(prefixEl);
+						lineEl.appendChild(valueEl);
+						pre.appendChild(lineEl);
+						return { prefixEl, valueEl };
+					};
+
+					const renderValue = (val, p, level, targetEl) => {
 						if (val === null) {
-							appendSpan(pre, 'msghub-json-null', 'null');
+							appendSpan(targetEl, 'msghub-json-null', 'null');
 							return;
 						}
 						if (typeof val === 'string') {
-							appendSpan(pre, 'msghub-json-string', JSON.stringify(val));
+							appendSpan(targetEl, 'msghub-json-string', JSON.stringify(val));
 							return;
 						}
 						if (typeof val === 'number') {
-							appendSpan(pre, 'msghub-json-number', String(val));
+							appendSpan(targetEl, 'msghub-json-number', String(val));
 							return;
 						}
 						if (typeof val === 'boolean') {
-							appendSpan(pre, 'msghub-json-bool', val ? 'true' : 'false');
+							appendSpan(targetEl, 'msghub-json-bool', val ? 'true' : 'false');
 							return;
 						}
 						if (Array.isArray(val)) {
 							if (val.length === 0) {
-								appendSpan(pre, 'msghub-json-punct', '[]');
+								appendSpan(targetEl, 'msghub-json-punct', '[]');
 								return;
 							}
-							appendSpan(pre, 'msghub-json-punct', '[');
-							appendSpan(pre, '', '\n');
+							appendSpan(targetEl, 'msghub-json-punct', '[');
 							for (let i = 0; i < val.length; i++) {
-								appendSpan(pre, '', IND.repeat(level + 1));
-								renderValue(val[i], p.concat(String(i)), level + 1, false);
+								const line = createLine(level + 1);
+								renderValue(val[i], p.concat(String(i)), level + 1, line.valueEl);
 								if (i < val.length - 1) {
-									appendSpan(pre, 'msghub-json-punct', ',');
+									appendSpan(line.valueEl, 'msghub-json-punct', ',');
 								}
-								appendSpan(pre, '', '\n');
 							}
-							appendSpan(pre, '', IND.repeat(level));
-							appendSpan(pre, 'msghub-json-punct', ']');
+							const closeLine = createLine(level);
+							appendSpan(closeLine.valueEl, 'msghub-json-punct', ']');
 							return;
 						}
 						if (val && typeof val === 'object') {
 							const entries = Object.entries(val);
 							if (entries.length === 0) {
-								appendSpan(pre, 'msghub-json-punct', '{}');
+								appendSpan(targetEl, 'msghub-json-punct', '{}');
 								return;
 							}
-							appendSpan(pre, 'msghub-json-punct', '{');
-							appendSpan(pre, '', '\n');
+							appendSpan(targetEl, 'msghub-json-punct', '{');
 							for (let i = 0; i < entries.length; i++) {
 								const [k, v] = entries[i];
-								appendSpan(pre, '', IND.repeat(level + 1));
-								appendSpan(pre, 'msghub-json-key', JSON.stringify(k));
-								appendSpan(pre, 'msghub-json-punct', ': ');
-								renderValue(v, p.concat(k), level + 1, false);
+								const line = createLine(level + 1);
+								appendSpan(line.prefixEl, 'msghub-json-key', JSON.stringify(k));
+								appendSpan(line.prefixEl, 'msghub-json-punct', ': ');
+								renderValue(v, p.concat(k), level + 1, line.valueEl);
 
 								const comment = resolveAnnotation(p, k, v);
 								if (i < entries.length - 1) {
-									appendSpan(pre, 'msghub-json-punct', ',');
+									appendSpan(line.valueEl, 'msghub-json-punct', ',');
 								}
 								if (comment) {
-									appendSpan(pre, 'msghub-json-comment', ` // ${comment}`);
+									appendSpan(line.valueEl, 'msghub-json-comment', ` // ${comment}`);
 								}
-								appendSpan(pre, '', '\n');
 							}
-							appendSpan(pre, '', IND.repeat(level));
-							appendSpan(pre, 'msghub-json-punct', '}');
+							const closeLine = createLine(level);
+							appendSpan(closeLine.valueEl, 'msghub-json-punct', '}');
 							return;
 						}
-						appendSpan(pre, 'msghub-json-null', JSON.stringify(val));
+						appendSpan(targetEl, 'msghub-json-null', JSON.stringify(val));
 					};
 
 					// reset target and render
 					pre.replaceChildren();
-					renderValue(value, pathParts, indent, false);
+					const root = createLine(indent);
+					renderValue(value, pathParts, indent, root.valueEl);
 				}
 
 			function getNumberTokenAtPoint(rootEl, x, y) {
