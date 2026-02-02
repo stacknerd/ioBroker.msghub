@@ -534,8 +534,11 @@
 		});
 
 		document.addEventListener('msghub:tabSwitch', e => {
-			const from = String(e?.detail?.from || '');
-			const to = String(e?.detail?.to || '');
+			if (!(e instanceof CustomEvent)) {
+				return;
+			}
+			const from = String(e.detail?.from || '');
+			const to = String(e.detail?.to || '');
 			if (from === 'tab-stats' && to && to !== 'tab-stats') {
 				stopAuto();
 				return;

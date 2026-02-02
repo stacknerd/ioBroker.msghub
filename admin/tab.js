@@ -622,9 +622,8 @@ function createUi() {
 
 	// Small dialog (confirm/prompt)
 	let dialogIsOpen = false;
-	let dialogPrevActive = /** @type {HTMLElement | null} */ (null);
-	/** @type {(ok: boolean) => void | null} */
-	let dialogPendingResolve = null;
+	let dialogPrevActive = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+	let dialogPendingResolve = undefined;
 
 	const dialogSetOpen = isOpen => {
 		dialogIsOpen = isOpen;
@@ -640,7 +639,7 @@ function createUi() {
 		dialogSetOpen(false);
 		if (typeof dialogPendingResolve === 'function') {
 			const r = dialogPendingResolve;
-			dialogPendingResolve = null;
+			dialogPendingResolve = undefined;
 			r(ok === true);
 		}
 		if (dialogBody) {
@@ -693,9 +692,7 @@ function createUi() {
 				return;
 			}
 
-			dialogPrevActive = /** @type {HTMLElement | null} */ (
-				document.activeElement instanceof HTMLElement ? document.activeElement : null
-			);
+			dialogPrevActive = document.activeElement instanceof HTMLElement ? document.activeElement : null;
 
 			const title = typeof opts?.title === 'string' ? opts.title : '';
 			const text = typeof opts?.text === 'string' ? opts.text : '';
