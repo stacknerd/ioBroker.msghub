@@ -1,8 +1,36 @@
 /* tab.messages.css — Messages panel styles (scoped to .msghub-root .msghub-messages) */
 
 /* Intentionally empty (Big-Bang rebuild, step-by-step).
-   Add panel-specific styles here, always scoped:
-   .msghub-root .msghub-messages ... */
+	 Add panel-specific styles here, always scoped:
+	 .msghub-root .msghub-messages ... */
+
+/* Message JSON viewer (line-based; wraps long values without horizontal scrolling) */
+.msghub-root .msghub-overlay-body .msghub-messages-json {
+	margin: 0;
+	font-family: var(--msghub-font-mono);
+	font-size: var(--msghub-fs-sm);
+	line-height: var(--msghub-lh-normal);
+	max-width: 100%;
+	overflow-x: hidden;
+}
+
+.msghub-root .msghub-messages-json .msghub-json-line {
+	display: flex;
+	align-items: flex-start;
+}
+
+.msghub-root .msghub-messages-json .msghub-json-prefix {
+	flex: 0 0 auto;
+	white-space: pre;
+}
+
+.msghub-root .msghub-messages-json .msghub-json-value {
+	flex: 1 1 auto;
+	min-width: 0;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	word-break: break-word;
+}
 
 .msghub-root .msghub-messages-json .msghub-json-key {
 	color: #0451a5;
