@@ -46,7 +46,10 @@
 	}
 
 		function initMessagesSection(ctx) {
-			const { sendTo, h, elements, ui } = ctx;
+			const { api, h, elements } = ctx;
+			const messagesApi = api?.messages;
+			const constantsApi = api?.constants;
+			const ui = api?.ui || ctx.ui;
 			const root = elements.messagesRoot;
 			if (!root) {
 				throw new Error('MsghubAdminTabMessages: missing messagesRoot element');
@@ -55,8 +58,8 @@
 			const AUTO_REFRESH_MS = 15000;
 
 			const t = (en, de) => {
-				const lang = typeof ctx?.lang === 'string' ? ctx.lang : '';
-				return lang.toLowerCase().startsWith('de') ? de : en;
+				const lang = typeof api?.i18n?.lang === 'function' ? api.i18n.lang() : typeof ctx?.lang === 'string' ? ctx.lang : '';
+				return String(lang).toLowerCase().startsWith('de') ? de : en;
 			};
 
 			let loading = false;
@@ -1249,7 +1252,10 @@
 
 			async function loadConstants() {
 				try {
-					constants = await sendTo('admin.constants.get', {});
+					if (!constantsApi?.get) {
+						throw new Error('Constants API is not available');
+					}
+					constants = await constantsApi.get();
 				// Canonicalize default lifecycle filter to enum values (if available)
 				const enumStates = getConstantsEnum('lifecycle.state');
 				if (enumStates) {
@@ -1276,7 +1282,10 @@
 				render({ forceRows: !hasLoadedOnce });
 
 					try {
-						const res = await sendTo('admin.messages.query', {
+						if (!messagesApi?.query) {
+							throw new Error('Messages API is not available');
+						}
+						const res = await messagesApi.query({
 							query: {
 								where: buildWhereFromFilters(),
 								page: { index: pageIndex, size: pageSize },
@@ -1310,7 +1319,7 @@
 					}
 				}
 
-			deleteBtn.addEventListener('click', async e => {
+				deleteBtn.addEventListener('click', async e => {
 				e.preventDefault();
 				if (!expertMode) {
 					return;
@@ -1323,27 +1332,30 @@
 					`Are you sure you want to delete ${refs.length} messages?`,
 					`Sicher, dass du ${refs.length} Nachrichten löschen möchtest?`,
 				);
-				const ok = ui?.dialog?.confirm
-					? await ui.dialog.confirm({
-							title: t('Delete messages?', 'Nachrichten löschen?'),
-							text,
-							danger: true,
-							confirmText: 'Delete',
-							cancelText: 'Cancel',
-						})
+					const ok = ui?.dialog?.confirm
+						? await ui.dialog.confirm({
+								title: t('Delete messages?', 'Nachrichten löschen?'),
+								text,
+								danger: true,
+								confirmText: 'Delete',
+								cancelText: 'Cancel',
+							})
 					: win.confirm(text);
 				if (!ok) {
 					return;
 				}
-				try {
-					await sendTo('admin.messages.delete', { refs });
-					selectedRefs.clear();
-					updateDeleteButton();
-					await loadMessages({ silent: false });
-				} catch (err) {
-					toast(String(err?.message || err));
-				}
-			});
+					try {
+						if (!messagesApi?.delete) {
+							throw new Error('Messages API is not available');
+						}
+						await messagesApi.delete(refs);
+						selectedRefs.clear();
+						updateDeleteButton();
+						await loadMessages({ silent: false });
+					} catch (err) {
+						toast(String(err?.message || err));
+					}
+				});
 
 			const applyExpertMode = next => {
 				const on = next === true;

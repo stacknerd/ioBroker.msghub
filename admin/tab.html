@@ -1,82 +1,49 @@
 <!doctype html>
-<html lang="en">
-	<head>
-		<meta charset="utf-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<title>MsgHub</title>
+<html lang="en" data-msghub-view="adminTab">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<title>MsgHub</title>
+	<link rel="stylesheet" href="tab.css" />
+	<script src="../../lib/js/socket.io.js"></script>
+</head>
+<body>
+	<div class="msghub-root">
+		<div id="msghub-connection" class="msghub-connectionbar offline" role="status">
+			…
+		</div>
+		<div id="msghub-layout"></div>
 
-		<link rel="stylesheet" href="tab.css" />
-		<link rel="stylesheet" href="tab.stats.css" />
-		<link rel="stylesheet" href="tab.messages.css" />
-		<link rel="stylesheet" href="tab.plugins.css" />
-		<link rel="stylesheet" href="tab.plugins.tools.ingeststates.css" />
-
-		<script src="../../lib/js/socket.io.js"></script>
-	</head>
-
-	<body>
-		<div class="msghub-root">
-			<nav class="msghub-tabs" role="tablist" aria-label="MsgHub">
-				<a class="msghub-tab" href="#tab-stats" role="tab" aria-controls="tab-stats" data-i18n="msghub.i18n.core.admin.ui.tabs.stats.label">Stats</a>
-				<a class="msghub-tab" href="#tab-messages" role="tab" aria-controls="tab-messages" data-i18n="msghub.i18n.core.admin.ui.tabs.messages.label">Messages</a>
-				<a class="msghub-tab is-active" href="#tab-plugins" role="tab" aria-controls="tab-plugins" data-i18n="msghub.i18n.core.admin.ui.tabs.plugins.label">Plugin Config</a>
-				<div class="msghub-tabs-spacer" aria-hidden="true"></div>
-				<div class="offline" id="msghub-connection">…</div>
-			</nav>
-
-			<div id="tab-stats" class="msghub-panel msghub-stats" role="tabpanel">
-				<div id="stats-root"></div>
-			</div>
-
-			<div id="tab-messages" class="msghub-panel msghub-messages" role="tabpanel">
-				<div id="messages-root"></div>
-			</div>
-
-			<div id="tab-plugins" class="msghub-panel msghub-plugins" role="tabpanel">
-				<div id="plugins-root"></div>
-			</div>
-
-			<!-- Universal UI infrastructure (always in DOM; JS toggles aria-hidden + is-hidden) -->
-			<div
-				id="msghub-toast-host"
-				class="msghub-toast-host is-hidden"
-				aria-hidden="true"
-				aria-live="polite"
-				aria-atomic="true"
-				aria-relevant="additions text"
-			></div>
-
-			<div id="msghub-overlay-large" class="msghub-overlay-backdrop is-hidden" aria-hidden="true">
-					<div class="msghub-overlay" role="dialog" aria-modal="true" aria-labelledby="msghub-overlay-large-title">
-						<div class="msghub-overlay-head">
-							<div id="msghub-overlay-large-title" class="msghub-overlay-title"></div>
-							<button id="msghub-overlay-large-close" type="button" class="msghub-overlay-close">Close</button>
-						</div>
-						<div id="msghub-overlay-large-body" class="msghub-overlay-body"></div>
-					</div>
+		<!-- Universal UI infrastructure (always in DOM; JS toggles aria-hidden + is-hidden) -->
+		<div id="msghub-toast-host" class="msghub-toast-host is-hidden" aria-hidden="true" aria-live="polite"
+			aria-atomic="true" aria-relevant="additions text"></div>
+		<div id="msghub-overlay-large" class="msghub-overlay-backdrop is-hidden" aria-hidden="true">
+			<div class="msghub-overlay" role="dialog" aria-modal="true" aria-labelledby="msghub-overlay-large-title">
+				<div class="msghub-overlay-head">
+					<div id="msghub-overlay-large-title" class="msghub-overlay-title"></div>
+					<button id="msghub-overlay-large-close" type="button" class="msghub-overlay-close">
+						Close
+					</button>
 				</div>
-
-			<div id="msghub-dialog-small" class="msghub-dialog-backdrop is-hidden" aria-hidden="true">
-				<div
-					class="msghub-dialog"
-					role="dialog"
-					aria-modal="true"
-					aria-labelledby="msghub-dialog-small-title"
-					aria-describedby="msghub-dialog-small-body"
-				>
-					<h6 id="msghub-dialog-small-title" class="msghub-dialog-title"></h6>
-					<div id="msghub-dialog-small-body" class="msghub-dialog-body"></div>
-					<div class="msghub-dialog-actions">
-						<button id="msghub-dialog-small-cancel" type="button">Cancel</button>
-						<button id="msghub-dialog-small-confirm" type="button">OK</button>
-					</div>
+				<div id="msghub-overlay-large-body" class="msghub-overlay-body"></div>
+			</div>
+		</div>
+		<div id="msghub-dialog-small" class="msghub-dialog-backdrop is-hidden" aria-hidden="true">
+			<div class="msghub-dialog" role="dialog" aria-modal="true" aria-labelledby="msghub-dialog-small-title"
+				aria-describedby="msghub-dialog-small-body">
+				<h6 id="msghub-dialog-small-title" class="msghub-dialog-title"></h6>
+				<div id="msghub-dialog-small-body" class="msghub-dialog-body"></div>
+				<div class="msghub-dialog-actions">
+					<button id="msghub-dialog-small-cancel" type="button">
+						Cancel
+					</button>
+					<button id="msghub-dialog-small-confirm" type="button">
+						OK
+					</button>
 				</div>
 			</div>
 		</div>
-
-		<script src="tab.js"></script>
-		<script src="tab.plugins.js"></script>
-		<script src="tab.stats.js"></script>
-		<script src="tab.messages.js"></script>
-	</body>
+	</div>
+	<script src="tab.js"></script>
+</body>
 </html>
