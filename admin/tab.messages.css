@@ -33,45 +33,23 @@
 }
 
 .msghub-root .msghub-messages-json .msghub-json-key {
-	color: #0451a5;
+	color: var(--msghub-syntax-key);
 }
 .msghub-root .msghub-messages-json .msghub-json-string {
-	color: #a31515;
+	color: var(--msghub-syntax-string);
 }
 .msghub-root .msghub-messages-json .msghub-json-number {
-	color: #098658;
+	color: var(--msghub-syntax-number);
 }
 .msghub-root .msghub-messages-json .msghub-json-bool {
-	color: #0000ff;
+	color: var(--msghub-syntax-bool);
 }
 .msghub-root .msghub-messages-json .msghub-json-null {
-	color: #0000ff;
+	color: var(--msghub-syntax-null);
 }
 .msghub-root .msghub-messages-json .msghub-json-punct {
-	color: #000000;
+	color: var(--msghub-syntax-punct);
 }
 .msghub-root .msghub-messages-json .msghub-json-comment {
-	color: #008000;
-}
-
-html[data-msghub-theme='dark'] .msghub-root .msghub-messages-json .msghub-json-key {
-	color: #9cdcfe;
-}
-html[data-msghub-theme='dark'] .msghub-root .msghub-messages-json .msghub-json-string {
-	color: #ce9178;
-}
-html[data-msghub-theme='dark'] .msghub-root .msghub-messages-json .msghub-json-number {
-	color: #b5cea8;
-}
-html[data-msghub-theme='dark'] .msghub-root .msghub-messages-json .msghub-json-bool {
-	color: #569cd6;
-}
-html[data-msghub-theme='dark'] .msghub-root .msghub-messages-json .msghub-json-null {
-	color: #569cd6;
-}
-html[data-msghub-theme='dark'] .msghub-root .msghub-messages-json .msghub-json-punct {
-	color: #d4d4d4;
-}
-html[data-msghub-theme='dark'] .msghub-root .msghub-messages-json .msghub-json-comment {
-	color: #6a9955;
+	color: var(--msghub-syntax-comment);
 }

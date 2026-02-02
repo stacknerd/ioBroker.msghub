@@ -78,11 +78,19 @@
 			'div',
 			{ class: 'msghub-legend' },
 			(entries || []).map(e =>
+				(() => {
+					const dotClass =
+						typeof e?.colorClass === 'string' && e.colorClass.trim()
+							? e.colorClass.trim()
+							: `msghub-color-${Number(e?.colorIdx) || 0}`;
+					return (
 				h('div', { class: 'msghub-legend-item' }, [
-					h('span', { class: 'msghub-legend-dot', style: `background:${e.color}` }),
+					h('span', { class: `msghub-legend-dot ${dotClass}` }),
 					h('span', { class: 'msghub-legend-label', text: e.label }),
 					h('span', { class: 'msghub-legend-value msghub-muted', text: e.value }),
-				]),
+				])
+					);
+				})(),
 			),
 		);
 	}
@@ -98,11 +106,26 @@
 
 		const total = entriesRaw.reduce((sum, e) => sum + e.value, 0);
 
-		const palette = ['#26a69a', '#42a5f5', '#ab47bc', '#ffa726', '#ef5350', '#8d6e63', '#26c6da'];
+		const palette = [
+			'var(--msghub-chart-1)',
+			'var(--msghub-chart-2)',
+			'var(--msghub-chart-3)',
+			'var(--msghub-chart-4)',
+			'var(--msghub-chart-5)',
+			'var(--msghub-chart-6)',
+			'var(--msghub-chart-7)',
+			'var(--msghub-chart-8)',
+			'var(--msghub-chart-9)',
+			'var(--msghub-chart-10)',
+			'var(--msghub-chart-11)',
+			'var(--msghub-chart-12)',
+		];
+
 		const segments = entriesRaw.map((e, idx) => ({
 			label: e.label,
 			value: e.value,
 			color: palette[idx % palette.length],
+			colorIdx: idx % palette.length,
 		}));
 
 		let angle = 0;
@@ -114,11 +137,11 @@
 			return `${s.color} ${start.toFixed(3)}deg ${end.toFixed(3)}deg`;
 		});
 
-		const bg = total > 0 ? `conic-gradient(${stops.join(',')})` : 'conic-gradient(#cfd8dc 0deg 360deg)';
+		const bg = total > 0 ? `conic-gradient(${stops.join(',')})` : 'conic-gradient(var(--msghub-chart-neutral) 0deg 360deg)';
 
 		const legendEntries = segments.map(s => ({
 			label: s.label,
-			color: s.color,
+			colorIdx: s.colorIdx,
 			value: total > 0 ? `${s.value} (${Math.round((s.value / total) * 100)}%)` : String(s.value),
 		}));
 
@@ -154,7 +177,7 @@
 			return typeof fb === 'number' && Number.isFinite(fb) ? Math.max(0, fb) : 0;
 		};
 
-		const mkRow = (key, label, value, color) => {
+		const mkRow = (key, label, value) => {
 			const v = typeof value === 'number' && Number.isFinite(value) ? Math.max(0, value) : 0;
 			const pct = total > 0 ? clamp01(v / total) : 0;
 			const w = pct;
@@ -162,18 +185,18 @@
 				h('div', { class: 'msghub-sched-label msghub-muted', text: label }),
 				h('div', {
 					class: `msghub-sched-bar is-${key}`,
-					style: `--msghub-marker:${marker}; --msghub-bucket:${w}; --msghub-bucket-color:${color};`,
+					style: `--msghub-marker:${marker}; --msghub-bucket:${w};`,
 					title: `${label}: ${v} / total ${total} (overdue ${overdue})`,
-				}),
+				}, [h('div', { class: 'msghub-sched-bar-fill' }), h('div', { class: 'msghub-sched-bar-marker', 'aria-hidden': 'true' })]),
 				h('div', { class: 'msghub-sched-value msghub-mono', text: String(v) }),
 			]);
 		};
 
 		const rows = h('div', { class: 'msghub-sched' }, [
-			mkRow('today', 'today', pickCount(b, 'today', 'today'), '#26a69a'),
-			mkRow('tomorrow', 'tomorrow', pickCount(b, 'tomorrow', 'tomorrow'), '#42a5f5'),
-			mkRow('week', 'week', pickCount(b, 'thisWeekFromToday', 'thisWeek'), '#ab47bc'),
-			mkRow('month', 'month', pickCount(b, 'thisMonthFromToday', 'thisMonth'), '#ffa726'),
+			mkRow('today', 'today', pickCount(b, 'today', 'today')),
+			mkRow('tomorrow', 'tomorrow', pickCount(b, 'tomorrow', 'tomorrow')),
+			mkRow('week', 'week', pickCount(b, 'thisWeekFromToday', 'thisWeek')),
+			mkRow('month', 'month', pickCount(b, 'thisMonthFromToday', 'thisMonth')),
 		]);
 
 		const out = [rows];
@@ -181,9 +204,9 @@
 			out.push(
 				h('div', { class: 'msghub-sched-legend' }, [
 					renderLegend(h, [
-						{ label: 'overdue', color: 'var(--msghub-danger)', value: String(overdue) },
-						{ label: 'today marker', color: 'var(--msghub-text)', value: '|' },
-						{ label: 'filler', color: 'var(--msghub-border)', value: '' },
+						{ label: 'overdue', colorClass: 'msghub-color-danger', value: String(overdue) },
+						{ label: 'today marker', colorClass: 'msghub-color-text', value: '|' },
+						{ label: 'filler', colorClass: 'msghub-color-border', value: '' },
 					]),
 				]),
 			);
