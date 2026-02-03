@@ -20,13 +20,13 @@
 				? ctx.adapterInstance.trim()
 				: `msghub.${adapterInstance}`;
 
-			const api = ctx.api;
-			const constantsApi = api?.constants;
-			const pluginsApi = api?.plugins;
-			const ingestStatesApi = api?.ingestStates;
-			const h = ctx.h;
-			const pickText = ctx.pickText;
-			const ui = api?.ui || ctx.ui;
+				const api = ctx.api;
+				const constantsApi = api?.constants;
+				const pluginsApi = api?.plugins;
+				const ingestStatesApi = api?.ingestStates;
+				const h = ctx.h;
+				const pickText = api.i18n.pickText;
+				const ui = api?.ui || ctx.ui;
 
 		let cachedConstants = null;
 		let cachedIngestStatesConstants = null;

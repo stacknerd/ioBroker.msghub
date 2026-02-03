@@ -135,10 +135,10 @@ function createAsyncCache(fetchFn, { maxAgeMs = Infinity } = {}) {
 	return Object.freeze({ get, invalidate });
 }
 
-function createAdminApi({ sendTo, socket, adapterInstance, lang, t, ui }) {
-	const registry = win.MsghubAdminTabRegistry || null;
-	const viewIdRaw = document?.documentElement?.getAttribute?.('data-msghub-view') || '';
-	const viewId = String(viewIdRaw || '').trim() || 'adminTab';
+	function createAdminApi({ sendTo, socket, adapterInstance, lang, t, pickText, ui }) {
+		const registry = win.MsghubAdminTabRegistry || null;
+		const viewIdRaw = document?.documentElement?.getAttribute?.('data-msghub-view') || '';
+		const viewId = String(viewIdRaw || '').trim() || 'adminTab';
 	const composition =
 		registry && registry.compositions && typeof registry.compositions === 'object' ? registry.compositions[viewId] : null;
 	const panelIds = Array.isArray(composition?.panels) ? composition.panels.filter(Boolean).map(v => String(v)) : [];
@@ -152,10 +152,17 @@ function createAdminApi({ sendTo, socket, adapterInstance, lang, t, ui }) {
 		error: (...args) => console.error(logPrefix, ...args),
 	});
 
-	const i18n = Object.freeze({
-		lang: () => String(lang || 'en'),
-		t: (key, ...args) => t(String(key ?? ''), ...args),
-	});
+		const i18n = Object.freeze({
+			lang: () => String(lang || 'en'),
+			has: key => hasAdminKey(String(key ?? '')),
+			t: (key, ...args) => t(String(key ?? ''), ...args),
+			tOr: (key, fallback, ...args) => {
+				const k = String(key ?? '');
+				const out = t(k, ...args);
+				return out === k ? String(fallback ?? '') : out;
+			},
+			pickText: value => pickText(value),
+		});
 
 	const uiApi = Object.freeze({
 		toast: opts => ui?.toast?.(opts),
@@ -1175,21 +1182,19 @@ const elements = Object.freeze({
 
 const ui = createUi();
 
-const api = createAdminApi({ sendTo, socket, adapterInstance, lang, t, ui });
+	const api = createAdminApi({ sendTo, socket, adapterInstance, lang, t, pickText, ui });
 
-const ctx = Object.freeze({
-	args,
-	adapterInstance,
-	socket,
-	sendTo,
-	api,
-	h,
-	t,
-	pickText,
-	ui,
-	lang,
-	elements,
-});
+	const ctx = Object.freeze({
+		args,
+		adapterInstance,
+		socket,
+		sendTo,
+		api,
+		h,
+		ui,
+		lang,
+		elements,
+	});
 
 const setConnText = text => {
 	if (elements.connection) {
@@ -1352,29 +1357,78 @@ function ensureBooted() {
 	return bootPromise;
 }
 
-window.addEventListener('DOMContentLoaded', () => {
-	void ensureBooted();
-});
-
-socket.on('connect', () => {
-	connOnline = true;
-	setConnStatus(true);
-	void ensureBooted().then(() => {
-		applyStaticI18n();
-		setConnTextFromState();
+	window.addEventListener('DOMContentLoaded', () => {
+		void ensureBooted();
 	});
-	void ensureBooted().then(() => {
-		for (const section of panelSections.values()) {
-			section?.onConnect?.();
+
+	let connectWarmupToken = 0;
+	let connectWarmupPromise = null;
+
+	const sleepMs = ms => new Promise(resolve => setTimeout(resolve, Math.max(0, Math.trunc(Number(ms) || 0))));
+
+	async function warmupAdminApis() {
+		const token = ++connectWarmupToken;
+		const startedAt = Date.now();
+		const maxWaitMs = 30000;
+		let delayMs = 200;
+
+		while (socket?.connected && connectWarmupToken === token && Date.now() - startedAt <= maxWaitMs) {
+			try {
+				await api.constants.get();
+				await api.ingestStates?.constants?.get?.();
+				return true;
+			} catch (_err) {
+				await sleepMs(delayMs + Math.trunc(Math.random() * 250));
+				delayMs = Math.min(2000, Math.trunc(delayMs * 1.5));
+			}
 		}
-	});
-});
+		return false;
+	}
 
-socket.on('disconnect', () => {
-	connOnline = false;
-	setConnStatus(false);
-	void ensureAdminI18nLoaded().then(() => {
-		applyStaticI18n();
-		setConnTextFromState();
+	function triggerWarmupReconnect() {
+		if (connectWarmupPromise) {
+			return connectWarmupPromise;
+		}
+		connectWarmupPromise = Promise.resolve()
+			.then(async () => {
+				const ok = await warmupAdminApis();
+				if (!ok || !socket?.connected) {
+					return;
+				}
+				for (const section of panelSections.values()) {
+					try {
+						await section?.onConnect?.();
+					} catch (_err) {
+						// ignore: panel should render its own error state
+					}
+				}
+			})
+			.finally(() => {
+				connectWarmupPromise = null;
+			});
+		return connectWarmupPromise;
+	}
+
+	socket.on('connect', () => {
+		connOnline = true;
+		setConnStatus(true);
+		void ensureBooted().then(() => {
+			applyStaticI18n();
+			setConnTextFromState();
+			for (const section of panelSections.values()) {
+				section?.onConnect?.();
+			}
+			void triggerWarmupReconnect();
+		});
 	});
-});
+
+	socket.on('disconnect', () => {
+		connOnline = false;
+		setConnStatus(false);
+		connectWarmupToken++;
+		connectWarmupPromise = null;
+		void ensureAdminI18nLoaded().then(() => {
+			applyStaticI18n();
+			setConnTextFromState();
+		});
+	});
