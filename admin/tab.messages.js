@@ -84,6 +84,8 @@
 
 			let expertMode = false;
 			const selectedRefs = new Set();
+			let syncSelectionUI = () => undefined;
+			let suppressRowClickUntil = 0;
 
 			/** @type {Record<string, Set<string>>} */
 			const columnFilters = Object.create(null);
@@ -916,20 +918,22 @@
 			document.addEventListener('click', onDocClick, true);
 		}
 
-			function renderTable(itemsToRender) {
-				const rows = itemsToRender.map(msg => {
-					const title = truncateStr(pick(msg, 'title'), 40);
-					const text = truncateStr(pick(msg, 'text'), 70);
-					const location = safeStr(pick(msg, 'details.location'));
-					const kind = safeStr(pick(msg, 'kind'));
-					const lifecycle = safeStr(pick(msg, 'lifecycle.state'));
-					const level = pick(msg, 'level');
-					const origin = safeStr(pick(msg, 'origin.system')) || safeStr(pick(msg, 'origin.type'));
-					const progressPercentage = pick(msg, 'progress.percentage');
-					const createdAt = pick(msg, 'timing.createdAt');
-					const updatedAt = pick(msg, 'timing.updatedAt');
+				function renderTable(itemsToRender) {
+					const rows = itemsToRender.map(msg => {
+						const title = truncateStr(pick(msg, 'title'), 40);
+						const text = truncateStr(pick(msg, 'text'), 70);
+						const location = safeStr(pick(msg, 'details.location'));
+						const kind = safeStr(pick(msg, 'kind'));
+						const lifecycle = safeStr(pick(msg, 'lifecycle.state'));
+						const icon = safeStr(pick(msg, 'icon'));
+						const level = pick(msg, 'level');
+						const origin = safeStr(pick(msg, 'origin.system')) || safeStr(pick(msg, 'origin.type'));
+						const progressPercentage = pick(msg, 'progress.percentage');
+						const createdAt = pick(msg, 'timing.createdAt');
+						const updatedAt = pick(msg, 'timing.updatedAt');
 
-					const ref = expertMode ? safeStr(pick(msg, 'ref')) : '';
+					const ref = safeStr(pick(msg, 'ref'));
+					const isSelected = !!ref && selectedRefs.has(ref);
 					const checkboxCell = expertMode
 						? h('td', { class: 'msghub-messages-select' }, [
 								h('label', null, [
@@ -943,31 +947,128 @@
 											} else {
 												selectedRefs.delete(ref);
 											}
+											syncSelectionUI();
 											updateDeleteButton();
 										},
-									}),
+											}),
 									h('span', { text: '' }),
 								]),
 							])
 						: null;
 
+						const applySelection = mode => {
+							if (!ref) {
+								return false;
+							}
+
+							const alreadySelected = selectedRefs.has(ref);
+
+							if (!expertMode) {
+								if (mode === 'contextmenu') {
+									// Right-click selects the row (never deselects), to make context menus act on selection.
+									if (alreadySelected) {
+										return false;
+									}
+									selectedRefs.clear();
+									selectedRefs.add(ref);
+									return true;
+								}
+								if (alreadySelected) {
+									selectedRefs.clear();
+									return true;
+								}
+								selectedRefs.clear();
+								selectedRefs.add(ref);
+								return true;
+							}
+
+						if (mode === 'contextmenu') {
+							// File-manager-like: right-click selects the row (and clears others) if it wasn't selected yet.
+							if (!alreadySelected) {
+								selectedRefs.clear();
+								selectedRefs.add(ref);
+								return true;
+							}
+							return false;
+						}
+
+						// Expert mode click toggles the row (multi-select).
+						if (alreadySelected) {
+							selectedRefs.delete(ref);
+						} else {
+							selectedRefs.add(ref);
+						}
+						return true;
+					};
+
 					return h(
 						'tr',
 						{
-							ondblclick: () => openMessageJson(msg),
+							class: isSelected ? 'is-selected' : '',
+							'data-ref': ref || '',
+							onclick: e => {
+								if (!ref) {
+									return;
+								}
+								if (Date.now() < suppressRowClickUntil) {
+									return;
+								}
+								const target = e?.target;
+								if (target && typeof target.closest === 'function') {
+									if (target.closest('input, button, a, select, textarea, label')) {
+										return;
+									}
+								}
+
+								const didChange = applySelection('click');
+								if (!didChange) {
+									return;
+								}
+
+								syncSelectionUI();
+								updateDeleteButton();
+							},
+							oncontextmenu: e => {
+								if (!ref) {
+									return;
+								}
+								suppressRowClickUntil = Date.now() + 500;
+								const didChange = applySelection('contextmenu');
+								if (!didChange) {
+									return;
+								}
+
+								syncSelectionUI();
+								updateDeleteButton();
+							},
+							ondblclick: () => {
+								openMessageJson(msg);
+							},
 						},
 						[
 							...(checkboxCell ? [checkboxCell] : []),
 							h('td', { text: kind }),
 							h('td', { text: getLevelLabel(level) }),
 							h('td', { text: lifecycle }),
+							h('td', { text: icon }),
 							h('td', { text: title }),
 							h('td', { text: text }),
 							h('td', { text: location }),
-							h('td', { class: 'msghub-muted', text: formatTs(typeof createdAt === 'number' ? createdAt : NaN) }),
-							h('td', { class: 'msghub-muted', text: formatTs(typeof updatedAt === 'number' ? updatedAt : NaN) }),
+							h('td', {
+								class: 'msghub-muted',
+								text: formatTs(typeof createdAt === 'number' ? createdAt : NaN),
+							}),
+							h('td', {
+								class: 'msghub-muted',
+								text: formatTs(typeof updatedAt === 'number' ? updatedAt : NaN),
+							}),
 							h('td', { text: origin }),
-							h('td', { text: typeof progressPercentage === 'number' && Number.isFinite(progressPercentage) ? String(progressPercentage) : '' }),
+							h('td', {
+								text:
+									typeof progressPercentage === 'number' && Number.isFinite(progressPercentage)
+										? String(progressPercentage)
+										: '',
+							}),
 						],
 					);
 				});
@@ -1034,9 +1135,9 @@
 				}
 			};
 
-			let tableColCount = 10;
+			let tableColCount = 11;
 			const updateTableColCount = () => {
-				tableColCount = expertMode ? 11 : 10;
+				tableColCount = expertMode ? 12 : 11;
 			};
 
 			const makeSortBtn = (field, title, label) => {
@@ -1085,6 +1186,7 @@
 								listEnumValues(getConstantsEnum('lifecycle.state')),
 							),
 						]),
+						h('th', { class: 'msghub-th' }, []),
 						h('th', { class: 'msghub-th' }, [
 							makeSortBtn('title', 'Title', 'Title'),
 						]),
@@ -1206,8 +1308,8 @@
 				updateDeleteButton();
 			};
 
-			const updateTbody = (rows, { showLoadingRow = false } = {}) => {
-				const fragment = document.createDocumentFragment();
+				const updateTbody = (rows, { showLoadingRow = false } = {}) => {
+					const fragment = document.createDocumentFragment();
 				if (showLoadingRow) {
 					fragment.appendChild(
 						h('tr', null, [
@@ -1219,8 +1321,29 @@
 						fragment.appendChild(r);
 					}
 				}
-				tbodyEl.replaceChildren(fragment);
-			};
+					tbodyEl.replaceChildren(fragment);
+				};
+
+				syncSelectionUI = () => {
+					try {
+						const rows = Array.from(tbodyEl.querySelectorAll('tr'));
+						for (const tr of rows) {
+							const rowRef = String(tr.getAttribute('data-ref') || '');
+							const on = !!rowRef && selectedRefs.has(rowRef);
+							tr.classList.toggle('is-selected', on);
+							try {
+								const input = tr.querySelector('input[type="checkbox"]');
+								if (input) {
+									input.checked = on;
+								}
+							} catch {
+								// ignore
+							}
+						}
+					} catch {
+						// ignore
+					}
+				};
 
 				function render({ forceRows = false } = {}) {
 					updateButtons();
@@ -1254,8 +1377,9 @@
 					return;
 				}
 
-				updateTbody(renderTable(items));
-			}
+					updateTbody(renderTable(items));
+					syncSelectionUI();
+				}
 
 			async function loadConstants() {
 				try {
@@ -1364,16 +1488,18 @@
 					}
 				});
 
-			const applyExpertMode = next => {
-				const on = next === true;
-				if (expertMode === on) {
-					return;
-				}
-				expertMode = on;
-				if (!expertMode) {
-					selectedRefs.clear();
-				}
-				closePopover();
+				const applyExpertMode = next => {
+					const on = next === true;
+					if (expertMode === on) {
+						return;
+					}
+					expertMode = on;
+					const tab = root.closest('#tab-messages');
+					tab?.classList?.toggle?.('is-expert', expertMode);
+					if (!expertMode) {
+						selectedRefs.clear();
+					}
+					closePopover();
 				renderThead();
 				updateDeleteButton();
 				render({ forceRows: true });

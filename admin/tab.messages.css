@@ -53,3 +53,55 @@
 .msghub-root .msghub-messages-json .msghub-json-comment {
 	color: var(--msghub-syntax-comment);
 }
+
+/* Messages table (SharePoint-like list) */
+.msghub-root .msghub-messages .msghub-table {
+	width: 100%;
+	border-collapse: separate;
+	border-spacing: 0;
+	font: var(--msghub-font-body);
+}
+
+.msghub-root .msghub-messages .msghub-table thead th {
+	position: sticky;
+	top: 0;
+	z-index: 2;
+	background: var(--msghub-bg);
+	color: var(--msghub-muted);
+	font: var(--msghub-font-body);
+	text-align: left;
+	white-space: nowrap;
+	padding: var(--msghub-space-1) var(--msghub-space-2);
+	border-bottom: 1px solid var(--msghub-border-light);
+}
+
+.msghub-root .msghub-messages .msghub-table tbody td {
+	padding: var(--msghub-space-1) var(--msghub-space-2);
+	border-bottom: 1px solid var(--msghub-border-light);
+	vertical-align: top;
+}
+
+.msghub-root .msghub-messages .msghub-table tbody tr:last-child td {
+	border-bottom: 0;
+}
+
+.msghub-root .msghub-messages .msghub-table tbody tr:hover td {
+	background: var(--msghub-surface-hover);
+}
+
+.msghub-root .msghub-messages .msghub-table tbody tr.is-selected td {
+	background: var(--msghub-surface-selected);
+}
+
+.msghub-root .msghub-messages .msghub-table tbody tr.is-selected td:first-child {
+	box-shadow: inset 2px 0 0 var(--msghub-accent);
+}
+
+.msghub-root .msghub-messages .msghub-table tbody tr {
+	cursor: pointer;
+}
+
+.msghub-root .msghub-messages .msghub-messages-select {
+	width: 1%;
+	white-space: nowrap;
+}
