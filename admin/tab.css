@@ -11,8 +11,10 @@
 	--msghub-bg: rgb(255 255 255);
 	--msghub-text: rgb(0 0 0 / 0.87);
 	--msghub-muted: rgb(0 0 0 / 0.6);
-	--msghub-border: rgb(0 0 0 / 0.12);
 	--msghub-backdrop: rgb(140 140 140 / 0.55);
+
+	--msghub-border: rgb(0 0 0 / 0.12);
+	--msghub-border-light: rgb(0 0 0 / 0.08);
 
 	--msghub-accent: rgb(51 153 204);
 	--msghub-ok: rgb(38 166 154);
@@ -75,6 +77,7 @@
 
 	/* Surfaces / effects (keep all color literals in this token section) */
 	--msghub-surface-hover: rgb(0 0 0 / 0.04);
+	--msghub-surface-selected: rgb(0 0 0 / 0.07);
 	--msghub-shadow-md: rgb(0 0 0 / 0.16);
 
 	--msghub-radius: 4px;
@@ -90,8 +93,10 @@ html[data-msghub-theme='dark'] .msghub-root {
 	--msghub-bg: rgb(18 18 18);
 	--msghub-text: rgb(255 255 255 / 0.88);
 	--msghub-muted: rgb(255 255 255 / 0.64);
-	--msghub-border: rgb(255 255 255 / 0.08);
 	--msghub-backdrop: rgb(0 0 0 / 0.65);
+
+	--msghub-border: rgb(255 255 255 / 0.08);
+	--msghub-border-light: rgb(255 255 255 / 0.06);
 
 	--msghub-accent: rgb(51 153 204);
 	--msghub-ok: rgb(45 212 191);
@@ -124,6 +129,7 @@ html[data-msghub-theme='dark'] .msghub-root {
 	--msghub-syntax-comment: rgb(106 153 85);
 
 	--msghub-surface-hover: rgb(255 255 255 / 0.1);
+	--msghub-surface-selected: rgb(255 255 255 / 0.16);
 	--msghub-shadow-md: rgb(0 0 0 / 0.4);
 }
 
