@@ -57,10 +57,7 @@
 
 			const AUTO_REFRESH_MS = 15000;
 
-			const t = (en, de) => {
-				const lang = typeof api?.i18n?.lang === 'function' ? api.i18n.lang() : typeof ctx?.lang === 'string' ? ctx.lang : '';
-				return String(lang).toLowerCase().startsWith('de') ? de : en;
-			};
+				const t = api.i18n.t;
 
 			let loading = false;
 			let silentLoading = false;
@@ -82,10 +79,11 @@
 			let sortField = 'timing.createdAt';
 			let sortDir = 'desc';
 
-			let expertMode = false;
-			const selectedRefs = new Set();
-			let syncSelectionUI = () => undefined;
-			let suppressRowClickUntil = 0;
+				let expertMode = false;
+				const selectedRefs = new Set();
+				let syncSelectionUI = () => undefined;
+				let suppressRowClickUntil = 0;
+				let headerSelectAllInput = null;
 
 			/** @type {Record<string, Set<string>>} */
 			const columnFilters = Object.create(null);
@@ -543,28 +541,42 @@
 			return isObject(o) ? o : null;
 		}
 
-		function listEnumValues(enumObj) {
-			const vals = [];
-			for (const v of Object.values(enumObj || {})) {
-				if (typeof v === 'string' && v.trim()) {
-					vals.push(v.trim());
+			function listEnumValues(enumObj) {
+				const vals = [];
+				const seen = new Set();
+				for (const v of Object.values(enumObj || {})) {
+					if (typeof v === 'string' && v.trim()) {
+						const s = v.trim();
+						if (!seen.has(s)) {
+							seen.add(s);
+							vals.push(s);
+						}
+					}
+					if (typeof v === 'number' && Number.isFinite(v)) {
+						const s = String(v);
+						if (!seen.has(s)) {
+							seen.add(s);
+							vals.push(s);
+						}
+					}
 				}
-				if (typeof v === 'number' && Number.isFinite(v)) {
-					vals.push(String(v));
-				}
+				return vals;
 			}
-			return Array.from(new Set(vals)).sort((a, b) => String(a).localeCompare(String(b)));
-		}
 
-		function listEnumKeys(enumObj) {
-			const keys = [];
-			for (const k of Object.keys(enumObj || {})) {
-				if (typeof k === 'string' && k.trim()) {
-					keys.push(k.trim());
+			function listEnumKeys(enumObj) {
+				const keys = [];
+				const seen = new Set();
+				for (const k of Object.keys(enumObj || {})) {
+					if (typeof k === 'string' && k.trim()) {
+						const s = k.trim();
+						if (!seen.has(s)) {
+							seen.add(s);
+							keys.push(s);
+						}
+					}
 				}
+				return keys;
 			}
-			return Array.from(new Set(keys)).sort((a, b) => String(a).localeCompare(String(b)));
-		}
 
 		function getLevelLabel(level) {
 			const map = getConstantsEnum('level');
@@ -710,23 +722,23 @@
 			el.appendChild(
 					h('div', { class: 'msghub-popover-controls' }, [
 						h('div', { class: 'msghub-popover-sortrow' }, [
-							h('button', {
-								class: 'msghub-popover-sort',
-								type: 'button',
-								'data-sort': 'asc',
-								onclick: () => setSort('asc'),
-								text: t('Sort ascending', 'Aufsteigend sortieren'),
-							}),
-							h('button', {
-								class: 'msghub-popover-sort',
-								type: 'button',
-								'data-sort': 'desc',
-								onclick: () => setSort('desc'),
-								text: t('Sort descending', 'Absteigend sortieren'),
-							}),
+								h('button', {
+									class: 'msghub-popover-sort',
+									type: 'button',
+									'data-sort': 'asc',
+									onclick: () => setSort('asc'),
+									text: t('msghub.i18n.core.admin.ui.messages.filter.sort.asc.action'),
+								}),
+								h('button', {
+									class: 'msghub-popover-sort',
+									type: 'button',
+									'data-sort': 'desc',
+									onclick: () => setSort('desc'),
+									text: t('msghub.i18n.core.admin.ui.messages.filter.sort.desc.action'),
+								}),
+							]),
 						]),
-					]),
-			);
+				);
 
 			el.appendChild(h('div', { class: 'msghub-popover-body' }));
 
@@ -747,10 +759,10 @@
 			document.addEventListener('click', onDocClick, true);
 		}
 
-			function openFilterPopover(anchorEl, { key, title, options }) {
-				closePopover();
+				function openFilterPopover(anchorEl, { key, title, options }) {
+					closePopover();
 
-				const selected = new Set(getFilterSet(key) || []);
+					const selected = new Set(getFilterSet(key) || []);
 				const sortableField =
 					key === 'kind' ||
 					key === 'lifecycle.state' ||
@@ -766,7 +778,10 @@
 			el.style.left = `${Math.max(10, Math.min(rect.left, window.innerWidth - 340))}px`;
 			el.style.top = `${rect.bottom + 6}px`;
 
-			const selectionLabel = () => (selected.size > 0 ? `${selected.size} selected` : t('No filter', 'Kein Filter'));
+					const selectionLabel = () =>
+						selected.size > 0
+							? t('msghub.i18n.core.admin.ui.messages.filter.number.label', selected.size)
+							: t('msghub.i18n.core.admin.ui.messages.filter.none.label');
 
 			const applyAndReload = () => {
 				setFilterSet(key, new Set(selected));
@@ -801,37 +816,58 @@
 				}
 			};
 
-			const updateSelectedInfo = () => {
-				const selectionInfo = el.querySelector('.msghub-popover-selected');
-				if (selectionInfo) {
-					selectionInfo.textContent = selectionLabel();
-				}
-			};
+				const updateSelectedInfo = () => {
+					const selectionInfo = el.querySelector('.msghub-popover-selected');
+					if (selectionInfo) {
+						selectionInfo.textContent = selectionLabel();
+					}
+				};
 
-			const renderList = () => {
-				const list = options || [];
-				updateSelectedInfo();
-				const checkboxes = list.map(v => {
-					return h('div', { class: 'msghub-popover-item' }, [
-						h('label', null, [
-							h('input', {
-								type: 'checkbox',
-								class: 'msghub-filter-checkbox',
-								checked: selected.has(v) ? 'true' : null,
-								onchange: e => {
-									const on = !!e?.target?.checked;
-									if (on) {
-										selected.add(v);
-									} else {
-										selected.delete(v);
-									}
-									renderList();
-								},
-							}),
-							h('span', { class: 'msghub-mono', text: v }),
-						]),
-					]);
-				});
+				const renderFilterValueLabel = (filterKey, value) => {
+					const raw = safeStr(value);
+					if (!raw) {
+						return '';
+					}
+					if (filterKey === 'kind') {
+						return api.i18n.tOr(`msghub.i18n.core.admin.common.MsgConstants.kind.${raw.toLowerCase()}.label`, raw);
+					}
+					if (filterKey === 'level') {
+						return api.i18n.tOr(`msghub.i18n.core.admin.common.MsgConstants.level.${raw}.label`, raw);
+					}
+					if (filterKey === 'lifecycle.state') {
+						return api.i18n.tOr(
+							`msghub.i18n.core.admin.common.MsgConstants.lifecycle.state.${raw.toLowerCase()}.label`,
+							raw,
+						);
+					}
+					return raw;
+				};
+
+				const renderList = () => {
+					const list = options || [];
+					updateSelectedInfo();
+					const checkboxes = list.map(v => {
+						const label = renderFilterValueLabel(key, v);
+						return h('div', { class: 'msghub-popover-item' }, [
+							h('label', null, [
+								h('input', {
+									type: 'checkbox',
+									class: 'msghub-filter-checkbox',
+									checked: selected.has(v) ? 'true' : null,
+									onchange: e => {
+										const on = !!e?.target?.checked;
+										if (on) {
+											selected.add(v);
+										} else {
+											selected.delete(v);
+										}
+										renderList();
+									},
+								}),
+								h('span', { class: 'msghub-mono', text: label || String(v) }),
+							]),
+						]);
+					});
 
 				const body = el.querySelector('.msghub-popover-body');
 				if (body) {
@@ -855,49 +891,53 @@
 			el.appendChild(
 					h('div', { class: 'msghub-popover-controls' }, [
 						h('div', { class: 'msghub-popover-actions' }, [
-							h('button', {
-								type: 'button',
-								onclick: () => {
-									for (const v of options || []) {
-										selected.add(v);
-								}
-								renderList();
-							},
-								text: t('Select all', 'Alle anwählen'),
-							}),
-							h('button', {
-								type: 'button',
-								onclick: () => {
-									selected.clear();
+								h('button', {
+									type: 'button',
+									onclick: () => {
+										for (const v of options || []) {
+											selected.add(v);
+									}
 									renderList();
-							},
-								text: t('Select none', 'Alle abwählen'),
+								},
+									text: t('msghub.i18n.core.admin.ui.messages.filter.selectAll.action'),
+								}),
+								h('button', {
+									type: 'button',
+									onclick: () => {
+										selected.clear();
+										renderList();
+								},
+									text: t('msghub.i18n.core.admin.ui.messages.filter.selectNone.action'),
+								}),
+							]),
+						sortableField
+							? h('div', { class: 'msghub-popover-sortrow' }, [
+									h('button', {
+										class: 'msghub-popover-sort',
+										type: 'button',
+										'data-sort': 'asc',
+										onclick: () => setSort('asc'),
+										text: t('msghub.i18n.core.admin.ui.messages.filter.sort.asc.action'),
+									}),
+									h('button', {
+										class: 'msghub-popover-sort',
+										type: 'button',
+										'data-sort': 'desc',
+										onclick: () => setSort('desc'),
+										text: t('msghub.i18n.core.admin.ui.messages.filter.sort.desc.action'),
+									}),
+								])
+							: null,
+						h('div', { class: 'msghub-popover-footer' }, [
+							h('div', { class: 'msghub-popover-selected msghub-muted', text: selectionLabel() }),
+							h('button', {
+								type: 'button',
+								onclick: applyAndReload,
+								text: t('msghub.i18n.core.admin.ui.messages.filter.apply.action'),
 							}),
 						]),
-					sortableField
-						? h('div', { class: 'msghub-popover-sortrow' }, [
-								h('button', {
-									class: 'msghub-popover-sort',
-									type: 'button',
-									'data-sort': 'asc',
-									onclick: () => setSort('asc'),
-									text: t('Sort ascending', 'Aufsteigend sortieren'),
-								}),
-								h('button', {
-									class: 'msghub-popover-sort',
-									type: 'button',
-									'data-sort': 'desc',
-									onclick: () => setSort('desc'),
-									text: t('Sort descending', 'Absteigend sortieren'),
-								}),
-							])
-						: null,
-					h('div', { class: 'msghub-popover-footer' }, [
-						h('div', { class: 'msghub-popover-selected msghub-muted', text: selectionLabel() }),
-						h('button', { type: 'button', onclick: applyAndReload, text: t('Apply', 'Übernehmen') }),
 					]),
-				]),
-			);
+				);
 			el.appendChild(h('div', { class: 'msghub-popover-body' }));
 
 			mount.appendChild(el);
@@ -1047,9 +1087,24 @@
 						},
 						[
 							...(checkboxCell ? [checkboxCell] : []),
-							h('td', { text: kind }),
-							h('td', { text: getLevelLabel(level) }),
-							h('td', { text: lifecycle }),
+							h('td', {
+								text: api.i18n.tOr(
+									`msghub.i18n.core.admin.common.MsgConstants.kind.${kind.toLowerCase()}.label`,
+									kind,
+								),
+							}),
+							h('td', {
+								text: api.i18n.tOr(
+									`msghub.i18n.core.admin.common.MsgConstants.level.${getLevelLabel(level).toLowerCase()}.label`,
+									getLevelLabel(level),
+								),
+							}),
+							h('td', {
+								text: api.i18n.tOr(
+									`msghub.i18n.core.admin.common.MsgConstants.lifecycle.state.${lifecycle.toLowerCase()}.label`,
+									lifecycle,
+								),
+							}),
 							h('td', { text: icon }),
 							h('td', { text: title }),
 							h('td', { text: text }),
@@ -1087,7 +1142,10 @@
 			const sizeOptions = [10, 25, 50, 100, 250];
 			const prevBtn = h('button', { type: 'button', text: 'Prev' });
 			const nextBtn = h('button', { type: 'button', text: 'Next' });
-			const pageInfoEl = h('div', { class: 'msghub-muted', text: 'Page 1 / 1' });
+				const pageInfoEl = h(
+					'div',
+					{ class: 'msghub-muted', text: t('msghub.i18n.core.admin.ui.pagination.pageOf.text', 1, 1) },
+				);
 			const pageSizeSelect = h(
 				'select',
 				{
@@ -1112,11 +1170,15 @@
 			]);
 
 			const head = h('div', { class: 'msghub-messages-head' }, [actions, paging]);
-			const progress = h('div', { class: 'msghub-progress is-hidden' }, h('div', { class: 'msghub-muted', text: 'Loading…' }));
+				const progress = h(
+					'div',
+					{ class: 'msghub-progress is-hidden' },
+					h('div', { class: 'msghub-muted', text: t('msghub.i18n.core.admin.ui.loading.text') }),
+				);
 			const errorEl = h('div', { class: 'msghub-error' });
 			const metaEl = h('div', { class: 'msghub-muted msghub-messages-meta' });
-			const emptyEl = h('div', { class: 'msghub-muted', text: t('No messages.', 'Keine Messages.') });
-			emptyEl.style.display = 'none';
+				const emptyEl = h('div', { class: 'msghub-muted', text: t('msghub.i18n.core.admin.ui.messages.empty.text') });
+				emptyEl.style.display = 'none';
 
 			const tableWrap = h('div', { class: 'msghub-table-wrap' });
 			const tableEl = h('table', { class: 'msghub-table' });
@@ -1169,42 +1231,84 @@
 				return btn;
 			};
 
-			const renderThead = () => {
-				clearHeaderBtns();
-				updateTableColCount();
-				theadEl.replaceChildren(
-					h('tr', null, [
-						...(expertMode ? [h('th', { class: 'msghub-th msghub-messages-select' }, [])] : []),
-						h('th', { class: 'msghub-th' }, [
-							makeFilterBtn('kind', 'Kind', 'Kind', () => listEnumValues(getConstantsEnum('kind'))),
+				const renderThead = () => {
+					clearHeaderBtns();
+					updateTableColCount();
+					headerSelectAllInput = null;
+					const labelKind = t('msghub.i18n.core.admin.common.MsgConstants.field.kind.label');
+					const labelLevel = t('msghub.i18n.core.admin.common.MsgConstants.field.level.label');
+					const labelLifecycle = t('msghub.i18n.core.admin.common.MsgConstants.field.lifecycle.state.label');
+					const labelTitle = t('msghub.i18n.core.admin.common.MsgConstants.field.title.label');
+					const labelText = t('msghub.i18n.core.admin.common.MsgConstants.field.text.label');
+					const labelLocation = t('msghub.i18n.core.admin.common.MsgConstants.field.details.location.label');
+					const labelCreated = t('msghub.i18n.core.admin.common.MsgConstants.field.timing.createdAt.label');
+					const labelUpdated = t('msghub.i18n.core.admin.common.MsgConstants.field.timing.updatedAt.label');
+					const labelOrigin = t('msghub.i18n.core.admin.common.MsgConstants.field.origin.system.label');
+					const labelProgress = t('msghub.i18n.core.admin.common.MsgConstants.field.progress.percentage.label');
+
+					const makeSelectAllTh = () => {
+						if (!expertMode) {
+							return h('th', { class: 'msghub-th msghub-messages-select' }, []);
+						}
+						const input = h('input', {
+							type: 'checkbox',
+							checked: null,
+							onchange: e => {
+								e?.preventDefault?.();
+								const refs = Array.from(tbodyEl.querySelectorAll('tr[data-ref]'))
+									.map(tr => String(tr.getAttribute('data-ref') || '').trim())
+									.filter(Boolean);
+								const allSelected = refs.length > 0 && refs.every(r => selectedRefs.has(r));
+								if (allSelected) {
+									for (const r of refs) {
+										selectedRefs.delete(r);
+									}
+								} else {
+									for (const r of refs) {
+										selectedRefs.add(r);
+									}
+								}
+								syncSelectionUI();
+								updateDeleteButton();
+							},
+						});
+						headerSelectAllInput = input;
+						return h('th', { class: 'msghub-th msghub-messages-select' }, [h('label', null, [input])]);
+					};
+
+					theadEl.replaceChildren(
+						h('tr', null, [
+							...(expertMode ? [makeSelectAllTh()] : []),
+							h('th', { class: 'msghub-th' }, [
+								makeFilterBtn('kind', labelKind, labelKind, () => listEnumValues(getConstantsEnum('kind'))),
+							]),
+							h('th', { class: 'msghub-th' }, [
+								makeFilterBtn('level', labelLevel, labelLevel, () => listEnumKeys(getConstantsEnum('level'))),
+							]),
+							h('th', { class: 'msghub-th' }, [
+								makeFilterBtn('lifecycle.state', labelLifecycle, labelLifecycle, () =>
+									listEnumValues(getConstantsEnum('lifecycle.state')),
+								),
+							]),
+							h('th', { class: 'msghub-th' }, []),
+							h('th', { class: 'msghub-th' }, [
+								makeSortBtn('title', labelTitle, labelTitle),
+							]),
+							h('th', { class: 'msghub-th' }, [h('span', { text: labelText })]),
+							h('th', { class: 'msghub-th' }, [
+								makeFilterBtn('details.location', labelLocation, labelLocation, () =>
+									listDistinctFromItems('details.location'),
+								),
+							]),
+							h('th', { class: 'msghub-th' }, [makeSortBtn('timing.createdAt', labelCreated, labelCreated)]),
+							h('th', { class: 'msghub-th' }, [makeSortBtn('timing.updatedAt', labelUpdated, labelUpdated)]),
+							h('th', { class: 'msghub-th' }, [
+								makeFilterBtn('origin.system', labelOrigin, labelOrigin, () => listDistinctFromItems('origin.system')),
+							]),
+							h('th', { class: 'msghub-th' }, [makeSortBtn('progress.percentage', labelProgress, labelProgress)]),
 						]),
-						h('th', { class: 'msghub-th' }, [
-							makeFilterBtn('level', 'Level', 'Level', () => listEnumKeys(getConstantsEnum('level'))),
-						]),
-						h('th', { class: 'msghub-th' }, [
-							makeFilterBtn('lifecycle.state', 'Lifecycle state', 'Lifecycle', () =>
-								listEnumValues(getConstantsEnum('lifecycle.state')),
-							),
-						]),
-						h('th', { class: 'msghub-th' }, []),
-						h('th', { class: 'msghub-th' }, [
-							makeSortBtn('title', 'Title', 'Title'),
-						]),
-						h('th', { class: 'msghub-th' }, [h('span', { text: 'Text' })]),
-						h('th', { class: 'msghub-th' }, [
-							makeFilterBtn('details.location', 'Location', 'Location', () =>
-								listDistinctFromItems('details.location'),
-							),
-						]),
-						h('th', { class: 'msghub-th' }, [makeSortBtn('timing.createdAt', 'Created', 'Created')]),
-						h('th', { class: 'msghub-th' }, [makeSortBtn('timing.updatedAt', 'Updated', 'Updated')]),
-						h('th', { class: 'msghub-th' }, [
-							makeFilterBtn('origin.system', 'Origin system', 'Origin', () => listDistinctFromItems('origin.system')),
-						]),
-						h('th', { class: 'msghub-th' }, [makeSortBtn('progress.percentage', 'Progress', 'Progress')]),
-					]),
-				);
-			};
+					);
+				};
 
 			renderThead();
 
@@ -1251,38 +1355,44 @@
 				progress.classList.toggle('is-hidden', !isVisible);
 			};
 
-			const updateHeaderButtons = () => {
-				const locationCount = getFilterSet('details.location')?.size || 0;
-				const kindCount = getFilterSet('kind')?.size || 0;
-				const lifecycleCount = getFilterSet('lifecycle.state')?.size || 0;
-				const levelCount = getFilterSet('level')?.size || 0;
-				const originCount = getFilterSet('origin.system')?.size || 0;
+				const updateHeaderButtons = () => {
+					const labelLocation = t('msghub.i18n.core.admin.common.MsgConstants.field.details.location.label');
+					const labelKind = t('msghub.i18n.core.admin.common.MsgConstants.field.kind.label');
+					const labelLifecycle = t('msghub.i18n.core.admin.common.MsgConstants.field.lifecycle.state.label');
+					const labelLevel = t('msghub.i18n.core.admin.common.MsgConstants.field.level.label');
+					const labelOrigin = t('msghub.i18n.core.admin.common.MsgConstants.field.origin.system.label');
 
-				const btnLocation = headerBtns['filter:details.location'];
-				if (btnLocation) {
-					btnLocation.classList.toggle('is-active', locationCount > 0);
-					btnLocation.textContent = locationCount > 0 ? `Location (${locationCount})` : 'Location';
-				}
-				const btnKind = headerBtns['filter:kind'];
-				if (btnKind) {
-					btnKind.classList.toggle('is-active', kindCount > 0);
-					btnKind.textContent = kindCount > 0 ? `Kind (${kindCount})` : 'Kind';
-				}
-				const btnLifecycle = headerBtns['filter:lifecycle.state'];
-				if (btnLifecycle) {
-					btnLifecycle.classList.toggle('is-active', lifecycleCount > 0);
-					btnLifecycle.textContent = lifecycleCount > 0 ? `Lifecycle (${lifecycleCount})` : 'Lifecycle';
-				}
-				const btnLevel = headerBtns['filter:level'];
-				if (btnLevel) {
-					btnLevel.classList.toggle('is-active', levelCount > 0);
-					btnLevel.textContent = levelCount > 0 ? `Level (${levelCount})` : 'Level';
-				}
-				const btnOrigin = headerBtns['filter:origin.system'];
-				if (btnOrigin) {
-					btnOrigin.classList.toggle('is-active', originCount > 0);
-					btnOrigin.textContent = originCount > 0 ? `Origin (${originCount})` : 'Origin';
-				}
+					const locationCount = getFilterSet('details.location')?.size || 0;
+					const kindCount = getFilterSet('kind')?.size || 0;
+					const lifecycleCount = getFilterSet('lifecycle.state')?.size || 0;
+					const levelCount = getFilterSet('level')?.size || 0;
+					const originCount = getFilterSet('origin.system')?.size || 0;
+
+					const btnLocation = headerBtns['filter:details.location'];
+					if (btnLocation) {
+						btnLocation.classList.toggle('is-active', locationCount > 0);
+						btnLocation.textContent = locationCount > 0 ? `${labelLocation} (${locationCount})` : labelLocation;
+					}
+					const btnKind = headerBtns['filter:kind'];
+					if (btnKind) {
+						btnKind.classList.toggle('is-active', kindCount > 0);
+						btnKind.textContent = kindCount > 0 ? `${labelKind} (${kindCount})` : labelKind;
+					}
+					const btnLifecycle = headerBtns['filter:lifecycle.state'];
+					if (btnLifecycle) {
+						btnLifecycle.classList.toggle('is-active', lifecycleCount > 0);
+						btnLifecycle.textContent = lifecycleCount > 0 ? `${labelLifecycle} (${lifecycleCount})` : labelLifecycle;
+					}
+					const btnLevel = headerBtns['filter:level'];
+					if (btnLevel) {
+						btnLevel.classList.toggle('is-active', levelCount > 0);
+						btnLevel.textContent = levelCount > 0 ? `${labelLevel} (${levelCount})` : labelLevel;
+					}
+					const btnOrigin = headerBtns['filter:origin.system'];
+					if (btnOrigin) {
+						btnOrigin.classList.toggle('is-active', originCount > 0);
+						btnOrigin.textContent = originCount > 0 ? `${labelOrigin} (${originCount})` : labelOrigin;
+					}
 
 				for (const field of ['title', 'timing.createdAt', 'timing.updatedAt', 'progress.percentage']) {
 					const btn = headerBtns[`sort:${field}`];
@@ -1292,14 +1402,14 @@
 				}
 			};
 
-			const updatePaging = () => {
-				const p = pages || 1;
-				const idx = Math.min(Math.max(1, pageIndex), p);
-				pageInfoEl.textContent = `Page ${idx} / ${p}`;
-				prevBtn.disabled = idx <= 1;
-				nextBtn.disabled = idx >= p;
-				pageSizeSelect.value = String(pageSize);
-			};
+				const updatePaging = () => {
+					const p = pages || 1;
+					const idx = Math.min(Math.max(1, pageIndex), p);
+					pageInfoEl.textContent = t('msghub.i18n.core.admin.ui.pagination.pageOf.text', idx, p);
+					prevBtn.disabled = idx <= 1;
+					nextBtn.disabled = idx >= p;
+					pageSizeSelect.value = String(pageSize);
+				};
 
 			const updateButtons = () => {
 				refreshBtn.disabled = loading && !silentLoading;
@@ -1312,11 +1422,15 @@
 					const fragment = document.createDocumentFragment();
 				if (showLoadingRow) {
 					fragment.appendChild(
-						h('tr', null, [
-							h('td', { class: 'msghub-muted', text: t('Loading…', 'Lade…'), colspan: String(tableColCount) }),
-						]),
-					);
-				} else {
+							h('tr', null, [
+								h('td', {
+									class: 'msghub-muted',
+									text: t('msghub.i18n.core.admin.ui.loading.text'),
+									colspan: String(tableColCount),
+								}),
+							]),
+						);
+					} else {
 					for (const r of rows || []) {
 						fragment.appendChild(r);
 					}
@@ -1324,12 +1438,28 @@
 					tbodyEl.replaceChildren(fragment);
 				};
 
-				syncSelectionUI = () => {
-					try {
-						const rows = Array.from(tbodyEl.querySelectorAll('tr'));
-						for (const tr of rows) {
-							const rowRef = String(tr.getAttribute('data-ref') || '');
-							const on = !!rowRef && selectedRefs.has(rowRef);
+					function updateSelectAllCheckboxState() {
+						if (!expertMode || !headerSelectAllInput) {
+							return;
+						}
+						try {
+							const refs = Array.from(tbodyEl.querySelectorAll('tr[data-ref]'))
+								.map(tr => String(tr.getAttribute('data-ref') || '').trim())
+								.filter(Boolean);
+							const selectedCount = refs.reduce((sum, r) => sum + (selectedRefs.has(r) ? 1 : 0), 0);
+							headerSelectAllInput.indeterminate = selectedCount > 0 && selectedCount < refs.length;
+							headerSelectAllInput.checked = refs.length > 0 && selectedCount === refs.length;
+						} catch {
+							// ignore
+						}
+					}
+
+					syncSelectionUI = () => {
+						try {
+							const rows = Array.from(tbodyEl.querySelectorAll('tr'));
+							for (const tr of rows) {
+								const rowRef = String(tr.getAttribute('data-ref') || '');
+								const on = !!rowRef && selectedRefs.has(rowRef);
 							tr.classList.toggle('is-selected', on);
 							try {
 								const input = tr.querySelector('input[type="checkbox"]');
@@ -1338,12 +1468,13 @@
 								}
 							} catch {
 								// ignore
+								}
 							}
+						} catch {
+							// ignore
 						}
-					} catch {
-						// ignore
-					}
-				};
+						updateSelectAllCheckboxState();
+					};
 
 				function render({ forceRows = false } = {}) {
 					updateButtons();
@@ -1459,18 +1590,15 @@
 				if (refs.length === 0) {
 					return;
 				}
-				const text = t(
-					`Are you sure you want to delete ${refs.length} messages?`,
-					`Sicher, dass du ${refs.length} Nachrichten löschen möchtest?`,
-				);
+					const text = t('msghub.i18n.core.admin.ui.messages.delete.confirm.text', refs.length);
 					const ok = ui?.dialog?.confirm
 						? await ui.dialog.confirm({
-								title: t('Delete messages?', 'Nachrichten löschen?'),
+								title: t('msghub.i18n.core.admin.ui.messages.delete.confirm.title'),
 								text,
 								danger: true,
-								confirmText: 'Delete',
-								cancelText: 'Cancel',
-							})
+									confirmText: t('msghub.i18n.core.admin.ui.action.delete'),
+									cancelText: t('msghub.i18n.core.admin.ui.action.cancel'),
+								})
 					: win.confirm(text);
 				if (!ok) {
 					return;
