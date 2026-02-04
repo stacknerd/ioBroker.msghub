@@ -48,6 +48,10 @@
 	--msghub-syntax-punct: rgb(0 0 0);
 	--msghub-syntax-comment: rgb(0 128 0);
 
+		/* Icons (CSS mask; color via currentColor). */
+		--msghub-icon-open-json: url("data:image/svg+xml,%3Csvg%20width%3D%2216px%22%20height%3D%2216px%22%20viewBox%3D%220%200%200.32%200.32%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22%23000000%22%3E%3Cpath%20fill-rule%3D%22evenodd%22%20clip-rule%3D%22evenodd%22%20d%3D%22M0.12%200.06V0.04h-0.002q-0.009%200%20-0.018%200.004a0.046%200.046%200%200%200%20-0.016%200.011%200.044%200.044%200%200%200%20-0.01%200.015v0a0.07%200.07%200%200%200%20-0.004%200.017v0a0.12%200.12%200%200%200%200%200.017q0%200.009%200%200.017%200%200.006%20-0.002%200.011v0a0.03%200.03%200%200%201%20-0.015%200.016%200.028%200.028%200%200%201%20-0.011%200.002H0.04v0.02h0.002q0.006%200%200.011%200.002l0%200q0.005%200.002%200.009%200.006l0%200q0.004%200.004%200.006%200.009l0%200q0.002%200.005%200.002%200.011%200%200.009%200%200.017%200%200.009%200%200.017v0q0.001%200.009%200.004%200.016v0q0.003%200.008%200.01%200.015%200.007%200.007%200.016%200.011t0.018%200.004H0.12v-0.02h-0.002q-0.006%200%20-0.011%20-0.002a0.032%200.032%200%200%201%20-0.009%20-0.006%200.034%200.034%200%200%201%20-0.006%20-0.009q-0.002%20-0.005%20-0.002%20-0.011%200%20-0.007%200%20-0.013%200%20-0.007%200%20-0.013a0.1%200.1%200%200%200%20-0.001%20-0.013%200.054%200.054%200%200%200%20-0.003%20-0.012A0.046%200.046%200%200%200%200.07%200.16a0.046%200.046%200%200%200%200.015%20-0.019q0.002%20-0.006%200.003%20-0.012%200.001%20-0.006%200.001%20-0.013%200%20-0.007%200%20-0.013t0%20-0.014a0.029%200.029%200%200%201%200.018%20-0.027%200.026%200.026%200%200%201%200.011%20-0.002zm0.08%200.201V0.28h0.002q0.009%200%200.018%20-0.004t0.016%20-0.011%200.01%20-0.015v0q0.003%20-0.008%200.004%20-0.017v0q0.001%20-0.008%200%20-0.017%200%20-0.009%200%20-0.017%200%20-0.006%200.002%20-0.011v0a0.03%200.03%200%200%201%200.015%20-0.016%200.028%200.028%200%200%201%200.011%20-0.002H0.28v-0.02h-0.002q-0.006%200%20-0.011%20-0.002l0%200a0.028%200.028%200%200%201%20-0.009%20-0.006l0%200a0.028%200.028%200%200%201%20-0.006%20-0.009v0a0.028%200.028%200%200%201%20-0.002%20-0.011q0%20-0.009%200%20-0.017a0.12%200.12%200%200%200%200%20-0.017v0a0.07%200.07%200%200%200%20-0.004%20-0.016v0a0.044%200.044%200%200%200%20-0.01%20-0.015%200.046%200.046%200%200%200%20-0.016%20-0.011%200.046%200.046%200%200%200%20-0.018%20-0.004H0.2v0.02h0.002q0.006%200%200.011%200.002%200.005%200.002%200.009%200.006%200.004%200.004%200.006%200.009%200.002%200.005%200.002%200.011%200%200.007%200%200.013%200%200.007%200%200.013%200%200.007%200.001%200.013%200.001%200.006%200.003%200.012a0.046%200.046%200%200%200%200.015%200.019%200.046%200.046%200%200%200%20-0.015%200.019%200.054%200.054%200%200%200%20-0.003%200.012q-0.001%200.006%20-0.001%200.013a0.18%200.18%200%200%200%200%200.013q0%200.007%200%200.014a0.029%200.029%200%200%201%20-0.018%200.027%200.026%200.026%200%200%201%20-0.011%200.002z%22%2F%3E%3C%2Fsvg%3E");
+		--msghub-icon-open-archive: url("data:image/svg+xml,%3Csvg%20width%3D%2216px%22%20height%3D%2216px%22%20viewBox%3D%220%200%2016%2016%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22currentColor%22%20class%3D%22bi%20bi-archive%22%3E%3Cpath%20d%3D%22M0%202a1%201%200%200%201%201-1h14a1%201%200%200%201%201%201v2a1%201%200%200%201-1%201v7.5a2.5%202.5%200%200%201-2.5%202.5h-9A2.5%202.5%200%200%201%201%2012.5V5a1%201%200%200%201-1-1V2zm2%203v7.5A1.5%201.5%200%200%200%203.5%2014h9a1.5%201.5%200%200%200%201.5-1.5V5H2zm13-3H1v2h14V2zM5%207.5a.5.5%200%200%201%20.5-.5h5a.5.5%200%200%201%200%201h-5a.5.5%200%200%201-.5-.5z%22%2F%3E%3C%2Fsvg%3E");
+
 	/* Typography (central presets; avoid ad-hoc font-weight/size usage) */
 	--msghub-font-sans:
 		system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, 'Apple Color Emoji', 'Segoe UI Emoji';
@@ -72,6 +76,8 @@
 	--msghub-font-body: normal var(--msghub-fw-light) var(--msghub-fs-md) / var(--msghub-lh-normal)
 		var(--msghub-font-sans);
 	--msghub-font-body-bold: normal var(--msghub-fw-med) var(--msghub-fs-md) / var(--msghub-lh-normal)
+		var(--msghub-font-sans);
+	--msghub-font-body-meta: italic var(--msghub-fw-light) var(--msghub-fs-md) / var(--msghub-lh-normal)
 		var(--msghub-font-sans);
 	--msghub-font-tab: normal var(--msghub-fw-med) var(--msghub-fs-lg) / var(--msghub-lh-tight) var(--msghub-font-sans);
 	--msghub-font-badge: normal var(--msghub-fw-bold) var(--msghub-fs-sm) / var(--msghub-lh-solid)
@@ -322,18 +328,51 @@ html[data-msghub-layout='tabs'] .msghub-root #msghub-connection {
 		padding: var(--msghub-space-1) 0;
 	}
 
-	.msghub-root .msghub-contextmenu-item {
+	.msghub-root .msghub-contextmenu-item,
+	.msghub-root .msghub-contextmenu-heading,
+	.msghub-root .msghub-contextmenu-footer {
 		width: 100%;
-		border: 0;
 		background: transparent;
 		color: inherit;
 		font: var(--msghub-font-body);
 		text-align: left;
 		padding: var(--msghub-space-2) var(--msghub-space-3);
+	}
+
+	.msghub-root .msghub-contextmenu-separator {
+		height: 1px;
+		background: var(--msghub-border-light);
+		margin: var(--msghub-space-1) 0;
+	}
+
+	.msghub-root .msghub-contextmenu-heading {
+		display: flex;
+		align-items: center;
+		gap: var(--msghub-space-2);
+		border: 0;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.msghub-root .msghub-contextmenu-heading-text {
+		flex: 1 1 auto;
+		min-width: 0;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.msghub-root .msghub-contextmenu-item {
+		border: 0;
 		cursor: pointer;
 	}
 
 	.msghub-root .msghub-contextmenu-item:hover {
+		background: var(--msghub-surface-hover);
+	}
+
+	.msghub-root .msghub-contextmenu-item.is-submenu-open {
 		background: var(--msghub-surface-hover);
 	}
 
@@ -343,8 +382,21 @@ html[data-msghub-layout='tabs'] .msghub-root #msghub-connection {
 	}
 
 	.msghub-root .msghub-contextmenu-item:disabled {
+		cursor: default;
+	}
+
+	.msghub-root .msghub-contextmenu-item:disabled,
+	.msghub-root .msghub-contextmenu-heading,
+	.msghub-root .msghub-contextmenu-footer {
 		color: var(--msghub-muted);
 		cursor: default;
+	}
+
+	.msghub-root .msghub-contextmenu-heading,
+	.msghub-root .msghub-contextmenu-footer {
+		font: var(--msghub-font-body-meta);
+		padding-top: var(--msghub-space-1);
+		padding-bottom: var(--msghub-space-1);
 	}
 
 	.msghub-root .msghub-contextmenu-item.is-primary {
@@ -357,8 +409,31 @@ html[data-msghub-layout='tabs'] .msghub-root #msghub-connection {
 
 	.msghub-root .msghub-contextmenu-row {
 		display: flex;
-		align-items: baseline;
+		align-items: center;
 		gap: var(--msghub-space-2);
+	}
+
+	.msghub-root .msghub-contextmenu-icon-slot {
+		flex: 0 0 auto;
+		width: 18px;
+		height: 18px;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.msghub-root .msghub-contextmenu-icon {
+		width: 16px;
+		height: 16px;
+		background-color: var(--msghub-muted);
+		-webkit-mask-image: var(--msghub-contextmenu-icon);
+		-webkit-mask-repeat: no-repeat;
+		-webkit-mask-position: center;
+		-webkit-mask-size: 16px 16px;
+		mask-image: var(--msghub-contextmenu-icon);
+		mask-repeat: no-repeat;
+		mask-position: center;
+		mask-size: 16px 16px;
 	}
 
 	.msghub-root .msghub-contextmenu-label {
@@ -383,10 +458,20 @@ html[data-msghub-layout='tabs'] .msghub-root #msghub-connection {
 	}
 
 	.msghub-root .msghub-contextmenu-footer {
+		display: flex;
+		align-items: center;
+		gap: var(--msghub-space-2);
+		border: 0;
 		padding: var(--msghub-space-2) var(--msghub-space-3);
-		border-top: 1px solid var(--msghub-border-light);
-		color: var(--msghub-muted);
-		font-size: var(--msghub-fs-sm);
+		border-top: 1px solid var(--msghub-border);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.msghub-root .msghub-contextmenu-footer-text {
+		flex: 1 1 auto;
+		min-width: 0;
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;

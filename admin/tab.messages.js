@@ -1142,14 +1142,16 @@
 											{
 												id: 'openJson',
 												label: t('msghub.i18n.core.admin.ui.messages.contextMenu.openJson.action'),
-												primary: true,
+												icon: 'open-json',
 												onSelect: () => openMessageJson(msg),
 											},
 											{
 												id: 'openArchive',
 												label: t('msghub.i18n.core.admin.ui.messages.contextMenu.openArchive.action'),
 												disabled: openArchiveDisabled,
+												icon: 'open-archive',
 											},
+											{ type: 'separator' },
 											{
 												id: 'copy',
 												label: t('msghub.i18n.core.admin.ui.messages.contextMenu.copy.submenu.label'),
