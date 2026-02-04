@@ -71,6 +71,8 @@
 		var(--msghub-font-sans);
 	--msghub-font-body: normal var(--msghub-fw-light) var(--msghub-fs-md) / var(--msghub-lh-normal)
 		var(--msghub-font-sans);
+	--msghub-font-body-bold: normal var(--msghub-fw-med) var(--msghub-fs-md) / var(--msghub-lh-normal)
+		var(--msghub-font-sans);
 	--msghub-font-tab: normal var(--msghub-fw-med) var(--msghub-fs-lg) / var(--msghub-lh-tight) var(--msghub-font-sans);
 	--msghub-font-badge: normal var(--msghub-fw-bold) var(--msghub-fs-sm) / var(--msghub-lh-solid)
 		var(--msghub-font-sans);
@@ -79,6 +81,7 @@
 	--msghub-surface-hover: rgb(0 0 0 / 0.04);
 	--msghub-surface-selected: rgb(0 0 0 / 0.07);
 	--msghub-shadow-md: rgb(0 0 0 / 0.16);
+	--msghub-shadow-elevated: 0 10px 28px var(--msghub-shadow-md);
 
 	--msghub-radius: 4px;
 
@@ -131,6 +134,7 @@ html[data-msghub-theme='dark'] .msghub-root {
 	--msghub-surface-hover: rgb(255 255 255 / 0.1);
 	--msghub-surface-selected: rgb(255 255 255 / 0.16);
 	--msghub-shadow-md: rgb(0 0 0 / 0.4);
+	--msghub-shadow-elevated: 0 10px 28px var(--msghub-shadow-md);
 }
 
 html[data-msghub-theme='dark'] {
@@ -278,7 +282,7 @@ html[data-msghub-layout='tabs'] .msghub-root #msghub-connection {
 	pointer-events: none;
 }
 
-.msghub-root .msghub-toast {
+	.msghub-root .msghub-toast {
 	pointer-events: auto;
 	max-width: min(520px, calc(100vw - 2 * var(--msghub-space-3)));
 	background: var(--msghub-bg);
@@ -287,13 +291,111 @@ html[data-msghub-layout='tabs'] .msghub-root #msghub-connection {
 	border-radius: var(--msghub-radius);
 	box-shadow: 0 6px 18px var(--msghub-shadow-md);
 	padding: var(--msghub-space-2) var(--msghub-space-3);
-	font: var(--msghub-font-body);
-}
+		font: var(--msghub-font-body);
+	}
 
-.msghub-root .msghub-overlay-backdrop,
-.msghub-root .msghub-dialog-backdrop {
-	position: fixed;
-	inset: 0;
+	/* Context menu (core primitive; no visible backdrop) */
+	.msghub-root .msghub-contextmenu-host {
+		position: fixed;
+		inset: 0;
+		z-index: 1075; /* above overlay (1050), below dialog (1100) */
+		pointer-events: none;
+	}
+
+	.msghub-root .msghub-contextmenu {
+		position: fixed;
+		pointer-events: auto;
+		min-width: 220px;
+		max-width: min(380px, calc(100vw - 2 * var(--msghub-space-3)));
+		max-height: min(60vh, calc(100vh - 2 * var(--msghub-space-3)));
+		overflow: auto;
+		background: var(--msghub-bg);
+		color: var(--msghub-text);
+		border: 1px solid var(--msghub-border);
+		border-radius: var(--msghub-radius);
+		box-shadow: var(--msghub-shadow-elevated);
+	}
+
+	.msghub-root .msghub-contextmenu-list {
+		list-style: none;
+		margin: 0;
+		padding: var(--msghub-space-1) 0;
+	}
+
+	.msghub-root .msghub-contextmenu-item {
+		width: 100%;
+		border: 0;
+		background: transparent;
+		color: inherit;
+		font: var(--msghub-font-body);
+		text-align: left;
+		padding: var(--msghub-space-2) var(--msghub-space-3);
+		cursor: pointer;
+	}
+
+	.msghub-root .msghub-contextmenu-item:hover {
+		background: var(--msghub-surface-hover);
+	}
+
+	.msghub-root .msghub-contextmenu-item:focus-visible {
+		outline: 2px solid var(--msghub-accent);
+		outline-offset: -2px;
+	}
+
+	.msghub-root .msghub-contextmenu-item:disabled {
+		color: var(--msghub-muted);
+		cursor: default;
+	}
+
+	.msghub-root .msghub-contextmenu-item.is-primary {
+		font: var(--msghub-font-body-bold);
+	}
+
+	.msghub-root .msghub-contextmenu-item.is-danger {
+		color: var(--msghub-danger);
+	}
+
+	.msghub-root .msghub-contextmenu-row {
+		display: flex;
+		align-items: baseline;
+		gap: var(--msghub-space-2);
+	}
+
+	.msghub-root .msghub-contextmenu-label {
+		flex: 1 1 auto;
+		min-width: 0;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.msghub-root .msghub-contextmenu-meta {
+		flex: 0 0 auto;
+		display: inline-flex;
+		align-items: baseline;
+		gap: var(--msghub-space-2);
+		color: var(--msghub-muted);
+	}
+
+	.msghub-root .msghub-contextmenu-submenu {
+		font: var(--msghub-font-tab);
+		line-height: var(--msghub-lh-solid);
+	}
+
+	.msghub-root .msghub-contextmenu-footer {
+		padding: var(--msghub-space-2) var(--msghub-space-3);
+		border-top: 1px solid var(--msghub-border-light);
+		color: var(--msghub-muted);
+		font-size: var(--msghub-fs-sm);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.msghub-root .msghub-overlay-backdrop,
+	.msghub-root .msghub-dialog-backdrop {
+		position: fixed;
+		inset: 0;
 	z-index: 1100;
 	display: flex;
 	align-items: center;

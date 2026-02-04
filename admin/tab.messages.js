@@ -522,19 +522,54 @@
 			return jsonPre;
 		}
 
-		function openMessageJson(msg) {
-			const pre = ensureJsonPre();
-			try {
-				if (typeof pre.__msghubRenderAnnotated === 'function') {
-					pre.__msghubRenderAnnotated(msg, [], 0);
-				} else {
-					pre.textContent = JSON.stringify(msg, null, 2);
+			function openMessageJson(msg) {
+				const pre = ensureJsonPre();
+				try {
+					if (typeof pre.__msghubRenderAnnotated === 'function') {
+						pre.__msghubRenderAnnotated(msg, [], 0);
+					} else {
+						pre.textContent = JSON.stringify(msg, null, 2);
+					}
+				} catch (e) {
+					pre.textContent = String(e?.message || e);
 				}
-			} catch (e) {
-				pre.textContent = String(e?.message || e);
+				ui?.overlayLarge?.open?.({ title: 'Message JSON', bodyEl: pre });
 			}
-			ui?.overlayLarge?.open?.({ title: 'Message JSON', bodyEl: pre });
-		}
+
+			async function copyTextToClipboard(text) {
+				const s = typeof text === 'string' ? text : text == null ? '' : String(text);
+				if (!s) {
+					return;
+				}
+				if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+					await navigator.clipboard.writeText(s);
+					return;
+				}
+
+				// Fallback: execCommand('copy') using a hidden textarea.
+				const ta = document.createElement('textarea');
+				ta.value = s;
+				ta.setAttribute('readonly', 'true');
+				ta.setAttribute('aria-hidden', 'true');
+				ta.style.position = 'fixed';
+				ta.style.left = '-9999px';
+				ta.style.top = '0';
+				document.body.appendChild(ta);
+				try {
+					ta.focus();
+					ta.select();
+					const ok = typeof document.execCommand === 'function' ? document.execCommand('copy') : false;
+					if (!ok) {
+						throw new Error('Copy not supported');
+					}
+				} finally {
+					try {
+						ta.remove();
+					} catch {
+						// ignore
+					}
+				}
+			}
 
 		function getConstantsEnum(path) {
 			const o = constants && typeof constants === 'object' ? pick(constants, path) : null;
@@ -1041,11 +1076,11 @@
 						return true;
 					};
 
-					return h(
-						'tr',
-						{
-							class: isSelected ? 'is-selected' : '',
-							'data-ref': ref || '',
+							return h(
+								'tr',
+								{
+									class: isSelected ? 'is-selected' : '',
+									'data-ref': ref || '',
 							onclick: e => {
 								if (!ref) {
 									return;
@@ -1068,22 +1103,85 @@
 								syncSelectionUI();
 								updateDeleteButton();
 							},
-							oncontextmenu: e => {
-								if (!ref) {
-									return;
-								}
-								suppressRowClickUntil = Date.now() + 500;
-								const didChange = applySelection('contextmenu');
-								if (!didChange) {
-									return;
-								}
+								oncontextmenu: e => {
+									if (!ref) {
+										return;
+									}
+									const target = e?.target;
+									if (target && typeof target.closest === 'function') {
+										if (target.closest('input, button, a, select, textarea, label')) {
+											return;
+										}
+									}
+									suppressRowClickUntil = Date.now() + 500;
+									const didChange = applySelection('contextmenu');
+									if (didChange) {
+										syncSelectionUI();
+										updateDeleteButton();
+									}
 
-								syncSelectionUI();
-								updateDeleteButton();
-							},
-							ondblclick: () => {
-								openMessageJson(msg);
-							},
+									if (typeof e?.preventDefault === 'function') {
+										e.preventDefault();
+									}
+
+									const msgJson = () => {
+										try {
+											return JSON.stringify(msg, null, 2);
+										} catch (_err) {
+											return String(msg);
+										}
+									};
+
+									const openArchiveDisabled = true;
+
+									ui?.contextMenu?.open?.({
+										anchorPoint: { x: e.clientX, y: e.clientY },
+										ariaLabel: 'Message actions',
+										placement: 'bottom-start',
+										items: [
+											{
+												id: 'openJson',
+												label: t('msghub.i18n.core.admin.ui.messages.contextMenu.openJson.action'),
+												primary: true,
+												onSelect: () => openMessageJson(msg),
+											},
+											{
+												id: 'openArchive',
+												label: t('msghub.i18n.core.admin.ui.messages.contextMenu.openArchive.action'),
+												disabled: openArchiveDisabled,
+											},
+											{
+												id: 'copy',
+												label: t('msghub.i18n.core.admin.ui.messages.contextMenu.copy.submenu.label'),
+												items: [
+													{
+														id: 'copyJson',
+														label: t('msghub.i18n.core.admin.ui.messages.contextMenu.copyJson.action'),
+														onSelect: () => copyTextToClipboard(msgJson()),
+													},
+													{
+														id: 'copyRef',
+														label: t('msghub.i18n.core.admin.ui.messages.contextMenu.copyRef.action'),
+														onSelect: () => copyTextToClipboard(ref),
+													},
+													{
+														id: 'copyTitle',
+														label: t('msghub.i18n.core.admin.ui.messages.contextMenu.copyTitle.action'),
+														onSelect: () => copyTextToClipboard(safeStr(pick(msg, 'title'))),
+													},
+													{
+														id: 'copyText',
+														label: t('msghub.i18n.core.admin.ui.messages.contextMenu.copyText.action'),
+														onSelect: () => copyTextToClipboard(safeStr(pick(msg, 'text'))),
+													},
+												],
+											},
+										],
+									});
+								},
+								ondblclick: () => {
+									openMessageJson(msg);
+								},
 						},
 						[
 							...(checkboxCell ? [checkboxCell] : []),
@@ -1411,17 +1509,42 @@
 					pageSizeSelect.value = String(pageSize);
 				};
 
-			const updateButtons = () => {
-				refreshBtn.disabled = loading && !silentLoading;
-				refreshBtn.classList.toggle('msghub-btn-loading', loading && silentLoading);
-				autoBtn.textContent = autoRefresh ? 'Auto: on' : 'Auto: off';
-				updateDeleteButton();
-			};
+				const updateButtons = () => {
+					refreshBtn.disabled = loading && !silentLoading;
+					refreshBtn.classList.toggle('msghub-btn-loading', loading && silentLoading);
+					autoBtn.textContent = autoRefresh ? 'Auto: on' : 'Auto: off';
+					updateDeleteButton();
+				};
 
-				const updateTbody = (rows, { showLoadingRow = false } = {}) => {
-					const fragment = document.createDocumentFragment();
-				if (showLoadingRow) {
-					fragment.appendChild(
+				function pruneSelectionToVisibleRows() {
+					if (!expertMode) {
+						return;
+					}
+					try {
+						const visible = new Set(
+							Array.from(tbodyEl.querySelectorAll('tr[data-ref]'))
+								.map(tr => String(tr.getAttribute('data-ref') || '').trim())
+								.filter(Boolean),
+						);
+						let changed = false;
+						for (const ref of Array.from(selectedRefs)) {
+							if (!visible.has(ref)) {
+								selectedRefs.delete(ref);
+								changed = true;
+							}
+						}
+						if (changed) {
+							updateDeleteButton();
+						}
+					} catch {
+						// ignore
+					}
+				}
+
+					const updateTbody = (rows, { showLoadingRow = false } = {}) => {
+						const fragment = document.createDocumentFragment();
+					if (showLoadingRow) {
+						fragment.appendChild(
 							h('tr', null, [
 								h('td', {
 									class: 'msghub-muted',
@@ -1431,12 +1554,13 @@
 							]),
 						);
 					} else {
-					for (const r of rows || []) {
-						fragment.appendChild(r);
+						for (const r of rows || []) {
+							fragment.appendChild(r);
+						}
 					}
-				}
-					tbodyEl.replaceChildren(fragment);
-				};
+						tbodyEl.replaceChildren(fragment);
+						pruneSelectionToVisibleRows();
+					};
 
 					function updateSelectAllCheckboxState() {
 						if (!expertMode || !headerSelectAllInput) {
