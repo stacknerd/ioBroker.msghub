@@ -195,6 +195,14 @@ function computeContextMenuPosition({
 	return { x, y };
 }
 
+function toContextMenuIconVar(iconName) {
+	const name = typeof iconName === 'string' ? iconName.trim() : '';
+	if (!/^[a-z0-9-]+$/.test(name)) {
+		return '';
+	}
+	return `var(--msghub-icon-${name})`;
+}
+
 	function createAdminApi({ sendTo, socket, adapterInstance, lang, t, pickText, ui }) {
 		const registry = win.MsghubAdminTabRegistry || null;
 		const viewIdRaw = document?.documentElement?.getAttribute?.('data-msghub-view') || '';
@@ -783,6 +791,11 @@ function createUi() {
 		while (contextMenuStack.length > d + 1) {
 			const last = contextMenuStack.pop();
 			try {
+				last?.parentButton?.classList?.remove?.('is-submenu-open');
+			} catch {
+				// ignore
+			}
+			try {
 				last?.menuEl?.remove?.();
 			} catch {
 				// ignore
@@ -816,12 +829,51 @@ function createUi() {
 			if (!item || typeof item !== 'object') {
 				continue;
 			}
+			const type = typeof item.type === 'string' ? item.type : 'item';
+
+			if (type === 'separator') {
+				const li = document.createElement('li');
+				li.setAttribute('role', 'none');
+				const sep = document.createElement('div');
+				sep.className = 'msghub-contextmenu-separator';
+				sep.setAttribute('aria-hidden', 'true');
+				li.appendChild(sep);
+				nodes.push(li);
+				continue;
+			}
+
+			if (type === 'label') {
+				const label = typeof item.label === 'string' ? item.label : '';
+				if (!label) {
+					continue;
+				}
+				const li = document.createElement('li');
+				li.setAttribute('role', 'none');
+
+				const heading = document.createElement('div');
+				heading.className = 'msghub-contextmenu-heading';
+
+				const slot = document.createElement('span');
+				slot.className = 'msghub-contextmenu-icon-slot';
+				heading.appendChild(slot);
+
+				const text = document.createElement('span');
+				text.className = 'msghub-contextmenu-heading-text';
+				text.textContent = label;
+				heading.appendChild(text);
+
+				li.appendChild(heading);
+				nodes.push(li);
+				continue;
+			}
+
 			const label = typeof item.label === 'string' ? item.label : '';
 			const shortcut = typeof item.shortcut === 'string' ? item.shortcut : '';
 			const hasSubmenu = Array.isArray(item.items) && item.items.length > 0;
 			const disabled = !!item.disabled;
 			const danger = item.danger === true;
 			const primary = item.primary === true;
+			const icon = depth === 0 ? toContextMenuIconVar(item.icon) : '';
 
 			const li = document.createElement('li');
 			li.setAttribute('role', 'none');
@@ -846,6 +898,19 @@ function createUi() {
 
 			const row = document.createElement('span');
 			row.className = 'msghub-contextmenu-row';
+
+			{
+				const slot = document.createElement('span');
+				slot.className = 'msghub-contextmenu-icon-slot';
+				if (icon) {
+					const iconEl = document.createElement('span');
+					iconEl.className = 'msghub-contextmenu-icon';
+					iconEl.setAttribute('aria-hidden', 'true');
+					iconEl.style.setProperty('--msghub-contextmenu-icon', icon);
+					slot.appendChild(iconEl);
+				}
+				row.appendChild(slot);
+			}
 
 			const labelEl = document.createElement('span');
 			labelEl.className = 'msghub-contextmenu-label';
@@ -928,9 +993,19 @@ function createUi() {
 			// Branding footer (always present on root, disabled/non-interactive).
 			const footerLi = document.createElement('li');
 			footerLi.setAttribute('role', 'none');
+
 			const footer = document.createElement('div');
 			footer.className = 'msghub-contextmenu-footer';
-			footer.textContent = String(contextMenuBrandingText || '').trim() || 'Message Hub';
+
+			const slot = document.createElement('span');
+			slot.className = 'msghub-contextmenu-icon-slot';
+			footer.appendChild(slot);
+
+			const text = document.createElement('span');
+			text.className = 'msghub-contextmenu-footer-text';
+			text.textContent = String(contextMenuBrandingText || '').trim() || 'Message Hub';
+			footer.appendChild(text);
+
 			footerLi.appendChild(footer);
 			nodes.push(footerLi);
 		}
@@ -1097,6 +1172,20 @@ function createUi() {
 		const childItems = Array.isArray(items) ? items : [];
 
 		closeContextMenuLevel(d - 1);
+
+		// Mark the triggering item as active while its submenu is open.
+		try {
+			for (const entry of contextMenuStack) {
+				entry?.parentButton?.classList?.remove?.('is-submenu-open');
+			}
+		} catch {
+			// ignore
+		}
+		try {
+			parentButton.classList.add('is-submenu-open');
+		} catch {
+			// ignore
+		}
 
 		const menuEl = document.createElement('div');
 		menuEl.className = 'msghub-contextmenu';
