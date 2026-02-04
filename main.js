@@ -7,6 +7,7 @@
 // The adapter-core module gives you access to the core ioBroker functions
 // you need to create an adapter
 const utils = require('@iobroker/adapter-core');
+const ioPackage = require('./io-package.json');
 
 const { MsgFactory } = require(`${__dirname}/src/MsgFactory`);
 const { MsgConstants } = require(`${__dirname}/src/MsgConstants`);
@@ -349,6 +350,11 @@ class Msghub extends utils.Adapter {
 				result = await this._handleCustomSelectOptions(cmd, payload);
 			} else if (typeof cmd === 'string' && cmd.startsWith('admin.')) {
 				result = await this._handleAdminCommand(cmd, payload);
+			} else if (cmd === 'runtime.about') {
+				const adapterVersion = ioPackage?.common?.version ?? '0.0.0';
+				const adapterTitle =
+					ioPackage?.common?.titleLang?.de ?? ioPackage?.common?.titleLang?.en ?? 'Message Hub';
+				result = { ok: true, data: { title: adapterTitle, version: adapterVersion } };
 			} else {
 				result = await this._msgPlugins?.dispatchMessagebox?.(obj);
 				if (result == null) {

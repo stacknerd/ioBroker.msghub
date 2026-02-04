@@ -369,6 +369,132 @@ describe('AdminTab UI', function () {
 		}
 	});
 
+	it('exposes contextMenu API on ctx.api.ui (phase 1)', async function () {
+		const tabJsPath = path.join(adminDir, 'tab.js');
+		const src = await fs.readFile(tabJsPath, 'utf8');
+
+		assert.match(
+			src,
+			/\bcontextMenu\s*:\s*Object\.freeze\s*\(\s*\{\s*open\s*:\s*opts\s*=>/m,
+			'Expected ctx.api.ui.contextMenu to exist in admin/tab.js',
+		);
+
+		assert.match(
+			src,
+			/\breturn\s+Object\.freeze\s*\(\s*\{[\s\S]*?\bcontextMenu\s*,/m,
+			'Expected createUi\\(\\) to return the contextMenu primitive',
+		);
+	});
+
+	it('does not implement contextmenu DOM in panels (use ctx.api.ui.contextMenu)', async function () {
+		const files = await listFilesRecursive(adminDir);
+		const candidates = files.filter(f => {
+			if (f.endsWith('.test.js')) {
+				return false;
+			}
+			const ext = path.extname(f).toLowerCase();
+			return ext === '.js' || ext === '.html' || ext === '.css';
+		});
+
+		const violations = [];
+		for (const file of candidates) {
+			const base = path.basename(file);
+			if (base === 'tab.js' || base === 'tab.css' || base === 'tab.html') {
+				continue;
+			}
+			const relPath = path.relative(repoRoot, file);
+			const text = await fs.readFile(file, 'utf8');
+			const idx = text.indexOf('msghub-contextmenu');
+			if (idx >= 0) {
+				const lineStarts = computeLineStarts(text);
+				const pos = lineColFromIndex(lineStarts, idx);
+				violations.push({
+					file: relPath,
+					line: pos.line,
+					col: pos.col,
+					context: "Forbidden contextmenu DOM token 'msghub-contextmenu' (use ctx.api.ui.contextMenu)",
+				});
+			}
+		}
+
+		if (violations.length) {
+			const msg = violations.map(v => `- ${v.file}:${v.line}:${v.col} ${v.context}`).join('\n');
+			assert.fail(`ContextMenu primitive must be core-only:\n${msg}\nTotal: ${violations.length}`);
+		}
+	});
+
+	it('context menu clamp algorithm is deterministic (pure function)', async function () {
+		const tabJsPath = path.join(adminDir, 'tab.js');
+		const src = await fs.readFile(tabJsPath, 'utf8');
+
+		const idx = src.indexOf('function computeContextMenuPosition');
+		assert.ok(idx >= 0, 'Expected computeContextMenuPosition() to exist in admin/tab.js');
+
+		const end = src.indexOf('\n}\n', idx);
+		assert.ok(end >= 0, 'Expected end of computeContextMenuPosition()');
+
+		const snippet = `${src.slice(idx, end + 3)}\nwindow.computeContextMenuPosition = computeContextMenuPosition;\n`;
+		const sandbox = { window: {} };
+		vm.runInNewContext(snippet, sandbox, { filename: 'admin/tab.js (computeContextMenuPosition snippet)' });
+
+		const fn = sandbox.window.computeContextMenuPosition;
+		assert.equal(typeof fn, 'function', 'Expected computeContextMenuPosition to be a function');
+
+		// Case 1: fits bottom-right.
+		const p1 = fn({
+			anchorX: 100,
+			anchorY: 100,
+			menuWidth: 200,
+			menuHeight: 120,
+			viewportWidth: 800,
+			viewportHeight: 600,
+			mode: 'cursor',
+			viewportPadding: 8,
+			cursorOffset: 2,
+		});
+		assert.equal(p1.x, 102);
+		assert.equal(p1.y, 102);
+
+		// Case 2: near bottom-right, should flip left/up.
+		const p2 = fn({
+			anchorX: 790,
+			anchorY: 590,
+			menuWidth: 240,
+			menuHeight: 140,
+			viewportWidth: 800,
+			viewportHeight: 600,
+			mode: 'cursor',
+			viewportPadding: 8,
+			cursorOffset: 2,
+		});
+		assert.ok(p2.x < 790, 'Expected flip to left');
+		assert.ok(p2.y < 590, 'Expected flip to top');
+		assert.ok(p2.x >= 8 && p2.y >= 8, 'Expected clamped to viewport padding');
+
+		// Case 3: submenu aligns to parent top when there is room, otherwise clamps.
+		const p3 = fn({
+			anchorX: 700,
+			anchorY: 20,
+			menuWidth: 200,
+			menuHeight: 300,
+			viewportWidth: 800,
+			viewportHeight: 200,
+			mode: 'submenu',
+			alignHeight: 24,
+			viewportPadding: 8,
+			cursorOffset: 2,
+		});
+		assert.ok(p3.x <= 700, 'Expected submenu to clamp/flip if needed');
+		assert.ok(p3.y >= 8, 'Expected submenu y to be clamped');
+	});
+
+	it('context menu supports primary menu items (core-only styling hook)', async function () {
+		const tabJsPath = path.join(adminDir, 'tab.js');
+		const src = await fs.readFile(tabJsPath, 'utf8');
+		assert.match(src, /\bitem\.primary\s*===\s*true\b/, 'Expected primary flag check in admin/tab.js contextmenu renderer');
+		assert.match(src, /classList\.add\(\s*['"]is-primary['"]\s*\)/, "Expected class 'is-primary' to be applied");
+	});
+
 	it('does not use admin sendTo outside the API layer', async function () {
 		const files = await listFilesRecursive(adminDir);
 		const candidates = files.filter(f => {

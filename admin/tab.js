@@ -135,6 +135,66 @@ function createAsyncCache(fetchFn, { maxAgeMs = Infinity } = {}) {
 	return Object.freeze({ get, invalidate });
 }
 
+function computeContextMenuPosition({
+	anchorX,
+	anchorY,
+	menuWidth,
+	menuHeight,
+	viewportWidth,
+	viewportHeight,
+	mode,
+	alignHeight,
+	viewportPadding,
+	cursorOffset,
+}) {
+	const VIEWPORT_PADDING = Number.isFinite(Number(viewportPadding)) ? Math.max(0, Math.trunc(Number(viewportPadding))) : 8;
+	const CURSOR_OFFSET = Number.isFinite(Number(cursorOffset)) ? Math.max(0, Math.trunc(Number(cursorOffset))) : 2;
+
+	const vw = Math.max(0, Math.trunc(Number(viewportWidth) || 0));
+	const vh = Math.max(0, Math.trunc(Number(viewportHeight) || 0));
+	const w = Math.max(0, Math.trunc(Number(menuWidth) || 0));
+	const h = Math.max(0, Math.trunc(Number(menuHeight) || 0));
+
+	const ax = Math.max(0, Math.trunc(Number(anchorX) || 0));
+	const ay = Math.max(0, Math.trunc(Number(anchorY) || 0));
+
+	const m = mode === 'submenu' ? 'submenu' : 'cursor';
+	const ah = Math.max(0, Math.trunc(Number(alignHeight) || 0));
+
+	// Initial preference:
+	// - cursor: bottom-right-ish (so the cursor is not "inside" the menu)
+	// - submenu: right-start (aligned with parent top)
+	let x = m === 'submenu' ? ax : ax + CURSOR_OFFSET;
+	let y = m === 'submenu' ? ay : ay + CURSOR_OFFSET;
+
+	// Flip if we would overflow the viewport.
+	if (vw && w && x + w > vw - VIEWPORT_PADDING) {
+		x = ax - w - CURSOR_OFFSET;
+	}
+	if (vh && h && y + h > vh - VIEWPORT_PADDING) {
+		if (m === 'submenu' && ah > 0) {
+			// Align submenu to the parent bottom when flipping up, so it "sticks" to the row.
+			y = ay + ah - h;
+		} else {
+			y = ay - h - CURSOR_OFFSET;
+		}
+	}
+
+	// Clamp to viewport padding.
+	if (vw) {
+		x = Math.max(VIEWPORT_PADDING, Math.min(x, Math.max(VIEWPORT_PADDING, vw - VIEWPORT_PADDING - w)));
+	} else {
+		x = Math.max(VIEWPORT_PADDING, x);
+	}
+	if (vh) {
+		y = Math.max(VIEWPORT_PADDING, Math.min(y, Math.max(VIEWPORT_PADDING, vh - VIEWPORT_PADDING - h)));
+	} else {
+		y = Math.max(VIEWPORT_PADDING, y);
+	}
+
+	return { x, y };
+}
+
 	function createAdminApi({ sendTo, socket, adapterInstance, lang, t, pickText, ui }) {
 		const registry = win.MsghubAdminTabRegistry || null;
 		const viewIdRaw = document?.documentElement?.getAttribute?.('data-msghub-view') || '';
@@ -164,8 +224,109 @@ function createAsyncCache(fetchFn, { maxAgeMs = Infinity } = {}) {
 			pickText: value => pickText(value),
 		});
 
+	const rawContextMenu =
+		ui?.contextMenu ||
+		Object.freeze({
+			open: () => {},
+			close: () => {},
+			isOpen: () => false,
+		});
+
+	const wrapContextMenuItems = items => {
+		const list = Array.isArray(items) ? items : [];
+		return list
+			.filter(Boolean)
+			.map(item => {
+				const it = item && typeof item === 'object' ? item : {};
+				const children = it.items ? wrapContextMenuItems(it.items) : undefined;
+				const onSelectRaw = typeof it.onSelect === 'function' ? it.onSelect : null;
+
+				const onSelect =
+					onSelectRaw &&
+					(() => {
+						try {
+							rawContextMenu.close();
+						} catch {
+							// ignore
+						}
+
+						let waitShown = false;
+						let waitTimer = null;
+
+						try {
+							waitTimer = window.setTimeout(() => {
+								waitShown = true;
+								try {
+									ui?.toast?.({ text: t('msghub.i18n.core.admin.ui.contextMenu.wait.text') });
+								} catch {
+									// ignore
+								}
+							}, 100);
+						} catch {
+							// ignore
+						}
+
+						const clearWaitTimer = () => {
+							if (waitTimer == null) {
+								return;
+							}
+							try {
+								window.clearTimeout(waitTimer);
+							} catch {
+								// ignore
+							}
+							waitTimer = null;
+						};
+
+						return Promise.resolve()
+							.then(() => onSelectRaw())
+							.then(result => {
+								clearWaitTimer();
+								if (waitShown) {
+									try {
+										ui?.toast?.({ text: t('msghub.i18n.core.admin.ui.contextMenu.done.text') });
+									} catch {
+										// ignore
+									}
+								}
+								return result;
+							})
+							.catch(err => {
+								clearWaitTimer();
+								const msg =
+									typeof err?.message === 'string' && err.message.trim()
+										? err.message.trim()
+										: typeof err === 'string' && err.trim()
+											? err.trim()
+											: 'Error';
+								try {
+									ui?.toast?.({ text: t('msghub.i18n.core.admin.ui.contextMenu.failed.text', msg) });
+								} catch {
+									// ignore
+								}
+								throw err;
+							});
+					});
+
+				return Object.freeze({
+					...it,
+					...(children ? { items: children } : {}),
+					...(onSelect ? { onSelect } : {}),
+				});
+			});
+	};
+
 	const uiApi = Object.freeze({
 		toast: opts => ui?.toast?.(opts),
+		contextMenu: Object.freeze({
+			open: opts => {
+				const o = opts && typeof opts === 'object' ? opts : {};
+				const items = wrapContextMenuItems(o.items);
+				return rawContextMenu.open({ ...o, items });
+			},
+			close: () => rawContextMenu.close(),
+			isOpen: () => rawContextMenu.isOpen(),
+		}),
 		overlayLarge: ui?.overlayLarge || Object.freeze({ open: () => {}, close: () => {}, isOpen: () => false }),
 		dialog: ui?.dialog || Object.freeze({ confirm: () => Promise.resolve(false), close: () => {}, isOpen: () => false }),
 		closeAll: () => ui?.closeAll?.(),
@@ -234,6 +395,10 @@ function createAsyncCache(fetchFn, { maxAgeMs = Infinity } = {}) {
 		}),
 	});
 
+	const runtime = Object.freeze({
+		about: () => sendTo('runtime.about', {}),
+	});
+
 	// Stable API surface: Panels should use ctx.api.* and not talk to sendTo/socket directly.
 	return Object.freeze({
 		i18n,
@@ -241,6 +406,7 @@ function createAsyncCache(fetchFn, { maxAgeMs = Infinity } = {}) {
 		log,
 		host,
 		constants,
+		runtime,
 		stats,
 		messages,
 		plugins,
@@ -288,6 +454,11 @@ const socket = createSocket();
 const lang = typeof args.lang === 'string' ? args.lang : 'en';
 const debugTheme = args.debugTheme === true || args.debugTheme === '1' || args.debugTheme === 'true';
 const initialThemeFromQuery = resolveTheme(args);
+const nativeContextMenuInputs =
+	args.nativeContextMenuInputs === true ||
+	args.nativeContextMenuInputs === '1' ||
+	args.nativeContextMenuInputs === 1 ||
+	args.nativeContextMenuInputs === 'true';
 
 let adminDict = Object.freeze({});
 let adminDictPromise = null;
@@ -563,8 +734,400 @@ function createUi() {
 			} catch {
 				// ignore
 			}
-		}, timeoutMs);
+			}, timeoutMs);
+		};
+
+	// Context menu (Phase 2: DOM + minimal CSS; always in DOM, default-hidden)
+	const contextMenuHost =
+		document.getElementById('msghub-contextmenu') ||
+		(() => {
+			const el = document.createElement('div');
+			el.id = 'msghub-contextmenu';
+			el.className = 'msghub-contextmenu-host is-hidden';
+			el.setAttribute('aria-hidden', 'true');
+			(root || document.body).appendChild(el);
+			return el;
+		})();
+
+	const contextMenuEl = document.createElement('div');
+	contextMenuEl.className = 'msghub-contextmenu';
+	contextMenuHost.appendChild(contextMenuEl);
+
+	const contextMenuList = document.createElement('ul');
+	contextMenuList.className = 'msghub-contextmenu-list';
+	contextMenuList.setAttribute('role', 'menu');
+	contextMenuEl.appendChild(contextMenuList);
+
+	let contextMenuBrandingText = 'Message Hub v0.0.1';
+
+	let contextMenuIsOpen = false;
+	/** @type {any} */
+	let contextMenuState = null;
+	/** @type {Array<{ menuEl: HTMLDivElement, listEl: HTMLUListElement, parentButton: HTMLButtonElement | null }>} */
+	const contextMenuStack = [];
+
+	const contextMenuSetOpen = isOpen => {
+		contextMenuIsOpen = !!isOpen;
+		contextMenuHost.classList.toggle('is-hidden', !contextMenuIsOpen);
+		contextMenuHost.setAttribute('aria-hidden', contextMenuIsOpen ? 'false' : 'true');
 	};
+
+	const ensureMenuInStack = (menuEl, listEl, parentButton) => {
+		if (!contextMenuStack.length) {
+			contextMenuStack.push({ menuEl, listEl, parentButton: parentButton || null });
+		}
+	};
+
+	const closeContextMenuLevel = depth => {
+		const d = Math.max(0, Math.trunc(Number(depth) || 0));
+		while (contextMenuStack.length > d + 1) {
+			const last = contextMenuStack.pop();
+			try {
+				last?.menuEl?.remove?.();
+			} catch {
+				// ignore
+			}
+		}
+	};
+
+	const closeAllContextMenus = () => {
+		closeContextMenuLevel(0);
+		contextMenuState = null;
+		contextMenuSetOpen(false);
+	};
+
+	const renderContextMenuItems = (listEl, items, depth = 0) => {
+		const hoverEnabled = (() => {
+			try {
+				return window.matchMedia && !window.matchMedia('(pointer: coarse)').matches;
+			} catch {
+				return true;
+			}
+		})();
+		const HOVER_DELAY_MS = 150;
+		let hoverTimer = null;
+		/** @type {HTMLButtonElement | null} */
+		let hoverBtn = null;
+
+		const list = Array.isArray(items) ? items : [];
+		const nodes = [];
+
+		for (const item of list) {
+			if (!item || typeof item !== 'object') {
+				continue;
+			}
+			const label = typeof item.label === 'string' ? item.label : '';
+			const shortcut = typeof item.shortcut === 'string' ? item.shortcut : '';
+			const hasSubmenu = Array.isArray(item.items) && item.items.length > 0;
+			const disabled = !!item.disabled;
+			const danger = item.danger === true;
+			const primary = item.primary === true;
+
+			const li = document.createElement('li');
+			li.setAttribute('role', 'none');
+
+			const btn = document.createElement('button');
+			btn.type = 'button';
+			btn.className = 'msghub-contextmenu-item';
+			btn.setAttribute('role', 'menuitem');
+			btn.disabled = disabled;
+			if (disabled) {
+				btn.setAttribute('aria-disabled', 'true');
+			}
+			if (danger) {
+				btn.classList.add('is-danger');
+			}
+			if (primary) {
+				btn.classList.add('is-primary');
+			}
+			if (hasSubmenu) {
+				btn.classList.add('has-submenu');
+			}
+
+			const row = document.createElement('span');
+			row.className = 'msghub-contextmenu-row';
+
+			const labelEl = document.createElement('span');
+			labelEl.className = 'msghub-contextmenu-label';
+			labelEl.textContent = label;
+			row.appendChild(labelEl);
+
+			const meta = document.createElement('span');
+			meta.className = 'msghub-contextmenu-meta';
+
+			if (shortcut) {
+				const s = document.createElement('span');
+				s.className = 'msghub-contextmenu-shortcut';
+				s.textContent = shortcut;
+				meta.appendChild(s);
+			}
+
+			if (hasSubmenu) {
+				const arrow = document.createElement('span');
+				arrow.className = 'msghub-contextmenu-submenu';
+				arrow.setAttribute('aria-hidden', 'true');
+				arrow.textContent = '›';
+				meta.appendChild(arrow);
+			}
+
+			row.appendChild(meta);
+			btn.appendChild(row);
+
+			if (!disabled && hasSubmenu) {
+				btn.addEventListener('click', () => {
+					openSubmenu(depth + 1, btn, item.items);
+				});
+
+				if (hoverEnabled) {
+					btn.addEventListener('pointerenter', () => {
+						try {
+							if (hoverTimer != null) {
+								window.clearTimeout(hoverTimer);
+							}
+						} catch {
+							// ignore
+						}
+						hoverBtn = btn;
+						try {
+							hoverTimer = window.setTimeout(() => {
+								if (hoverBtn === btn) {
+									openSubmenu(depth + 1, btn, item.items);
+								}
+							}, HOVER_DELAY_MS);
+						} catch {
+							// ignore
+						}
+					});
+					btn.addEventListener('pointerleave', () => {
+						try {
+							if (hoverTimer != null) {
+								window.clearTimeout(hoverTimer);
+							}
+						} catch {
+							// ignore
+						}
+						hoverTimer = null;
+						if (hoverBtn === btn) {
+							hoverBtn = null;
+						}
+					});
+				}
+			} else if (!disabled && typeof item.onSelect === 'function') {
+				btn.addEventListener('click', () => {
+					Promise.resolve()
+						.then(() => item.onSelect())
+						.catch(() => undefined);
+				});
+			}
+
+			li.appendChild(btn);
+			nodes.push(li);
+		}
+
+		if (depth === 0) {
+			// Branding footer (always present on root, disabled/non-interactive).
+			const footerLi = document.createElement('li');
+			footerLi.setAttribute('role', 'none');
+			const footer = document.createElement('div');
+			footer.className = 'msghub-contextmenu-footer';
+			footer.textContent = String(contextMenuBrandingText || '').trim() || 'Message Hub';
+			footerLi.appendChild(footer);
+			nodes.push(footerLi);
+		}
+
+		listEl.replaceChildren(...nodes);
+	};
+
+	const applyContextMenuAnchor = state => {
+		const s = state && typeof state === 'object' ? state : {};
+		const p = s.anchorPoint && typeof s.anchorPoint === 'object' ? s.anchorPoint : null;
+		const el = s.anchorEl instanceof HTMLElement ? s.anchorEl : null;
+
+		let x = 0;
+		let y = 0;
+		if (p && Number.isFinite(Number(p.x)) && Number.isFinite(Number(p.y))) {
+			x = Math.max(0, Math.trunc(Number(p.x)));
+			y = Math.max(0, Math.trunc(Number(p.y)));
+		} else if (el) {
+			try {
+				const r = el.getBoundingClientRect();
+				x = Math.max(0, Math.trunc(r.left));
+				y = Math.max(0, Math.trunc(r.bottom));
+			} catch {
+				// ignore
+			}
+		}
+		return { x, y };
+	};
+
+	const positionMenuWithClamp = (menuEl, anchorX, anchorY, { mode = 'cursor', alignHeight = 0 } = {}) => {
+		// Force layout: measure menu after it's in DOM and visible (visibility:hidden is fine).
+		let rect;
+		try {
+			rect = menuEl.getBoundingClientRect();
+		} catch {
+			rect = null;
+		}
+		const w = rect ? Math.max(0, Math.ceil(rect.width)) : 0;
+		const h = rect ? Math.max(0, Math.ceil(rect.height)) : 0;
+		const vw = Math.max(0, Math.trunc(Number(window.innerWidth) || 0));
+		const vh = Math.max(0, Math.trunc(Number(window.innerHeight) || 0));
+
+		const pos = computeContextMenuPosition({
+			anchorX,
+			anchorY,
+			menuWidth: w,
+			menuHeight: h,
+			viewportWidth: vw,
+			viewportHeight: vh,
+			mode,
+			alignHeight,
+			viewportPadding: 8,
+			cursorOffset: 2,
+		});
+
+		menuEl.style.left = `${pos.x}px`;
+		menuEl.style.top = `${pos.y}px`;
+	};
+
+	const onContextMenuDocPointerDown = ev => {
+		if (!contextMenuIsOpen) {
+			return;
+		}
+		const target = ev?.target;
+		if (target && contextMenuHost.contains(target)) {
+			return;
+		}
+		contextMenuClose();
+	};
+
+	document.addEventListener('pointerdown', onContextMenuDocPointerDown, true);
+
+	const onContextMenuWheel = ev => {
+		if (!contextMenuIsOpen) {
+			return;
+		}
+		const target = ev?.target;
+		if (target && contextMenuHost.contains(target)) {
+			return;
+		}
+		contextMenuClose();
+	};
+	document.addEventListener('wheel', onContextMenuWheel, { capture: true, passive: true });
+
+	const onContextMenuScroll = ev => {
+		if (!contextMenuIsOpen) {
+			return;
+		}
+		const target = ev?.target;
+		if (target && contextMenuHost.contains(target)) {
+			return;
+		}
+		contextMenuClose();
+	};
+	// Use capture to also catch scroll on nested containers (scroll doesn't bubble).
+	window.addEventListener('scroll', onContextMenuScroll, true);
+
+	const onContextMenuResize = () => {
+		if (!contextMenuIsOpen) {
+			return;
+		}
+		contextMenuClose();
+	};
+	window.addEventListener('resize', onContextMenuResize, { passive: true });
+
+	const onContextMenuVisibility = () => {
+		if (!contextMenuIsOpen) {
+			return;
+		}
+		if (document.visibilityState === 'hidden') {
+			contextMenuClose();
+		}
+	};
+	document.addEventListener('visibilitychange', onContextMenuVisibility);
+
+	const contextMenuOpen = opts => {
+		const o = opts && typeof opts === 'object' ? opts : {};
+		const items = Array.isArray(o.items) ? o.items : [];
+		const anchorPoint = o.anchorPoint && typeof o.anchorPoint === 'object' ? o.anchorPoint : null;
+		const anchorEl = o.anchorEl instanceof HTMLElement ? o.anchorEl : null;
+		const placement = typeof o.placement === 'string' ? o.placement : '';
+		const ariaLabel = typeof o.ariaLabel === 'string' ? o.ariaLabel : '';
+
+		contextMenuState = Object.freeze({ items, anchorPoint, anchorEl, placement, ariaLabel });
+		contextMenuList.setAttribute('aria-label', ariaLabel || 'Context menu');
+		ensureMenuInStack(contextMenuEl, contextMenuList, null);
+		closeContextMenuLevel(0);
+		renderContextMenuItems(contextMenuList, items, 0);
+		contextMenuSetOpen(true);
+
+		// Positioning (Phase 3): measure, flip/clamp to viewport, avoid cursor-on-item.
+		const anchor = applyContextMenuAnchor(contextMenuState);
+		contextMenuEl.style.visibility = 'hidden';
+		positionMenuWithClamp(contextMenuEl, anchor.x, anchor.y, { mode: 'cursor' });
+		contextMenuEl.style.visibility = '';
+
+		try {
+			document.dispatchEvent(new CustomEvent('msghub:contextMenuOpen', { detail: contextMenuState }));
+		} catch {
+			// ignore
+		}
+	};
+
+	const contextMenuClose = () => {
+		if (!contextMenuIsOpen) {
+			return;
+		}
+		closeAllContextMenus();
+		try {
+			document.dispatchEvent(new CustomEvent('msghub:contextMenuClose'));
+		} catch {
+			// ignore
+		}
+	};
+
+	const openSubmenu = (depth, parentButton, items) => {
+		if (!contextMenuIsOpen) {
+			return;
+		}
+		const d = Math.max(1, Math.trunc(Number(depth) || 1));
+		if (!(parentButton instanceof HTMLButtonElement)) {
+			return;
+		}
+		const childItems = Array.isArray(items) ? items : [];
+
+		closeContextMenuLevel(d - 1);
+
+		const menuEl = document.createElement('div');
+		menuEl.className = 'msghub-contextmenu';
+		contextMenuHost.appendChild(menuEl);
+
+		const listEl = document.createElement('ul');
+		listEl.className = 'msghub-contextmenu-list';
+		listEl.setAttribute('role', 'menu');
+		menuEl.appendChild(listEl);
+
+		contextMenuStack.push({ menuEl, listEl, parentButton });
+
+		menuEl.style.visibility = 'hidden';
+		renderContextMenuItems(listEl, childItems, d);
+		try {
+			const r = parentButton.getBoundingClientRect();
+			positionMenuWithClamp(menuEl, r.right, r.top, { mode: 'submenu', alignHeight: Math.ceil(r.height) });
+		} catch {
+			// ignore
+		}
+		menuEl.style.visibility = '';
+	};
+
+	const contextMenu = Object.freeze({
+		open: contextMenuOpen,
+		close: contextMenuClose,
+		isOpen: () => contextMenuIsOpen,
+		setBrandingText: text => {
+			contextMenuBrandingText = String(text ?? '').trim() || contextMenuBrandingText;
+		},
+	});
 
 	// Large overlay (viewer)
 	let overlayIsOpen = false;
@@ -672,24 +1235,35 @@ function createUi() {
 		}
 	});
 
-	document.addEventListener('keydown', e => {
-		if (e.key !== 'Escape' && e.key !== 'Esc') {
-			return;
-		}
-		if (dialogIsOpen) {
-			e.preventDefault();
-			dialogCloseFn(false);
-			return;
-		}
-		if (overlayIsOpen) {
-			e.preventDefault();
-			overlayCloseFn();
-		}
-	});
+		document.addEventListener('keydown', e => {
+			if (e.key !== 'Escape' && e.key !== 'Esc') {
+				return;
+			}
+			if (dialogIsOpen) {
+				e.preventDefault();
+				dialogCloseFn(false);
+				return;
+			}
+			if (contextMenuIsOpen) {
+				e.preventDefault();
+				// Phase 6: close submenu first, then root menu.
+				if (Array.isArray(contextMenuStack) && contextMenuStack.length > 1) {
+					closeContextMenuLevel(contextMenuStack.length - 2);
+				} else {
+					contextMenuClose();
+				}
+				return;
+			}
+			if (overlayIsOpen) {
+				e.preventDefault();
+				overlayCloseFn();
+			}
+		});
 
 	document.addEventListener('msghub:tabSwitch', () => {
 		overlayCloseFn();
 		dialogCloseFn(false);
+		contextMenuClose();
 	});
 
 	const confirm = opts =>
@@ -739,10 +1313,12 @@ function createUi() {
 	const closeAll = () => {
 		overlayCloseFn();
 		dialogCloseFn(false);
+		contextMenuClose();
 	};
 
 	return Object.freeze({
 		toast,
+		contextMenu,
 		overlayLarge: Object.freeze({
 			open: overlayOpen,
 			close: overlayCloseFn,
@@ -1180,25 +1756,276 @@ const elements = Object.freeze({
 	},
 });
 
-const ui = createUi();
+	const ui = createUi();
+		ui?.contextMenu?.setBrandingText?.('Message Hub');
 
-	const api = createAdminApi({ sendTo, socket, adapterInstance, lang, t, pickText, ui });
+		const api = createAdminApi({ sendTo, socket, adapterInstance, lang, t, pickText, ui });
 
-	const ctx = Object.freeze({
-		args,
-		adapterInstance,
-		socket,
-		sendTo,
-		api,
-		h,
-		ui,
-		lang,
-		elements,
+			const ctx = Object.freeze({
+				args,
+				adapterInstance,
+				socket,
+				sendTo,
+				api,
+				h,
+				ui,
+				lang,
+				elements,
+			});
+
+			void api?.runtime
+				?.about?.()
+				.then(res => {
+					const data = res && typeof res === 'object' ? res : null;
+					const title = typeof data?.title === 'string' ? data.title.trim() : '';
+					const version = typeof data?.version === 'string' ? data.version.trim() : '';
+					const label = `${title || 'Message Hub'} v${version || '0.0.0'}`;
+					ui?.contextMenu?.setBrandingText?.(label);
+				})
+				.catch(() => undefined);
+
+		function findEditableTarget(el) {
+			const node = el instanceof HTMLElement ? el : null;
+			if (!node) {
+				return null;
+		}
+		const input = node.closest('input');
+		if (input instanceof HTMLInputElement) {
+			const type = String(input.type || '').toLowerCase();
+			const textLike =
+				!type ||
+				type === 'text' ||
+				type === 'search' ||
+				type === 'url' ||
+				type === 'tel' ||
+				type === 'email' ||
+				type === 'password' ||
+				type === 'number';
+			if (textLike && !input.readOnly && !input.disabled) {
+				return input;
+			}
+		}
+		const ta = node.closest('textarea');
+		if (ta instanceof HTMLTextAreaElement && !ta.readOnly && !ta.disabled) {
+			return ta;
+		}
+		const ce = node.closest('[contenteditable]');
+		if (ce instanceof HTMLElement && ce.isContentEditable) {
+			return ce;
+		}
+		return null;
+	}
+
+	function getEditableSelectionInfo(editable) {
+		if (editable instanceof HTMLInputElement || editable instanceof HTMLTextAreaElement) {
+			const start = Number.isFinite(Number(editable.selectionStart)) ? Number(editable.selectionStart) : 0;
+			const end = Number.isFinite(Number(editable.selectionEnd)) ? Number(editable.selectionEnd) : 0;
+			const hasSelection = end > start;
+			const value = String(editable.value || '');
+			const selectedText = hasSelection ? value.slice(start, end) : '';
+			return { hasSelection, selectedText, start, end };
+		}
+		if (editable instanceof HTMLElement) {
+			const sel = window.getSelection ? window.getSelection() : null;
+			if (!sel || sel.rangeCount <= 0) {
+				return { hasSelection: false, selectedText: '', start: 0, end: 0 };
+			}
+			const text = sel.toString();
+			const range = sel.getRangeAt(0);
+			const inEl = !!range && editable.contains(range.commonAncestorContainer);
+			return { hasSelection: inEl && !!text, selectedText: inEl ? text : '', start: 0, end: 0 };
+		}
+		return { hasSelection: false, selectedText: '', start: 0, end: 0 };
+	}
+
+	function selectAllInEditable(editable) {
+		if (editable instanceof HTMLInputElement || editable instanceof HTMLTextAreaElement) {
+			editable.focus();
+			editable.select();
+			return;
+		}
+		if (editable instanceof HTMLElement) {
+			editable.focus();
+			const sel = window.getSelection ? window.getSelection() : null;
+			if (!sel) {
+				return;
+			}
+			const range = document.createRange();
+			range.selectNodeContents(editable);
+			sel.removeAllRanges();
+			sel.addRange(range);
+		}
+	}
+
+	function execCommandSafe(cmd) {
+		try {
+			if (typeof document.execCommand === 'function') {
+				return document.execCommand(cmd);
+			}
+		} catch {
+			// ignore
+		}
+		return false;
+	}
+
+	async function copySelectionFromEditable(editable) {
+		editable.focus();
+		if (execCommandSafe('copy')) {
+			return;
+		}
+		const info = getEditableSelectionInfo(editable);
+		if (!info.selectedText) {
+			return;
+		}
+		if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+			await navigator.clipboard.writeText(info.selectedText);
+			return;
+		}
+		throw new Error('Copy not supported');
+	}
+
+	async function cutSelectionFromEditable(editable) {
+		editable.focus();
+		if (execCommandSafe('cut')) {
+			return;
+		}
+		const info = getEditableSelectionInfo(editable);
+		if (!info.selectedText) {
+			return;
+		}
+		if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+			await navigator.clipboard.writeText(info.selectedText);
+		}
+		if (editable instanceof HTMLInputElement || editable instanceof HTMLTextAreaElement) {
+			const value = String(editable.value || '');
+			const next = value.slice(0, info.start) + value.slice(info.end);
+			editable.value = next;
+			try {
+				editable.setSelectionRange(info.start, info.start);
+			} catch {
+				// ignore
+			}
+			return;
+		}
+		throw new Error('Cut not supported');
+	}
+
+	async function pasteIntoEditable(editable) {
+		editable.focus();
+		if (navigator.clipboard && typeof navigator.clipboard.readText === 'function') {
+			const text = await navigator.clipboard.readText();
+			const s = String(text ?? '');
+			if (editable instanceof HTMLInputElement || editable instanceof HTMLTextAreaElement) {
+				const info = getEditableSelectionInfo(editable);
+				const value = String(editable.value || '');
+				const start = Math.max(0, Math.trunc(Number(info.start) || 0));
+				const end = Math.max(start, Math.trunc(Number(info.end) || 0));
+				editable.value = value.slice(0, start) + s + value.slice(end);
+				const caret = start + s.length;
+				try {
+					editable.setSelectionRange(caret, caret);
+				} catch {
+					// ignore
+				}
+				return;
+			}
+			if (editable instanceof HTMLElement) {
+				const sel = window.getSelection ? window.getSelection() : null;
+				if (!sel || sel.rangeCount <= 0) {
+					return;
+				}
+				const range = sel.getRangeAt(0);
+				if (!editable.contains(range.commonAncestorContainer)) {
+					return;
+				}
+				range.deleteContents();
+				range.insertNode(document.createTextNode(s));
+				range.collapse(false);
+				sel.removeAllRanges();
+				sel.addRange(range);
+				return;
+			}
+			return;
+		}
+		throw new Error('Paste not supported');
+	}
+
+	function buildInputContextMenuItems(editable) {
+		const info = getEditableSelectionInfo(editable);
+		const canPaste = !!navigator.clipboard && typeof navigator.clipboard.readText === 'function';
+
+		return [
+			{
+				id: 'cut',
+				label: 'Cut',
+				disabled: !info.hasSelection,
+				onSelect: () => cutSelectionFromEditable(editable),
+			},
+			{
+				id: 'copy',
+				label: 'Copy',
+				disabled: !info.hasSelection,
+				onSelect: () => copySelectionFromEditable(editable),
+			},
+			{
+				id: 'paste',
+				label: 'Paste',
+				disabled: !canPaste,
+				onSelect: () => pasteIntoEditable(editable),
+			},
+			{
+				id: 'selectAll',
+				label: 'Select all',
+				onSelect: () => selectAllInEditable(editable),
+			},
+		].map(it => Object.freeze(it));
+	}
+
+	// Global ContextMenu: replaces browser right-click within MsgHub root.
+	// Kill switch: add `?nativeContextMenuInputs=1` to keep the native menu on input/textarea/contenteditable.
+	document.addEventListener('contextmenu', e => {
+		try {
+			if (!e || typeof e !== 'object') {
+				return;
+			}
+			if (ctx.api.ui.dialog?.isOpen?.()) {
+				return;
+			}
+			const target = e.target instanceof HTMLElement ? e.target : null;
+			if (!target) {
+				return;
+			}
+			const rootEl = target.closest('.msghub-root');
+			if (!rootEl) {
+				return;
+			}
+			const insideMenu = target.closest('.msghub-contextmenu');
+			if (insideMenu) {
+				return;
+			}
+			// If a panel wants to own the context menu, it can `preventDefault()` and open its own.
+			if (e.defaultPrevented) {
+				return;
+			}
+
+			const editable = findEditableTarget(target);
+			if (editable && nativeContextMenuInputs) {
+				return;
+			}
+
+			e.preventDefault();
+
+			const items = editable ? buildInputContextMenuItems(editable) : [];
+			const anchorPoint = { x: e.clientX, y: e.clientY };
+			ctx.api.ui.contextMenu.open({ items, anchorPoint, ariaLabel: 'Context menu', placement: 'bottom-start' });
+		} catch (_err) {
+			// ignore
+		}
 	});
 
-const setConnText = text => {
-	if (elements.connection) {
-		elements.connection.textContent = text;
+	const setConnText = text => {
+		if (elements.connection) {
+			elements.connection.textContent = text;
 	}
 };
 
