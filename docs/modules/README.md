@@ -41,7 +41,9 @@ For runtime enable/disable + configuration of plugins (including bidirectional `
 7. **Notifier Plugins (delivery)**: Notifier plugins (e.g. `lib/Notify*.js`) receive events from `MsgNotify` and perform the actual delivery (ioBroker states, push, TTS, ...). See [`docs/plugins/README.md`](../plugins/README.md).
    - In interactive channels (`Engage...`), user intents may execute actions (`MsgAction.execute(...)`).
    - Successful actions are dispatched as events to producer plugins via `MsgIngest` (`onAction(actionInfo, ctx)`).
-8. **Output (read view)**: On reads, `MsgStore` returns a view; `MsgRender` returns rendered `title`/`text`/`details` (resolving template placeholders from `metrics`/`timing`).
+8. **Output (read view)**: On reads, `MsgStore` returns a view:
+   - raw snapshots (`getMessages()`), or
+   - rendered output (`getMessageByRef()`, `queryMessages()`) via `MsgRender` (resolving template placeholders from `metrics`/`timing`).
 
 ASCII sketch - WRITE / MUTATE (create/update/delete + side effects):
 ```
@@ -59,7 +61,7 @@ MsgIngest  --->  MsgFactory  --->  MsgStore (canonical list)
 
 ASCII sketch - READ / VIEW (rendering only; no mutation)
 ```
-Consumer/UI  --->  MsgStore.getMessages()/getMessageByRef()  --->  MsgRender  --->  rendered output (title/text/details)
+Consumer/UI  --->  MsgStore.queryMessages()/getMessageByRef()  --->  MsgRender  --->  rendered output (title/text/details)
 ```
 
 ## Design ideas (why it is built like this)
@@ -75,7 +77,7 @@ Consumer/UI  --->  MsgStore.getMessages()/getMessageByRef()  --->  MsgRender  --
 - `MsgFactory` validates/normalizes the `Message` schema and defines patch semantics.
 - `MsgBridge` is an adapter-wiring helper for bidirectional integrations (register/unregister ingest + notify plugin pairs).
 - `MsgEngage` is an adapter-wiring helper for interactive channels (like MsgBridge, but adds action capability).
-- `MsgStore` is the hub: owns `fullList`, coordinates persistence/archive/notifications, and returns rendered views.
+- `MsgStore` is the hub: owns `fullList`, coordinates persistence/archive/notifications, and returns views (raw snapshots or rendered output, depending on the read API).
 - `MsgStorage` persists and restores the full message list (including revival of `Map` fields such as `metrics`).
 - `MsgArchive` writes an append-only history (JSONL) per message `ref` for audit/debug/replay.
 - `MsgNotify` dispatches notification events to registered notifier plugins (delivery happens in plugins).

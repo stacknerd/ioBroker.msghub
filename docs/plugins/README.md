@@ -469,7 +469,7 @@ What you receive:
 	    - `completeAfterCauseEliminated(ref, { actor? })`
   - read API (views)
     - `getMessageByRef(ref)`
-    - `getMessages()`
+    - `getMessages()` (raw/unrendered snapshot)
     - `queryMessages({ where, page?, sort? })`
 - `ctx.api.factory` normalization gate: `createMessage(...)`
 - `ctx.api.constants` for enums and shared vocabulary
@@ -508,7 +508,7 @@ What you receive:
 - `ctx.api.constants` for allowed event names and enums
 - `ctx.api.store` read API (optional; when the host was constructed with a store)
   - `getMessageByRef(ref)`
-  - `getMessages()`
+  - `getMessages()` (raw/unrendered snapshot)
   - `queryMessages({ where, page?, sort? })`
 - `ctx.api.i18n` / `ctx.api.log` for translations and logging
 - `ctx.api.iobroker` for ID conversion and optional ioBroker read/subscribe tasks (see API reference above)
@@ -545,7 +545,7 @@ What you can do (functional contract):
 - Everything an Ingest plugin can do:
   - `ctx.api.factory.createMessage(...)` (normalization gate)
   - `ctx.api.store.addMessage(...)`, `updateMessage(...)`, `addOrUpdateMessage(...)`, `removeMessage(...)`, `completeAfterCauseEliminated(...)`
-  - `ctx.api.store.getMessageByRef(...)`, `getMessages()`, `queryMessages(...)`
+  - `ctx.api.store.getMessageByRef(...)`, `getMessages()` (raw), `queryMessages(...)`
 - Plus execute whitelisted actions via MsgAction:
   - `ctx.api.action.execute({ ref, actionId, actor?, payload?, snoozeForMs? })`
 

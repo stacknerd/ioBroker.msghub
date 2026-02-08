@@ -245,7 +245,13 @@ Removes a message when it exists.
 
 All read methods:
 - run throttled pruning
-- return rendered views when `MsgRender` is available
+
+Rendered read methods:
+- `getMessageByRef(ref)` and `queryMessages(...)` return rendered views when `MsgRender` is available.
+
+Raw snapshot:
+- `getMessages()` returns an unrendered snapshot view of the full store (no `MsgRender`, no `display`).
+  Prefer `queryMessages({ page, where, sort })` for UI use so paging bounds render cost.
 
 #### `queryMessages` sort (selected)
 

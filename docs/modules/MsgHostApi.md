@@ -237,7 +237,7 @@ Derivation rule:
 Read APIs:
 
 - `getMessageByRef(ref)`
-- `getMessages()`
+- `getMessages()` (raw/unrendered snapshot)
 - `queryMessages({ where, page?, sort? })`
 
 Write APIs (ingest only):

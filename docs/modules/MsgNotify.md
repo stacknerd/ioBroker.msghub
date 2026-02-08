@@ -97,7 +97,7 @@ Every dispatch call passes the same context shape:
     - `MsgConstants` values (levels, kinds, origin types, allowed notify events, …)
   - `ctx.api.store` (optional; `null` when `MsgNotify` was constructed without a store)
     - `getMessageByRef(ref)`
-    - `getMessages()`
+    - `getMessages()` (raw/unrendered snapshot)
     - `queryMessages({ where, page?, sort? })`
   - `ctx.api.iobroker`: ioBroker facade (promises where applicable)
   - `ctx.api.i18n`: optional i18n facade (may be `null`)

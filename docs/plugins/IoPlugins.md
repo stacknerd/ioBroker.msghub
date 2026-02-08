@@ -87,7 +87,7 @@ This is routing only: `audience.tags` is still plugin-defined and may be used by
 
 - Notification path: when `manifest.supportsChannelRouting === true`, your `onNotifications(...)` handler already receives a channel-filtered list; do not re-filter by `audience.channels` inside the plugin.
 - Pull/query path: when you compute projections/snapshots from the store, prefer `ctx.api.store.queryMessages({ where: { audience: { channels: { routeTo: ctx.meta.plugin.channel } } } })` so selection matches the notify-side routing semantics.
-- `getMessages()` returns “everything”; use it only when you intentionally want an unfiltered view.
+- `getMessages()` returns a raw, unrendered “everything” snapshot; use it only when you intentionally want an unfiltered view (not for UI lists).
 
 ---
 

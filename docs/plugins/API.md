@@ -46,7 +46,7 @@ Columns:
 | API | `ai` | `json(request)*` | ✓ | ✓ | ✓ | ✓ | Best-effort JSON completion helper. | `buildAiApi()` (`src/MsgHostApi.js`), bound by `IoPlugins` | `../modules/MsgAi.md` |
 | API | `templates` | `renderStates(text)` | ✓ | ✓ | ✓ | ✓ | Replace `{id}` placeholders with current foreign state values (missing/unreadable → empty). | `IoPlugins` (`lib/IoPlugins.js`) | `./API.md` |
 | API | `store` | `getMessageByRef(ref)` | ✓ | ✓ | ✓ | ✓ | Look up a message by stable `ref` (read-only on notify-side). | `buildStoreApi()` (`src/MsgHostApi.js`) | `../modules/MsgHostApi.md` |
-| API | `store` | `getMessages()` | ✓ | ✓ | ✓ | ✓ | Get full message list snapshot (read-only on notify-side). | `buildStoreApi()` (`src/MsgHostApi.js`) | `../modules/MsgHostApi.md` |
+| API | `store` | `getMessages()` | ✓ | ✓ | ✓ | ✓ | Get full message list snapshot (raw/unrendered; read-only on notify-side). | `buildStoreApi()` (`src/MsgHostApi.js`) | `../modules/MsgHostApi.md` |
 | API | `store` | `queryMessages(options)` | ✓ | ✓ | ✓ | ✓ | Query messages with filters/paging (read-only on notify-side). | `buildStoreApi()` (`src/MsgHostApi.js`) | `../modules/MsgHostApi.md` |
 | API | `store` | `addMessage(msg)` | ✓ |  | ✓ | ✓ | Add a normalized message into the store (inbound ctx only). | `buildStoreApi()` (`src/MsgHostApi.js`) | `../modules/MsgHostApi.md` |
 | API | `store` | `updateMessage(msgOrRef, patch)` | ✓ |  | ✓ | ✓ | Patch a message by ref/object (inbound ctx only). | `buildStoreApi()` (`src/MsgHostApi.js`) | `../modules/MsgHostApi.md` |

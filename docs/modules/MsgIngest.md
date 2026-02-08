@@ -90,7 +90,7 @@ Every dispatch call passes the same context shape:
     - `addOrUpdateMessage(msg)`
     - `removeMessage(ref)`
     - `getMessageByRef(ref)`
-    - `getMessages()`
+    - `getMessages()` (raw/unrendered snapshot)
     - `queryMessages({ where, page?, sort? })`
   - `ctx.api.factory`
     - `createMessage(data)` (normalization gate for “create” paths)

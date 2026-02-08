@@ -9,13 +9,14 @@
  * - Own the canonical in-memory list (`this.fullList`) and be the single place where the list is mutated.
  * - Provide a small set of mutation APIs (`addMessage`, `updateMessage`, `removeMessage`, `addOrUpdateMessage`)
  *   that coordinate side-effects consistently.
- * - Provide read APIs (`getMessageByRef`, `getMessages`, `queryMessages`) that return a rendered view of the
- *   canonical data without mutating stored messages.
+ * - Provide read APIs:
+ *   - `getMessages()` returns a raw snapshot (unrendered) of the canonical data.
+ *   - `getMessageByRef()` and `queryMessages()` return rendered views of the canonical data (without mutating stored messages).
  * - Run lifecycle maintenance (`_pruneOldMessages`) and optionally dispatch due notifications on a timer
  *   (`_initiateNotifications`).
  *
  * Design guidelines / invariants
- * - Canonical vs. view: `this.fullList` stores raw message objects only. Rendering happens at the boundary (read methods).
+ * - Canonical vs. view: `this.fullList` stores raw message objects only. Rendering happens at the boundary (rendered read methods).
  * - Best-effort side-effects: persistence/archiving/notifications must not block the core mutation. They are called without
  *   awaiting and failures are handled inside their respective components (or via adapter logging).
  * - Single source of truth for validation: `MsgFactory.applyPatch()` is responsible for schema/normalization rules during updates.
@@ -56,7 +57,7 @@
  * - Pruning is throttled by `pruneIntervalMs` to avoid scanning on every call.
  *
  * Rendering (MsgRender)
- * - Read methods return a view of messages (`msgRender.renderMessage`) without mutating stored data.
+ * - Rendered read methods return a view of messages (`msgRender.renderMessage`) without mutating stored data.
  * - The canonical data is always `this.fullList`; rendered output is view-only.
  */
 
@@ -569,13 +570,13 @@ class MsgStore {
 	 *
 	 * Behavior:
 	 * - Triggers a throttled prune before returning.
-	 * - Returns rendered views when `MsgRender` is available.
+	 * - Returns a raw snapshot view (unrendered).
 	 *
 	 * @returns {Array<object>} All messages.
 	 */
 	getMessages() {
 		this._pruneOldMessages();
-		return this.fullList.map(msg => this._renderForOutput(msg));
+		return this.fullList.map(msg => this._cloneForOutput(msg));
 	}
 
 	/**
@@ -1668,6 +1669,26 @@ class MsgStore {
 		const rendered = this.msgRender?.renderMessage(msg) || msg;
 		const buildActions = this.msgActions?.buildActions;
 		return typeof buildActions === 'function' ? buildActions.call(this.msgActions, rendered) : rendered;
+	}
+
+	_cloneForOutput(msg) {
+		if (!msg || typeof msg !== 'object') {
+			return msg;
+		}
+		// Keep this intentionally shallow: fast snapshot that avoids mutating canonical store objects.
+		// (Rendered outputs are also shallow clones; nested structures like `metrics` are shared there as well.)
+		const out = { ...msg };
+		if (msg.details && typeof msg.details === 'object' && !Array.isArray(msg.details)) {
+			const details = { ...msg.details };
+			if (Array.isArray(details.tools)) {
+				details.tools = details.tools.slice();
+			}
+			if (Array.isArray(details.consumables)) {
+				details.consumables = details.consumables.slice();
+			}
+			out.details = details;
+		}
+		return out;
 	}
 }
 

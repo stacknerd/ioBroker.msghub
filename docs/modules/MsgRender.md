@@ -14,7 +14,7 @@ Simplified flow:
 
 1. A producer plugin creates or patches a message (usually via `MsgFactory` and `MsgStore`).
 2. `MsgStore` stores the **raw** message in its canonical list (`fullList`).
-3. When a consumer reads messages (`getMessages()`, `getMessageByRef()`, …), `MsgStore` returns a **rendered view**:
+3. When a consumer reads messages for UI/human output (`getMessageByRef()`, `queryMessages()`, …), `MsgStore` returns a **rendered view**:
    - `MsgRender.renderMessage(msg)` returns the message with rendered `title`/`text`/`details` plus a view-only `display` block.
 4. The rendered output is used for UI or human-facing text, but it is not written back to storage.
 

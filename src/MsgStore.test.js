@@ -151,6 +151,33 @@ function withFixedNow(now, fn) {
 }
 
 describe('MsgStore', () => {
+	describe('getMessages (raw snapshot)', () => {
+		it('does not render (query/getByRef still render)', () => {
+			const { msgRender, calls } = createRenderer();
+			const { store } = createStore({
+				messages: [{ ref: 'r1', level: 10, title: 't', text: 'x', details: { tools: ['a'] } }],
+				msgRender,
+			});
+
+			calls.length = 0;
+			const list = store.getMessages();
+			expect(list).to.have.length(1);
+			expect(list[0]).to.not.have.property('__rendered');
+			expect(list[0]).to.not.equal(store.fullList[0]);
+			expect(calls).to.have.length(0);
+
+			const byRef = store.getMessageByRef('r1');
+			expect(byRef).to.have.property('__rendered', true);
+			expect(calls).to.have.length(1);
+
+			calls.length = 0;
+			const res = store.queryMessages();
+			expect(res).to.have.property('items');
+			expect(res.items[0]).to.have.property('__rendered', true);
+			expect(calls.length).to.be.greaterThan(0);
+		});
+	});
+
 	describe('addMessage guards', () => {
 		it('rejects non-integer levels', () => {
 			const { store, writes } = createStore();
