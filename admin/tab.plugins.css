@@ -1,6 +1,147 @@
 /* tab.plugins.css — Plugins panel styles (scoped to .msghub-root .msghub-plugins) */
 
-/* Intentionally empty (Big-Bang rebuild, step-by-step).
-   Add panel-specific styles here, always scoped:
-   .msghub-root .msghub-plugins ... */
+/* Minimal row skeleton: row height/hover/cursor + accordion behavior.
+	 Keep row-internal styling minimal (exception: icon buttons in instance head). */
 
+.msghub-root .msghub-plugins .msghub-acc-input {
+	position: absolute;
+	opacity: 0;
+	pointer-events: none;
+}
+
+.msghub-root .msghub-plugins .msghub-acc-input + .msghub-instance-head + .msghub-instance-body {
+	display: none;
+}
+
+.msghub-root .msghub-plugins .msghub-acc-input:checked + .msghub-instance-head + .msghub-instance-body {
+	display: block;
+}
+
+.msghub-root .msghub-plugins .msghub-instance-body {
+	padding: var(--msghub-space-2) var(--msghub-space-2) var(--msghub-space-2) var(--msghub-indent-3);
+}
+
+.msghub-root .msghub-plugins .msghub-plugin-instance {
+	border-bottom: 1px solid var(--msghub-border-light);
+}
+
+.msghub-root .msghub-plugins .msghub-plugin-instance:last-child {
+	border-bottom: 0;
+}
+
+.msghub-root .msghub-plugins .msghub-plugin-category-row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--msghub-space-2);
+	padding: var(--msghub-space-2) var(--msghub-space-2);
+	padding-left: calc(var(--msghub-space-2) + var(--msghub-row-edge-indent));
+	border-bottom: 1px solid var(--msghub-border-light);
+	cursor: default;
+	user-select: none;
+}
+
+.msghub-root .msghub-plugins .msghub-plugin-category-title {
+	margin: 0;
+	font: var(--msghub-font-sectionTitle);
+}
+
+.msghub-root .msghub-plugins .msghub-plugin-category-desc {
+	flex: 1 1 280px;
+	min-width: 0;
+	font: var(--msghub-font-body-meta);
+}
+
+.msghub-root .msghub-plugins .msghub-instance-head {
+	display: grid;
+	grid-template-columns:
+		minmax(160px, max-content) /* name */
+		var(--msghub-size-iconButton) /* play/pause */
+		var(--msghub-size-iconButton) /* help */
+		var(--msghub-size-iconButton) /* tools */
+		minmax(60px, 96px) /* title/value */
+		minmax(0, 1fr) /* spacer */
+		minmax(160px, 1.2fr) /* channel */
+		16px; /* chevron */
+	align-items: center;
+	column-gap: var(--msghub-space-2);
+	padding: var(--msghub-space-2) var(--msghub-space-2);
+	padding-left: calc(var(--msghub-space-2) + var(--msghub-row-edge-indent));
+	cursor: pointer;
+}
+
+.msghub-root .msghub-plugins .msghub-instance-status,
+.msghub-root .msghub-plugins .msghub-instance-icon-slot {
+	display: none;
+}
+
+.msghub-root .msghub-plugins .msghub-instance-name,
+.msghub-root .msghub-plugins .msghub-instance-titlevalue,
+.msghub-root .msghub-plugins .msghub-instance-channel-text,
+.msghub-root .msghub-plugins .msghub-instance-channel-input {
+	min-width: 0;
+}
+
+.msghub-root .msghub-plugins .msghub-instance-name {
+	font-weight: var(--msghub-fw-med);
+}
+
+.msghub-root .msghub-plugins .msghub-plugin-instance.msghub-run-running .msghub-instance-name {
+	color: var(--msghub-ok);
+}
+
+.msghub-root .msghub-plugins .msghub-plugin-instance.msghub-run-error .msghub-instance-name {
+	color: var(--msghub-danger);
+}
+
+.msghub-root .msghub-plugins .msghub-plugin-instance.msghub-run-starting .msghub-instance-name,
+.msghub-root .msghub-plugins .msghub-plugin-instance.msghub-run-stopping .msghub-instance-name {
+	color: var(--msghub-warning);
+}
+
+.msghub-root .msghub-plugins .msghub-instance-channel-input {
+	width: 100%;
+	grid-column: -2;
+}
+
+.msghub-root .msghub-plugins .msghub-instance-channel-text {
+	grid-column: -2;
+}
+
+.msghub-root .msghub-plugins .msghub-acc-toggle--instance {
+	grid-column: -1;
+	justify-self: end;
+}
+
+.msghub-root .msghub-plugins .msghub-instance-help {
+	--msghub-uibutton-icon: var(--msghub-icon-help);
+}
+
+.msghub-root .msghub-plugins .msghub-instance-tools {
+	--msghub-uibutton-icon: var(--msghub-icon-tools);
+}
+
+.msghub-root .msghub-plugins .msghub-plugin-instance[data-enabled='1'] .msghub-instance-toggle {
+	--msghub-uibutton-icon: var(--msghub-icon-pause);
+}
+
+.msghub-root .msghub-plugins .msghub-plugin-instance[data-enabled='0'] .msghub-instance-toggle {
+	--msghub-uibutton-icon: var(--msghub-icon-play);
+}
+
+.msghub-root .msghub-plugins .msghub-plugin-instance.msghub-run-running > .msghub-instance-head {
+	box-shadow: inset 3px 0 0 var(--msghub-ok);
+}
+
+.msghub-root .msghub-plugins .msghub-plugin-instance.msghub-run-error > .msghub-instance-head {
+	box-shadow: inset 3px 0 0 var(--msghub-danger);
+}
+
+.msghub-root .msghub-plugins .msghub-plugin-instance.msghub-run-starting > .msghub-instance-head,
+.msghub-root .msghub-plugins .msghub-plugin-instance.msghub-run-stopping > .msghub-instance-head {
+	box-shadow: inset 3px 0 0 var(--msghub-warning);
+}
+
+.msghub-root .msghub-plugins .msghub-plugin-instance:hover .msghub-instance-head {
+	background: var(--msghub-surface-hover);
+}

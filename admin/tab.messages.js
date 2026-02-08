@@ -1187,6 +1187,10 @@
 						},
 						[
 							...(checkboxCell ? [checkboxCell] : []),
+							h('td', { text: icon }),
+							h('td', { text: title }),
+							h('td', { text: text }),
+							h('td', { text: location }),
 							h('td', {
 								text: api.i18n.tOr(
 									`msghub.i18n.core.admin.common.MsgConstants.kind.${kind.toLowerCase()}.label`,
@@ -1205,10 +1209,6 @@
 									lifecycle,
 								),
 							}),
-							h('td', { text: icon }),
-							h('td', { text: title }),
-							h('td', { text: text }),
-							h('td', { text: location }),
 							h('td', {
 								class: 'msghub-muted',
 								text: formatTs(typeof createdAt === 'number' ? createdAt : NaN),
@@ -1337,12 +1337,13 @@
 					headerSelectAllInput = null;
 					const labelKind = t('msghub.i18n.core.admin.common.MsgConstants.field.kind.label');
 					const labelLevel = t('msghub.i18n.core.admin.common.MsgConstants.field.level.label');
-					const labelLifecycle = t('msghub.i18n.core.admin.common.MsgConstants.field.lifecycle.state.label');
-					const labelTitle = t('msghub.i18n.core.admin.common.MsgConstants.field.title.label');
-					const labelText = t('msghub.i18n.core.admin.common.MsgConstants.field.text.label');
-					const labelLocation = t('msghub.i18n.core.admin.common.MsgConstants.field.details.location.label');
-					const labelCreated = t('msghub.i18n.core.admin.common.MsgConstants.field.timing.createdAt.label');
-					const labelUpdated = t('msghub.i18n.core.admin.common.MsgConstants.field.timing.updatedAt.label');
+						const labelLifecycle = t('msghub.i18n.core.admin.common.MsgConstants.field.lifecycle.state.label');
+						const labelIcon = t('msghub.i18n.core.admin.common.MsgConstants.field.icon.label');
+						const labelTitle = t('msghub.i18n.core.admin.common.MsgConstants.field.title.label');
+						const labelText = t('msghub.i18n.core.admin.common.MsgConstants.field.text.label');
+						const labelLocation = t('msghub.i18n.core.admin.common.MsgConstants.field.details.location.label');
+						const labelCreated = t('msghub.i18n.core.admin.common.MsgConstants.field.timing.createdAt.label');
+						const labelUpdated = t('msghub.i18n.core.admin.common.MsgConstants.field.timing.updatedAt.label');
 					const labelOrigin = t('msghub.i18n.core.admin.common.MsgConstants.field.origin.system.label');
 					const labelProgress = t('msghub.i18n.core.admin.common.MsgConstants.field.progress.percentage.label');
 
@@ -1377,8 +1378,18 @@
 					};
 
 					theadEl.replaceChildren(
-						h('tr', null, [
-							...(expertMode ? [makeSelectAllTh()] : []),
+							h('tr', null, [
+								...(expertMode ? [makeSelectAllTh()] : []),
+							h('th', { class: 'msghub-th' }, [makeSortBtn('icon', labelIcon, labelIcon)]),
+							h('th', { class: 'msghub-th' }, [
+								makeSortBtn('title', labelTitle, labelTitle),
+							]),
+							h('th', { class: 'msghub-th' }, [makeSortBtn('text', labelText, labelText)]),
+							h('th', { class: 'msghub-th' }, [
+								makeFilterBtn('details.location', labelLocation, labelLocation, () =>
+									listDistinctFromItems('details.location'),
+								),
+							]),
 							h('th', { class: 'msghub-th' }, [
 								makeFilterBtn('kind', labelKind, labelKind, () => listEnumValues(getConstantsEnum('kind'))),
 							]),
@@ -1388,16 +1399,6 @@
 							h('th', { class: 'msghub-th' }, [
 								makeFilterBtn('lifecycle.state', labelLifecycle, labelLifecycle, () =>
 									listEnumValues(getConstantsEnum('lifecycle.state')),
-								),
-							]),
-							h('th', { class: 'msghub-th' }, []),
-							h('th', { class: 'msghub-th' }, [
-								makeSortBtn('title', labelTitle, labelTitle),
-							]),
-							h('th', { class: 'msghub-th' }, [h('span', { text: labelText })]),
-							h('th', { class: 'msghub-th' }, [
-								makeFilterBtn('details.location', labelLocation, labelLocation, () =>
-									listDistinctFromItems('details.location'),
 								),
 							]),
 							h('th', { class: 'msghub-th' }, [makeSortBtn('timing.createdAt', labelCreated, labelCreated)]),
@@ -1455,12 +1456,12 @@
 				progress.classList.toggle('is-hidden', !isVisible);
 			};
 
-				const updateHeaderButtons = () => {
-					const labelLocation = t('msghub.i18n.core.admin.common.MsgConstants.field.details.location.label');
-					const labelKind = t('msghub.i18n.core.admin.common.MsgConstants.field.kind.label');
-					const labelLifecycle = t('msghub.i18n.core.admin.common.MsgConstants.field.lifecycle.state.label');
-					const labelLevel = t('msghub.i18n.core.admin.common.MsgConstants.field.level.label');
-					const labelOrigin = t('msghub.i18n.core.admin.common.MsgConstants.field.origin.system.label');
+					const updateHeaderButtons = () => {
+						const labelLocation = t('msghub.i18n.core.admin.common.MsgConstants.field.details.location.label');
+						const labelKind = t('msghub.i18n.core.admin.common.MsgConstants.field.kind.label');
+						const labelLifecycle = t('msghub.i18n.core.admin.common.MsgConstants.field.lifecycle.state.label');
+						const labelLevel = t('msghub.i18n.core.admin.common.MsgConstants.field.level.label');
+						const labelOrigin = t('msghub.i18n.core.admin.common.MsgConstants.field.origin.system.label');
 
 					const locationCount = getFilterSet('details.location')?.size || 0;
 					const kindCount = getFilterSet('kind')?.size || 0;
@@ -1494,12 +1495,12 @@
 						btnOrigin.textContent = originCount > 0 ? `${labelOrigin} (${originCount})` : labelOrigin;
 					}
 
-				for (const field of ['title', 'timing.createdAt', 'timing.updatedAt', 'progress.percentage']) {
-					const btn = headerBtns[`sort:${field}`];
-					if (btn) {
-						btn.classList.toggle('is-active', sortField === field);
+					for (const field of ['icon', 'title', 'text', 'timing.createdAt', 'timing.updatedAt', 'progress.percentage']) {
+						const btn = headerBtns[`sort:${field}`];
+						if (btn) {
+							btn.classList.toggle('is-active', sortField === field);
+						}
 					}
-				}
 			};
 
 				const updatePaging = () => {
