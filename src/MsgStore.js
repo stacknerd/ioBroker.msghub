@@ -677,7 +677,7 @@ class MsgStore {
 	 * - `sort` is optional and must be an array of `{ field, dir? }`.
 	 * - `dir` defaults to `"asc"`; `"desc"` reverses the order.
 	 * - Only the following fields are allowed (others are ignored):
-	 *   - `ref`, `title`, `level`, `kind`, `origin.type`, `origin.system`, `lifecycle.state`, `details.location`
+	 *   - `ref`, `icon`, `title`, `text`, `level`, `kind`, `origin.type`, `origin.system`, `lifecycle.state`, `details.location`
 	 *   - `timing.createdAt`, `timing.updatedAt`, `timing.expiresAt`, `timing.notifyAt`, `timing.remindEvery`, `timing.timeBudget`,
 	 *     `timing.dueAt`, `timing.startAt`, `timing.endAt`
 	 *
@@ -1035,7 +1035,9 @@ class MsgStore {
 
 		const allowedSortFields = new Set([
 			'ref',
+			'icon',
 			'title',
+			'text',
 			'level',
 			'kind',
 			'origin.type',

@@ -977,11 +977,43 @@ describe('MsgStore', () => {
 			expect(result.items.map(msg => msg.ref)).to.deep.equal(['r2', 'r1', 'r3']);
 		});
 
-		it('supports sort and pagination and stays deterministic', () => {
-			const messages = [
-				{ ref: 'r1', level: 10, timing: { createdAt: 100 } },
-				{ ref: 'r2', level: 10, timing: { createdAt: 200 } },
-				{ ref: 'r3', level: 10, timing: { createdAt: 300 } },
+			it('supports sorting by icon (missing values last)', () => {
+				const messages = [
+					{ ref: 'r1', level: 10, icon: 'B' },
+					{ ref: 'r2', level: 10, icon: 'A' },
+					{ ref: 'r3', level: 10 },
+					{ ref: 'r4', level: 10, icon: null },
+				];
+				const { store } = createStore({ messages });
+
+				const asc = store.queryMessages({ sort: [{ field: 'icon', dir: 'asc' }] });
+				expect(asc.items.map(msg => msg.ref)).to.deep.equal(['r2', 'r1', 'r3', 'r4']);
+
+				const desc = store.queryMessages({ sort: [{ field: 'icon', dir: 'desc' }] });
+				expect(desc.items.map(msg => msg.ref)).to.deep.equal(['r1', 'r2', 'r3', 'r4']);
+			});
+
+			it('supports sorting by text (missing values last)', () => {
+				const messages = [
+					{ ref: 'r1', level: 10, text: 'B' },
+					{ ref: 'r2', level: 10, text: 'A' },
+					{ ref: 'r3', level: 10 },
+					{ ref: 'r4', level: 10, text: null },
+				];
+				const { store } = createStore({ messages });
+
+				const asc = store.queryMessages({ sort: [{ field: 'text', dir: 'asc' }] });
+				expect(asc.items.map(msg => msg.ref)).to.deep.equal(['r2', 'r1', 'r3', 'r4']);
+
+				const desc = store.queryMessages({ sort: [{ field: 'text', dir: 'desc' }] });
+				expect(desc.items.map(msg => msg.ref)).to.deep.equal(['r1', 'r2', 'r3', 'r4']);
+			});
+
+			it('supports sort and pagination and stays deterministic', () => {
+				const messages = [
+					{ ref: 'r1', level: 10, timing: { createdAt: 100 } },
+					{ ref: 'r2', level: 10, timing: { createdAt: 200 } },
+					{ ref: 'r3', level: 10, timing: { createdAt: 300 } },
 				{ ref: 'r4', level: 10, timing: { createdAt: 400 } },
 				{ ref: 'r5', level: 10, timing: { createdAt: 500 } },
 			];

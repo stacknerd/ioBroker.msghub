@@ -247,6 +247,12 @@ All read methods:
 - run throttled pruning
 - return rendered views when `MsgRender` is available
 
+#### `queryMessages` sort (selected)
+
+- `sort` is optional and must be an array of `{ field, dir? }` (dir: `"asc"` / `"desc"`).
+- Sorting is only supported on a small allowlist of fields (others are ignored), including: `ref`, `icon`, `title`, `text`, `level`, `kind`,
+  `origin.type`, `origin.system`, `lifecycle.state`, `details.location`, and `timing.*` fields like `timing.createdAt`.
+
 #### `queryMessages` filters (selected)
 
 `where` is a partial message-like object that supports a small set of filter operators.
