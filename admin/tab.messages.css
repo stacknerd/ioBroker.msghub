@@ -75,10 +75,18 @@
 	border-bottom: 1px solid var(--msghub-border-light);
 }
 
+.msghub-root .msghub-messages .msghub-table thead th:first-child {
+	padding-left: calc(var(--msghub-space-2) + var(--msghub-row-edge-indent));
+}
+
 .msghub-root .msghub-messages .msghub-table tbody td {
 	padding: var(--msghub-space-1) var(--msghub-space-2);
 	border-bottom: 1px solid var(--msghub-border-light);
 	vertical-align: top;
+}
+
+.msghub-root .msghub-messages .msghub-table tbody td:first-child {
+	padding-left: calc(var(--msghub-space-2) + var(--msghub-row-edge-indent));
 }
 
 .msghub-root .msghub-messages .msghub-table tbody tr:last-child td {
@@ -94,7 +102,7 @@
 }
 
 .msghub-root .msghub-messages .msghub-table tbody tr.is-selected td:first-child {
-	box-shadow: inset 2px 0 0 var(--msghub-accent);
+	box-shadow: inset 3px 0 0 var(--msghub-accent);
 }
 
 .msghub-root .msghub-messages .msghub-table tbody tr {

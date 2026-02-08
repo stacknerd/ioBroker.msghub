@@ -462,12 +462,6 @@ const socket = createSocket();
 const lang = typeof args.lang === 'string' ? args.lang : 'en';
 const debugTheme = args.debugTheme === true || args.debugTheme === '1' || args.debugTheme === 'true';
 const initialThemeFromQuery = resolveTheme(args);
-const nativeContextMenuInputs =
-	args.nativeContextMenuInputs === true ||
-	args.nativeContextMenuInputs === '1' ||
-	args.nativeContextMenuInputs === 1 ||
-	args.nativeContextMenuInputs === 'true';
-
 let adminDict = Object.freeze({});
 let adminDictPromise = null;
 
@@ -2070,42 +2064,50 @@ const elements = Object.freeze({
 		].map(it => Object.freeze(it));
 	}
 
-	// Global ContextMenu: replaces browser right-click within MsgHub root.
-	// Kill switch: add `?nativeContextMenuInputs=1` to keep the native menu on input/textarea/contenteditable.
-	document.addEventListener('contextmenu', e => {
-		try {
-			if (!e || typeof e !== 'object') {
-				return;
-			}
-			if (ctx.api.ui.dialog?.isOpen?.()) {
-				return;
-			}
-			const target = e.target instanceof HTMLElement ? e.target : null;
-			if (!target) {
-				return;
-			}
-			const rootEl = target.closest('.msghub-root');
-			if (!rootEl) {
-				return;
-			}
-			const insideMenu = target.closest('.msghub-contextmenu');
-			if (insideMenu) {
-				return;
-			}
-			// If a panel wants to own the context menu, it can `preventDefault()` and open its own.
-			if (e.defaultPrevented) {
-				return;
-			}
+		// Global ContextMenu: replaces browser right-click within MsgHub root.
+		document.addEventListener('contextmenu', e => {
+			try {
+				if (!e || typeof e !== 'object') {
+					return;
+				}
+				// Secret bypass: Ctrl+RightClick opens the native browser context menu.
+				if (e.ctrlKey === true) {
+					try {
+						ctx.api.ui.contextMenu.close();
+					} catch {
+						// ignore
+					}
+					return;
+				}
+				if (ctx.api.ui.dialog?.isOpen?.()) {
+					return;
+				}
+				const target = e.target instanceof HTMLElement ? e.target : null;
+				if (!target) {
+					return;
+				}
+				const rootEl = target.closest('.msghub-root');
+				if (!rootEl) {
+					return;
+				}
+					const insideMenu = target.closest('.msghub-contextmenu');
+					if (insideMenu) {
+						// Prevent the native browser context menu on our own context menu UI.
+						// (Ctrl+RightClick bypass is handled above.)
+						e.preventDefault();
+						return;
+					}
+				// If a panel wants to own the context menu, it can `preventDefault()` and open its own.
+				if (e.defaultPrevented) {
+					return;
+				}
 
-			const editable = findEditableTarget(target);
-			if (editable && nativeContextMenuInputs) {
-				return;
-			}
+				const editable = findEditableTarget(target);
 
-			e.preventDefault();
+				e.preventDefault();
 
-			const items = editable ? buildInputContextMenuItems(editable) : [];
-			const anchorPoint = { x: e.clientX, y: e.clientY };
+				const items = editable ? buildInputContextMenuItems(editable) : [];
+				const anchorPoint = { x: e.clientX, y: e.clientY };
 			ctx.api.ui.contextMenu.open({ items, anchorPoint, ariaLabel: 'Context menu', placement: 'bottom-start' });
 		} catch (_err) {
 			// ignore

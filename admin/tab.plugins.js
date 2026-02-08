@@ -8,7 +8,7 @@
 	/** @type {any} */
 	const win = /** @type {any} */ (window);
 
-		function initPluginConfigSection(ctx) {
+	function initPluginConfigSection(ctx) {
 		const elRoot = ctx?.elements?.pluginsRoot;
 		if (!elRoot) {
 			throw new Error('MsghubAdminTabPlugins: missing pluginsRoot element');
@@ -20,13 +20,15 @@
 				? ctx.adapterInstance.trim()
 				: `msghub.${adapterInstance}`;
 
-				const api = ctx.api;
-				const constantsApi = api?.constants;
-				const pluginsApi = api?.plugins;
-				const ingestStatesApi = api?.ingestStates;
-				const h = ctx.h;
-				const pickText = api.i18n.pickText;
-				const ui = api?.ui || ctx.ui;
+		const api = ctx.api;
+		const constantsApi = api?.constants;
+		const pluginsApi = api?.plugins;
+		const ingestStatesApi = api?.ingestStates;
+		const h = ctx.h;
+		const pickText = api.i18n.pickText;
+		const tOr = api.i18n.tOr;
+		const t = api.i18n.t;
+		const ui = api?.ui || ctx.ui;
 
 		let cachedConstants = null;
 		let cachedIngestStatesConstants = null;
@@ -113,11 +115,27 @@
 		};
 
 		const CATEGORY_ORDER = Object.freeze(['ingest', 'notify', 'bridge', 'engage']);
-		const CATEGORY_TITLES = Object.freeze({
-			ingest: 'Ingest',
-			notify: 'Notify',
-			bridge: 'Bridge',
-			engage: 'Engage',
+		const CATEGORY_I18N = Object.freeze({
+			ingest: Object.freeze({
+				titleKey: 'msghub.i18n.core.admin.ui.plugins.category.ingest.title',
+				descKey: 'msghub.i18n.core.admin.ui.plugins.category.ingest.desc',
+				fallbackTitle: 'Ingest',
+			}),
+			notify: Object.freeze({
+				titleKey: 'msghub.i18n.core.admin.ui.plugins.category.notify.title',
+				descKey: 'msghub.i18n.core.admin.ui.plugins.category.notify.desc',
+				fallbackTitle: 'Notify',
+			}),
+			bridge: Object.freeze({
+				titleKey: 'msghub.i18n.core.admin.ui.plugins.category.bridge.title',
+				descKey: 'msghub.i18n.core.admin.ui.plugins.category.bridge.desc',
+				fallbackTitle: 'Bridge',
+			}),
+			engage: Object.freeze({
+				titleKey: 'msghub.i18n.core.admin.ui.plugins.category.engage.title',
+				descKey: 'msghub.i18n.core.admin.ui.plugins.category.engage.desc',
+				fallbackTitle: 'Engage',
+			}),
 		});
 
 		const TIME_UNITS = Object.freeze([
@@ -193,18 +211,466 @@
 			);
 		}
 
-		const confirmDialog = opts => {
-			if (ui?.dialog?.confirm) {
-				return ui.dialog.confirm(opts);
-			}
-			const text = typeof opts?.text === 'string' && opts.text.trim() ? opts.text : String(opts?.title || '');
-			return Promise.resolve(window.confirm(text));
-		};
+			const confirmDialog = opts => {
+				if (ui?.dialog?.confirm) {
+					return ui.dialog.confirm(opts);
+				}
+				const text = typeof opts?.text === 'string' && opts.text.trim() ? opts.text : String(opts?.title || '');
+				return Promise.resolve(window.confirm(text));
+			};
 
-		function appendInlineCodeAware(parent, text) {
-			const s = String(text ?? '');
-			const parts = s.split(/(`[^`]+`)/g).filter(Boolean);
-			for (const part of parts) {
+			const isTextEditableElement = el => {
+				if (!el || typeof el !== 'object') {
+					return false;
+				}
+				if (el instanceof HTMLTextAreaElement) {
+					return true;
+				}
+				if (el instanceof HTMLInputElement) {
+					const type = String(el.type || '').toLowerCase();
+					return ![
+						'button',
+						'submit',
+						'reset',
+						'image',
+						'checkbox',
+						'radio',
+						'range',
+						'color',
+						'file',
+						'hidden',
+					].includes(type);
+				}
+				if (el instanceof HTMLElement && el.isContentEditable === true) {
+					return true;
+				}
+				return false;
+			};
+
+			const isTextEditableTarget = target => {
+				if (!target || typeof target !== 'object' || typeof target.closest !== 'function') {
+					return false;
+				}
+				const el =
+					target.closest('textarea, input, [contenteditable=""], [contenteditable="true"], [contenteditable="plaintext-only"]') ||
+					null;
+				return isTextEditableElement(el);
+			};
+
+			const getAllInstanceWraps = () => Array.from(elRoot.querySelectorAll('.msghub-plugin-instance')).filter(Boolean);
+
+			const getCategoryTitle = categoryRaw => {
+				const raw = typeof categoryRaw === 'string' ? categoryRaw : '';
+				const cfg = CATEGORY_I18N[raw] || null;
+				if (cfg) {
+					return tOr(cfg.titleKey, cfg.fallbackTitle || raw);
+				}
+				return tOr(`msghub.i18n.core.admin.ui.plugins.category.${raw}.title`, raw);
+			};
+
+			const setAccordionChecked = (wraps, checked) => {
+				const list = Array.isArray(wraps) ? wraps : [];
+				for (const w of list) {
+					const input = w?.querySelector?.('.msghub-acc-input--instance');
+					if (!(input instanceof HTMLInputElement)) {
+						continue;
+					}
+					if (input.checked === checked) {
+						continue;
+					}
+					input.checked = checked;
+					try {
+						input.dispatchEvent(new Event('change', { bubbles: true }));
+					} catch {
+						// ignore
+					}
+				}
+			};
+
+			const getEnabledStats = wraps => {
+				const list = Array.isArray(wraps) ? wraps : [];
+				let enabledCount = 0;
+				let disabledCount = 0;
+				for (const w of list) {
+					const curEnabled = w?.getAttribute?.('data-enabled') === '1';
+					if (curEnabled) {
+						enabledCount += 1;
+					} else {
+						disabledCount += 1;
+					}
+				}
+				return { enabledCount, disabledCount, total: enabledCount + disabledCount };
+			};
+
+			const setEnabledForWraps = async (wraps, enabled) => {
+				const list = Array.isArray(wraps) ? wraps : [];
+				const tasks = [];
+				for (const w of list) {
+					const type = String(w?.getAttribute?.('data-plugin-type') || '').trim();
+					const iid = Number(w?.getAttribute?.('data-instance-id'));
+					if (!type || !Number.isFinite(iid)) {
+						continue;
+					}
+					const curEnabled = w?.getAttribute?.('data-enabled') === '1';
+					if (curEnabled === enabled) {
+						continue;
+					}
+					tasks.push({ type, instanceId: Math.trunc(iid) });
+				}
+				for (const task of tasks) {
+					if (!pluginsApi?.setEnabled) {
+						throw new Error('Plugins API is not available');
+					}
+					await pluginsApi.setEnabled({
+						type: task.type,
+						instanceId: task.instanceId,
+						enabled,
+					});
+				}
+				await refreshAll();
+			};
+
+			const openPluginsContextMenu = (e, ctx) => {
+				if (!e || typeof e !== 'object') {
+					return;
+				}
+				const context = ctx && typeof ctx === 'object' ? ctx : {};
+				const kind = typeof context.kind === 'string' ? context.kind : 'all';
+
+				// Secret bypass: Ctrl+RightClick opens the native browser context menu (global handler).
+				if (e.ctrlKey === true) {
+					return;
+				}
+				// Keep the global input context menu for text-like editables.
+				if (isTextEditableTarget(e?.target)) {
+					return;
+				}
+				if (!ui?.contextMenu?.open) {
+					return;
+				}
+				if (typeof e.preventDefault === 'function') {
+					e.preventDefault();
+				}
+
+				const wrapsAll = getAllInstanceWraps();
+				const wrapsThis = kind === 'instance' && context.instWrap ? [context.instWrap] : [];
+				const wrapsType =
+					kind === 'instance' && context.pluginType
+						? wrapsAll.filter(w => String(w.getAttribute('data-plugin-type') || '') === String(context.pluginType))
+						: [];
+				const wrapsCategory =
+					(kind === 'instance' || kind === 'category') && context.categorySafe
+						? wrapsAll.filter(w => String(w.getAttribute('data-plugin-category') || '') === String(context.categorySafe))
+						: [];
+
+				const canExpandAll = wrapsAll.some(w => w?.querySelector?.('.msghub-acc-input--instance'));
+				const canExpandCategory = wrapsCategory.some(w => w?.querySelector?.('.msghub-acc-input--instance'));
+				const canExpandType = wrapsType.some(w => w?.querySelector?.('.msghub-acc-input--instance'));
+				const canExpandThis = wrapsThis.some(w => w?.querySelector?.('.msghub-acc-input--instance'));
+
+				const categoryTitle = context.categoryRaw ? getCategoryTitle(context.categoryRaw) : '';
+				const categoryLabel =
+					kind === 'category'
+						? t('msghub.i18n.core.admin.ui.plugins.contextMenu.scope.this.label', categoryTitle || String(context.categoryRaw))
+						: t('msghub.i18n.core.admin.ui.plugins.contextMenu.scope.category.label', categoryTitle);
+
+				const expandItems =
+					kind === 'instance'
+						? [
+								{
+									id: 'expand_this',
+									label: t('msghub.i18n.core.admin.ui.plugins.contextMenu.scope.this.label', context.instanceName),
+									disabled: !canExpandThis,
+									onSelect: () => setAccordionChecked(wrapsThis, true),
+								},
+								{
+									id: 'expand_type',
+									label: t(
+										'msghub.i18n.core.admin.ui.plugins.contextMenu.scope.type.label',
+										String(context.pluginType || ''),
+									),
+									disabled: !canExpandType,
+									onSelect: () => setAccordionChecked(wrapsType, true),
+								},
+								{
+									id: 'expand_category',
+									label: categoryLabel,
+									disabled: !canExpandCategory,
+									onSelect: () => setAccordionChecked(wrapsCategory, true),
+								},
+								{
+									id: 'expand_all',
+									label: t('msghub.i18n.core.admin.ui.plugins.contextMenu.scope.all.label'),
+									disabled: !canExpandAll,
+									onSelect: () => setAccordionChecked(wrapsAll, true),
+								},
+							]
+						: kind === 'category'
+							? [
+									{
+										id: 'expand_category',
+										label: categoryLabel,
+										disabled: !canExpandCategory,
+										onSelect: () => setAccordionChecked(wrapsCategory, true),
+									},
+									{
+										id: 'expand_all',
+										label: t('msghub.i18n.core.admin.ui.plugins.contextMenu.scope.all.label'),
+										disabled: !canExpandAll,
+										onSelect: () => setAccordionChecked(wrapsAll, true),
+									},
+								]
+							: [
+									{
+										id: 'expand_all',
+										label: t('msghub.i18n.core.admin.ui.plugins.contextMenu.scope.all.label'),
+										disabled: !canExpandAll,
+										onSelect: () => setAccordionChecked(wrapsAll, true),
+									},
+								];
+
+				const collapseItems =
+					kind === 'instance'
+						? [
+								{
+									id: 'collapse_this',
+									label: t('msghub.i18n.core.admin.ui.plugins.contextMenu.scope.this.label', context.instanceName),
+									disabled: !canExpandThis,
+									onSelect: () => setAccordionChecked(wrapsThis, false),
+								},
+								{
+									id: 'collapse_type',
+									label: t(
+										'msghub.i18n.core.admin.ui.plugins.contextMenu.scope.type.label',
+										String(context.pluginType || ''),
+									),
+									disabled: !canExpandType,
+									onSelect: () => setAccordionChecked(wrapsType, false),
+								},
+								{
+									id: 'collapse_category',
+									label: categoryLabel,
+									disabled: !canExpandCategory,
+									onSelect: () => setAccordionChecked(wrapsCategory, false),
+								},
+								{
+									id: 'collapse_all',
+									label: t('msghub.i18n.core.admin.ui.plugins.contextMenu.scope.all.label'),
+									disabled: !canExpandAll,
+									onSelect: () => setAccordionChecked(wrapsAll, false),
+								},
+							]
+						: kind === 'category'
+							? [
+									{
+										id: 'collapse_category',
+										label: categoryLabel,
+										disabled: !canExpandCategory,
+										onSelect: () => setAccordionChecked(wrapsCategory, false),
+									},
+									{
+										id: 'collapse_all',
+										label: t('msghub.i18n.core.admin.ui.plugins.contextMenu.scope.all.label'),
+										disabled: !canExpandAll,
+										onSelect: () => setAccordionChecked(wrapsAll, false),
+									},
+								]
+							: [
+									{
+										id: 'collapse_all',
+										label: t('msghub.i18n.core.admin.ui.plugins.contextMenu.scope.all.label'),
+										disabled: !canExpandAll,
+										onSelect: () => setAccordionChecked(wrapsAll, false),
+									},
+								];
+
+				const statsAll = getEnabledStats(wrapsAll);
+				const statsCategory = getEnabledStats(wrapsCategory);
+				const statsType = getEnabledStats(wrapsType);
+				const statsThis = getEnabledStats(wrapsThis);
+
+				const disableItems =
+					kind === 'instance'
+						? [
+								{
+									id: 'disable_this',
+									label: t('msghub.i18n.core.admin.ui.plugins.contextMenu.scope.this.label', context.instanceName),
+									disabled: statsThis.enabledCount === 0,
+									onSelect: () => setEnabledForWraps(wrapsThis, false),
+								},
+								{
+									id: 'disable_type',
+									label: t(
+										'msghub.i18n.core.admin.ui.plugins.contextMenu.scope.type.label',
+										String(context.pluginType || ''),
+									),
+									disabled: statsType.enabledCount === 0,
+									onSelect: () => setEnabledForWraps(wrapsType, false),
+								},
+								{
+									id: 'disable_category',
+									label: categoryLabel,
+									disabled: statsCategory.enabledCount === 0,
+									onSelect: () => setEnabledForWraps(wrapsCategory, false),
+								},
+								{
+									id: 'disable_all',
+									label: t('msghub.i18n.core.admin.ui.plugins.contextMenu.scope.all.label'),
+									disabled: statsAll.enabledCount === 0,
+									onSelect: () => setEnabledForWraps(wrapsAll, false),
+								},
+							]
+						: kind === 'category'
+							? [
+									{
+										id: 'disable_category',
+										label: categoryLabel,
+										disabled: statsCategory.enabledCount === 0,
+										onSelect: () => setEnabledForWraps(wrapsCategory, false),
+									},
+									{
+										id: 'disable_all',
+										label: t('msghub.i18n.core.admin.ui.plugins.contextMenu.scope.all.label'),
+										disabled: statsAll.enabledCount === 0,
+										onSelect: () => setEnabledForWraps(wrapsAll, false),
+									},
+								]
+							: [
+									{
+										id: 'disable_all',
+										label: t('msghub.i18n.core.admin.ui.plugins.contextMenu.scope.all.label'),
+										disabled: statsAll.enabledCount === 0,
+										onSelect: () => setEnabledForWraps(wrapsAll, false),
+									},
+								];
+
+				const enableItems =
+					kind === 'instance'
+						? [
+								{
+									id: 'enable_this',
+									label: t('msghub.i18n.core.admin.ui.plugins.contextMenu.scope.this.label', context.instanceName),
+									disabled: statsThis.disabledCount === 0,
+									onSelect: () => setEnabledForWraps(wrapsThis, true),
+								},
+								{
+									id: 'enable_type',
+									label: t(
+										'msghub.i18n.core.admin.ui.plugins.contextMenu.scope.type.label',
+										String(context.pluginType || ''),
+									),
+									disabled: statsType.disabledCount === 0,
+									onSelect: () => setEnabledForWraps(wrapsType, true),
+								},
+								{
+									id: 'enable_category',
+									label: categoryLabel,
+									disabled: statsCategory.disabledCount === 0,
+									onSelect: () => setEnabledForWraps(wrapsCategory, true),
+								},
+								{
+									id: 'enable_all',
+									label: t('msghub.i18n.core.admin.ui.plugins.contextMenu.scope.all.label'),
+									disabled: statsAll.disabledCount === 0,
+									onSelect: () => setEnabledForWraps(wrapsAll, true),
+								},
+							]
+						: kind === 'category'
+							? [
+									{
+										id: 'enable_category',
+										label: categoryLabel,
+										disabled: statsCategory.disabledCount === 0,
+										onSelect: () => setEnabledForWraps(wrapsCategory, true),
+									},
+									{
+										id: 'enable_all',
+										label: t('msghub.i18n.core.admin.ui.plugins.contextMenu.scope.all.label'),
+										disabled: statsAll.disabledCount === 0,
+										onSelect: () => setEnabledForWraps(wrapsAll, true),
+									},
+								]
+							: [
+									{
+										id: 'enable_all',
+										label: t('msghub.i18n.core.admin.ui.plugins.contextMenu.scope.all.label'),
+										disabled: statsAll.disabledCount === 0,
+										onSelect: () => setEnabledForWraps(wrapsAll, true),
+									},
+								];
+
+				/** @type {any[]} */
+				const items = [];
+				if (kind === 'instance') {
+					items.push(
+						{
+							id: 'help',
+							label: t('msghub.i18n.core.admin.ui.plugins.contextMenu.help.label', String(context.pluginType || '')),
+							icon: 'help',
+							disabled: context.hasReadme !== true,
+							onSelect: () => context.openReadme?.(),
+						},
+						{
+							id: 'tools',
+							label: t('msghub.i18n.core.admin.ui.plugins.contextMenu.tools.label', String(context.pluginType || '')),
+							icon: 'tools',
+							disabled: context.hasToolsAvailable !== true,
+							items: Array.isArray(context.toolsItems) ? context.toolsItems : [],
+						},
+						{ type: 'separator' },
+					);
+				}
+
+				items.push(
+					{
+						id: 'expand',
+						label: t('msghub.i18n.core.admin.ui.plugins.contextMenu.expand.label'),
+						items: expandItems,
+					},
+					{
+						id: 'collapse',
+						label: t('msghub.i18n.core.admin.ui.plugins.contextMenu.collapse.label'),
+						items: collapseItems,
+					},
+					{ type: 'separator' },
+					{
+						id: 'disable',
+						label: t('msghub.i18n.core.admin.ui.plugins.contextMenu.disable.label'),
+						icon: 'pause',
+						items: disableItems,
+					},
+					{
+						id: 'enable',
+						label: t('msghub.i18n.core.admin.ui.plugins.contextMenu.enable.label'),
+						icon: 'play',
+						items: enableItems,
+					},
+				);
+
+				if (kind === 'instance') {
+					items.push(
+						{ type: 'separator' },
+						{
+							id: 'remove',
+							label: t('msghub.i18n.core.admin.ui.plugins.contextMenu.remove.label'),
+							danger: true,
+							onSelect: () => context.removeInstance?.(),
+						},
+					);
+				}
+
+					ui.contextMenu.open({
+						anchorPoint: { x: e.clientX, y: e.clientY },
+						ariaLabel: 'Plugin context menu',
+						placement: 'bottom-start',
+						items,
+					});
+				};
+
+			function appendInlineCodeAware(parent, text) {
+				const s = String(text ?? '');
+				const parts = s.split(/(`[^`]+`)/g).filter(Boolean);
+				for (const part of parts) {
 				if (part.startsWith('`') && part.endsWith('`') && part.length >= 2) {
 					parent.appendChild(h('code', { text: part.slice(1, -1) }));
 				} else {
@@ -213,7 +679,7 @@
 			}
 		}
 
-		function renderMarkdownLite(md) {
+			function renderMarkdownLite(md) {
 			const root = h('div', { class: 'msghub-readme' });
 			const text = String(md || '').replace(/\r\n/g, '\n');
 			const lines = text.split('\n');
@@ -322,17 +788,33 @@
 			const title = typeof opts?.title === 'string' ? opts.title : '';
 			const bodyEl = opts?.bodyEl;
 			ui?.overlayLarge?.open?.({
-				title: title && title.trim() ? title.trim() : 'Viewer',
-				bodyEl: bodyEl || h('p', { class: 'msghub-muted', text: 'No content available.' }),
+				title: title && title.trim() ? title.trim() : t('msghub.i18n.core.admin.ui.plugins.viewer.title'),
+				bodyEl:
+					bodyEl ||
+					h('p', {
+						class: 'msghub-muted',
+						text: t('msghub.i18n.core.admin.ui.plugins.viewer.empty.text'),
+					}),
 			});
 		};
 
 		let pluginReadmesByType = new Map();
 		let pluginReadmesLoadPromise = null;
-		async function ensurePluginReadmesLoaded() {
+			async function ensurePluginReadmesLoaded() {
 			if (pluginReadmesLoadPromise) {
 				return pluginReadmesLoadPromise;
 			}
+
+			elRoot.addEventListener('contextmenu', e => {
+				try {
+					if (e?.defaultPrevented) {
+						return;
+					}
+					openPluginsContextMenu(e, { kind: 'all' });
+				} catch {
+					// ignore
+				}
+			});
 			pluginReadmesLoadPromise = (async () => {
 				try {
 					const res = await fetch('plugin-readmes.json', { cache: 'no-store' });
@@ -370,11 +852,65 @@
 		const captureAccordionState = () => {
 			const map = new Map();
 			for (const el of elRoot.querySelectorAll('.msghub-acc-input')) {
-				if (el && typeof el.id === 'string' && el.id) {
+				if (!el) {
+					continue;
+				}
+				const key = typeof el.getAttribute === 'function' ? el.getAttribute('data-acc-key') || '' : '';
+				if (key) {
+					map.set(key, el.checked === true);
+					continue;
+				}
+				if (typeof el.id === 'string' && el.id) {
 					map.set(el.id, el.checked === true);
 				}
 			}
 			return map;
+		};
+
+		const toAccKey = ({ kind, type, instanceId }) => {
+			const k = String(kind || '').trim();
+			const t = String(type || '').trim();
+			const iid = Number.isFinite(instanceId) ? Math.trunc(instanceId) : null;
+			if (!k || !t) {
+				return '';
+			}
+			return iid === null ? `${k}:${adapterNamespace}:${t}` : `${k}:${adapterNamespace}:${t}:${iid}`;
+		};
+
+		const buildPluginsViewModel = ({ plugins, instances, readmesByType }) => {
+			const pluginList = Array.isArray(plugins) ? plugins.filter(Boolean) : [];
+			const instList = Array.isArray(instances) ? instances.filter(Boolean) : [];
+
+			const byType = buildInstancesByType(instList);
+			const metaByType = new Map();
+			for (const p of pluginList) {
+				const type = String(p?.type || '').trim();
+				if (!type) {
+					continue;
+				}
+				const hasSchema = !!(p?.options && typeof p.options === 'object');
+				const discoverable = p?.discoverable === false ? false : true;
+				const supportsMultiple = p?.supportsMultiple === true;
+				const category = typeof p?.category === 'string' ? p.category : 'unknown';
+				const hasReadme = readmesByType instanceof Map ? !!readmesByType.get(type)?.md?.trim?.() : false;
+				metaByType.set(
+					type,
+					Object.freeze({
+						type,
+						category,
+						hasSchema,
+						discoverable,
+						supportsMultiple,
+						hasReadme,
+					}),
+				);
+			}
+
+			return Object.freeze({
+				byType,
+				metaByType,
+				plugins: pluginList,
+			});
 		};
 
 		function parseCsvValues(csv) {
@@ -1421,9 +1957,7 @@
 								]),
 							]),
 						]),
-						h('div', null, [
-							h('label', null, [elReplace, h('span', { text: ' ' }), elReplaceLabel]),
-						]),
+						h('div', null, [h('label', null, [elReplace, h('span', { text: ' ' }), elReplaceLabel])]),
 					]),
 				]),
 				h('div', { class: 'msghub-bulk-step' }, [
@@ -1728,15 +2262,15 @@
 				setError('');
 				saving = true;
 				render();
-					Promise.resolve()
-						.then(() => {
-							if (!ingestStatesApi?.presets?.delete) {
-								throw new Error('IngestStates presets API is not available');
-							}
-							return ingestStatesApi.presets.delete({ presetId: id });
-						})
-						.then(() => loadList())
-						.catch(e => {
+				Promise.resolve()
+					.then(() => {
+						if (!ingestStatesApi?.presets?.delete) {
+							throw new Error('IngestStates presets API is not available');
+						}
+						return ingestStatesApi.presets.delete({ presetId: id });
+					})
+					.then(() => loadList())
+					.catch(e => {
 						const msg = String(e?.message || e);
 						setError(msg);
 						toast(msg);
@@ -1786,7 +2320,7 @@
 				setError('');
 				saving = true;
 				render();
-					Promise.resolve()
+				Promise.resolve()
 					.then(() => {
 						try {
 							console.debug('Msghub presets: upsert start', { presetId: draft?.presetId });
@@ -1794,13 +2328,13 @@
 							// ignore
 						}
 					})
-						.then(() => {
-							if (!ingestStatesApi?.presets?.upsert) {
-								throw new Error('IngestStates presets API is not available');
-							}
-							return ingestStatesApi.presets.upsert({ preset: cloneJson(draft) });
-						})
-						.then(() => loadList({ selectPresetId: draft.presetId }))
+					.then(() => {
+						if (!ingestStatesApi?.presets?.upsert) {
+							throw new Error('IngestStates presets API is not available');
+						}
+						return ingestStatesApi.presets.upsert({ preset: cloneJson(draft) });
+					})
+					.then(() => loadList({ selectPresetId: draft.presetId }))
 					.then(() => {
 						try {
 							console.debug('Msghub presets: upsert ok', { presetId: draft?.presetId });
@@ -2031,10 +2565,7 @@
 					return {
 						input,
 						getValue: () => input.value,
-						wrapper: h('div', { class: 'msghub-field' }, [
-							input,
-							h('label', { for: id, text: 'Title' }),
-						]),
+						wrapper: h('div', { class: 'msghub-field' }, [input, h('label', { for: id, text: 'Title' })]),
 					};
 				})();
 
@@ -2475,562 +3006,6 @@
 			return el;
 		}
 
-		function renderIngestStatesTools({ instances, schema, ingestConstants }) {
-			const body = h('div', { class: 'msghub-tools-root' });
-
-			const tabs = [
-				{
-					id: 'bulk',
-					label: 'Batch edit',
-					render: () => renderIngestStatesBulkApply({ instances, schema, ingestConstants }),
-				},
-				{
-					id: 'presets',
-					label: 'Message presets',
-					render: () => renderIngestStatesMessagePresetsTool({ ingestConstants }),
-				},
-			];
-
-			let activeId = 'bulk';
-
-			const elTabs = h(
-				'div',
-				{ class: 'msghub-tools-tabs' },
-				tabs.map(t =>
-					h('a', {
-						class: `msghub-tools-tab${t.id === activeId ? ' active' : ''}`,
-						href: '#',
-						'data-tab': t.id,
-						onclick: e => {
-							e.preventDefault();
-							activeId = t.id;
-							render();
-						},
-						text: t.label,
-					}),
-				),
-			);
-
-			const elContent = h('div', { class: 'msghub-tools-content' });
-
-			const render = () => {
-				for (const a of elTabs.querySelectorAll('a')) {
-					a.classList.toggle('active', a.getAttribute('data-tab') === activeId);
-				}
-				const t = tabs.find(x => x.id === activeId) || tabs[0];
-				elContent.replaceChildren(t.render());
-			};
-
-			body.appendChild(elTabs);
-			body.appendChild(elContent);
-			render();
-			return body;
-		}
-
-		function renderPluginCard({ plugin, instances, refreshAll, refreshPlugin, expandedById, readmesByType }) {
-			const label = formatPluginLabel(plugin);
-			const desc = pickText(plugin?.description) || '';
-
-			const instList = Array.isArray(instances) ? instances : [];
-			const fields = getPluginFields(plugin);
-			const instanceTitleKey = getInstanceTitleFieldKey(fields);
-			const hasOptions = fields.length > 0;
-
-			const readme = readmesByType instanceof Map ? readmesByType.get(String(plugin?.type || '')) : null;
-			const hasReadme = !!readme?.md?.trim?.();
-
-			const safeIdPart = String(plugin.type || 'plugin').replace(/[^A-Za-z0-9_-]/g, '_');
-			const accId = `acc_${safeIdPart}_${adapterInstance}`;
-			const isExpanded = expandedById instanceof Map ? expandedById.get(accId) : undefined;
-
-			const total = instList.length;
-			const runningCount = instList.filter(i => i?.status === 'running').length;
-			const errorCount = instList.filter(i => i?.status === 'error').length;
-			const stoppedCount = instList.filter(i => i?.status === 'stopped').length;
-
-			const toPct = (count, denom) => {
-				if (!denom || denom <= 0) {
-					return 0;
-				}
-				return Math.max(0, Math.min(100, Math.round((count / denom) * 100)));
-			};
-			let pRunning = toPct(runningCount, total);
-			let pError = toPct(errorCount, total);
-			let pStopped = toPct(stoppedCount, total);
-			if (total > 0) {
-				pStopped = Math.max(0, Math.min(100, 100 - pRunning - pError));
-			}
-
-			const statusTitle = `${runningCount} running · ${errorCount} error · ${stoppedCount} stopped`;
-
-			const openReadme = () => {
-				const body = h('div', null, [
-					readme?.source
-						? h('div', { class: 'msghub-muted msghub-readme-source', text: `Source: ${readme.source}` })
-						: null,
-					hasReadme
-						? renderMarkdownLite(readme.md)
-						: h('p', { class: 'msghub-muted', text: 'No guide available.' }),
-				]);
-				openViewer({
-					title: `${label.primary} · User Guide`,
-					bodyEl: body,
-				});
-			};
-
-			const openTools = () => {
-				const hasInst0 = instList.some(i => i?.type === 'IngestStates' && i?.instanceId === 0);
-				const inst0 = instList.find(i => i?.type === 'IngestStates' && i?.instanceId === 0) || null;
-				if (!hasInst0) {
-					toast('IngestStates has no instance yet. Create and enable it first.');
-					return;
-				}
-				if (inst0?.enabled !== true) {
-					toast('IngestStates is disabled. Enable the plugin to use Tools.');
-					return;
-				}
-
-				const body = h('div', null, [h('p', { class: 'msghub-muted', text: 'Loading tools…' })]);
-				openViewer({
-					title: `${label.primary} · Tools`,
-					bodyEl: body,
-				});
-
-				Promise.resolve()
-					.then(async () => {
-						await ensureConstantsLoaded();
-						const schema = await ensureIngestStatesSchema();
-						const ingestConstants = await ensureIngestStatesConstantsLoaded();
-						body.replaceChildren(renderIngestStatesTools({ instances: instList, schema, ingestConstants }));
-					})
-					.catch(err => {
-						body.replaceChildren(
-							h('div', {
-								class: 'msghub-error',
-								text: `Failed to load tools.\n${String(err?.message || err)}`,
-							}),
-						);
-					});
-			};
-
-			const header = h('div', { class: 'msghub-card-head' }, [
-				h('div', { class: 'msghub-card-headrow' }, [
-					h('div', { class: 'msghub-card-headleft' }, [
-						h('div', {
-							class: 'msghub-status-ring',
-							style: `--p-running: ${pRunning}; --p-error: ${pError}; --p-stopped: ${pStopped};`,
-							title: statusTitle,
-							'aria-label': statusTitle,
-						}),
-						h('span', { class: 'msghub-card-title', text: label.primary }),
-					]),
-					h('div', { class: 'msghub-card-headright' }, [
-						h('button', {
-							class: 'msghub-info-btn',
-							type: 'button',
-							disabled: hasReadme ? undefined : true,
-							title: hasReadme ? 'User guide' : 'No user guide available',
-							'aria-label': hasReadme ? 'User guide' : 'No user guide available',
-							onclick: () => openReadme(),
-							text: 'i',
-						}),
-						plugin?.type === 'IngestStates'
-							? h('button', {
-									class: 'msghub-tools-btn',
-									type: 'button',
-									title: 'Tools',
-									'aria-label': 'Tools',
-									onclick: () => openTools(),
-									text: 'Tools',
-								})
-							: null,
-						h('label', { class: 'msghub-acc-toggle', for: accId, text: 'Details' }),
-					]),
-				]),
-				label.secondary ? h('p', { class: 'msghub-muted', text: label.secondary }) : null,
-				desc ? h('p', { class: 'msghub-muted', text: desc }) : null,
-			]);
-
-			const body = h('div', { class: 'msghub-card-body' });
-			const canAdd = plugin.supportsMultiple === true ? true : instList.length === 0;
-
-			const actions = h('div', { class: 'msghub-actions' }, []);
-			if (canAdd) {
-					actions.appendChild(
-						h('button', {
-							type: 'button',
-							onclick: async () => {
-								if (!pluginsApi?.createInstance) {
-									throw new Error('Plugins API is not available');
-								}
-								await pluginsApi.createInstance({
-									category: plugin.category,
-									type: plugin.type,
-								});
-								await refreshPlugin(plugin.type);
-							},
-						text: 'Add instance',
-					}),
-				);
-			}
-
-			if (instList.length > 1) {
-				const setAll = async enabled => {
-					const buttons = Array.from(actions.querySelectorAll('button'));
-					for (const btn of buttons) {
-						btn.disabled = true;
-					}
-						try {
-							for (const inst of instList) {
-								if (!pluginsApi?.setEnabled) {
-									throw new Error('Plugins API is not available');
-								}
-								await pluginsApi.setEnabled({
-									type: plugin.type,
-									instanceId: inst.instanceId,
-									enabled,
-								});
-							}
-							await refreshPlugin(plugin.type);
-					} finally {
-						for (const btn of buttons) {
-							btn.disabled = false;
-						}
-					}
-				};
-
-				actions.appendChild(
-					h('button', {
-						type: 'button',
-						onclick: async () => await setAll(true),
-						text: 'Enable all',
-					}),
-				);
-				actions.appendChild(
-					h('button', {
-						type: 'button',
-						onclick: async () => await setAll(false),
-						text: 'Disable all',
-					}),
-				);
-			}
-
-			if (hasOptions && instList.length > 1) {
-				const setAllInstances = open => {
-					for (const el of body.querySelectorAll('.msghub-acc-input--instance')) {
-						el.checked = open === true;
-					}
-				};
-				actions.appendChild(
-					h('button', {
-						type: 'button',
-						onclick: () => setAllInstances(true),
-						text: 'Expand instances',
-					}),
-				);
-				actions.appendChild(
-					h('button', {
-						type: 'button',
-						onclick: () => setAllInstances(false),
-						text: 'Collapse instances',
-					}),
-				);
-			}
-
-			body.appendChild(actions);
-
-			if (instList.length === 0) {
-				body.appendChild(h('p', { class: 'msghub-muted', text: 'No instances yet.' }));
-			}
-
-			for (const inst of instList) {
-				const statusSafe = cssSafe(inst?.status || 'unknown');
-				const instIdPart = String(inst.instanceId).replace(/[^0-9]/g, '') || '0';
-				const instAccId = `acc_inst_${safeIdPart}_${instIdPart}_${adapterInstance}`;
-				const instExpanded = expandedById instanceof Map ? expandedById.get(instAccId) : undefined;
-				const instanceTitleValue = formatInstanceTitleValue({ inst, fieldKey: instanceTitleKey, plugin });
-
-				const enabledId = `en_${plugin.type}_${inst.instanceId}`;
-				const enabledInput = h('input', { type: 'checkbox', id: enabledId });
-				enabledInput.checked = inst.enabled === true;
-				const enabledLabel = h('label', { for: enabledId, text: 'Enabled' });
-				const enabledWrap = h('p', null, [enabledInput, enabledLabel]);
-
-				enabledInput.addEventListener('change', async () => {
-					try {
-						if (!pluginsApi?.setEnabled) {
-							throw new Error('Plugins API is not available');
-						}
-						await pluginsApi.setEnabled({
-							type: plugin.type,
-							instanceId: inst.instanceId,
-							enabled: enabledInput.checked,
-						});
-						await refreshPlugin(plugin.type);
-					} catch (e) {
-						enabledInput.checked = !enabledInput.checked;
-						throw e;
-					}
-				});
-
-				const instWrap = h('div', {
-					class: [
-						'msghub-instance',
-						plugin.supportsMultiple === true ? 'msghub-instance--multi' : 'msghub-instance--single',
-						`msghub-run-${statusSafe}`,
-					].join(' '),
-					'data-instance-id': String(inst.instanceId),
-					'data-run-status': statusSafe,
-				});
-
-				if (hasOptions) {
-					instWrap.appendChild(
-						h('input', {
-							class: 'msghub-acc-input msghub-acc-input--instance',
-							type: 'checkbox',
-							id: instAccId,
-							checked: instExpanded === true ? '' : undefined,
-						}),
-					);
-				}
-
-				const headActions = h('div', { class: 'msghub-instance-actions' }, []);
-				if (hasOptions) {
-					headActions.appendChild(
-						h('label', {
-							class: 'msghub-acc-toggle msghub-acc-toggle--instance',
-							for: instAccId,
-							text: 'Options',
-						}),
-					);
-					}
-					headActions.appendChild(
-						h('button', {
-							type: 'button',
-							onclick: async () => {
-								const ok = await confirmDialog({
-									title: 'Delete instance?',
-									text: 'Options of this instance will be lost and states will be deleted.',
-									danger: true,
-									confirmText: 'Delete',
-									cancelText: 'Cancel',
-								});
-								if (!ok) {
-									return;
-								}
-								if (!pluginsApi?.deleteInstance) {
-									throw new Error('Plugins API is not available');
-								}
-								await pluginsApi.deleteInstance({
-									type: plugin.type,
-									instanceId: inst.instanceId,
-								});
-								await refreshPlugin(plugin.type);
-							},
-							text: 'Delete',
-						}),
-					);
-
-				const wantsChannel = plugin.supportsChannelRouting === true;
-				let channelRow = null;
-				if (wantsChannel) {
-					const channelId = `ch_${plugin.type}_${inst.instanceId}_${adapterInstance}`;
-					const initialChannel = typeof inst.native?.channel === 'string' ? inst.native.channel : '';
-					const channelInput = h('input', {
-						type: 'text',
-						id: channelId,
-						class: 'msghub-instance-channel-input',
-						placeholder: 'all',
-					});
-					channelInput.value = initialChannel;
-					channelInput.setAttribute('data-prev', initialChannel);
-
-						const saveChannel = async () => {
-						const prev = channelInput.getAttribute('data-prev') || '';
-						const next = String(channelInput.value || '').trim();
-						if (next === prev) {
-							return;
-						}
-							try {
-								channelInput.setAttribute('data-prev', next);
-								if (!pluginsApi?.updateInstance) {
-									throw new Error('Plugins API is not available');
-								}
-								await pluginsApi.updateInstance({
-									type: plugin.type,
-									instanceId: inst.instanceId,
-									nativePatch: { channel: next || null },
-								});
-								await refreshPlugin(plugin.type);
-							} catch (e) {
-							channelInput.value = prev;
-							channelInput.setAttribute('data-prev', prev);
-							toast(`Failed to save channel: ${String(e?.message || e)}`);
-						}
-					};
-
-					channelInput.addEventListener('keydown', e => {
-						if (e.key === 'Enter') {
-							e.preventDefault();
-							channelInput.blur();
-						}
-					});
-					channelInput.addEventListener('blur', () => saveChannel());
-					channelInput.addEventListener('change', () => saveChannel());
-
-					channelRow = h('div', { class: 'msghub-instance-channel' }, [
-						h('span', { class: 'msghub-instance-channel-label', text: 'Channel:' }),
-						channelInput,
-					]);
-				}
-
-				const metaChildren = [
-					h('div', { text: `Status: ${inst.status || 'unknown'}` }),
-					instanceTitleValue ? h('div', { text: instanceTitleValue }) : null,
-					channelRow,
-				].filter(Boolean);
-
-				const head = h('div', { class: 'msghub-instance-head' }, [
-					h('div', { class: 'msghub-instance-title', text: `#${inst.instanceId}` }),
-					h('div', { class: 'msghub-instance-enabled' }, [enabledWrap]),
-					h('div', { class: 'msghub-instance-meta msghub-muted' }, metaChildren),
-					headActions,
-				]);
-
-				instWrap.appendChild(head);
-
-				if (hasOptions) {
-					const bodyWrap = h('div', { class: 'msghub-instance-body' });
-					const fieldsContainer = h('div', { class: 'msghub-instance-fields' });
-					const inputs = {};
-					const initial = {};
-
-					const normalize = v => (v === undefined ? null : v);
-					const isEqual = (a, b) => Object.is(a, b);
-
-					let saveBtn = null;
-					const setSaveEnabled = enabled => {
-						if (!saveBtn) {
-							return;
-						}
-						saveBtn.disabled = enabled !== true;
-						saveBtn.setAttribute('aria-disabled', enabled === true ? 'false' : 'true');
-					};
-
-					const isDirtyNow = () => {
-						for (const [k, info] of Object.entries(inputs)) {
-							const cur = normalize(info.getValue());
-							const prev = normalize(initial[k]);
-							if (!isEqual(cur, prev)) {
-								return true;
-							}
-						}
-						return false;
-					};
-
-					const updateDirtyUi = () => setSaveEnabled(isDirtyNow());
-
-					for (const field of fields) {
-						const key = field?.key;
-						if (!key) {
-							continue;
-						}
-						const effectiveValue =
-							inst.native?.[key] !== undefined && inst.native?.[key] !== null
-								? inst.native?.[key]
-								: field.default;
-						const unit = field?.unit;
-						const { input, select, wrapper, getValue, skipSave } = buildFieldInput({
-							type: field.type,
-							key,
-							label:
-								field.type === 'header'
-									? pickText(field.label) || ''
-									: pickText(field.label) || field.key,
-							help: pickText(field.help) || '',
-							value: effectiveValue,
-							unit,
-							min: field.min,
-							max: field.max,
-							step: field.step,
-							options: field.options,
-							multiOptions: field.multiOptions,
-						});
-
-						if (skipSave === true) {
-							fieldsContainer.appendChild(wrapper);
-							continue;
-						}
-
-						const valueGetter = typeof getValue === 'function' ? getValue : () => null;
-						inputs[key] = { input, select, field, getValue: valueGetter };
-						initial[key] = normalize(valueGetter());
-
-						if (input?.tagName === 'SELECT') {
-							input.addEventListener('change', updateDirtyUi);
-						} else if (field.type === 'boolean') {
-							input?.addEventListener?.('change', updateDirtyUi);
-						} else {
-							input?.addEventListener?.('input', updateDirtyUi);
-							input?.addEventListener?.('change', updateDirtyUi);
-						}
-						if (select) {
-							select.addEventListener('change', updateDirtyUi);
-						}
-
-						fieldsContainer.appendChild(wrapper);
-					}
-
-						saveBtn = h('button', {
-							type: 'button',
-							disabled: true,
-							'aria-disabled': 'true',
-								onclick: async () => {
-									if (saveBtn.disabled) {
-										return;
-									}
-									const patch = {};
-									for (const [k, info] of Object.entries(inputs)) {
-										patch[k] = info.getValue();
-									}
-									if (!pluginsApi?.updateInstance) {
-										throw new Error('Plugins API is not available');
-									}
-									await pluginsApi.updateInstance({
-										type: plugin.type,
-										instanceId: inst.instanceId,
-										nativePatch: patch,
-									});
-									await refreshPlugin(plugin.type);
-								},
-							text: 'Save options',
-						});
-
-					updateDirtyUi();
-
-					bodyWrap.appendChild(fieldsContainer);
-					bodyWrap.appendChild(h('div', { class: 'msghub-instance-save' }, [saveBtn]));
-					instWrap.appendChild(bodyWrap);
-				}
-
-				body.appendChild(instWrap);
-			}
-
-			const catClass = typeof plugin?.category === 'string' ? `msghub-plugin-${cssSafe(plugin.category)}` : '';
-			const multiClass = plugin.supportsMultiple === true ? 'msghub-plugin--multi' : 'msghub-plugin--single';
-
-				return h('div', { class: `msghub-card msghub-plugin-card ${catClass} ${multiClass}`.trim(), 'data-plugin-type': plugin.type }, [
-						h('input', {
-							class: 'msghub-acc-input',
-							type: 'checkbox',
-							id: accId,
-							checked: isExpanded === true ? '' : undefined,
-						}),
-						header,
-						body,
-					]);
-			}
-
 		let cachedPluginsWithUi = [];
 
 		function buildInstancesByType(instances) {
@@ -3058,87 +3033,591 @@
 			return null;
 		}
 
-			async function refreshAll() {
-				try {
-					await ensureConstantsLoaded();
-					const expandedById = captureAccordionState();
-					if (!pluginsApi?.getCatalog || !pluginsApi?.listInstances) {
+		function renderInstanceRow({ plugin, inst, instList, expandedById, readmesByType }) {
+			const statusSafe = cssSafe(inst?.status || 'unknown');
+			const stateClass = `msghub-plugin-state-${statusSafe}`;
+			const categoryRaw = typeof plugin?.category === 'string' ? plugin.category : 'unknown';
+			const categorySafe = cssSafe(categoryRaw);
+
+			const fields = getPluginFields(plugin);
+			const instanceTitleKey = getInstanceTitleFieldKey(fields);
+			const hasOptions = fields.length > 0;
+			const instAccKey = toAccKey({ kind: 'inst', type: plugin.type, instanceId: inst.instanceId });
+			const instExpanded = expandedById instanceof Map ? expandedById.get(instAccKey) : undefined;
+
+			const readme = readmesByType instanceof Map ? readmesByType.get(String(plugin?.type || '')) : null;
+			const hasReadme = !!readme?.md?.trim?.();
+
+			const instanceTitleValue = formatInstanceTitleValue({ inst, fieldKey: instanceTitleKey, plugin });
+			const wantsChannel = plugin.supportsChannelRouting === true;
+			const instanceName = `${plugin.type}.${inst.instanceId}`;
+
+			const openReadme = () => {
+				if (!hasReadme) {
+					return;
+				}
+				const body = h('div', null, [
+					readme?.source
+						? h('div', { class: 'msghub-muted msghub-readme-source', text: `Source: ${readme.source}` })
+						: null,
+					renderMarkdownLite(readme.md),
+				]);
+				openViewer({
+					title: `${plugin.type} · User Guide`,
+					bodyEl: body,
+				});
+			};
+
+			const hasToolsAvailable = (() => {
+				if (plugin?.type !== 'IngestStates') {
+					return false;
+				}
+				const inst0 = Array.isArray(instList) ? instList.find(i => i?.instanceId === 0) : null;
+				return inst0?.enabled === true;
+			})();
+
+			const getToolsMenuConfig = () => {
+				if (plugin?.type !== 'IngestStates' || !hasToolsAvailable) {
+					return { isAvailable: false, items: [] };
+				}
+
+				const openIngestStatesTool = toolId => {
+					const body = h('div', null, [
+						h('p', {
+							class: 'msghub-muted',
+							text: t('msghub.i18n.core.admin.ui.plugins.tools.loading.text'),
+						}),
+					]);
+					openViewer({
+						title: `${plugin.type} · Tools`,
+						bodyEl: body,
+					});
+
+					Promise.resolve()
+						.then(async () => {
+							await ensureConstantsLoaded();
+							const ingestConstants = await ensureIngestStatesConstantsLoaded();
+							if (toolId === 'bulk') {
+								const schema = await ensureIngestStatesSchema();
+								body.replaceChildren(
+									renderIngestStatesBulkApply({ instances: instList, schema, ingestConstants }),
+								);
+								return;
+							}
+							if (toolId === 'presets') {
+								body.replaceChildren(renderIngestStatesMessagePresetsTool({ ingestConstants }));
+								return;
+							}
+							body.replaceChildren(h('p', { class: 'msghub-muted', text: '' }));
+						})
+						.catch(err => {
+							body.replaceChildren(
+								h('div', {
+									class: 'msghub-error',
+									text: t(
+										'msghub.i18n.core.admin.ui.plugins.tools.loadFailed.text',
+										String(err?.message || err),
+									),
+								}),
+							);
+						});
+				};
+
+				return {
+					isAvailable: true,
+					items: [
+						{
+							id: 'ingeststates_bulk',
+							label: t('msghub.i18n.core.admin.ui.plugins.tools.ingestStates.bulk.label'),
+							onSelect: () => openIngestStatesTool('bulk'),
+						},
+						{
+							id: 'ingeststates_presets',
+							label: t('msghub.i18n.core.admin.ui.plugins.tools.ingestStates.presets.label'),
+							onSelect: () => openIngestStatesTool('presets'),
+						},
+					],
+				};
+			};
+
+			const openToolsMenu = (anchorEl, e) => {
+				const cfg = getToolsMenuConfig();
+				if (!cfg.isAvailable) {
+					return;
+				}
+				if (!ui?.contextMenu?.open) {
+					return;
+				}
+					ui.contextMenu.open({
+						anchorEl: anchorEl instanceof HTMLElement ? anchorEl : null,
+						anchorPoint: !anchorEl && e ? { x: e.clientX, y: e.clientY } : null,
+						ariaLabel: 'Plugin context menu',
+						placement: 'bottom-start',
+						items: cfg.items,
+					});
+				};
+
+			const instWrap = h('div', {
+				class: [
+					'msghub-instance',
+					'msghub-plugin-instance',
+					plugin.supportsMultiple === true ? 'msghub-instance--multi' : 'msghub-instance--single',
+					`msghub-run-${statusSafe}`,
+					stateClass,
+				].join(' '),
+				'data-instance-id': String(inst.instanceId),
+				'data-run-status': statusSafe,
+				'data-enabled': inst?.enabled === true ? '1' : '0',
+				'data-plugin-type': String(plugin.type || ''),
+				'data-plugin-category': categorySafe,
+			});
+
+			const accId = `acc_inst_${String(plugin.type || 'plugin').replace(/[^A-Za-z0-9_-]/g, '_')}_${String(inst.instanceId).replace(/[^0-9]/g, '') || '0'}_${adapterInstance}`;
+			let accInput = null;
+			if (hasOptions) {
+				accInput = h('input', {
+					class: 'msghub-acc-input msghub-acc-input--instance',
+					type: 'checkbox',
+					id: accId,
+					'data-acc-key': instAccKey,
+					checked: instExpanded === true ? '' : undefined,
+				});
+				instWrap.appendChild(accInput);
+			}
+
+			const statusRaw = typeof inst?.status === 'string' ? inst.status.trim() : '';
+			const statusText = statusRaw || t('msghub.i18n.core.admin.ui.plugins.instance.status.unknown');
+			const statusTitle = t('msghub.i18n.core.admin.ui.plugins.instance.status.title', statusText);
+			const statusEl = h('div', {
+				class: 'msghub-instance-status',
+				title: statusTitle,
+				'aria-label': statusTitle,
+			});
+			const iconSlot = h('div', { class: 'msghub-instance-icon-slot', 'aria-hidden': 'true' });
+			const nameEl = h('div', { class: 'msghub-instance-name', text: `${plugin.type}.${inst.instanceId}` });
+
+			const toggleLabel =
+				inst?.enabled === true
+					? t('msghub.i18n.core.admin.ui.plugins.instance.action.stop')
+					: t('msghub.i18n.core.admin.ui.plugins.instance.action.start');
+					const toggleBtn = h('button', {
+						type: 'button',
+						class: 'msghub-instance-toggle msghub-uibutton-icon',
+						title: toggleLabel,
+						'aria-label': toggleLabel,
+						text: inst?.enabled === true ? '⏸' : '▶',
+						onclick: async () => {
+					if (!pluginsApi?.setEnabled) {
 						throw new Error('Plugins API is not available');
 					}
-					const { plugins } = await pluginsApi.getCatalog();
-					const { instances } = await pluginsApi.listInstances();
+					await pluginsApi.setEnabled({
+						type: plugin.type,
+						instanceId: inst.instanceId,
+						enabled: inst?.enabled !== true,
+					});
+					await refreshAll();
+				},
+			});
+
+						const helpBtn = h('button', {
+							type: 'button',
+							class: `msghub-instance-help msghub-uibutton-icon${hasReadme ? '' : ' is-invisible'}`,
+							disabled: hasReadme ? undefined : true,
+							title: hasReadme ? t('msghub.i18n.core.admin.ui.plugins.instance.help.button') : '',
+							'aria-label': t('msghub.i18n.core.admin.ui.plugins.instance.help.button'),
+					text: 'i',
+					onclick: () => openReadme(),
+				});
+
+						const toolsBtn = h('button', {
+							type: 'button',
+							class: `msghub-instance-tools msghub-uibutton-icon${hasToolsAvailable ? '' : ' is-invisible'}`,
+							disabled: hasToolsAvailable ? undefined : true,
+							title: hasToolsAvailable ? t('msghub.i18n.core.admin.ui.plugins.instance.tools.button') : '',
+							'aria-label': t('msghub.i18n.core.admin.ui.plugins.instance.tools.button'),
+					text: t('msghub.i18n.core.admin.ui.plugins.instance.tools.button'),
+					onclick: e => openToolsMenu(toolsBtn, e),
+				});
+
+			const channelId = `ch_${plugin.type}_${inst.instanceId}_${adapterInstance}`;
+			const channelValue = typeof inst.native?.channel === 'string' ? inst.native.channel : '';
+			const channelEl = wantsChannel
+				? (() => {
+						const input = h('input', {
+							type: 'text',
+							id: channelId,
+							class: 'msghub-instance-channel-input',
+							// Intentionally hard-coded: this is also the default filter value (must be "all", not translated).
+							placeholder: 'all',
+							value: channelValue,
+						});
+						input.setAttribute('data-prev', channelValue);
+
+						const saveChannel = async () => {
+							const prev = input.getAttribute('data-prev') || '';
+							const next = String(input.value || '').trim();
+							if (next === prev) {
+								return;
+							}
+							try {
+								input.setAttribute('data-prev', next);
+								if (!pluginsApi?.updateInstance) {
+									throw new Error('Plugins API is not available');
+								}
+								await pluginsApi.updateInstance({
+									type: plugin.type,
+									instanceId: inst.instanceId,
+									nativePatch: { channel: next || null },
+								});
+							} catch (e) {
+								input.value = prev;
+								input.setAttribute('data-prev', prev);
+								toast(
+									t(
+										'msghub.i18n.core.admin.ui.plugins.instance.channel.saveFailed.text',
+										String(e?.message || e),
+									),
+								);
+							}
+						};
+
+						input.addEventListener('keydown', e => {
+							if (e.key === 'Enter') {
+								e.preventDefault();
+								input.blur();
+							}
+						});
+						input.addEventListener('blur', () => saveChannel());
+						input.addEventListener('change', () => saveChannel());
+
+						return input;
+					})()
+				: h('span', { class: 'msghub-instance-channel-text' });
+
+			const titleValueEl = h('div', {
+				class: `msghub-instance-titlevalue${instanceTitleValue ? '' : ' is-invisible'}`,
+				text: instanceTitleValue || '—',
+				title: instanceTitleValue || '',
+			});
+
+			const chevron = hasOptions
+				? h('label', { class: 'msghub-acc-toggle msghub-acc-toggle--instance', for: accId, text: '▾' })
+				: h('span', { class: 'msghub-acc-toggle msghub-acc-toggle--instance is-invisible', text: '▾' });
+
+				const head = h('div', { class: 'msghub-instance-head' }, [
+					statusEl,
+					iconSlot,
+					nameEl,
+					toggleBtn,
+					helpBtn,
+					toolsBtn,
+					titleValueEl,
+					channelEl,
+					chevron,
+				]);
+
+				const removeInstance = async () => {
+					const name = instanceName;
+					const ok = await confirmDialog({
+						title: t('msghub.i18n.core.admin.ui.plugins.contextMenu.remove.title'),
+						text: t('msghub.i18n.core.admin.ui.plugins.contextMenu.remove.text', name),
+					});
+					if (!ok) {
+						return;
+					}
+					if (!pluginsApi?.deleteInstance) {
+						throw new Error('Plugins API is not available');
+					}
+					await pluginsApi.deleteInstance({ type: plugin.type, instanceId: inst.instanceId });
+					await refreshAll();
+				};
+
+				const instanceMenuCtx = Object.freeze({
+					kind: 'instance',
+					instWrap,
+					instanceName,
+					pluginType: String(plugin.type || ''),
+					categoryRaw,
+					categorySafe,
+					hasReadme: hasReadme === true,
+					hasToolsAvailable: hasToolsAvailable === true,
+					toolsItems: getToolsMenuConfig().items,
+					openReadme,
+					removeInstance,
+				});
+
+				head.oncontextmenu = e => openPluginsContextMenu(e, instanceMenuCtx);
+
+			if (accInput) {
+				head.setAttribute('role', 'button');
+				head.setAttribute('tabindex', '0');
+				head.setAttribute('aria-controls', accId);
+
+				const syncAriaExpanded = () => {
+					head.setAttribute('aria-expanded', accInput.checked === true ? 'true' : 'false');
+				};
+				syncAriaExpanded();
+				accInput.addEventListener('change', syncAriaExpanded);
+
+				const shouldIgnoreToggle = target => {
+					if (!target || typeof target !== 'object' || typeof target.closest !== 'function') {
+						return false;
+					}
+					return !!target.closest('button, a, input, select, textarea, label');
+				};
+
+				const toggle = () => {
+					accInput.checked = accInput.checked !== true;
+					accInput.dispatchEvent(new Event('change', { bubbles: true }));
+				};
+
+				head.addEventListener('click', e => {
+					if (e?.defaultPrevented) {
+						return;
+					}
+					if (shouldIgnoreToggle(e?.target)) {
+						return;
+					}
+					toggle();
+				});
+
+				head.addEventListener('keydown', e => {
+					if (e?.defaultPrevented) {
+						return;
+					}
+					if (shouldIgnoreToggle(e?.target)) {
+						return;
+					}
+					if (e.key === 'Enter' || e.key === ' ') {
+						e.preventDefault();
+						toggle();
+					}
+				});
+			}
+
+				instWrap.appendChild(head);
+
+				if (hasOptions) {
+					const bodyWrap = h('div', { class: 'msghub-instance-body' });
+					bodyWrap.oncontextmenu = e => openPluginsContextMenu(e, instanceMenuCtx);
+					const fieldsContainer = h('div', { class: 'msghub-instance-fields' });
+					const inputs = {};
+					const initial = {};
+
+				const normalize = v => (v === undefined ? null : v);
+				const isEqual = (a, b) => Object.is(a, b);
+
+				let saveBtn = null;
+				const setSaveEnabled = enabled => {
+					if (!saveBtn) {
+						return;
+					}
+					saveBtn.disabled = enabled !== true;
+					saveBtn.setAttribute('aria-disabled', enabled === true ? 'false' : 'true');
+				};
+
+				const isDirtyNow = () => {
+					for (const [k, info] of Object.entries(inputs)) {
+						const cur = normalize(info.getValue());
+						const prev = normalize(initial[k]);
+						if (!isEqual(cur, prev)) {
+							return true;
+						}
+					}
+					return false;
+				};
+
+				const updateDirtyUi = () => setSaveEnabled(isDirtyNow());
+
+				for (const field of fields) {
+					const key = field?.key;
+					if (!key) {
+						continue;
+					}
+					const effectiveValue =
+						inst.native?.[key] !== undefined && inst.native?.[key] !== null
+							? inst.native?.[key]
+							: field.default;
+					const unit = field?.unit;
+					const { input, select, wrapper, getValue, skipSave } = buildFieldInput({
+						type: field.type,
+						key,
+						label:
+							field.type === 'header' ? pickText(field.label) || '' : pickText(field.label) || field.key,
+						help: pickText(field.help) || '',
+						value: effectiveValue,
+						unit,
+						min: field.min,
+						max: field.max,
+						step: field.step,
+						options: field.options,
+						multiOptions: field.multiOptions,
+					});
+
+					if (skipSave === true) {
+						fieldsContainer.appendChild(wrapper);
+						continue;
+					}
+
+					const valueGetter = typeof getValue === 'function' ? getValue : () => null;
+					inputs[key] = { input, select, field, getValue: valueGetter };
+					initial[key] = normalize(valueGetter());
+
+					if (input?.tagName === 'SELECT') {
+						input.addEventListener('change', updateDirtyUi);
+					} else if (field.type === 'boolean') {
+						input?.addEventListener?.('change', updateDirtyUi);
+					} else {
+						input?.addEventListener?.('input', updateDirtyUi);
+						input?.addEventListener?.('change', updateDirtyUi);
+					}
+					if (select) {
+						select.addEventListener('change', updateDirtyUi);
+					}
+
+					fieldsContainer.appendChild(wrapper);
+				}
+
+				saveBtn = h('button', {
+					type: 'button',
+					disabled: true,
+					'aria-disabled': 'true',
+					onclick: async () => {
+						if (saveBtn.disabled) {
+							return;
+						}
+						if (saveBtn.getAttribute('data-saving') === '1') {
+							return;
+						}
+						const patch = {};
+						for (const [k, info] of Object.entries(inputs)) {
+							patch[k] = info.getValue();
+						}
+						if (!pluginsApi?.updateInstance) {
+							throw new Error('Plugins API is not available');
+						}
+						saveBtn.setAttribute('data-saving', '1');
+						saveBtn.disabled = true;
+						saveBtn.setAttribute('aria-disabled', 'true');
+						try {
+							await pluginsApi.updateInstance({
+								type: plugin.type,
+								instanceId: inst.instanceId,
+								nativePatch: patch,
+							});
+
+							for (const [k, info] of Object.entries(inputs)) {
+								initial[k] = normalize(info.getValue());
+							}
+						} catch (e) {
+							toast(String(e?.message || e));
+						} finally {
+							saveBtn.removeAttribute('data-saving');
+							updateDirtyUi();
+						}
+					},
+					text: 'Save options',
+				});
+
+				updateDirtyUi();
+
+				bodyWrap.appendChild(fieldsContainer);
+				bodyWrap.appendChild(h('div', { class: 'msghub-instance-save' }, [saveBtn]));
+				instWrap.appendChild(bodyWrap);
+			}
+
+			return instWrap;
+		}
+
+		async function refreshAll() {
+			try {
+				await ensureConstantsLoaded();
+				const expandedById = captureAccordionState();
+				if (!pluginsApi?.getCatalog || !pluginsApi?.listInstances) {
+					throw new Error('Plugins API is not available');
+				}
+				const { plugins } = await pluginsApi.getCatalog();
+				const { instances } = await pluginsApi.listInstances();
 
 				const readmesByType = await ensurePluginReadmesLoaded();
 
-				const byType = buildInstancesByType(instances);
-
-				const withUi = (plugins || []).filter(p => p && p.options && typeof p.options === 'object');
+				const vm = buildPluginsViewModel({ plugins, instances, readmesByType });
+				const withUi = (vm.plugins || []).filter(p => p && p.options && typeof p.options === 'object');
 				cachedPluginsWithUi = withUi;
+
+				const entriesByCategory = new Map();
+				for (const plugin of withUi) {
+					const list = vm.byType.get(plugin.type) || [];
+					if (!Array.isArray(list) || list.length === 0) {
+						continue;
+					}
+					const category = typeof plugin?.category === 'string' ? plugin.category : 'unknown';
+					const entries = entriesByCategory.get(category) || [];
+					for (const inst of list) {
+						entries.push({ plugin, inst, instList: list });
+					}
+					entriesByCategory.set(category, entries);
+				}
+
+				const allEntries = Array.from(entriesByCategory.values()).reduce((acc, v) => acc + (v?.length || 0), 0);
+
 				const fragment = document.createDocumentFragment();
 
-				if (withUi.length === 0) {
+				if (allEntries === 0) {
 					fragment.appendChild(
-						h('p', { class: 'msghub-muted', text: 'No plugins with Admin UI schema found yet.' }),
+						h('p', { class: 'msghub-muted', text: t('msghub.i18n.core.admin.ui.plugins.empty.text') }),
 					);
-				} else {
-						const globalActions = h('div', { class: 'msghub-actions msghub-actions--global' }, [
-							h('button', {
-								type: 'button',
-								onclick: () => {
-									for (const el of elRoot.querySelectorAll('.msghub-plugin-card > .msghub-acc-input')) {
-										el.checked = true;
-									}
-								},
-								text: 'Expand all plugins',
-							}),
-							h('button', {
-								type: 'button',
-								onclick: () => {
-									for (const el of elRoot.querySelectorAll('.msghub-plugin-card > .msghub-acc-input')) {
-										el.checked = false;
-									}
-								},
-								text: 'Collapse all plugins',
-							}),
-						]);
-					fragment.appendChild(globalActions);
+				}
 
-					const byCategory = new Map();
-					for (const p of withUi) {
-						const c = typeof p?.category === 'string' ? p.category : 'unknown';
-						const list = byCategory.get(c) || [];
-						list.push(p);
-						byCategory.set(c, list);
+				for (const category of CATEGORY_ORDER) {
+					const entries = entriesByCategory.get(category) || [];
+					entries.sort(
+						(a, b) =>
+							String(a?.plugin?.type || '').localeCompare(String(b?.plugin?.type || '')) ||
+							(a?.inst?.instanceId ?? 0) - (b?.inst?.instanceId ?? 0),
+					);
+					if (entries.length === 0) {
+						continue;
 					}
-
-					for (const category of CATEGORY_ORDER) {
-						const list = byCategory.get(category) || [];
-						list.sort((a, b) => String(a?.type || '').localeCompare(String(b?.type || '')));
-						if (list.length === 0) {
-							continue;
-						}
 
 						const section = h('div', { class: 'msghub-plugin-category', 'data-category': category }, [
-							h('h6', {
-								class: 'msghub-plugin-category-title',
-								text: CATEGORY_TITLES[category] || category,
-							}),
+							(() => {
+								const cfg = CATEGORY_I18N[category] || null;
+								const title = cfg
+									? tOr(cfg.titleKey, cfg.fallbackTitle || category)
+									: tOr(`msghub.i18n.core.admin.ui.plugins.category.${category}.title`, category);
+								const desc = cfg
+									? tOr(cfg.descKey, '')
+									: tOr(`msghub.i18n.core.admin.ui.plugins.category.${category}.desc`, '');
+								const categorySafe = cssSafe(category);
+								const row = h('div', { class: 'msghub-plugin-category-row' }, [
+									h('h6', {
+										class: 'msghub-plugin-category-title',
+										text: title || category,
+									}),
+									desc
+										? h('div', { class: 'msghub-muted msghub-plugin-category-desc', text: desc })
+										: null,
+								]);
+								row.oncontextmenu = e =>
+									openPluginsContextMenu(e, { kind: 'category', categoryRaw: category, categorySafe });
+								return row;
+							})(),
 						]);
 
-						for (const plugin of list) {
-							section.appendChild(
-								renderPluginCard({
-									plugin,
-									instances: byType.get(plugin.type) || [],
-									refreshAll,
-									refreshPlugin,
-									expandedById,
-									readmesByType,
-								}),
-							);
-						}
-						fragment.appendChild(section);
+					for (const entry of entries) {
+						section.appendChild(
+							renderInstanceRow({
+								plugin: entry.plugin,
+								inst: entry.inst,
+								instList: entry.instList,
+								expandedById,
+								readmesByType,
+							}),
+						);
 					}
+
+					fragment.appendChild(section);
 				}
 
 				elRoot.replaceChildren(fragment);
@@ -3146,48 +3625,14 @@
 				elRoot.replaceChildren(
 					h('div', {
 						class: 'msghub-error',
-						text: `Failed to load plugin config.\n${String(e?.message || e)}`,
+						text: t('msghub.i18n.core.admin.ui.plugins.loadFailed.text', String(e?.message || e)),
 					}),
 				);
 			}
 		}
 
-			async function refreshPlugin(type) {
-			if (!type) {
-				return refreshAll();
-			}
-
-			const plugin = cachedPluginsWithUi.find(p => p?.type === type);
-			if (!plugin) {
-				return refreshAll();
-			}
-
-				try {
-					const expandedById = captureAccordionState();
-					if (!pluginsApi?.listInstances) {
-						throw new Error('Plugins API is not available');
-					}
-					const { instances } = await pluginsApi.listInstances();
-					const byType = buildInstancesByType(instances);
-					const readmesByType = await ensurePluginReadmesLoaded();
-
-				const nextCard = renderPluginCard({
-					plugin,
-					instances: byType.get(plugin.type) || [],
-					refreshAll,
-					refreshPlugin,
-					expandedById,
-					readmesByType,
-				});
-
-				const existing = getExistingCardForType(type);
-				if (!existing) {
-					return refreshAll();
-				}
-				existing.replaceWith(nextCard);
-			} catch (e) {
-				return refreshAll();
-			}
+		async function refreshPlugin(type) {
+			return refreshAll();
 		}
 
 		return {

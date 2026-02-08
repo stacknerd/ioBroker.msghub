@@ -48,9 +48,13 @@
 	--msghub-syntax-punct: rgb(0 0 0);
 	--msghub-syntax-comment: rgb(0 128 0);
 
-		/* Icons (CSS mask; color via currentColor). */
-		--msghub-icon-open-json: url("data:image/svg+xml,%3Csvg%20width%3D%2216px%22%20height%3D%2216px%22%20viewBox%3D%220%200%200.32%200.32%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22%23000000%22%3E%3Cpath%20fill-rule%3D%22evenodd%22%20clip-rule%3D%22evenodd%22%20d%3D%22M0.12%200.06V0.04h-0.002q-0.009%200%20-0.018%200.004a0.046%200.046%200%200%200%20-0.016%200.011%200.044%200.044%200%200%200%20-0.01%200.015v0a0.07%200.07%200%200%200%20-0.004%200.017v0a0.12%200.12%200%200%200%200%200.017q0%200.009%200%200.017%200%200.006%20-0.002%200.011v0a0.03%200.03%200%200%201%20-0.015%200.016%200.028%200.028%200%200%201%20-0.011%200.002H0.04v0.02h0.002q0.006%200%200.011%200.002l0%200q0.005%200.002%200.009%200.006l0%200q0.004%200.004%200.006%200.009l0%200q0.002%200.005%200.002%200.011%200%200.009%200%200.017%200%200.009%200%200.017v0q0.001%200.009%200.004%200.016v0q0.003%200.008%200.01%200.015%200.007%200.007%200.016%200.011t0.018%200.004H0.12v-0.02h-0.002q-0.006%200%20-0.011%20-0.002a0.032%200.032%200%200%201%20-0.009%20-0.006%200.034%200.034%200%200%201%20-0.006%20-0.009q-0.002%20-0.005%20-0.002%20-0.011%200%20-0.007%200%20-0.013%200%20-0.007%200%20-0.013a0.1%200.1%200%200%200%20-0.001%20-0.013%200.054%200.054%200%200%200%20-0.003%20-0.012A0.046%200.046%200%200%200%200.07%200.16a0.046%200.046%200%200%200%200.015%20-0.019q0.002%20-0.006%200.003%20-0.012%200.001%20-0.006%200.001%20-0.013%200%20-0.007%200%20-0.013t0%20-0.014a0.029%200.029%200%200%201%200.018%20-0.027%200.026%200.026%200%200%201%200.011%20-0.002zm0.08%200.201V0.28h0.002q0.009%200%200.018%20-0.004t0.016%20-0.011%200.01%20-0.015v0q0.003%20-0.008%200.004%20-0.017v0q0.001%20-0.008%200%20-0.017%200%20-0.009%200%20-0.017%200%20-0.006%200.002%20-0.011v0a0.03%200.03%200%200%201%200.015%20-0.016%200.028%200.028%200%200%201%200.011%20-0.002H0.28v-0.02h-0.002q-0.006%200%20-0.011%20-0.002l0%200a0.028%200.028%200%200%201%20-0.009%20-0.006l0%200a0.028%200.028%200%200%201%20-0.006%20-0.009v0a0.028%200.028%200%200%201%20-0.002%20-0.011q0%20-0.009%200%20-0.017a0.12%200.12%200%200%200%200%20-0.017v0a0.07%200.07%200%200%200%20-0.004%20-0.016v0a0.044%200.044%200%200%200%20-0.01%20-0.015%200.046%200.046%200%200%200%20-0.016%20-0.011%200.046%200.046%200%200%200%20-0.018%20-0.004H0.2v0.02h0.002q0.006%200%200.011%200.002%200.005%200.002%200.009%200.006%200.004%200.004%200.006%200.009%200.002%200.005%200.002%200.011%200%200.007%200%200.013%200%200.007%200%200.013%200%200.007%200.001%200.013%200.001%200.006%200.003%200.012a0.046%200.046%200%200%200%200.015%200.019%200.046%200.046%200%200%200%20-0.015%200.019%200.054%200.054%200%200%200%20-0.003%200.012q-0.001%200.006%20-0.001%200.013a0.18%200.18%200%200%200%200%200.013q0%200.007%200%200.014a0.029%200.029%200%200%201%20-0.018%200.027%200.026%200.026%200%200%201%20-0.011%200.002z%22%2F%3E%3C%2Fsvg%3E");
-		--msghub-icon-open-archive: url("data:image/svg+xml,%3Csvg%20width%3D%2216px%22%20height%3D%2216px%22%20viewBox%3D%220%200%2016%2016%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22currentColor%22%20class%3D%22bi%20bi-archive%22%3E%3Cpath%20d%3D%22M0%202a1%201%200%200%201%201-1h14a1%201%200%200%201%201%201v2a1%201%200%200%201-1%201v7.5a2.5%202.5%200%200%201-2.5%202.5h-9A2.5%202.5%200%200%201%201%2012.5V5a1%201%200%200%201-1-1V2zm2%203v7.5A1.5%201.5%200%200%200%203.5%2014h9a1.5%201.5%200%200%200%201.5-1.5V5H2zm13-3H1v2h14V2zM5%207.5a.5.5%200%200%201%20.5-.5h5a.5.5%200%200%201%200%201h-5a.5.5%200%200%201-.5-.5z%22%2F%3E%3C%2Fsvg%3E");
+	/* Icons (CSS mask; color via currentColor). */
+	--msghub-icon-open-json: url('data:image/svg+xml,%3Csvg%20width%3D%2216px%22%20height%3D%2216px%22%20viewBox%3D%220%200%200.32%200.32%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22%23000000%22%3E%3Cpath%20fill-rule%3D%22evenodd%22%20clip-rule%3D%22evenodd%22%20d%3D%22M0.12%200.06V0.04h-0.002q-0.009%200%20-0.018%200.004a0.046%200.046%200%200%200%20-0.016%200.011%200.044%200.044%200%200%200%20-0.01%200.015v0a0.07%200.07%200%200%200%20-0.004%200.017v0a0.12%200.12%200%200%200%200%200.017q0%200.009%200%200.017%200%200.006%20-0.002%200.011v0a0.03%200.03%200%200%201%20-0.015%200.016%200.028%200.028%200%200%201%20-0.011%200.002H0.04v0.02h0.002q0.006%200%200.011%200.002l0%200q0.005%200.002%200.009%200.006l0%200q0.004%200.004%200.006%200.009l0%200q0.002%200.005%200.002%200.011%200%200.009%200%200.017%200%200.009%200%200.017v0q0.001%200.009%200.004%200.016v0q0.003%200.008%200.01%200.015%200.007%200.007%200.016%200.011t0.018%200.004H0.12v-0.02h-0.002q-0.006%200%20-0.011%20-0.002a0.032%200.032%200%200%201%20-0.009%20-0.006%200.034%200.034%200%200%201%20-0.006%20-0.009q-0.002%20-0.005%20-0.002%20-0.011%200%20-0.007%200%20-0.013%200%20-0.007%200%20-0.013a0.1%200.1%200%200%200%20-0.001%20-0.013%200.054%200.054%200%200%200%20-0.003%20-0.012A0.046%200.046%200%200%200%200.07%200.16a0.046%200.046%200%200%200%200.015%20-0.019q0.002%20-0.006%200.003%20-0.012%200.001%20-0.006%200.001%20-0.013%200%20-0.007%200%20-0.013t0%20-0.014a0.029%200.029%200%200%201%200.018%20-0.027%200.026%200.026%200%200%201%200.011%20-0.002zm0.08%200.201V0.28h0.002q0.009%200%200.018%20-0.004t0.016%20-0.011%200.01%20-0.015v0q0.003%20-0.008%200.004%20-0.017v0q0.001%20-0.008%200%20-0.017%200%20-0.009%200%20-0.017%200%20-0.006%200.002%20-0.011v0a0.03%200.03%200%200%201%200.015%20-0.016%200.028%200.028%200%200%201%200.011%20-0.002H0.28v-0.02h-0.002q-0.006%200%20-0.011%20-0.002l0%200a0.028%200.028%200%200%201%20-0.009%20-0.006l0%200a0.028%200.028%200%200%201%20-0.006%20-0.009v0a0.028%200.028%200%200%201%20-0.002%20-0.011q0%20-0.009%200%20-0.017a0.12%200.12%200%200%200%200%20-0.017v0a0.07%200.07%200%200%200%20-0.004%20-0.016v0a0.044%200.044%200%200%200%20-0.01%20-0.015%200.046%200.046%200%200%200%20-0.016%20-0.011%200.046%200.046%200%200%200%20-0.018%20-0.004H0.2v0.02h0.002q0.006%200%200.011%200.002%200.005%200.002%200.009%200.006%200.004%200.004%200.006%200.009%200.002%200.005%200.002%200.011%200%200.007%200%200.013%200%200.007%200%200.013%200%200.007%200.001%200.013%200.001%200.006%200.003%200.012a0.046%200.046%200%200%200%200.015%200.019%200.046%200.046%200%200%200%20-0.015%200.019%200.054%200.054%200%200%200%20-0.003%200.012q-0.001%200.006%20-0.001%200.013a0.18%200.18%200%200%200%200%200.013q0%200.007%200%200.014a0.029%200.029%200%200%201%20-0.018%200.027%200.026%200.026%200%200%201%20-0.011%200.002z%22%2F%3E%3C%2Fsvg%3E');
+	--msghub-icon-open-archive: url('data:image/svg+xml,%3Csvg%20width%3D%2215px%22%20height%3D%2215px%22%20viewBox%3D%220%200%200.281%200.281%22%20fill%3D%22none%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cpath%20d%3D%22M0.094%200.159h0.094M0.009%200.009h0.263v0.075H0.009zm0.019%200.075v0.169a0.019%200.019%200%200%200%200.019%200.019h0.188a0.019%200.019%200%200%200%200.019%20-0.019v-0.169z%22%20stroke%3D%22%23000000%22%20stroke-width%3D%220.01875%22%2F%3E%3C%2Fsvg%3E');
+	--msghub-icon-help: url('data:image/svg+xml,%3C%3Fxml%20version%3D%221.0%22%20encoding%3D%22utf-8%22%3F%3E%0A%3C!--%20License%3A%20MIT.%20Made%20by%20teenyicons%3A%20https%3A%2F%2Fgithub.com%2Fteenyicons%2Fteenyicons%20--%3E%0A%3Csvg%20width%3D%2215px%22%20height%3D%2215px%22%20viewBox%3D%220%200%2015%2015%22%20fill%3D%22none%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%0A%3Cpath%20d%3D%22M1.5%200.5V0C1.22386%200%201%200.223858%201%200.5H1.5ZM1.5%2013.5H1C1%2013.7761%201.22386%2014%201.5%2014V13.5ZM4%200V15H5V0H4ZM1.5%201H11.5V0H1.5V1ZM13%202.5V11.5H14V2.5H13ZM11.5%2013H1.5V14H11.5V13ZM2%2013.5V0.5H1V13.5H2ZM13%2011.5C13%2012.3284%2012.3284%2013%2011.5%2013V14C12.8807%2014%2014%2012.8807%2014%2011.5H13ZM11.5%201C12.3284%201%2013%201.67157%2013%202.5H14C14%201.11929%2012.8807%200%2011.5%200V1ZM7%205H11V4H7V5Z%22%20fill%3D%22%23000000%22%2F%3E%0A%3C%2Fsvg%3E');
+	--msghub-icon-tools: url('data:image/svg+xml,%3Csvg%20width%3D%2215px%22%20height%3D%2215px%22%20viewBox%3D%220%200%200.281%200.281%22%20fill%3D%22none%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cpath%20fill-rule%3D%22evenodd%22%20clip-rule%3D%22evenodd%22%20d%3D%22m0.111%200.009%20-0.002%200.008%20-0.006%200.03a0.103%200.103%200%200%200%20-0.027%200.015L0.047%200.053l-0.008%20-0.002%20-0.004%200.007L0.014%200.092%200.009%200.1l0.006%200.005%200.023%200.02c-0.001%200.005%20-0.002%200.01%20-0.002%200.016s0.001%200.011%200.002%200.016L0.016%200.176%200.009%200.182l0.004%200.007%200.021%200.035%200.004%200.007%200.008%20-0.003%200.03%20-0.01c0.008%200.006%200.017%200.012%200.027%200.015l0.006%200.03%200.002%200.008h0.058l0.002%20-0.008%200.006%20-0.03a0.103%200.103%200%200%200%200.027%20-0.015l0.03%200.01%200.008%200.003%200.004%20-0.007%200.021%20-0.035%200.004%20-0.007%20-0.006%20-0.005%20-0.023%20-0.02c0.001%20-0.005%200.002%20-0.01%200.002%20-0.016%200%20-0.005%20-0.001%20-0.011%20-0.002%20-0.016l0.023%20-0.02%200.006%20-0.005%20-0.004%20-0.007%20-0.021%20-0.035%20-0.004%20-0.007%20-0.008%200.003%20-0.03%200.01a0.103%200.103%200%200%200%20-0.027%20-0.015L0.171%200.018%200.17%200.009z%22%20stroke%3D%22%23000000%22%20stroke-linecap%3D%22square%22%20stroke-linejoin%3D%22round%22%20stroke-width%3D%220.01875%22%2F%3E%3Cpath%20fill-rule%3D%22evenodd%22%20clip-rule%3D%22evenodd%22%20d%3D%22M0.178%200.141a0.037%200.037%200%200%201%20-0.075%200%200.037%200.037%200%200%201%200.075%200Z%22%20stroke%3D%22%23000000%22%20stroke-linecap%3D%22square%22%20stroke-linejoin%3D%22round%22%20stroke-width%3D%220.01875%22%2F%3E%3C%2Fsvg%3E');
+	--msghub-icon-play: url('data:image/svg+xml,%3C%3Fxml%20version%3D%221.0%22%20encoding%3D%22utf-8%22%3F%3E%0A%3C!--%20License%3A%20MIT.%20Made%20by%20teenyicons%3A%20https%3A%2F%2Fgithub.com%2Fteenyicons%2Fteenyicons%20--%3E%0A%3Csvg%20width%3D%2215px%22%20height%3D%2215px%22%20viewBox%3D%220%200%2015%2015%22%20fill%3D%22none%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%0A%3Cpath%20d%3D%22M4.5%2012.5V2.5L11.5%207.5L4.5%2012.5Z%22%20stroke%3D%22%23000000%22%20stroke-linejoin%3D%22round%22%2F%3E%0A%3C%2Fsvg%3E');
+	--msghub-icon-pause: url('data:image/svg+xml,%3C%3Fxml%20version%3D%221.0%22%20encoding%3D%22utf-8%22%3F%3E%0A%3C!--%20License%3A%20MIT.%20Made%20by%20teenyicons%3A%20https%3A%2F%2Fgithub.com%2Fteenyicons%2Fteenyicons%20--%3E%0A%3Csvg%20width%3D%2215px%22%20height%3D%2215px%22%20viewBox%3D%220%200%2015%2015%22%20fill%3D%22none%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%0A%3Cpath%20d%3D%22M5.5%203V12M9.5%203V12%22%20stroke%3D%22%23000000%22%2F%3E%0A%3C%2Fsvg%3E');
 
 	/* Typography (central presets; avoid ad-hoc font-weight/size usage) */
 	--msghub-font-sans:
@@ -58,14 +62,14 @@
 	--msghub-font-mono:
 		ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
 
-	--msghub-fw-light: 400;
-	--msghub-fw-med: 600;
-	--msghub-fw-bold: 700;
+	--msghub-fw-light: 375;
+	--msghub-fw-med: 450;
+	--msghub-fw-bold: 625;
 
 	--msghub-fs-sm: 12px;
 	--msghub-fs-md: 14px;
-	--msghub-fs-lg: 16px;
-	--msghub-fs-xl: 18px;
+	--msghub-fs-lg: 15px;
+	--msghub-fs-xl: 16px;
 
 	--msghub-lh-tight: 1.2;
 	--msghub-lh-normal: 1.4;
@@ -79,8 +83,10 @@
 		var(--msghub-font-sans);
 	--msghub-font-body-meta: italic var(--msghub-fw-light) var(--msghub-fs-md) / var(--msghub-lh-normal)
 		var(--msghub-font-sans);
-	--msghub-font-tab: normal var(--msghub-fw-med) var(--msghub-fs-lg) / var(--msghub-lh-tight) var(--msghub-font-sans);
-	--msghub-font-badge: normal var(--msghub-fw-bold) var(--msghub-fs-sm) / var(--msghub-lh-solid)
+	--msghub-font-sectionTitle: normal var(--msghub-fw-med) var(--msghub-fs-lg) / var(--msghub-lh-normal)
+		var(--msghub-font-sans);
+	--msghub-font-tab: normal var(--msghub-fw-bold) var(--msghub-fs-lg) / var(--msghub-lh-tight) var(--msghub-font-sans);
+	--msghub-font-badge: normal var(--msghub-fw-med) var(--msghub-fs-sm) / var(--msghub-lh-solid)
 		var(--msghub-font-sans);
 
 	/* Surfaces / effects (keep all color literals in this token section) */
@@ -95,7 +101,19 @@
 	--msghub-space-1: 4px;
 	--msghub-space-2: 6px;
 	--msghub-space-3: 10px;
-	--msghub-space-4: 14px;
+	--msghub-space-4: 12px;
+
+	/* Indents */
+	--msghub-indent-1: 12px;
+	--msghub-indent-2: 24px;
+	--msghub-indent-3: 36px;
+	--msghub-indent-4: 48px;
+
+	/* Row padding (extra left gutter for list-like rows) */
+	--msghub-row-edge-indent: var(--msghub-space-2);
+
+	/* Control sizes */
+	--msghub-size-iconButton: 28px;
 }
 
 html[data-msghub-theme='dark'] .msghub-root {
@@ -178,6 +196,50 @@ body {
 
 .msghub-root a {
 	color: inherit;
+}
+
+/* UI buttons (core primitives) */
+.msghub-root .msghub-uibutton-icon {
+	appearance: none;
+	background: transparent;
+	border-radius: var(--msghub-radius);
+	border: 0;
+	padding: 0;
+	width: var(--msghub-size-iconButton);
+	height: var(--msghub-size-iconButton);
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	color: var(--msghub-muted);
+	cursor: pointer;
+	user-select: none;
+	font-size: 0;
+	line-height: 0;
+}
+
+.msghub-root .msghub-uibutton-icon::before {
+	content: '';
+	width: 16px;
+	height: 16px;
+	background-color: currentColor;
+	-webkit-mask-image: var(--msghub-uibutton-icon);
+	-webkit-mask-repeat: no-repeat;
+	-webkit-mask-position: center;
+	-webkit-mask-size: 16px 16px;
+	mask-image: var(--msghub-uibutton-icon);
+	mask-repeat: no-repeat;
+	mask-position: center;
+	mask-size: 16px 16px;
+}
+
+.msghub-root .msghub-uibutton-icon:not(:disabled):hover {
+	color: var(--msghub-text);
+	background: var(--msghub-surface-selected);
+}
+
+.msghub-root .msghub-uibutton-icon:disabled {
+	cursor: default;
+	opacity: 0.45;
 }
 
 /* Primary navigation (tabs) + connection status */
@@ -288,7 +350,7 @@ html[data-msghub-layout='tabs'] .msghub-root #msghub-connection {
 	pointer-events: none;
 }
 
-	.msghub-root .msghub-toast {
+.msghub-root .msghub-toast {
 	pointer-events: auto;
 	max-width: min(520px, calc(100vw - 2 * var(--msghub-space-3)));
 	background: var(--msghub-bg);
@@ -297,190 +359,190 @@ html[data-msghub-layout='tabs'] .msghub-root #msghub-connection {
 	border-radius: var(--msghub-radius);
 	box-shadow: 0 6px 18px var(--msghub-shadow-md);
 	padding: var(--msghub-space-2) var(--msghub-space-3);
-		font: var(--msghub-font-body);
-	}
+	font: var(--msghub-font-body);
+}
 
-	/* Context menu (core primitive; no visible backdrop) */
-	.msghub-root .msghub-contextmenu-host {
-		position: fixed;
-		inset: 0;
-		z-index: 1075; /* above overlay (1050), below dialog (1100) */
-		pointer-events: none;
-	}
+/* Context menu (core primitive; no visible backdrop) */
+.msghub-root .msghub-contextmenu-host {
+	position: fixed;
+	inset: 0;
+	z-index: 1075; /* above overlay (1050), below dialog (1100) */
+	pointer-events: none;
+}
 
-	.msghub-root .msghub-contextmenu {
-		position: fixed;
-		pointer-events: auto;
-		min-width: 220px;
-		max-width: min(380px, calc(100vw - 2 * var(--msghub-space-3)));
-		max-height: min(60vh, calc(100vh - 2 * var(--msghub-space-3)));
-		overflow: auto;
-		background: var(--msghub-bg);
-		color: var(--msghub-text);
-		border: 1px solid var(--msghub-border);
-		border-radius: var(--msghub-radius);
-		box-shadow: var(--msghub-shadow-elevated);
-	}
+.msghub-root .msghub-contextmenu {
+	position: fixed;
+	pointer-events: auto;
+	min-width: 220px;
+	max-width: min(380px, calc(100vw - 2 * var(--msghub-space-3)));
+	max-height: min(60vh, calc(100vh - 2 * var(--msghub-space-3)));
+	overflow: auto;
+	background: var(--msghub-bg);
+	color: var(--msghub-text);
+	border: 1px solid var(--msghub-border);
+	border-radius: var(--msghub-radius);
+	box-shadow: var(--msghub-shadow-elevated);
+}
 
-	.msghub-root .msghub-contextmenu-list {
-		list-style: none;
-		margin: 0;
-		padding: var(--msghub-space-1) 0;
-	}
+.msghub-root .msghub-contextmenu-list {
+	list-style: none;
+	margin: 0;
+	padding: var(--msghub-space-1) 0;
+}
 
-	.msghub-root .msghub-contextmenu-item,
-	.msghub-root .msghub-contextmenu-heading,
-	.msghub-root .msghub-contextmenu-footer {
-		width: 100%;
-		background: transparent;
-		color: inherit;
-		font: var(--msghub-font-body);
-		text-align: left;
-		padding: var(--msghub-space-2) var(--msghub-space-3);
-	}
+.msghub-root .msghub-contextmenu-item,
+.msghub-root .msghub-contextmenu-heading,
+.msghub-root .msghub-contextmenu-footer {
+	width: 100%;
+	background: transparent;
+	color: inherit;
+	font: var(--msghub-font-body);
+	text-align: left;
+	padding: var(--msghub-space-2) var(--msghub-space-3);
+}
 
-	.msghub-root .msghub-contextmenu-separator {
-		height: 1px;
-		background: var(--msghub-border-light);
-		margin: var(--msghub-space-1) 0;
-	}
+.msghub-root .msghub-contextmenu-separator {
+	height: 1px;
+	background: var(--msghub-border-light);
+	margin: var(--msghub-space-1) 0;
+}
 
-	.msghub-root .msghub-contextmenu-heading {
-		display: flex;
-		align-items: center;
-		gap: var(--msghub-space-2);
-		border: 0;
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
+.msghub-root .msghub-contextmenu-heading {
+	display: flex;
+	align-items: center;
+	gap: var(--msghub-space-2);
+	border: 0;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
 
-	.msghub-root .msghub-contextmenu-heading-text {
-		flex: 1 1 auto;
-		min-width: 0;
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
+.msghub-root .msghub-contextmenu-heading-text {
+	flex: 1 1 auto;
+	min-width: 0;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
 
-	.msghub-root .msghub-contextmenu-item {
-		border: 0;
-		cursor: pointer;
-	}
+.msghub-root .msghub-contextmenu-item {
+	border: 0;
+	cursor: pointer;
+}
 
-	.msghub-root .msghub-contextmenu-item:hover {
-		background: var(--msghub-surface-hover);
-	}
+.msghub-root .msghub-contextmenu-item:hover {
+	background: var(--msghub-surface-hover);
+}
 
-	.msghub-root .msghub-contextmenu-item.is-submenu-open {
-		background: var(--msghub-surface-hover);
-	}
+.msghub-root .msghub-contextmenu-item.is-submenu-open {
+	background: var(--msghub-surface-hover);
+}
 
-	.msghub-root .msghub-contextmenu-item:focus-visible {
-		outline: 2px solid var(--msghub-accent);
-		outline-offset: -2px;
-	}
+.msghub-root .msghub-contextmenu-item:focus-visible {
+	outline: 2px solid var(--msghub-accent);
+	outline-offset: -2px;
+}
 
-	.msghub-root .msghub-contextmenu-item:disabled {
-		cursor: default;
-	}
+.msghub-root .msghub-contextmenu-item:disabled {
+	cursor: default;
+}
 
-	.msghub-root .msghub-contextmenu-item:disabled,
-	.msghub-root .msghub-contextmenu-heading,
-	.msghub-root .msghub-contextmenu-footer {
-		color: var(--msghub-muted);
-		cursor: default;
-	}
+.msghub-root .msghub-contextmenu-item:disabled,
+.msghub-root .msghub-contextmenu-heading,
+.msghub-root .msghub-contextmenu-footer {
+	color: var(--msghub-muted);
+	cursor: default;
+}
 
-	.msghub-root .msghub-contextmenu-heading,
-	.msghub-root .msghub-contextmenu-footer {
-		font: var(--msghub-font-body-meta);
-		padding-top: var(--msghub-space-1);
-		padding-bottom: var(--msghub-space-1);
-	}
+.msghub-root .msghub-contextmenu-heading,
+.msghub-root .msghub-contextmenu-footer {
+	font: var(--msghub-font-body-meta);
+	padding-top: var(--msghub-space-1);
+	padding-bottom: var(--msghub-space-1);
+}
 
-	.msghub-root .msghub-contextmenu-item.is-primary {
-		font: var(--msghub-font-body-bold);
-	}
+.msghub-root .msghub-contextmenu-item.is-primary {
+	font: var(--msghub-font-body-bold);
+}
 
-	.msghub-root .msghub-contextmenu-item.is-danger {
-		color: var(--msghub-danger);
-	}
+.msghub-root .msghub-contextmenu-item.is-danger {
+	color: var(--msghub-danger);
+}
 
-	.msghub-root .msghub-contextmenu-row {
-		display: flex;
-		align-items: center;
-		gap: var(--msghub-space-2);
-	}
+.msghub-root .msghub-contextmenu-row {
+	display: flex;
+	align-items: center;
+	gap: var(--msghub-space-2);
+}
 
-	.msghub-root .msghub-contextmenu-icon-slot {
-		flex: 0 0 auto;
-		width: 18px;
-		height: 18px;
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-	}
+.msghub-root .msghub-contextmenu-icon-slot {
+	flex: 0 0 auto;
+	width: 18px;
+	height: 18px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+}
 
-	.msghub-root .msghub-contextmenu-icon {
-		width: 16px;
-		height: 16px;
-		background-color: var(--msghub-muted);
-		-webkit-mask-image: var(--msghub-contextmenu-icon);
-		-webkit-mask-repeat: no-repeat;
-		-webkit-mask-position: center;
-		-webkit-mask-size: 16px 16px;
-		mask-image: var(--msghub-contextmenu-icon);
-		mask-repeat: no-repeat;
-		mask-position: center;
-		mask-size: 16px 16px;
-	}
+.msghub-root .msghub-contextmenu-icon {
+	width: 16px;
+	height: 16px;
+	background-color: var(--msghub-muted);
+	-webkit-mask-image: var(--msghub-contextmenu-icon);
+	-webkit-mask-repeat: no-repeat;
+	-webkit-mask-position: center;
+	-webkit-mask-size: 16px 16px;
+	mask-image: var(--msghub-contextmenu-icon);
+	mask-repeat: no-repeat;
+	mask-position: center;
+	mask-size: 16px 16px;
+}
 
-	.msghub-root .msghub-contextmenu-label {
-		flex: 1 1 auto;
-		min-width: 0;
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
+.msghub-root .msghub-contextmenu-label {
+	flex: 1 1 auto;
+	min-width: 0;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
 
-	.msghub-root .msghub-contextmenu-meta {
-		flex: 0 0 auto;
-		display: inline-flex;
-		align-items: baseline;
-		gap: var(--msghub-space-2);
-		color: var(--msghub-muted);
-	}
+.msghub-root .msghub-contextmenu-meta {
+	flex: 0 0 auto;
+	display: inline-flex;
+	align-items: baseline;
+	gap: var(--msghub-space-2);
+	color: var(--msghub-muted);
+}
 
-	.msghub-root .msghub-contextmenu-submenu {
-		font: var(--msghub-font-tab);
-		line-height: var(--msghub-lh-solid);
-	}
+.msghub-root .msghub-contextmenu-submenu {
+	font: var(--msghub-font-tab);
+	line-height: var(--msghub-lh-solid);
+}
 
-	.msghub-root .msghub-contextmenu-footer {
-		display: flex;
-		align-items: center;
-		gap: var(--msghub-space-2);
-		border: 0;
-		padding: var(--msghub-space-2) var(--msghub-space-3);
-		border-top: 1px solid var(--msghub-border);
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
+.msghub-root .msghub-contextmenu-footer {
+	display: flex;
+	align-items: center;
+	gap: var(--msghub-space-2);
+	border: 0;
+	padding: var(--msghub-space-2) var(--msghub-space-3);
+	border-top: 1px solid var(--msghub-border);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
 
-	.msghub-root .msghub-contextmenu-footer-text {
-		flex: 1 1 auto;
-		min-width: 0;
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
+.msghub-root .msghub-contextmenu-footer-text {
+	flex: 1 1 auto;
+	min-width: 0;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
 
-	.msghub-root .msghub-overlay-backdrop,
-	.msghub-root .msghub-dialog-backdrop {
-		position: fixed;
-		inset: 0;
+.msghub-root .msghub-overlay-backdrop,
+.msghub-root .msghub-dialog-backdrop {
+	position: fixed;
+	inset: 0;
 	z-index: 1100;
 	display: flex;
 	align-items: center;
