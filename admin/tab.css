@@ -4,17 +4,39 @@
  * - Base only: tokens + generic rules used across panels/modules
  * - No panel-specific styling here (use tab.<panel>.css / tab.<panel>.<module>.css)
  * - Keep it boring: prioritize density, legibility, and consistency with ioBroker Admin
+ *
+ * Navigation (search for these headers):
+ * - Tokens (Light)
+ * - Tokens (Dark Overrides)
+ * - Environment (html/body)
+ * - Base Root
+ * - Components: Checkbox / Buttons
+ * - Layout: Tabs / Panels
+ * - States
+ * - Infrastructure: Toast / Context Menu / Overlay / Dialog
  */
 
+/* ========================================================================== */
+/* Tokens (Light)                                                            */
+/* ========================================================================== */
 .msghub-root {
 	/* Theme tokens (keep minimal; panels/modules consume these) */
 	--msghub-bg: rgb(255 255 255);
+	--msghub-bg-table: rgb(255 255 255);
+	--msghub-bg-tableHeader: rgb(250 250 250);
+	--msghub-bg-overlay: rgb(255 255 255);
+	--msghub-bg-overlayHeader: rgb(250 250 250);
 	--msghub-text: rgb(0 0 0 / 0.87);
 	--msghub-muted: rgb(0 0 0 / 0.6);
 	--msghub-backdrop: rgb(140 140 140 / 0.55);
 
 	--msghub-border: rgb(0 0 0 / 0.12);
 	--msghub-border-light: rgb(0 0 0 / 0.08);
+
+	/* Motion */
+	--msghub-ease-overlay: cubic-bezier(0.2, 0, 0, 1);
+	--msghub-anim-overlay-in: 160ms;
+	--msghub-anim-overlay-out: 120ms;
 
 	--msghub-accent: rgb(51 153 204);
 	--msghub-ok: rgb(38 166 154);
@@ -55,6 +77,14 @@
 	--msghub-icon-tools: url('data:image/svg+xml,%3Csvg%20width%3D%2215px%22%20height%3D%2215px%22%20viewBox%3D%220%200%200.281%200.281%22%20fill%3D%22none%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cpath%20fill-rule%3D%22evenodd%22%20clip-rule%3D%22evenodd%22%20d%3D%22m0.111%200.009%20-0.002%200.008%20-0.006%200.03a0.103%200.103%200%200%200%20-0.027%200.015L0.047%200.053l-0.008%20-0.002%20-0.004%200.007L0.014%200.092%200.009%200.1l0.006%200.005%200.023%200.02c-0.001%200.005%20-0.002%200.01%20-0.002%200.016s0.001%200.011%200.002%200.016L0.016%200.176%200.009%200.182l0.004%200.007%200.021%200.035%200.004%200.007%200.008%20-0.003%200.03%20-0.01c0.008%200.006%200.017%200.012%200.027%200.015l0.006%200.03%200.002%200.008h0.058l0.002%20-0.008%200.006%20-0.03a0.103%200.103%200%200%200%200.027%20-0.015l0.03%200.01%200.008%200.003%200.004%20-0.007%200.021%20-0.035%200.004%20-0.007%20-0.006%20-0.005%20-0.023%20-0.02c0.001%20-0.005%200.002%20-0.01%200.002%20-0.016%200%20-0.005%20-0.001%20-0.011%20-0.002%20-0.016l0.023%20-0.02%200.006%20-0.005%20-0.004%20-0.007%20-0.021%20-0.035%20-0.004%20-0.007%20-0.008%200.003%20-0.03%200.01a0.103%200.103%200%200%200%20-0.027%20-0.015L0.171%200.018%200.17%200.009z%22%20stroke%3D%22%23000000%22%20stroke-linecap%3D%22square%22%20stroke-linejoin%3D%22round%22%20stroke-width%3D%220.01875%22%2F%3E%3Cpath%20fill-rule%3D%22evenodd%22%20clip-rule%3D%22evenodd%22%20d%3D%22M0.178%200.141a0.037%200.037%200%200%201%20-0.075%200%200.037%200.037%200%200%201%200.075%200Z%22%20stroke%3D%22%23000000%22%20stroke-linecap%3D%22square%22%20stroke-linejoin%3D%22round%22%20stroke-width%3D%220.01875%22%2F%3E%3C%2Fsvg%3E');
 	--msghub-icon-play: url('data:image/svg+xml,%3C%3Fxml%20version%3D%221.0%22%20encoding%3D%22utf-8%22%3F%3E%0A%3C!--%20License%3A%20MIT.%20Made%20by%20teenyicons%3A%20https%3A%2F%2Fgithub.com%2Fteenyicons%2Fteenyicons%20--%3E%0A%3Csvg%20width%3D%2215px%22%20height%3D%2215px%22%20viewBox%3D%220%200%2015%2015%22%20fill%3D%22none%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%0A%3Cpath%20d%3D%22M4.5%2012.5V2.5L11.5%207.5L4.5%2012.5Z%22%20stroke%3D%22%23000000%22%20stroke-linejoin%3D%22round%22%2F%3E%0A%3C%2Fsvg%3E');
 	--msghub-icon-pause: url('data:image/svg+xml,%3C%3Fxml%20version%3D%221.0%22%20encoding%3D%22utf-8%22%3F%3E%0A%3C!--%20License%3A%20MIT.%20Made%20by%20teenyicons%3A%20https%3A%2F%2Fgithub.com%2Fteenyicons%2Fteenyicons%20--%3E%0A%3Csvg%20width%3D%2215px%22%20height%3D%2215px%22%20viewBox%3D%220%200%2015%2015%22%20fill%3D%22none%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%0A%3Cpath%20d%3D%22M5.5%203V12M9.5%203V12%22%20stroke%3D%22%23000000%22%2F%3E%0A%3C%2Fsvg%3E');
+	--msghub-icon-chevron: url('data:image/svg+xml,%3Csvg%20width%3D%2216px%22%20height%3D%2216px%22%20viewBox%3D%220%200%200.3%200.3%22%20fill%3D%22none%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cpath%20d%3D%22m0.28%200.1%20-0.13%200.14L0.02%200.1%22%20stroke%3D%22%23000000%22%20stroke-linecap%3D%22square%22%20stroke-width%3D%220.02%22%2F%3E%3C%2Fsvg%3E');
+	--msghub-icon-sort-asc: url('data:image/svg+xml,%3Csvg%20width%3D%2215px%22%20height%3D%2215px%22%20viewBox%3D%220%200%200.281%200.281%22%20fill%3D%22none%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cpath%20d%3D%22m0.066%200.272%20-0.007%200.007a0.009%200.009%200%200%200%200.013%200zm0.112%20-0.112V0.15H0.169v0.009zm0%200.112H0.169v0.009h0.009zm-0.106%200.007%200.056%20-0.056%20-0.013%20-0.013%20-0.056%200.056zm0%20-0.013%20-0.056%20-0.056%20-0.013%200.013%200.056%200.056zM0.056%200v0.272h0.019V0zm0.122%200.169H0.225V0.15H0.178zm0.047%200.037H0.178v0.019H0.225zm-0.037%200.009v-0.056H0.169v0.056zm0.056%20-0.028a0.019%200.019%200%200%201%20-0.019%200.019v0.019a0.037%200.037%200%200%200%200.037%20-0.037zm-0.019%20-0.019a0.019%200.019%200%200%201%200.019%200.019h0.019a0.037%200.037%200%200%200%20-0.037%20-0.037zm0%200.094H0.178v0.019H0.225zm-0.037%200.009v-0.056H0.169v0.056zm0.056%20-0.028a0.019%200.019%200%200%201%20-0.019%200.019v0.019a0.037%200.037%200%200%200%200.037%20-0.037zm-0.019%20-0.019a0.019%200.019%200%200%201%200.019%200.019h0.019a0.037%200.037%200%200%200%20-0.037%20-0.037zm-0.037%20-0.094V0.047H0.169V0.131zm0.056%20-0.084V0.131h0.019V0.047zM0.216%200.019A0.028%200.028%200%200%201%200.244%200.047h0.019A0.047%200.047%200%200%200%200.216%200zM0.188%200.047A0.028%200.028%200%200%201%200.216%200.019V0A0.047%200.047%200%200%200%200.169%200.047zM0.178%200.094h0.075V0.075h-0.075z%22%20fill%3D%22%23000000%22%2F%3E%3C%2Fsvg%3E');
+	--msghub-icon-sort-desc: url('data:image/svg+xml,%3Csvg%20width%3D%2215px%22%20height%3D%2215px%22%20viewBox%3D%220%200%200.281%200.281%22%20fill%3D%22none%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cpath%20d%3D%22m0.066%200.009%200.007%20-0.007a0.009%200.009%200%200%200%20-0.013%200zm0.112%200.15V0.15H0.169v0.009zm0%200.112H0.169v0.009h0.009zM0.059%200.003l-0.056%200.056%200.013%200.013%200.056%20-0.056zm0%200.013%200.056%200.056%200.013%20-0.013%20-0.056%20-0.056zM0.056%200.009V0.281h0.019V0.009zM0.178%200.169H0.225V0.15H0.178zm0.047%200.037H0.178v0.019H0.225zm-0.037%200.009v-0.056H0.169v0.056zm0.056%20-0.028a0.019%200.019%200%200%201%20-0.019%200.019v0.019a0.037%200.037%200%200%200%200.037%20-0.037zm-0.019%20-0.019a0.019%200.019%200%200%201%200.019%200.019h0.019a0.037%200.037%200%200%200%20-0.037%20-0.037zm0%200.094H0.178v0.019H0.225zm-0.037%200.009v-0.056H0.169v0.056zm0.056%20-0.028a0.019%200.019%200%200%201%20-0.019%200.019v0.019a0.037%200.037%200%200%200%200.037%20-0.037zm-0.019%20-0.019a0.019%200.019%200%200%201%200.019%200.019h0.019a0.037%200.037%200%200%200%20-0.037%20-0.037zm-0.037%20-0.094V0.047H0.169V0.131zm0.056%20-0.084V0.131h0.019V0.047zM0.216%200.019A0.028%200.028%200%200%201%200.244%200.047h0.019A0.047%200.047%200%200%200%200.216%200zM0.188%200.047A0.028%200.028%200%200%201%200.216%200.019V0A0.047%200.047%200%200%200%200.169%200.047zM0.178%200.094h0.075V0.075h-0.075z%22%20fill%3D%22%23000000%22%2F%3E%3C%2Fsvg%3E');
+	--msghub-icon-filter: url('data:image/svg+xml,%3Csvg%20width%3D%2215px%22%20height%3D%2215px%22%20viewBox%3D%220%200%200.281%200.281%22%20fill%3D%22none%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cpath%20d%3D%22M0%200.047h0.281m-0.225%200.094h0.169m-0.131%200.094h0.094%22%20stroke%3D%22%23000000%22%20stroke-width%3D%220.01875%22%2F%3E%3C%2Fsvg%3E');
+
+	--msghub-icon-check-alt: url('data:image/svg+xml,%3Csvg%20width%3D%2216px%22%20height%3D%2216px%22%20viewBox%3D%220%200%2016%2016%22%20fill%3D%22none%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cpath%20d%3D%22M3.5%208.5L6.7%2011.4L12.7%204.6%22%20stroke%3D%22%23000%22%20stroke-width%3D%221.8%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%2F%3E%3C%2Fsvg%3E');
+	--msghub-icon-check: url('data:image/svg+xml,%3Csvg%20width%3D%2215px%22%20height%3D%2215px%22%20viewBox%3D%220%200%200.281%200.281%22%20fill%3D%22none%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cpath%20d%3D%22M0.009%200.272%200.094%200.188M0.009%200.103l0.169%200.169m-0.019%20-0.263%200.112%200.112m-0.244%200%200.15%20-0.094m-0.019%200.225%200.094%20-0.15%22%20stroke%3D%22%23000000%22%20stroke-width%3D%220.01875%22%2F%3E%3C%2Fsvg%3E');
+	--msghub-icon-close: url('data:image/svg+xml,%3Csvg%20width%3D%2215px%22%20height%3D%2215px%22%20viewBox%3D%220%200%200.281%200.281%22%20fill%3D%22none%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cpath%20d%3D%22m0.084%200.084%200.112%200.112m-0.112%200%200.112%20-0.112m-0.056%200.188a0.131%200.131%200%201%201%200%20-0.263%200.131%200.131%200%200%201%200%200.263Z%22%20stroke%3D%22%23000000%22%20stroke-width%3D%220.01875%22%2F%3E%3C%2Fsvg%3E');
 
 	/* Typography (central presets; avoid ad-hoc font-weight/size usage) */
 	--msghub-font-sans:
@@ -62,9 +92,9 @@
 	--msghub-font-mono:
 		ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
 
-	--msghub-fw-light: 375;
-	--msghub-fw-med: 450;
-	--msghub-fw-bold: 625;
+	--msghub-fw-light: 300;
+	--msghub-fw-med: 400;
+	--msghub-fw-bold: 600;
 
 	--msghub-fs-sm: 12px;
 	--msghub-fs-md: 14px;
@@ -77,13 +107,13 @@
 
 	--msghub-font-header: normal var(--msghub-fw-bold) var(--msghub-fs-xl) / var(--msghub-lh-normal)
 		var(--msghub-font-sans);
-	--msghub-font-body: normal var(--msghub-fw-light) var(--msghub-fs-md) / var(--msghub-lh-normal)
+	--msghub-font-body: normal var(--msghub-fw-med) var(--msghub-fs-md) / var(--msghub-lh-normal)
 		var(--msghub-font-sans);
-	--msghub-font-body-bold: normal var(--msghub-fw-med) var(--msghub-fs-md) / var(--msghub-lh-normal)
+	--msghub-font-body-bold: normal var(--msghub-fw-bold) var(--msghub-fs-md) / var(--msghub-lh-normal)
 		var(--msghub-font-sans);
 	--msghub-font-body-meta: italic var(--msghub-fw-light) var(--msghub-fs-md) / var(--msghub-lh-normal)
 		var(--msghub-font-sans);
-	--msghub-font-sectionTitle: normal var(--msghub-fw-med) var(--msghub-fs-lg) / var(--msghub-lh-normal)
+	--msghub-font-sectionTitle: normal var(--msghub-fw-bold) var(--msghub-fs-lg) / var(--msghub-lh-normal)
 		var(--msghub-font-sans);
 	--msghub-font-tab: normal var(--msghub-fw-bold) var(--msghub-fs-lg) / var(--msghub-lh-tight) var(--msghub-font-sans);
 	--msghub-font-badge: normal var(--msghub-fw-med) var(--msghub-fs-sm) / var(--msghub-lh-solid)
@@ -116,8 +146,15 @@
 	--msghub-size-iconButton: 28px;
 }
 
+/* ========================================================================== */
+/* Tokens (Dark Overrides)                                                   */
+/* ========================================================================== */
 html[data-msghub-theme='dark'] .msghub-root {
 	--msghub-bg: rgb(18 18 18);
+	--msghub-bg-table: rgb(20 20 20);
+	--msghub-bg-tableHeader: rgb(26 26 26);
+	--msghub-bg-overlay: rgb(24 24 24);
+	--msghub-bg-overlayHeader: rgb(30 30 30);
 	--msghub-text: rgb(255 255 255 / 0.88);
 	--msghub-muted: rgb(255 255 255 / 0.64);
 	--msghub-backdrop: rgb(0 0 0 / 0.65);
@@ -168,6 +205,16 @@ html:not([data-msghub-theme='dark']) {
 	color-scheme: light;
 }
 
+/* ========================================================================== */
+/* Environment (html/body)                                                   */
+/* ========================================================================== */
+@media (prefers-reduced-motion: reduce) {
+	.msghub-root {
+		--msghub-anim-overlay-in: 0ms;
+		--msghub-anim-overlay-out: 0ms;
+	}
+}
+
 html,
 body {
 	height: 100%;
@@ -177,7 +224,9 @@ body {
 	overflow: hidden;
 }
 
-/* Base */
+/* ========================================================================== */
+/* Base Root                                                                 */
+/* ========================================================================== */
 .msghub-root,
 .msghub-root * {
 	box-sizing: border-box;
@@ -198,6 +247,73 @@ body {
 	color: inherit;
 }
 
+/* ========================================================================== */
+/* Components: Checkbox                                                      */
+/* ========================================================================== */
+/* UI checkbox (opt-in component; do not style all native checkboxes globally) */
+.msghub-root .msghub-uicheckbox {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 14px;
+	height: 14px;
+	cursor: pointer;
+	user-select: none;
+}
+
+.msghub-root .msghub-uicheckbox__input {
+	position: absolute;
+	inset: 0;
+	opacity: 0;
+	margin: 0;
+}
+
+.msghub-root .msghub-uicheckbox__box {
+	width: 14px;
+	height: 14px;
+	box-sizing: border-box;
+	border: 1px solid var(--msghub-muted);
+	border-radius: var(--msghub-radius);
+	background: transparent;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.msghub-root .msghub-uicheckbox__box::before {
+	content: '';
+	width: 12px;
+	height: 12px;
+	background-color: var(--msghub-bg);
+	-webkit-mask-image: var(--msghub-icon-check);
+	-webkit-mask-repeat: no-repeat;
+	-webkit-mask-position: center;
+	-webkit-mask-size: 12px 12px;
+	mask-image: var(--msghub-icon-check);
+	mask-repeat: no-repeat;
+	mask-position: center;
+	mask-size: 12px 12px;
+	opacity: 0;
+}
+
+.msghub-root .msghub-uicheckbox__input:checked + .msghub-uicheckbox__box {
+	background: var(--msghub-accent);
+	border-color: var(--msghub-accent);
+}
+
+.msghub-root .msghub-uicheckbox__input:checked + .msghub-uicheckbox__box::before {
+	opacity: 1;
+}
+
+.msghub-root .msghub-uicheckbox__input:focus-visible + .msghub-uicheckbox__box {
+	outline: 2px solid var(--msghub-accent);
+	outline-offset: 2px;
+}
+
+/* ========================================================================== */
+/* Components: Buttons                                                       */
+/* ========================================================================== */
 /* UI buttons (core primitives) */
 .msghub-root .msghub-uibutton-icon {
 	appearance: none;
@@ -242,6 +358,9 @@ body {
 	opacity: 0.45;
 }
 
+/* ========================================================================== */
+/* Layout: Tabs / Connection Status                                          */
+/* ========================================================================== */
 /* Primary navigation (tabs) + connection status */
 .msghub-root #msghub-layout {
 	flex: 1 1 auto;
@@ -284,11 +403,6 @@ body {
 	background: transparent;
 }
 
-.msghub-root .msghub-tabs-spacer {
-	flex: 1 1 auto;
-	min-width: 0;
-}
-
 .msghub-root #msghub-connection {
 	align-self: flex-end;
 	padding: 5px 10px;
@@ -316,6 +430,9 @@ html[data-msghub-layout='tabs'] .msghub-root #msghub-connection {
 	background: var(--msghub-danger-dim);
 }
 
+/* ========================================================================== */
+/* Layout: Panels                                                            */
+/* ========================================================================== */
 .msghub-root .msghub-panel[hidden] {
 	display: none !important;
 }
@@ -328,6 +445,9 @@ html[data-msghub-layout='tabs'] .msghub-root #msghub-connection {
 	scrollbar-gutter: stable;
 }
 
+/* ========================================================================== */
+/* States                                                                    */
+/* ========================================================================== */
 /* States */
 .msghub-root .is-hidden {
 	display: none !important;
@@ -337,6 +457,9 @@ html[data-msghub-layout='tabs'] .msghub-root #msghub-connection {
 	overflow: hidden;
 }
 
+/* ========================================================================== */
+/* Infrastructure: Toast                                                     */
+/* ========================================================================== */
 /* Universal UI infrastructure */
 .msghub-root .msghub-toast-host {
 	position: fixed;
@@ -362,6 +485,9 @@ html[data-msghub-layout='tabs'] .msghub-root #msghub-connection {
 	font: var(--msghub-font-body);
 }
 
+/* ========================================================================== */
+/* Infrastructure: Context Menu                                               */
+/* ========================================================================== */
 /* Context menu (core primitive; no visible backdrop) */
 .msghub-root .msghub-contextmenu-host {
 	position: fixed;
@@ -377,7 +503,7 @@ html[data-msghub-layout='tabs'] .msghub-root #msghub-connection {
 	max-width: min(380px, calc(100vw - 2 * var(--msghub-space-3)));
 	max-height: min(60vh, calc(100vh - 2 * var(--msghub-space-3)));
 	overflow: auto;
-	background: var(--msghub-bg);
+	background: var(--msghub-bg-overlay);
 	color: var(--msghub-text);
 	border: 1px solid var(--msghub-border);
 	border-radius: var(--msghub-radius);
@@ -430,6 +556,57 @@ html[data-msghub-layout='tabs'] .msghub-root #msghub-connection {
 	cursor: pointer;
 }
 
+.msghub-root .msghub-contextmenu-item.msghub-contextmenu-item--checkbox {
+	padding-top: var(--msghub-space-1);
+	padding-bottom: var(--msghub-space-1);
+}
+
+.msghub-root .msghub-contextmenu-item.msghub-contextmenu-item--checkbox .msghub-contextmenu-row {
+	gap: var(--msghub-space-2);
+}
+
+.msghub-root .msghub-contextmenu-item.msghub-contextmenu-item--checkbox .msghub-contextmenu-icon-slot {
+	position: relative;
+	width: 18px;
+	height: 18px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.msghub-root .msghub-contextmenu-item.msghub-contextmenu-item--checkbox .msghub-contextmenu-icon-slot::before {
+	content: '';
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	width: 14px;
+	height: 14px;
+	box-sizing: border-box;
+	transform: translate(-50%, -50%);
+	border: 1px solid var(--msghub-muted);
+	border-radius: var(--msghub-radius);
+	background: transparent;
+}
+
+.msghub-root .msghub-contextmenu-item.msghub-contextmenu-item--checkbox .msghub-contextmenu-icon {
+	width: 12px;
+	height: 12px;
+	-webkit-mask-size: 12px 12px;
+	mask-size: 12px 12px;
+	background-color: var(--msghub-bg);
+}
+
+.msghub-root .msghub-contextmenu-item.msghub-contextmenu-item--checkbox[aria-checked='false'] .msghub-contextmenu-icon {
+	opacity: 0;
+}
+
+.msghub-root
+	.msghub-contextmenu-item.msghub-contextmenu-item--checkbox[aria-checked='true']
+	.msghub-contextmenu-icon-slot::before {
+	background: var(--msghub-accent);
+	border-color: var(--msghub-accent);
+}
+
 .msghub-root .msghub-contextmenu-item:hover {
 	background: var(--msghub-surface-hover);
 }
@@ -459,6 +636,7 @@ html[data-msghub-layout='tabs'] .msghub-root #msghub-connection {
 	font: var(--msghub-font-body-meta);
 	padding-top: var(--msghub-space-1);
 	padding-bottom: var(--msghub-space-1);
+	background: var(--msghub-bg-overlayHeader);
 }
 
 .msghub-root .msghub-contextmenu-item.is-primary {
@@ -549,17 +727,31 @@ html[data-msghub-layout='tabs'] .msghub-root #msghub-connection {
 	justify-content: center;
 	padding: var(--msghub-space-3);
 	background: var(--msghub-backdrop);
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity var(--msghub-anim-overlay-in) var(--msghub-ease-overlay);
 }
 
 .msghub-root .msghub-overlay-backdrop {
 	z-index: 1050;
 }
 
+.msghub-root .msghub-overlay-backdrop.is-open,
+.msghub-root .msghub-dialog-backdrop.is-open {
+	opacity: 1;
+	pointer-events: auto;
+}
+
+.msghub-root .msghub-overlay-backdrop.is-closing,
+.msghub-root .msghub-dialog-backdrop.is-closing {
+	transition-duration: var(--msghub-anim-overlay-out);
+}
+
 .msghub-root .msghub-overlay,
 .msghub-root .msghub-dialog {
 	width: min(980px, 100%);
 	max-height: min(86vh, 100%);
-	background: var(--msghub-bg);
+	background: var(--msghub-bg-overlay);
 	color: var(--msghub-text);
 	border: 1px solid var(--msghub-border);
 	border-radius: var(--msghub-radius);
@@ -567,11 +759,27 @@ html[data-msghub-layout='tabs'] .msghub-root #msghub-connection {
 	display: flex;
 	flex-direction: column;
 	min-height: 0;
+	opacity: 0;
+	transform: translateY(6px);
+	transition:
+		opacity var(--msghub-anim-overlay-in) var(--msghub-ease-overlay),
+		transform var(--msghub-anim-overlay-in) var(--msghub-ease-overlay);
 }
 
 .msghub-root .msghub-dialog {
 	width: min(520px, 100%);
 	max-height: min(70vh, 100%);
+}
+
+.msghub-root .msghub-overlay-backdrop.is-open .msghub-overlay,
+.msghub-root .msghub-dialog-backdrop.is-open .msghub-dialog {
+	opacity: 1;
+	transform: translateY(0);
+}
+
+.msghub-root .msghub-overlay-backdrop.is-closing .msghub-overlay,
+.msghub-root .msghub-dialog-backdrop.is-closing .msghub-dialog {
+	transition-duration: var(--msghub-anim-overlay-out);
 }
 
 .msghub-root .msghub-overlay-head {
@@ -580,6 +788,7 @@ html[data-msghub-layout='tabs'] .msghub-root #msghub-connection {
 	gap: var(--msghub-space-2);
 	padding: var(--msghub-space-2) var(--msghub-space-3);
 	border-bottom: 1px solid var(--msghub-border);
+	background: var(--msghub-bg-overlayHeader);
 }
 
 .msghub-root .msghub-overlay-title {

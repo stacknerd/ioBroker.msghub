@@ -198,6 +198,7 @@
 	"msghub.i18n.core.admin.ui.messages.filter.selectNone.action": "Select none",
 	"msghub.i18n.core.admin.ui.messages.filter.sort.asc.action": "Sort ascending",
 	"msghub.i18n.core.admin.ui.messages.filter.sort.desc.action": "Sort descending",
+	"msghub.i18n.core.admin.ui.messages.filter.submenu.label": "Filter…",
 	"msghub.i18n.core.admin.ui.pagination.pageOf.text": "Page %s of %s",
 	"msghub.i18n.core.admin.ui.plugins.category.bridge.desc": "Bidirectional integrations: ingest and/or write back (sync) between Message Hub and other systems.",
 	"msghub.i18n.core.admin.ui.plugins.category.bridge.title": "Bridge · Two-way sync",

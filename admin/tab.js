@@ -158,18 +158,19 @@ function computeContextMenuPosition({
 	const ax = Math.max(0, Math.trunc(Number(anchorX) || 0));
 	const ay = Math.max(0, Math.trunc(Number(anchorY) || 0));
 
-	const m = mode === 'submenu' ? 'submenu' : 'cursor';
+	const m = mode === 'submenu' ? 'submenu' : mode === 'anchor' ? 'anchor' : 'cursor';
 	const ah = Math.max(0, Math.trunc(Number(alignHeight) || 0));
 
 	// Initial preference:
 	// - cursor: bottom-right-ish (so the cursor is not "inside" the menu)
+	// - anchor: below-start (aligned to anchor left; add a small gap)
 	// - submenu: right-start (aligned with parent top)
-	let x = m === 'submenu' ? ax : ax + CURSOR_OFFSET;
+	let x = m === 'submenu' ? ax : m === 'anchor' ? ax : ax + CURSOR_OFFSET;
 	let y = m === 'submenu' ? ay : ay + CURSOR_OFFSET;
 
 	// Flip if we would overflow the viewport.
 	if (vw && w && x + w > vw - VIEWPORT_PADDING) {
-		x = ax - w - CURSOR_OFFSET;
+		x = ax - w - (m === 'cursor' ? CURSOR_OFFSET : 0);
 	}
 	if (vh && h && y + h > vh - VIEWPORT_PADDING) {
 		if (m === 'submenu' && ah > 0) {
@@ -861,13 +862,113 @@ function createUi() {
 				continue;
 			}
 
+			if (type === 'checkbox') {
+				const label = typeof item.label === 'string' ? item.label : '';
+				const shortcut = typeof item.shortcut === 'string' ? item.shortcut : '';
+				const disabled = !!item.disabled;
+				const danger = item.danger === true;
+				const primary = item.primary === true;
+				const checked = item.checked === true;
+				const id = typeof item.id === 'string' ? item.id.trim() : '';
+
+				const li = document.createElement('li');
+				li.setAttribute('role', 'none');
+
+				const btn = document.createElement('button');
+				btn.type = 'button';
+				btn.className = 'msghub-contextmenu-item';
+				btn.classList.add('msghub-contextmenu-item--checkbox');
+				btn.setAttribute('role', 'menuitemcheckbox');
+				btn.setAttribute('aria-checked', checked ? 'true' : 'false');
+				if (id) {
+					btn.setAttribute('data-msghub-contextmenu-id', id);
+				}
+				btn.disabled = disabled;
+				if (disabled) {
+					btn.setAttribute('aria-disabled', 'true');
+				}
+				if (danger) {
+					btn.classList.add('is-danger');
+				}
+				if (primary) {
+					btn.classList.add('is-primary');
+				}
+
+				const row = document.createElement('span');
+				row.className = 'msghub-contextmenu-row';
+
+				/** @type {HTMLElement | null} */
+				let checkIconEl = null;
+				{
+					const slot = document.createElement('span');
+					slot.className = 'msghub-contextmenu-icon-slot';
+					const iconEl = document.createElement('span');
+					iconEl.className = 'msghub-contextmenu-icon';
+					iconEl.setAttribute('aria-hidden', 'true');
+					iconEl.style.setProperty('--msghub-contextmenu-icon', toContextMenuIconVar('check'));
+					slot.appendChild(iconEl);
+					checkIconEl = iconEl;
+					row.appendChild(slot);
+				}
+
+				const labelEl = document.createElement('span');
+				labelEl.className = 'msghub-contextmenu-label';
+				labelEl.textContent = label;
+				row.appendChild(labelEl);
+
+				const meta = document.createElement('span');
+				meta.className = 'msghub-contextmenu-meta';
+				if (shortcut) {
+					const s = document.createElement('span');
+					s.className = 'msghub-contextmenu-shortcut';
+					s.textContent = shortcut;
+					meta.appendChild(s);
+				}
+				row.appendChild(meta);
+
+				btn.appendChild(row);
+
+				const setCheckedUI = isChecked => {
+					btn.setAttribute('aria-checked', isChecked ? 'true' : 'false');
+					if (checkIconEl) {
+						checkIconEl.style.opacity = isChecked ? '1' : '0';
+					}
+				};
+
+				setCheckedUI(checked);
+
+				if (!disabled && typeof item.onToggle === 'function') {
+					btn.addEventListener('click', () => {
+						const next = btn.getAttribute('aria-checked') !== 'true';
+						setCheckedUI(next);
+						Promise.resolve()
+							.then(() => item.onToggle(next))
+							.catch(() => {
+								// On error: revert optimistic UI.
+								setCheckedUI(!next);
+							});
+					});
+				} else if (!disabled && typeof item.onSelect === 'function') {
+					btn.addEventListener('click', () => {
+						Promise.resolve()
+							.then(() => item.onSelect())
+							.catch(() => undefined);
+					});
+				}
+
+				li.appendChild(btn);
+				nodes.push(li);
+				continue;
+			}
+
 			const label = typeof item.label === 'string' ? item.label : '';
 			const shortcut = typeof item.shortcut === 'string' ? item.shortcut : '';
 			const hasSubmenu = Array.isArray(item.items) && item.items.length > 0;
 			const disabled = !!item.disabled;
 			const danger = item.danger === true;
 			const primary = item.primary === true;
-			const icon = depth === 0 ? toContextMenuIconVar(item.icon) : '';
+			const icon = toContextMenuIconVar(item.icon);
+			const id = typeof item.id === 'string' ? item.id.trim() : '';
 
 			const li = document.createElement('li');
 			li.setAttribute('role', 'none');
@@ -876,6 +977,9 @@ function createUi() {
 			btn.type = 'button';
 			btn.className = 'msghub-contextmenu-item';
 			btn.setAttribute('role', 'menuitem');
+			if (id) {
+				btn.setAttribute('data-msghub-contextmenu-id', id);
+			}
 			btn.disabled = disabled;
 			if (disabled) {
 				btn.setAttribute('aria-disabled', 'true');
@@ -1029,7 +1133,7 @@ function createUi() {
 		return { x, y };
 	};
 
-	const positionMenuWithClamp = (menuEl, anchorX, anchorY, { mode = 'cursor', alignHeight = 0 } = {}) => {
+	const positionMenuWithClamp = (menuEl, anchorX, anchorY, { mode = 'cursor', alignHeight = 0, cursorOffset = 2 } = {}) => {
 		// Force layout: measure menu after it's in DOM and visible (visibility:hidden is fine).
 		let rect;
 		try {
@@ -1052,7 +1156,7 @@ function createUi() {
 			mode,
 			alignHeight,
 			viewportPadding: 8,
-			cursorOffset: 2,
+			cursorOffset,
 		});
 
 		menuEl.style.left = `${pos.x}px`;
@@ -1133,7 +1237,8 @@ function createUi() {
 		// Positioning (Phase 3): measure, flip/clamp to viewport, avoid cursor-on-item.
 		const anchor = applyContextMenuAnchor(contextMenuState);
 		contextMenuEl.style.visibility = 'hidden';
-		positionMenuWithClamp(contextMenuEl, anchor.x, anchor.y, { mode: 'cursor' });
+		const mode = placement === 'anchor' || placement === 'below-start' ? 'anchor' : 'cursor';
+		positionMenuWithClamp(contextMenuEl, anchor.x, anchor.y, { mode, cursorOffset: mode === 'anchor' ? 4 : 2 });
 		contextMenuEl.style.visibility = '';
 
 		try {
@@ -1216,10 +1321,81 @@ function createUi() {
 	let overlayIsOpen = false;
 	let overlayPrevActive = /** @type {HTMLElement | null} */ (null);
 
+	const parseCssTimeToMs = s => {
+		const str = String(s || '').trim();
+		if (!str) {
+			return 0;
+		}
+		if (str.endsWith('ms')) {
+			const n = Number(str.slice(0, -2).trim());
+			return Number.isFinite(n) ? n : 0;
+		}
+		if (str.endsWith('s')) {
+			const n = Number(str.slice(0, -1).trim());
+			return Number.isFinite(n) ? n * 1000 : 0;
+		}
+		const n = Number(str);
+		return Number.isFinite(n) ? n : 0;
+	};
+
+	const getMaxTransitionMs = el => {
+		try {
+			const cs = window.getComputedStyle(el);
+			const durs = String(cs.transitionDuration || '0s')
+				.split(',')
+				.map(x => parseCssTimeToMs(x));
+			const delays = String(cs.transitionDelay || '0s')
+				.split(',')
+				.map(x => parseCssTimeToMs(x));
+			const n = Math.max(durs.length, delays.length);
+			let max = 0;
+			for (let i = 0; i < n; i++) {
+				const dur = durs[i % durs.length] || 0;
+				const delay = delays[i % delays.length] || 0;
+				max = Math.max(max, dur + delay);
+			}
+			return Number.isFinite(max) ? max : 0;
+		} catch {
+			return 0;
+		}
+	};
+
+	const setBackdropOpenAnimated = (el, isOpen) => {
+		if (!el) {
+			return;
+		}
+		try {
+			if (el._msghubHideTimer) {
+				clearTimeout(el._msghubHideTimer);
+			}
+		} catch {
+			// ignore
+		}
+
+		if (isOpen) {
+			el.classList.remove('is-hidden');
+			el.classList.remove('is-closing');
+			el.classList.remove('is-open');
+			window.requestAnimationFrame(() => {
+				el.classList.add('is-open');
+			});
+			return;
+		}
+
+		el.classList.remove('is-open');
+		el.classList.add('is-closing');
+
+		const ms = getMaxTransitionMs(el);
+		el._msghubHideTimer = window.setTimeout(() => {
+			el.classList.add('is-hidden');
+			el.classList.remove('is-closing');
+		}, Math.max(0, ms) + 30);
+	};
+
 	const overlaySetOpen = isOpen => {
 		overlayIsOpen = isOpen;
-		overlayBackdrop.classList.toggle('is-hidden', !isOpen);
 		overlayBackdrop.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+		setBackdropOpenAnimated(overlayBackdrop, isOpen);
 		setRootModalOpen(isOpen || dialogIsOpen);
 	};
 
@@ -1280,8 +1456,8 @@ function createUi() {
 
 	const dialogSetOpen = isOpen => {
 		dialogIsOpen = isOpen;
-		dialogBackdrop.classList.toggle('is-hidden', !isOpen);
 		dialogBackdrop.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+		setBackdropOpenAnimated(dialogBackdrop, isOpen);
 		setRootModalOpen(isOpen || overlayIsOpen);
 	};
 

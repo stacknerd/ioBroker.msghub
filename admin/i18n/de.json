@@ -196,6 +196,7 @@
 	"msghub.i18n.core.admin.ui.messages.filter.selectNone.action": "Alle abwählen",
 	"msghub.i18n.core.admin.ui.messages.filter.sort.asc.action": "Aufsteigend sortieren",
 	"msghub.i18n.core.admin.ui.messages.filter.sort.desc.action": "Absteigend sortieren",
+	"msghub.i18n.core.admin.ui.messages.filter.submenu.label": "Filter…",
 	"msghub.i18n.core.admin.ui.pagination.pageOf.text": "Seite %s von %s",
 	"msghub.i18n.core.admin.ui.plugins.category.bridge.desc": "Bidirektionale Integrationen: Daten einspielen und/oder in andere Systeme zurückschreiben (Sync).",
 	"msghub.i18n.core.admin.ui.plugins.category.bridge.title": "Brücken",
