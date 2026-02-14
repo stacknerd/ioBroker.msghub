@@ -1,9 +1,5 @@
 /* tab.messages.css — Messages panel styles (scoped to .msghub-root .msghub-messages) */
 
-/* Intentionally empty (Big-Bang rebuild, step-by-step).
-	 Add panel-specific styles here, always scoped:
-	 .msghub-root .msghub-messages ... */
-
 /* Message JSON viewer (line-based; wraps long values without horizontal scrolling) */
 .msghub-root .msghub-overlay-body .msghub-messages-json {
 	margin: 0;
@@ -60,23 +56,222 @@
 	border-collapse: separate;
 	border-spacing: 0;
 	font: var(--msghub-font-body);
+	background: var(--msghub-bg-table);
+	table-layout: fixed;
+}
+
+.msghub-root .msghub-messages .msghub-col--select {
+	width: 34px;
+}
+.msghub-root .msghub-messages .msghub-col--icon {
+	width: 9ch;
+}
+.msghub-root .msghub-messages .msghub-col--location {
+	width: 18ch;
+}
+.msghub-root .msghub-messages .msghub-col--kind {
+	width: 14ch;
+}
+.msghub-root .msghub-messages .msghub-col--level {
+	width: 12ch;
+}
+.msghub-root .msghub-messages .msghub-col--lifecycle {
+	width: 12ch;
+}
+.msghub-root .msghub-messages .msghub-col--created {
+	width: 18ch;
+}
+.msghub-root .msghub-messages .msghub-col--updated {
+	width: 18ch;
+}
+.msghub-root .msghub-messages .msghub-col--origin {
+	width: 14ch;
+}
+.msghub-root .msghub-messages .msghub-col--progress {
+	width: 100px;
+}
+.msghub-root .msghub-messages .msghub-col--title {
+	width: 30%;
+}
+.msghub-root .msghub-messages .msghub-col--text {
+	width: 40%;
+}
+
+.msghub-root .msghub-messages .msghub-colCell--icon,
+.msghub-root .msghub-messages .msghub-colCell--title,
+.msghub-root .msghub-messages .msghub-colCell--text,
+.msghub-root .msghub-messages .msghub-colCell--location,
+.msghub-root .msghub-messages .msghub-colCell--kind,
+.msghub-root .msghub-messages .msghub-colCell--level,
+.msghub-root .msghub-messages .msghub-colCell--lifecycle,
+.msghub-root .msghub-messages .msghub-colCell--created,
+.msghub-root .msghub-messages .msghub-colCell--updated,
+.msghub-root .msghub-messages .msghub-colCell--origin {
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .msghub-root .msghub-messages .msghub-table thead th {
 	position: sticky;
 	top: 0;
 	z-index: 2;
-	background: var(--msghub-bg);
+	background: var(--msghub-bg-tableHeader);
 	color: var(--msghub-muted);
 	font: var(--msghub-font-body);
 	text-align: left;
 	white-space: nowrap;
-	padding: var(--msghub-space-1) var(--msghub-space-2);
-	border-bottom: 1px solid var(--msghub-border-light);
+	padding: var(--msghub-space-2) var(--msghub-space-2);
+	border-bottom: 1px solid var(--msghub-border);
 }
 
 .msghub-root .msghub-messages .msghub-table thead th:first-child {
 	padding-left: calc(var(--msghub-space-2) + var(--msghub-row-edge-indent));
+}
+
+.msghub-root .msghub-messages .msghub-th {
+	cursor: pointer;
+	isolation: isolate;
+}
+
+.msghub-root .msghub-messages .msghub-th:not(.msghub-messages-select)::before {
+	content: '';
+	position: absolute;
+	inset: 0;
+	background: var(--msghub-surface-hover);
+	opacity: 0;
+	pointer-events: none;
+	z-index: 0;
+}
+
+.msghub-root .msghub-messages .msghub-th:not(.msghub-messages-select):hover::before {
+	opacity: 1;
+}
+
+.msghub-root .msghub-messages .msghub-th:hover {
+	color: var(--msghub-text);
+}
+
+.msghub-root .msghub-messages th.msghub-messages-select {
+	cursor: default;
+}
+
+.msghub-root .msghub-messages .msghub-th > * {
+	position: relative;
+	z-index: 1;
+}
+
+.msghub-root .msghub-messages .msghub-thBtn {
+	appearance: none;
+	background: transparent;
+	border: 0;
+	padding: 0;
+	margin: 0;
+	width: 100%;
+	text-align: left;
+	font: var(--msghub-font-body-bold);
+	color: inherit;
+	cursor: pointer;
+	display: inline-flex;
+	align-items: center;
+	gap: var(--msghub-space-1);
+}
+
+.msghub-root .msghub-messages .msghub-th-label {
+	flex: 1 1 auto;
+	min-width: 0;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.msghub-root .msghub-messages .msghub-thIcon {
+	flex: 0 0 auto;
+	width: 12px;
+	height: 12px;
+	background-color: currentColor;
+	-webkit-mask-repeat: no-repeat;
+	-webkit-mask-position: center;
+	-webkit-mask-size: 12px 12px;
+	mask-repeat: no-repeat;
+	mask-position: center;
+	mask-size: 12px 12px;
+	opacity: 0.85;
+}
+
+.msghub-root .msghub-messages .msghub-thIcon--sort {
+	display: none;
+}
+
+.msghub-root .msghub-messages .msghub-thIcon--filter {
+	display: none;
+	-webkit-mask-image: var(--msghub-icon-filter);
+	mask-image: var(--msghub-icon-filter);
+	opacity: 0.75;
+}
+
+.msghub-root .msghub-messages .msghub-thBtn--filter[data-sort-dir='asc'] .msghub-thIcon--sort {
+	display: inline-flex;
+	-webkit-mask-image: var(--msghub-icon-sort-asc);
+	mask-image: var(--msghub-icon-sort-asc);
+}
+
+.msghub-root .msghub-messages .msghub-thBtn--filter[data-sort-dir='desc'] .msghub-thIcon--sort {
+	display: inline-flex;
+	-webkit-mask-image: var(--msghub-icon-sort-desc);
+	mask-image: var(--msghub-icon-sort-desc);
+}
+
+.msghub-root .msghub-messages .msghub-thBtn--filter[data-filter-count] .msghub-thIcon--filter {
+	display: inline-flex;
+}
+
+.msghub-root .msghub-messages .msghub-th-sort.is-active,
+.msghub-root .msghub-messages .msghub-th-filter[data-sort-dir],
+.msghub-root .msghub-messages .msghub-th-filter[data-filter-count] {
+	color: var(--msghub-accent);
+}
+
+.msghub-root .msghub-messages .msghub-th-badge {
+	display: none;
+}
+
+.msghub-root .msghub-messages .msghub-th-sort::after,
+.msghub-root .msghub-messages .msghub-th-filter::after {
+	content: '';
+	width: 12px;
+	height: 12px;
+	background-color: currentColor;
+	-webkit-mask-image: var(--msghub-icon-chevron);
+	-webkit-mask-repeat: no-repeat;
+	-webkit-mask-position: center;
+	-webkit-mask-size: 12px 12px;
+	mask-image: var(--msghub-icon-chevron);
+	mask-repeat: no-repeat;
+	mask-position: center;
+	mask-size: 12px 12px;
+	opacity: 0.75;
+}
+
+.msghub-root .msghub-messages .msghub-th-filter[data-sort-dir]::after,
+.msghub-root .msghub-messages .msghub-th-filter[data-filter-count]::after {
+	display: none;
+}
+
+.msghub-root .msghub-messages .msghub-th-sort.is-active::after {
+	display: none;
+}
+
+.msghub-root .msghub-messages .msghub-th-sort.is-active[data-sort-dir='asc'] .msghub-thIcon--sort {
+	display: inline-flex;
+	-webkit-mask-image: var(--msghub-icon-sort-asc);
+	mask-image: var(--msghub-icon-sort-asc);
+}
+
+.msghub-root .msghub-messages .msghub-th-sort.is-active[data-sort-dir='desc'] .msghub-thIcon--sort {
+	display: inline-flex;
+	-webkit-mask-image: var(--msghub-icon-sort-desc);
+	mask-image: var(--msghub-icon-sort-desc);
 }
 
 .msghub-root .msghub-messages .msghub-table tbody td {
@@ -112,4 +307,34 @@
 .msghub-root .msghub-messages .msghub-messages-select {
 	width: 1%;
 	white-space: nowrap;
+}
+
+/* Selection checkbox uses core component (.msghub-uicheckbox in tab.css) */
+
+/* Progress: keep value in DOM for later, but hide for now */
+.msghub-root .msghub-messages .msghub-progress-value {
+	display: none;
+}
+
+/* Progress bar (native <progress>) */
+.msghub-root .msghub-messages .msghub-progress-bar {
+	appearance: none;
+	width: 100%;
+	max-width: 82px;
+	border: 1px solid var(--msghub-border-light);
+	border-radius: var(--msghub-radius);
+	background: var(--msghub-bg);
+	overflow: hidden;
+}
+
+.msghub-root .msghub-messages .msghub-progress-bar::-webkit-progress-bar {
+	background: var(--msghub-bg);
+}
+
+.msghub-root .msghub-messages .msghub-progress-bar::-webkit-progress-value {
+	background: var(--msghub-ok);
+}
+
+.msghub-root .msghub-messages .msghub-progress-bar::-moz-progress-bar {
+	background: var(--msghub-ok);
 }

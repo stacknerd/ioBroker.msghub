@@ -23,6 +23,7 @@
 
 .msghub-root .msghub-plugins .msghub-plugin-instance {
 	border-bottom: 1px solid var(--msghub-border-light);
+	background: var(--msghub-bg-table);
 }
 
 .msghub-root .msghub-plugins .msghub-plugin-instance:last-child {
@@ -37,6 +38,7 @@
 	padding: var(--msghub-space-2) var(--msghub-space-2);
 	padding-left: calc(var(--msghub-space-2) + var(--msghub-row-edge-indent));
 	border-bottom: 1px solid var(--msghub-border-light);
+	background: var(--msghub-bg-tableHeader);
 	cursor: default;
 	user-select: none;
 }
