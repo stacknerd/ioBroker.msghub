@@ -24,7 +24,8 @@ describe('admin/tab/registry.js', function () {
 		assert.ok(Object.isFrozen(registry.compositions));
 
 		const panelIds = Object.keys(registry.panels);
-		assert.ok(panelIds.length >= 3, 'expected at least stats/messages/plugins panels');
+		assert.ok(panelIds.length >= 2, 'expected at least messages/plugins panels');
+		assert.equal(panelIds.includes('stats'), false, 'stats panel should be removed for now');
 
 		for (const panelId of panelIds) {
 			const panel = registry.panels[panelId];
@@ -61,6 +62,7 @@ describe('admin/tab/registry.js', function () {
 				assert.ok(registry.panels[panelId], `unknown panel '${panelId}' in composition '${compositionId}'`);
 			}
 		}
+		assert.equal(registry.compositions.dashboardStats, undefined, 'legacy stats composition should be removed');
 	});
 
 	it('is idempotent when loaded multiple times', async function () {
