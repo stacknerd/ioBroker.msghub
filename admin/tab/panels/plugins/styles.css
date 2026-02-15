@@ -30,6 +30,10 @@
 	border-bottom: 0;
 }
 
+.msghub-root .msghub-plugins .msghub-plugin-toolbar-add {
+	--msghub-uibutton-icon: var(--msghub-icon-add);
+}
+
 .msghub-root .msghub-plugins .msghub-plugin-category-row {
 	display: flex;
 	flex-wrap: wrap;

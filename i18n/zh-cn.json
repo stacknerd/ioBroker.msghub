@@ -200,6 +200,7 @@
   "msghub.i18n.core.admin.ui.messages.filter.sort.desc.action": "Sort descending",
   "msghub.i18n.core.admin.ui.messages.filter.submenu.label": "Filter…",
   "msghub.i18n.core.admin.ui.pagination.pageOf.text": "Page %s of %s",
+  "msghub.i18n.core.admin.ui.plugins.add.button": "Add plugin",
   "msghub.i18n.core.admin.ui.plugins.category.bridge.desc": "Bidirectional integrations: ingest and/or write back (sync) between Message Hub and other systems.",
   "msghub.i18n.core.admin.ui.plugins.category.bridge.title": "Bridge · Two-way sync",
   "msghub.i18n.core.admin.ui.plugins.category.engage.desc": "Interactive plugins (chat/commands): users can query and modify Message Hub via a channel.",

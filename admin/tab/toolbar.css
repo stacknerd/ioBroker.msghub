@@ -1,0 +1,38 @@
+/* ========================================================================== */
+/* Components: Toolbar                                                        */
+/* ========================================================================== */
+/* Shared toolbar contract.
+ *
+ * Goals:
+ * - Keep toolbars visually minimal and neutral.
+ * - Reuse one structure in multiple panels.
+ * - Keep button treatment opt-in via reserve hooks (`.msghub-toolbarbutton-*`).
+ */
+
+.msghub-root .msghub-toolbar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--msghub-space-2);
+	padding: var(--msghub-space-2) 0;
+	border-bottom: 1px solid var(--msghub-border-light);
+	background: transparent;
+}
+
+.msghub-root .msghub-toolbar__group {
+	display: inline-flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: var(--msghub-space-2);
+	min-width: 0;
+}
+
+.msghub-root .msghub-toolbar__meta {
+	margin-left: auto;
+	min-width: 0;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	color: var(--msghub-muted);
+	font: var(--msghub-font-body-meta);
+}
