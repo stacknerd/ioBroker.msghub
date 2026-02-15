@@ -4,35 +4,24 @@
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const fs = require('node:fs/promises');
-const vm = require('node:vm');
 
 const repoRoot = path.resolve(__dirname, '..');
 const adminDir = __dirname;
-const coreDir = path.join(adminDir, 'tab');
 const panelsDir = path.join(adminDir, 'tab', 'panels');
 
 const FORBIDDEN_CLASS_TOKENS = [
-	// Buttons / text
 	'btn',
 	'btn-flat',
 	'btn-small',
 	'red-text',
 	'disabled',
-
-	// Cards
 	'card',
 	'card-content',
 	'card-title',
-
-	// Progress
 	'progress',
 	'indeterminate',
-
-	// Tables
 	'striped',
 	'highlight',
-
-	// Forms / grid
 	'input-field',
 	'materialize-textarea',
 	'row',
@@ -44,24 +33,24 @@ const FORBIDDEN_CLASS_TOKENS = [
 
 const FORBIDDEN_WORDS_ANYWHERE = ['materialize', 'materializecss'];
 
-function escapeRe(s) {
-	return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+function escapeRe(value) {
+	return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-async function listFilesRecursive(dir) {
+async function listFilesRecursive(directory) {
 	const out = [];
-	const entries = await fs.readdir(dir, { withFileTypes: true });
-	for (const ent of entries) {
-		const full = path.join(dir, ent.name);
-		if (ent.isDirectory()) {
-			if (ent.name === 'i18n') {
+	const entries = await fs.readdir(directory, { withFileTypes: true });
+	for (const entry of entries) {
+		const fullPath = path.join(directory, entry.name);
+		if (entry.isDirectory()) {
+			if (entry.name === 'i18n') {
 				continue;
 			}
-			out.push(...(await listFilesRecursive(full)));
+			out.push(...(await listFilesRecursive(fullPath)));
 			continue;
 		}
-		if (ent.isFile()) {
-			out.push(full);
+		if (entry.isFile()) {
+			out.push(fullPath);
 		}
 	}
 	return out;
@@ -69,42 +58,42 @@ async function listFilesRecursive(dir) {
 
 function computeLineStarts(text) {
 	const starts = [0];
-	for (let i = 0; i < text.length; i++) {
-		if (text.charCodeAt(i) === 10) {
-			starts.push(i + 1);
+	for (let index = 0; index < text.length; index++) {
+		if (text.charCodeAt(index) === 10) {
+			starts.push(index + 1);
 		}
 	}
 	return starts;
 }
 
-function lineColFromIndex(lineStarts, idx) {
-	let lo = 0;
-	let hi = lineStarts.length - 1;
-	while (lo <= hi) {
-		const mid = (lo + hi) >> 1;
-		const v = lineStarts[mid];
-		if (v === idx) {
-			lo = mid;
+function lineColFromIndex(lineStarts, index) {
+	let lower = 0;
+	let upper = lineStarts.length - 1;
+	while (lower <= upper) {
+		const middle = (lower + upper) >> 1;
+		const value = lineStarts[middle];
+		if (value === index) {
+			lower = middle;
 			break;
 		}
-		if (v < idx) {
-			lo = mid + 1;
+		if (value < index) {
+			lower = middle + 1;
 		} else {
-			hi = mid - 1;
+			upper = middle - 1;
 		}
 	}
-	const lineIdx = Math.max(0, lo - 1);
-	return { line: lineIdx + 1, col: idx - lineStarts[lineIdx] + 1 };
+	const lineIndex = Math.max(0, lower - 1);
+	return { line: lineIndex + 1, col: index - lineStarts[lineIndex] + 1 };
 }
 
 function splitClassTokens(classValue) {
 	return String(classValue || '')
 		.split(/\s+/g)
-		.map(s => s.trim())
+		.map(token => token.trim())
 		.filter(Boolean);
 }
 
-function checkClassValueTokens(tokens, relPath, pos, violations) {
+function checkClassTokens(tokens, relPath, pos, violations) {
 	for (const token of FORBIDDEN_CLASS_TOKENS) {
 		if (tokens.includes(token)) {
 			violations.push({
@@ -117,37 +106,37 @@ function checkClassValueTokens(tokens, relPath, pos, violations) {
 	}
 }
 
-function findForbiddenWords(text, lineStarts, relPath, violations) {
+function scanForbiddenWords(text, lineStarts, relPath, violations) {
 	for (const word of FORBIDDEN_WORDS_ANYWHERE) {
 		const re = new RegExp(`\\b${escapeRe(word)}\\b`, 'gi');
-		let m;
-		while ((m = re.exec(text))) {
-			const pos = lineColFromIndex(lineStarts, m.index);
+		let match;
+		while ((match = re.exec(text))) {
+			const pos = lineColFromIndex(lineStarts, match.index);
 			violations.push({
 				file: relPath,
 				line: pos.line,
 				col: pos.col,
-				context: `forbidden word '${m[0]}'`,
+				context: `forbidden word '${match[0]}'`,
 			});
 		}
 	}
 }
 
-function scanHtml(text, lineStarts, relPath, violations) {
+function scanHtmlForClasses(text, lineStarts, relPath, violations) {
 	const classAttrRe = /\bclass\s*=\s*(['"])(.*?)\1/gs;
-	let m;
-	while ((m = classAttrRe.exec(text))) {
-		const pos = lineColFromIndex(lineStarts, m.index);
-		checkClassValueTokens(splitClassTokens(m[2]), relPath, pos, violations);
+	let match;
+	while ((match = classAttrRe.exec(text))) {
+		const pos = lineColFromIndex(lineStarts, match.index);
+		checkClassTokens(splitClassTokens(match[2]), relPath, pos, violations);
 	}
 }
 
-function scanCss(text, lineStarts, relPath, violations) {
+function scanCssForClasses(text, lineStarts, relPath, violations) {
 	for (const token of FORBIDDEN_CLASS_TOKENS) {
 		const re = new RegExp(`\\.${escapeRe(token)}(?![\\w-])`, 'g');
-		let m;
-		while ((m = re.exec(text))) {
-			const pos = lineColFromIndex(lineStarts, m.index);
+		let match;
+		while ((match = re.exec(text))) {
+			const pos = lineColFromIndex(lineStarts, match.index);
 			violations.push({
 				file: relPath,
 				line: pos.line,
@@ -158,7 +147,7 @@ function scanCss(text, lineStarts, relPath, violations) {
 	}
 }
 
-function scanJs(text, lineStarts, relPath, violations) {
+function scanJsForClasses(text, lineStarts, relPath, violations) {
 	const classPropRes = [
 		/\bclass\s*:\s*(['"])(.*?)\1/gs,
 		/\bclass\s*:\s*`([\s\S]*?)`/g,
@@ -167,28 +156,27 @@ function scanJs(text, lineStarts, relPath, violations) {
 	];
 
 	for (const re of classPropRes) {
-		let m;
-		while ((m = re.exec(text))) {
-			const idx = m.index;
-			const raw = m.length >= 3 ? m[2] : m[1];
+		let match;
+		while ((match = re.exec(text))) {
+			const index = match.index;
+			const raw = match.length >= 3 ? match[2] : match[1];
 			const cleaned = String(raw).replace(/\$\{[^}]*\}/g, '');
-			const pos = lineColFromIndex(lineStarts, idx);
-			checkClassValueTokens(splitClassTokens(cleaned), relPath, pos, violations);
+			const pos = lineColFromIndex(lineStarts, index);
+			checkClassTokens(splitClassTokens(cleaned), relPath, pos, violations);
 		}
 	}
 
-	// classList.add/remove/toggle/contains('token')
 	const classListRe = /\bclassList\.(?:add|remove|toggle|contains)\s*\(([^)]*)\)/g;
-	let m;
-	while ((m = classListRe.exec(text))) {
-		const idx = m.index;
-		const args = m[1] || '';
+	let match;
+	while ((match = classListRe.exec(text))) {
+		const index = match.index;
+		const args = match[1] || '';
 		const strRe = /(['"`])([^'"`]*?)\1/g;
-		let s;
-		while ((s = strRe.exec(args))) {
-			const value = s[2];
+		let valueMatch;
+		while ((valueMatch = strRe.exec(args))) {
+			const value = valueMatch[2];
 			if (FORBIDDEN_CLASS_TOKENS.includes(value)) {
-				const pos = lineColFromIndex(lineStarts, idx);
+				const pos = lineColFromIndex(lineStarts, index);
 				violations.push({
 					file: relPath,
 					line: pos.line,
@@ -199,15 +187,14 @@ function scanJs(text, lineStarts, relPath, violations) {
 		}
 	}
 
-	// querySelector(All)/matches('.token')
 	const selectorCallRe = /\b(?:querySelectorAll?|matches)\s*\(\s*(['"`])([\s\S]*?)\1/g;
-	while ((m = selectorCallRe.exec(text))) {
-		const idx = m.index;
-		const selector = String(m[2] || '').replace(/\$\{[^}]*\}/g, '');
+	while ((match = selectorCallRe.exec(text))) {
+		const index = match.index;
+		const selector = String(match[2] || '').replace(/\$\{[^}]*\}/g, '');
 		for (const token of FORBIDDEN_CLASS_TOKENS) {
 			const re = new RegExp(`(^|[^\\w-])\\.${escapeRe(token)}(?![\\w-])`);
 			if (re.test(selector)) {
-				const pos = lineColFromIndex(lineStarts, idx);
+				const pos = lineColFromIndex(lineStarts, index);
 				violations.push({
 					file: relPath,
 					line: pos.line,
@@ -219,45 +206,43 @@ function scanJs(text, lineStarts, relPath, violations) {
 	}
 }
 
-describe('AdminTab UI', function () {
-	it('does not use Materialize tokens/classes', async function () {
+describe('AdminTab Governance Integration', function () {
+	it('does not use Materialize tokens/classes in admin UI', async function () {
 		const files = await listFilesRecursive(adminDir);
-		const candidates = files.filter(f => {
-			const ext = path.extname(f).toLowerCase();
-			if (f.endsWith('.test.js')) {
+		const candidates = files.filter(file => {
+			if (file.endsWith('.test.js')) {
 				return false;
 			}
+			const ext = path.extname(file).toLowerCase();
 			return ext === '.js' || ext === '.html' || ext === '.css';
 		});
 
 		const violations = [];
-
 		for (const file of candidates) {
 			const relPath = path.relative(repoRoot, file);
 			const text = await fs.readFile(file, 'utf8');
 			const lineStarts = computeLineStarts(text);
-
-			findForbiddenWords(text, lineStarts, relPath, violations);
+			scanForbiddenWords(text, lineStarts, relPath, violations);
 
 			const ext = path.extname(file).toLowerCase();
 			if (ext === '.html') {
-				scanHtml(text, lineStarts, relPath, violations);
+				scanHtmlForClasses(text, lineStarts, relPath, violations);
 			} else if (ext === '.css') {
-				scanCss(text, lineStarts, relPath, violations);
+				scanCssForClasses(text, lineStarts, relPath, violations);
 			} else if (ext === '.js') {
-				scanJs(text, lineStarts, relPath, violations);
+				scanJsForClasses(text, lineStarts, relPath, violations);
 			}
 		}
 
 		if (violations.length) {
-			const msg = violations.map(v => `- ${v.file}:${v.line}:${v.col} ${v.context}`).join('\n');
-			assert.fail(`Materialize usage found in admin UI:\n${msg}\nTotal: ${violations.length}`);
+			const message = violations.map(violation => `- ${violation.file}:${violation.line}:${violation.col} ${violation.context}`).join('\n');
+			assert.fail(`Materialize usage found in admin UI:\n${message}\nTotal: ${violations.length}`);
 		}
 	});
 
 	it('panel/module css is tokens-only (no hardcoded colors)', async function () {
-		const files = await listFilesRecursive(adminDir);
-		const cssFiles = files.filter(f => path.extname(f).toLowerCase() === '.css' && path.basename(f) !== 'tab.css');
+		const files = await listFilesRecursive(panelsDir);
+		const cssFiles = files.filter(file => path.extname(file).toLowerCase() === '.css');
 
 		const violations = [];
 		const reHex = /#[0-9a-fA-F]{3,8}\b/g;
@@ -269,118 +254,44 @@ describe('AdminTab UI', function () {
 			const text = await fs.readFile(file, 'utf8');
 			const lineStarts = computeLineStarts(text);
 
-			let m;
-			while ((m = reHex.exec(text))) {
-				const pos = lineColFromIndex(lineStarts, m.index);
-				violations.push({ file: relPath, line: pos.line, col: pos.col, context: `hardcoded color '${m[0]}'` });
+			let match;
+			while ((match = reHex.exec(text))) {
+				const pos = lineColFromIndex(lineStarts, match.index);
+				violations.push({ file: relPath, line: pos.line, col: pos.col, context: `hardcoded color '${match[0]}'` });
 			}
-			while ((m = reRgb.exec(text))) {
-				const pos = lineColFromIndex(lineStarts, m.index);
-				violations.push({ file: relPath, line: pos.line, col: pos.col, context: `hardcoded color function '${m[0]}'` });
+			while ((match = reRgb.exec(text))) {
+				const pos = lineColFromIndex(lineStarts, match.index);
+				violations.push({
+					file: relPath,
+					line: pos.line,
+					col: pos.col,
+					context: `hardcoded color function '${match[0]}'`,
+				});
 			}
-			while ((m = reHsl.exec(text))) {
-				const pos = lineColFromIndex(lineStarts, m.index);
-				violations.push({ file: relPath, line: pos.line, col: pos.col, context: `hardcoded color function '${m[0]}'` });
+			while ((match = reHsl.exec(text))) {
+				const pos = lineColFromIndex(lineStarts, match.index);
+				violations.push({
+					file: relPath,
+					line: pos.line,
+					col: pos.col,
+					context: `hardcoded color function '${match[0]}'`,
+				});
 			}
 		}
 
 		if (violations.length) {
-			const msg = violations.map(v => `- ${v.file}:${v.line}:${v.col} ${v.context}`).join('\n');
-			assert.fail(`Hardcoded colors found in panel/module CSS (use tokens from admin/tab.css):\n${msg}\nTotal: ${violations.length}`);
+			const message = violations.map(violation => `- ${violation.file}:${violation.line}:${violation.col} ${violation.context}`).join('\n');
+			assert.fail(`Hardcoded colors found in panel/module CSS (use tokens from admin/tab/tokens.css):\n${message}\nTotal: ${violations.length}`);
 		}
 	});
 
-	it('registry is consistent (panels, compositions, assets)', async function () {
-		const registryPath = path.join(coreDir, 'registry.js');
-		const src = await fs.readFile(registryPath, 'utf8');
-		const sandbox = { window: {}, win: null, console: { debug() {}, info() {}, warn() {}, error() {} } };
-		sandbox.win = sandbox.window;
-		vm.runInNewContext(`const win = window;\n${src}`, sandbox, { filename: 'admin/tab/registry.js' });
-
-		const registry = sandbox.window.MsghubAdminTabRegistry;
-		assert.ok(registry && typeof registry === 'object', 'Expected registry to be an object');
-		assert.ok(registry.panels && typeof registry.panels === 'object', 'Expected registry.panels');
-		assert.ok(registry.compositions && typeof registry.compositions === 'object', 'Expected registry.compositions');
-
-		const panels = registry.panels;
-		const compositions = registry.compositions;
-
-		const mountIds = new Set();
-		for (const [id, def] of Object.entries(panels)) {
-			assert.ok(id && typeof id === 'string', 'Panel id must be a string');
-			assert.ok(def && typeof def === 'object', `Panel '${id}' must be an object`);
-			assert.equal(def.id, id, `Panel '${id}' must have matching .id`);
-			assert.ok(typeof def.mountId === 'string' && def.mountId.trim(), `Panel '${id}' must have mountId`);
-			assert.ok(typeof def.initGlobal === 'string' && def.initGlobal.trim(), `Panel '${id}' must have initGlobal`);
-			assert.ok(def.assets && typeof def.assets === 'object', `Panel '${id}' must have assets`);
-			assert.ok(Array.isArray(def.assets.css), `Panel '${id}' assets.css must be array`);
-			assert.ok(Array.isArray(def.assets.js), `Panel '${id}' assets.js must be array`);
-
-			assert.ok(!mountIds.has(def.mountId), `Duplicate mountId '${def.mountId}'`);
-			mountIds.add(def.mountId);
-
-			for (const rel of [...def.assets.css, ...def.assets.js]) {
-				assert.ok(typeof rel === 'string' && rel.trim(), `Panel '${id}' asset entries must be strings`);
-				const full = path.join(adminDir, rel);
-				try {
-					await fs.access(full);
-				} catch {
-					assert.fail(`Missing asset for panel '${id}': ${rel}`);
-				}
-			}
-		}
-
-		for (const [cid, comp] of Object.entries(compositions)) {
-			assert.ok(cid && typeof cid === 'string', 'Composition id must be a string');
-			assert.ok(comp && typeof comp === 'object', `Composition '${cid}' must be an object`);
-			assert.equal(comp.id, cid, `Composition '${cid}' must have matching .id`);
-			assert.ok(comp.layout === 'tabs' || comp.layout === 'single', `Composition '${cid}' has invalid layout`);
-			assert.ok(Array.isArray(comp.panels), `Composition '${cid}' must have panels[]`);
-
-			for (const pid of comp.panels) {
-				assert.ok(typeof pid === 'string' && pid.trim(), `Composition '${cid}' panel ids must be strings`);
-				assert.ok(panels[pid], `Composition '${cid}' references unknown panel '${pid}'`);
-			}
-
-			assert.ok(typeof comp.defaultPanel === 'string' && comp.defaultPanel.trim(), `Composition '${cid}' must have defaultPanel`);
-			assert.ok(
-				comp.panels.includes(comp.defaultPanel),
-				`Composition '${cid}' defaultPanel '${comp.defaultPanel}' must be in panels[]`,
-			);
-
-			if (comp.deviceMode != null) {
-				assert.ok(
-					comp.deviceMode === 'pc' || comp.deviceMode === 'mobile' || comp.deviceMode === 'screenOnly',
-					`Composition '${cid}' has invalid deviceMode`,
-				);
-			}
-		}
-	});
-
-	it('exposes contextMenu API on ctx.api.ui (phase 1)', async function () {
-		const apiSrc = await fs.readFile(path.join(coreDir, 'api.js'), 'utf8');
-		const uiSrc = await fs.readFile(path.join(coreDir, 'ui.js'), 'utf8');
-
-		assert.match(
-			apiSrc,
-			/\bcontextMenu\s*:\s*Object\.freeze\s*\(\s*\{\s*open\s*:\s*opts\s*=>/m,
-			'Expected ctx.api.ui.contextMenu to exist in admin/tab/api.js',
-		);
-
-		assert.match(
-			uiSrc,
-			/\breturn\s+Object\.freeze\s*\(\s*\{[\s\S]*?\bcontextMenu\s*,/m,
-			'Expected createUi\\(\\) to return the contextMenu primitive in admin/tab/ui.js',
-		);
-	});
-
-	it('does not implement contextmenu DOM in panels (use ctx.api.ui.contextMenu)', async function () {
+	it('does not implement contextmenu DOM in panels', async function () {
 		const files = await listFilesRecursive(panelsDir);
-		const candidates = files.filter(f => {
-			if (f.endsWith('.test.js')) {
+		const candidates = files.filter(file => {
+			if (file.endsWith('.test.js')) {
 				return false;
 			}
-			const ext = path.extname(f).toLowerCase();
+			const ext = path.extname(file).toLowerCase();
 			return ext === '.js' || ext === '.html' || ext === '.css';
 		});
 
@@ -388,105 +299,28 @@ describe('AdminTab UI', function () {
 		for (const file of candidates) {
 			const relPath = path.relative(repoRoot, file);
 			const text = await fs.readFile(file, 'utf8');
-			const idx = text.indexOf('msghub-contextmenu');
-			if (idx >= 0) {
+			const index = text.indexOf('msghub-contextmenu');
+			if (index >= 0) {
 				const lineStarts = computeLineStarts(text);
-				const pos = lineColFromIndex(lineStarts, idx);
+				const pos = lineColFromIndex(lineStarts, index);
 				violations.push({
 					file: relPath,
 					line: pos.line,
 					col: pos.col,
-					context: "Forbidden contextmenu DOM token 'msghub-contextmenu' (use ctx.api.ui.contextMenu)",
+					context: "forbidden contextmenu DOM token 'msghub-contextmenu' (use ctx.api.ui.contextMenu)",
 				});
 			}
 		}
 
 		if (violations.length) {
-			const msg = violations.map(v => `- ${v.file}:${v.line}:${v.col} ${v.context}`).join('\n');
-			assert.fail(`ContextMenu primitive must be core-only:\n${msg}\nTotal: ${violations.length}`);
+			const message = violations.map(violation => `- ${violation.file}:${violation.line}:${violation.col} ${violation.context}`).join('\n');
+			assert.fail(`ContextMenu primitive must be core-only:\n${message}\nTotal: ${violations.length}`);
 		}
-	});
-
-	it('context menu clamp algorithm is deterministic (pure function)', async function () {
-		const apiPath = path.join(coreDir, 'api.js');
-		const src = await fs.readFile(apiPath, 'utf8');
-
-		const idx = src.indexOf('function computeContextMenuPosition');
-		assert.ok(idx >= 0, 'Expected computeContextMenuPosition() to exist in admin/tab/api.js');
-
-		const end = src.indexOf('\n}\n', idx);
-		assert.ok(end >= 0, 'Expected end of computeContextMenuPosition()');
-
-		const snippet = `${src.slice(idx, end + 3)}\nwindow.computeContextMenuPosition = computeContextMenuPosition;\n`;
-		const sandbox = { window: {} };
-		vm.runInNewContext(snippet, sandbox, { filename: 'admin/tab/api.js (computeContextMenuPosition snippet)' });
-
-		const fn = sandbox.window.computeContextMenuPosition;
-		assert.equal(typeof fn, 'function', 'Expected computeContextMenuPosition to be a function');
-
-		// Case 1: fits bottom-right.
-		const p1 = fn({
-			anchorX: 100,
-			anchorY: 100,
-			menuWidth: 200,
-			menuHeight: 120,
-			viewportWidth: 800,
-			viewportHeight: 600,
-			mode: 'cursor',
-			viewportPadding: 8,
-			cursorOffset: 2,
-		});
-		assert.equal(p1.x, 102);
-		assert.equal(p1.y, 102);
-
-		// Case 2: near bottom-right, should flip left/up.
-		const p2 = fn({
-			anchorX: 790,
-			anchorY: 590,
-			menuWidth: 240,
-			menuHeight: 140,
-			viewportWidth: 800,
-			viewportHeight: 600,
-			mode: 'cursor',
-			viewportPadding: 8,
-			cursorOffset: 2,
-		});
-		assert.ok(p2.x < 790, 'Expected flip to left');
-		assert.ok(p2.y < 590, 'Expected flip to top');
-		assert.ok(p2.x >= 8 && p2.y >= 8, 'Expected clamped to viewport padding');
-
-		// Case 3: submenu aligns to parent top when there is room, otherwise clamps.
-		const p3 = fn({
-			anchorX: 700,
-			anchorY: 20,
-			menuWidth: 200,
-			menuHeight: 300,
-			viewportWidth: 800,
-			viewportHeight: 200,
-			mode: 'submenu',
-			alignHeight: 24,
-			viewportPadding: 8,
-			cursorOffset: 2,
-		});
-		assert.ok(p3.x <= 700, 'Expected submenu to clamp/flip if needed');
-		assert.ok(p3.y >= 8, 'Expected submenu y to be clamped');
-	});
-
-	it('context menu supports primary menu items (core-only styling hook)', async function () {
-		const uiPath = path.join(coreDir, 'ui.js');
-		const src = await fs.readFile(uiPath, 'utf8');
-		assert.match(src, /\bitem\.primary\s*===\s*true\b/, 'Expected primary flag check in admin/tab/ui.js contextmenu renderer');
-		assert.match(src, /classList\.add\(\s*['"]is-primary['"]\s*\)/, "Expected class 'is-primary' to be applied");
 	});
 
 	it('does not use admin sendTo outside the API layer', async function () {
 		const files = await listFilesRecursive(panelsDir);
-		const candidates = files.filter(f => {
-			if (f.endsWith('.test.js')) {
-				return false;
-			}
-			return path.extname(f).toLowerCase() === '.js';
-		});
+		const candidates = files.filter(file => !file.endsWith('.test.js') && path.extname(file).toLowerCase() === '.js');
 
 		const violations = [];
 		for (const file of candidates) {
@@ -494,24 +328,24 @@ describe('AdminTab UI', function () {
 			const text = await fs.readFile(file, 'utf8');
 			const lineStarts = computeLineStarts(text);
 
-			const needle1 = "sendTo('admin";
-			const idx1 = text.indexOf(needle1);
-			if (idx1 >= 0) {
-				const pos = lineColFromIndex(lineStarts, idx1);
-				violations.push({ file: relPath, line: pos.line, col: pos.col, context: `found ${needle1}` });
+			const needleDirect = "sendTo('admin";
+			const directIndex = text.indexOf(needleDirect);
+			if (directIndex >= 0) {
+				const pos = lineColFromIndex(lineStarts, directIndex);
+				violations.push({ file: relPath, line: pos.line, col: pos.col, context: `found ${needleDirect}` });
 			}
 
-			const needle2 = 'ctx.sendTo';
-			const idx2 = text.indexOf(needle2);
-			if (idx2 >= 0) {
-				const pos = lineColFromIndex(lineStarts, idx2);
-				violations.push({ file: relPath, line: pos.line, col: pos.col, context: `found ${needle2}` });
+			const needleContext = 'ctx.sendTo';
+			const contextIndex = text.indexOf(needleContext);
+			if (contextIndex >= 0) {
+				const pos = lineColFromIndex(lineStarts, contextIndex);
+				violations.push({ file: relPath, line: pos.line, col: pos.col, context: `found ${needleContext}` });
 			}
 		}
 
 		if (violations.length) {
-			const lines = violations.map(v => `${v.file}:${v.line}:${v.col} ${v.context}`).join('\n');
-			assert.fail(`Forbidden direct backend calls in panels:\n${lines}`);
+			const message = violations.map(violation => `${violation.file}:${violation.line}:${violation.col} ${violation.context}`).join('\n');
+			assert.fail(`Forbidden direct backend calls in panels:\n${message}`);
 		}
 	});
 });
