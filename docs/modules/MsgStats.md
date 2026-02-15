@@ -170,6 +170,6 @@ It is behind `include.archiveSize` and cached by `maxAgeMs`.
 - Storage diagnostics: `src/MsgStorage.js` (`getStatus`)
 - Archive diagnostics: `src/MsgArchive.js` (`getStatus`, `estimateSizeBytes`)
 - Admin endpoint: `lib/IoAdminTab.js` (`admin.stats.get`)
-- Admin UI: `admin/tab.stats.js` (Stats tab)
+- Admin UI: `admin/tab/panels/stats/index.js` (Stats tab)
 - Plugin API reference: `docs/plugins/API.md` (`ctx.api.stats`)
 - Module overview: `docs/modules/README.md`

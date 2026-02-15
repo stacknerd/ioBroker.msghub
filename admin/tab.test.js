@@ -8,6 +8,8 @@ const vm = require('node:vm');
 
 const repoRoot = path.resolve(__dirname, '..');
 const adminDir = __dirname;
+const coreDir = path.join(adminDir, 'tab');
+const panelsDir = path.join(adminDir, 'tab', 'panels');
 
 const FORBIDDEN_CLASS_TOKENS = [
 	// Buttons / text
@@ -254,11 +256,8 @@ describe('AdminTab UI', function () {
 	});
 
 	it('panel/module css is tokens-only (no hardcoded colors)', async function () {
-		const files = await fs.readdir(adminDir);
-		const cssFiles = files
-			.filter(f => f.endsWith('.css'))
-			.map(f => path.join(adminDir, f))
-			.filter(f => path.basename(f) !== 'tab.css');
+		const files = await listFilesRecursive(adminDir);
+		const cssFiles = files.filter(f => path.extname(f).toLowerCase() === '.css' && path.basename(f) !== 'tab.css');
 
 		const violations = [];
 		const reHex = /#[0-9a-fA-F]{3,8}\b/g;
@@ -292,22 +291,11 @@ describe('AdminTab UI', function () {
 	});
 
 	it('registry is consistent (panels, compositions, assets)', async function () {
-		const tabJsPath = path.join(adminDir, 'tab.js');
-		const src = await fs.readFile(tabJsPath, 'utf8');
-
-		const idx = src.indexOf('MsghubAdminTabRegistry');
-		assert.ok(idx >= 0, 'Expected MsghubAdminTabRegistry to exist in admin/tab.js');
-
-		const start = src.lastIndexOf('(() => {', idx);
-		assert.ok(start >= 0, 'Expected registry IIFE start in admin/tab.js');
-
-		const end = src.indexOf('})();', idx);
-		assert.ok(end >= 0, 'Expected registry IIFE end in admin/tab.js');
-
-		const snippet = src.slice(start, end + '})();'.length);
+		const registryPath = path.join(coreDir, 'registry.js');
+		const src = await fs.readFile(registryPath, 'utf8');
 		const sandbox = { window: {}, win: null, console: { debug() {}, info() {}, warn() {}, error() {} } };
 		sandbox.win = sandbox.window;
-		vm.runInNewContext(snippet, sandbox, { filename: 'admin/tab.js (registry snippet)' });
+		vm.runInNewContext(`const win = window;\n${src}`, sandbox, { filename: 'admin/tab/registry.js' });
 
 		const registry = sandbox.window.MsghubAdminTabRegistry;
 		assert.ok(registry && typeof registry === 'object', 'Expected registry to be an object');
@@ -370,24 +358,24 @@ describe('AdminTab UI', function () {
 	});
 
 	it('exposes contextMenu API on ctx.api.ui (phase 1)', async function () {
-		const tabJsPath = path.join(adminDir, 'tab.js');
-		const src = await fs.readFile(tabJsPath, 'utf8');
+		const apiSrc = await fs.readFile(path.join(coreDir, 'api.js'), 'utf8');
+		const uiSrc = await fs.readFile(path.join(coreDir, 'ui.js'), 'utf8');
 
 		assert.match(
-			src,
+			apiSrc,
 			/\bcontextMenu\s*:\s*Object\.freeze\s*\(\s*\{\s*open\s*:\s*opts\s*=>/m,
-			'Expected ctx.api.ui.contextMenu to exist in admin/tab.js',
+			'Expected ctx.api.ui.contextMenu to exist in admin/tab/api.js',
 		);
 
 		assert.match(
-			src,
+			uiSrc,
 			/\breturn\s+Object\.freeze\s*\(\s*\{[\s\S]*?\bcontextMenu\s*,/m,
-			'Expected createUi\\(\\) to return the contextMenu primitive',
+			'Expected createUi\\(\\) to return the contextMenu primitive in admin/tab/ui.js',
 		);
 	});
 
 	it('does not implement contextmenu DOM in panels (use ctx.api.ui.contextMenu)', async function () {
-		const files = await listFilesRecursive(adminDir);
+		const files = await listFilesRecursive(panelsDir);
 		const candidates = files.filter(f => {
 			if (f.endsWith('.test.js')) {
 				return false;
@@ -398,10 +386,6 @@ describe('AdminTab UI', function () {
 
 		const violations = [];
 		for (const file of candidates) {
-			const base = path.basename(file);
-			if (base === 'tab.js' || base === 'tab.css' || base === 'tab.html') {
-				continue;
-			}
 			const relPath = path.relative(repoRoot, file);
 			const text = await fs.readFile(file, 'utf8');
 			const idx = text.indexOf('msghub-contextmenu');
@@ -424,18 +408,18 @@ describe('AdminTab UI', function () {
 	});
 
 	it('context menu clamp algorithm is deterministic (pure function)', async function () {
-		const tabJsPath = path.join(adminDir, 'tab.js');
-		const src = await fs.readFile(tabJsPath, 'utf8');
+		const apiPath = path.join(coreDir, 'api.js');
+		const src = await fs.readFile(apiPath, 'utf8');
 
 		const idx = src.indexOf('function computeContextMenuPosition');
-		assert.ok(idx >= 0, 'Expected computeContextMenuPosition() to exist in admin/tab.js');
+		assert.ok(idx >= 0, 'Expected computeContextMenuPosition() to exist in admin/tab/api.js');
 
 		const end = src.indexOf('\n}\n', idx);
 		assert.ok(end >= 0, 'Expected end of computeContextMenuPosition()');
 
 		const snippet = `${src.slice(idx, end + 3)}\nwindow.computeContextMenuPosition = computeContextMenuPosition;\n`;
 		const sandbox = { window: {} };
-		vm.runInNewContext(snippet, sandbox, { filename: 'admin/tab.js (computeContextMenuPosition snippet)' });
+		vm.runInNewContext(snippet, sandbox, { filename: 'admin/tab/api.js (computeContextMenuPosition snippet)' });
 
 		const fn = sandbox.window.computeContextMenuPosition;
 		assert.equal(typeof fn, 'function', 'Expected computeContextMenuPosition to be a function');
@@ -489,14 +473,14 @@ describe('AdminTab UI', function () {
 	});
 
 	it('context menu supports primary menu items (core-only styling hook)', async function () {
-		const tabJsPath = path.join(adminDir, 'tab.js');
-		const src = await fs.readFile(tabJsPath, 'utf8');
-		assert.match(src, /\bitem\.primary\s*===\s*true\b/, 'Expected primary flag check in admin/tab.js contextmenu renderer');
+		const uiPath = path.join(coreDir, 'ui.js');
+		const src = await fs.readFile(uiPath, 'utf8');
+		assert.match(src, /\bitem\.primary\s*===\s*true\b/, 'Expected primary flag check in admin/tab/ui.js contextmenu renderer');
 		assert.match(src, /classList\.add\(\s*['"]is-primary['"]\s*\)/, "Expected class 'is-primary' to be applied");
 	});
 
 	it('does not use admin sendTo outside the API layer', async function () {
-		const files = await listFilesRecursive(adminDir);
+		const files = await listFilesRecursive(panelsDir);
 		const candidates = files.filter(f => {
 			if (f.endsWith('.test.js')) {
 				return false;
@@ -506,9 +490,6 @@ describe('AdminTab UI', function () {
 
 		const violations = [];
 		for (const file of candidates) {
-			if (path.basename(file) === 'tab.js') {
-				continue;
-			}
 			const relPath = path.relative(repoRoot, file);
 			const text = await fs.readFile(file, 'utf8');
 			const lineStarts = computeLineStarts(text);

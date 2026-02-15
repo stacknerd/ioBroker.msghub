@@ -1,9 +1,9 @@
-/* global window, document */
+/* global window, document, Node, HTMLButtonElement, requestAnimationFrame */
 (function () {
 	'use strict';
 
-	/** @type {any} */
-	const win = /** @type {any} */ (window);
+	const win = window;
+	let formatTsFormatter = null;
 
 	function isObject(v) {
 		return !!v && typeof v === 'object' && !Array.isArray(v);
@@ -30,8 +30,8 @@
 			return '';
 		}
 		try {
-			if (!formatTs._fmt) {
-				formatTs._fmt = new Intl.DateTimeFormat(undefined, {
+			if (!formatTsFormatter) {
+				formatTsFormatter = new Intl.DateTimeFormat(undefined, {
 					year: 'numeric',
 					month: '2-digit',
 					day: '2-digit',
@@ -40,8 +40,8 @@
 					second: '2-digit',
 				});
 			}
-			return formatTs._fmt.format(new Date(ts));
-		} catch (_err) {
+			return formatTsFormatter.format(new Date(ts));
+		} catch {
 			return String(ts);
 		}
 	}
@@ -86,7 +86,6 @@
 		let suppressRowClickUntil = 0;
 		let headerSelectAllInput = null;
 
-		/** @type {Record<string, Set<string>>} */
 		const columnFilters = Object.create(null);
 		// Default lifecycle filter:
 		// acked=true, closed=true, deleted=false, expired=false, open=true, snoozed=true
@@ -100,13 +99,13 @@
 						return true;
 					}
 				}
-			} catch (_err) {
+			} catch {
 				// ignore
 			}
 			try {
 				const sys = win._system || win.top?._system;
 				return !!sys?.expertMode;
-			} catch (_err) {
+			} catch {
 				return false;
 			}
 		};
@@ -145,7 +144,7 @@
 					const mm = pad2(d.getMinutes());
 					const ss = pad2(d.getSeconds());
 					return `${y}-${m}-${day} ${hh}:${mm}:${ss}`;
-				} catch (_e) {
+				} catch {
 					return '';
 				}
 			}
@@ -167,7 +166,7 @@
 						hour12: false,
 					});
 					return String(fmt.format(d)).replace('T', ' ');
-				} catch (_e) {
+				} catch {
 					return '';
 				}
 			}
@@ -724,27 +723,28 @@
 			return raw;
 		};
 
-			const openHeaderSortMenu = (anchor, { field }) => {
-				const sortableField = typeof field === 'string' && field.trim() ? field.trim() : '';
-				if (!sortableField) {
-					return;
-				}
+		const openHeaderSortMenu = (anchor, options) => {
+			const field = options && typeof options === 'object' ? options.field : undefined;
+			const sortableField = typeof field === 'string' && field.trim() ? field.trim() : '';
+			if (!sortableField) {
+				return;
+			}
 			if (!ui?.contextMenu?.open) {
 				return;
 			}
 			const isSorted = sortField === sortableField;
-				const applySort = dir => {
-					sortField = sortableField;
-					sortDir = dir === 'desc' ? 'desc' : 'asc';
-					pageIndex = 1;
-					updateHeaderButtons?.();
-					ui?.contextMenu?.close?.();
-					loadMessages({ silent: false }).catch(() => undefined);
-				};
-				ui.contextMenu.open({
-					anchorEl: anchor,
-					placement: 'below-start',
-					ariaLabel: 'Messages sort menu',
+			const applySort = dir => {
+				sortField = sortableField;
+				sortDir = dir === 'desc' ? 'desc' : 'asc';
+				pageIndex = 1;
+				updateHeaderButtons?.();
+				ui?.contextMenu?.close?.();
+				loadMessages({ silent: false }).catch(() => undefined);
+			};
+			ui.contextMenu.open({
+				anchorEl: anchor,
+				placement: 'below-start',
+				ariaLabel: 'Messages sort menu',
 				items: [
 					{
 						label: t('msghub.i18n.core.admin.ui.messages.filter.sort.asc.action'),
@@ -762,10 +762,14 @@
 			});
 		};
 
-		const openHeaderFilterMenu = (
-			anchor,
-			{ key, options, selected: selectedOverride, autoOpenSubmenu = false } = {},
-		) => {
+		const openHeaderFilterMenu = (anchor, options) => {
+			const opts = options && typeof options === 'object' ? options : {};
+			const key = opts.key;
+			const title = opts.title;
+			const optionsList = opts.options;
+			const selectedOverride = opts.selected;
+			const autoOpenSubmenu = opts.autoOpenSubmenu === true;
+			void title;
 			const filterKey = typeof key === 'string' ? key : '';
 			if (!filterKey) {
 				return;
@@ -773,7 +777,7 @@
 			if (!ui?.contextMenu?.open) {
 				return;
 			}
-			const list = Array.isArray(options) ? options : [];
+			const list = Array.isArray(optionsList) ? optionsList : [];
 			const selected =
 				selectedOverride instanceof Set ? selectedOverride : new Set(getFilterSet(filterKey) || []);
 			const sortableField =
@@ -793,17 +797,17 @@
 				loadMessages({ silent: false }).catch(() => undefined);
 			};
 
-				const applySort = dir => {
-					if (!sortableField) {
-						return;
-					}
-					sortField = sortableField;
-					sortDir = dir === 'desc' ? 'desc' : 'asc';
-					pageIndex = 1;
-					updateHeaderButtons?.();
-					ui?.contextMenu?.close?.();
-					loadMessages({ silent: false }).catch(() => undefined);
-				};
+			const applySort = dir => {
+				if (!sortableField) {
+					return;
+				}
+				sortField = sortableField;
+				sortDir = dir === 'desc' ? 'desc' : 'asc';
+				pageIndex = 1;
+				updateHeaderButtons?.();
+				ui?.contextMenu?.close?.();
+				loadMessages({ silent: false }).catch(() => undefined);
+			};
 
 			const submenuId = `messages-filter:${filterKey}`;
 			const reopenSubmenu = () =>
@@ -871,12 +875,12 @@
 					{ type: 'separator' },
 				);
 			}
-				items.push({
-					id: submenuId,
-					label: t('msghub.i18n.core.admin.ui.messages.filter.submenu.label'),
-					primary: selected.size > 0,
-					items: filterItems,
-				});
+			items.push({
+				id: submenuId,
+				label: t('msghub.i18n.core.admin.ui.messages.filter.submenu.label'),
+				primary: selected.size > 0,
+				items: filterItems,
+			});
 
 			ui.contextMenu.open({
 				anchorEl: anchor,
@@ -888,8 +892,13 @@
 			if (autoOpenSubmenu) {
 				window.setTimeout(() => {
 					try {
-						const btn = document.querySelector(`[data-msghub-contextmenu-id=\"${submenuId}\"]`);
-						btn?.click?.();
+						const btn = Array.from(document.querySelectorAll('button[role="menuitem"]')).find(
+							node =>
+								node instanceof HTMLButtonElement && node.dataset?.msghubContextmenuId === submenuId,
+						);
+						if (btn instanceof HTMLButtonElement) {
+							btn.click();
+						}
 					} catch {
 						// ignore
 					}
@@ -1036,7 +1045,7 @@
 							const msgJson = () => {
 								try {
 									return JSON.stringify(msg, null, 2);
-								} catch (_err) {
+								} catch {
 									return String(msg);
 								}
 							};
@@ -1150,7 +1159,10 @@
 											value: String(progressValue),
 											title: `${Math.round(progressValue)}%`,
 										}),
-										h('span', { class: 'msghub-progress-value', text: `${Math.round(progressValue)}%` }),
+										h('span', {
+											class: 'msghub-progress-value',
+											text: `${Math.round(progressValue)}%`,
+										}),
 									],
 						),
 					],
@@ -1221,7 +1233,6 @@
 		tableEl.appendChild(tbodyEl);
 		tableWrap.appendChild(tableEl);
 
-		/** @type {Record<string, HTMLButtonElement>} */
 		const headerBtns = Object.create(null);
 
 		const clearHeaderBtns = () => {
@@ -1339,7 +1350,11 @@
 
 			const makeSelectAllTh = () => {
 				if (!expertMode) {
-					return h('th', { class: 'msghub-th msghub-messages-select msghub-colCell msghub-colCell--select' }, []);
+					return h(
+						'th',
+						{ class: 'msghub-th msghub-messages-select msghub-colCell msghub-colCell--select' },
+						[],
+					);
 				}
 				const input = h('input', {
 					type: 'checkbox',
@@ -1364,7 +1379,9 @@
 					},
 				});
 				headerSelectAllInput = input;
-				return h('th', { class: 'msghub-th msghub-messages-select msghub-colCell msghub-colCell--select' }, [input]);
+				return h('th', { class: 'msghub-th msghub-messages-select msghub-colCell msghub-colCell--select' }, [
+					input,
+				]);
 			};
 
 			theadEl.replaceChildren(
@@ -1685,12 +1702,13 @@
 						setFilterSet('lifecycle.state', new Set(canonical));
 					}
 				}
-			} catch (_e) {
+			} catch {
 				constants = null;
 			}
 		}
 
-		async function loadMessages({ silent = false } = {}) {
+		async function loadMessages({ keepPopover = false, silent = false } = {}) {
+			void keepPopover;
 			const reqId = ++requestSeq;
 			loading = true;
 			silentLoading = silent === true;
@@ -1731,13 +1749,12 @@
 					toast(lastError);
 				}
 			} finally {
-				if (reqId !== requestSeq) {
-					return;
+				if (reqId === requestSeq) {
+					loading = false;
+					silentLoading = false;
+					hasLoadedOnce = true;
+					render({ forceRows: true });
 				}
-				loading = false;
-				silentLoading = false;
-				hasLoadedOnce = true;
-				render({ forceRows: true });
 			}
 		}
 
