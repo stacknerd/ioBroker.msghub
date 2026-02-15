@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-	const win = /** @type {any} */ (window);
+	const win = window;
 
 	function isObject(v) {
 		return !!v && typeof v === 'object' && !Array.isArray(v);
@@ -14,7 +14,7 @@
 		}
 		try {
 			return new Date(ts).toLocaleString();
-		} catch (_err) {
+		} catch {
 			return String(ts);
 		}
 	}
@@ -83,13 +83,11 @@
 						typeof e?.colorClass === 'string' && e.colorClass.trim()
 							? e.colorClass.trim()
 							: `msghub-color-${Number(e?.colorIdx) || 0}`;
-					return (
-				h('div', { class: 'msghub-legend-item' }, [
-					h('span', { class: `msghub-legend-dot ${dotClass}` }),
-					h('span', { class: 'msghub-legend-label', text: e.label }),
-					h('span', { class: 'msghub-legend-value msghub-muted', text: e.value }),
-				])
-					);
+					return h('div', { class: 'msghub-legend-item' }, [
+						h('span', { class: `msghub-legend-dot ${dotClass}` }),
+						h('span', { class: 'msghub-legend-label', text: e.label }),
+						h('span', { class: 'msghub-legend-value msghub-muted', text: e.value }),
+					]);
 				})(),
 			),
 		);
@@ -137,7 +135,10 @@
 			return `${s.color} ${start.toFixed(3)}deg ${end.toFixed(3)}deg`;
 		});
 
-		const bg = total > 0 ? `conic-gradient(${stops.join(',')})` : 'conic-gradient(var(--msghub-chart-neutral) 0deg 360deg)';
+		const bg =
+			total > 0
+				? `conic-gradient(${stops.join(',')})`
+				: 'conic-gradient(var(--msghub-chart-neutral) 0deg 360deg)';
 
 		const legendEntries = segments.map(s => ({
 			label: s.label,
@@ -183,11 +184,18 @@
 			const w = pct;
 			return h('div', { class: 'msghub-sched-row' }, [
 				h('div', { class: 'msghub-sched-label msghub-muted', text: label }),
-				h('div', {
-					class: `msghub-sched-bar is-${key}`,
-					style: `--msghub-marker:${marker}; --msghub-bucket:${w};`,
-					title: `${label}: ${v} / total ${total} (overdue ${overdue})`,
-				}, [h('div', { class: 'msghub-sched-bar-fill' }), h('div', { class: 'msghub-sched-bar-marker', 'aria-hidden': 'true' })]),
+				h(
+					'div',
+					{
+						class: `msghub-sched-bar is-${key}`,
+						style: `--msghub-marker:${marker}; --msghub-bucket:${w};`,
+						title: `${label}: ${v} / total ${total} (overdue ${overdue})`,
+					},
+					[
+						h('div', { class: 'msghub-sched-bar-fill' }),
+						h('div', { class: 'msghub-sched-bar-marker', 'aria-hidden': 'true' }),
+					],
+				),
 				h('div', { class: 'msghub-sched-value msghub-mono', text: String(v) }),
 			]);
 		};
@@ -308,7 +316,11 @@
 		actions.appendChild(refreshBtn);
 		actions.appendChild(autoBtn);
 
-		const progress = h('div', { class: 'msghub-progress is-hidden' }, h('div', { class: 'msghub-muted', text: 'Loading…' }));
+		const progress = h(
+			'div',
+			{ class: 'msghub-progress is-hidden' },
+			h('div', { class: 'msghub-muted', text: 'Loading…' }),
+		);
 		const errorEl = h('div', { class: 'msghub-error' });
 		const metaEl = h('div', { class: 'msghub-muted msghub-stats-meta' });
 		const contentEl = h('div', { class: 'msghub-stats-content' });
@@ -337,10 +349,10 @@
 			refreshBtn.classList.toggle('msghub-btn-loading', loading && silentLoading);
 		};
 
-			function buildContent(stats) {
-				const meta = isObject(stats?.meta) ? stats.meta : {};
-				metaEl.replaceChildren(
-					h('div', { text: `generatedAt: ${formatTs(meta.generatedAt)}` }),
+		function buildContent(stats) {
+			const meta = isObject(stats?.meta) ? stats.meta : {};
+			metaEl.replaceChildren(
+				h('div', { text: `generatedAt: ${formatTs(meta.generatedAt)}` }),
 				h('div', { text: meta.tz ? `tz: ${meta.tz}` : 'tz: n/a' }),
 			);
 
@@ -354,8 +366,12 @@
 			nodes.push(
 				h('div', { class: 'msghub-stats-row' }, [
 					h('div', { class: 'msghub-stats-col' }, [renderRingCard(h, 'Current by kind', current.byKind)]),
-					h('div', { class: 'msghub-stats-col' }, [renderRingCard(h, 'Current by lifecycle', current.byLifecycle)]),
-					h('div', { class: 'msghub-stats-col' }, [renderRingCard(h, 'Current by origin', current.byOriginSystem)]),
+					h('div', { class: 'msghub-stats-col' }, [
+						renderRingCard(h, 'Current by lifecycle', current.byLifecycle),
+					]),
+					h('div', { class: 'msghub-stats-col' }, [
+						renderRingCard(h, 'Current by origin', current.byOriginSystem),
+					]),
 				]),
 			);
 
@@ -364,82 +380,91 @@
 				nodes.push(scheduleDomain);
 			}
 
-				const scheduleByKind = renderScheduleByKind(h, schedule);
-				if (scheduleByKind) {
-					nodes.push(scheduleByKind);
-				}
-
-				nodes.push(
-					h('div', { class: 'msghub-card' }, [
-						h('div', { class: 'msghub-card-body' }, [
-							h('div', { class: 'msghub-card-title', text: 'Done (transition → closed)' }),
-							h('div', { class: 'msghub-stats-grid' }, [
-								renderTile(h, 'today', String(done?.today?.total ?? 0)),
-								renderTile(h, 'thisWeek', String(done?.thisWeek?.total ?? 0)),
-								renderTile(h, 'thisMonth', String(done?.thisMonth?.total ?? 0)),
-							]),
-							done?.lastClosedAt
-								? h('div', { class: 'msghub-muted msghub-stats-meta', text: `lastClosedAt: ${formatTs(done.lastClosedAt)}` })
-								: null,
-							h('div', { class: 'msghub-stats-block' }, [
-								h('div', { class: 'msghub-muted msghub-stats-subtitle', text: 'today by kind' }),
-								renderDoneByKind(h, done?.today),
-							]),
-						]),
-					]),
-				);
-
-				const storage = isObject(io.storage) ? io.storage : {};
-				const archive = isObject(io.archive) ? io.archive : {};
-				const pending = isObject(archive.pending) ? archive.pending : {};
-
-				nodes.push(
-					h('div', { class: 'msghub-card' }, [
-						h('div', { class: 'msghub-card-body' }, [
-							h('div', { class: 'msghub-card-title', text: 'Persistent Storage' }),
-							h('div', { class: 'msghub-stats-grid' }, [
-								renderTile(h, 'lastPersistedAt', formatTs(storage.lastPersistedAt)),
-								renderTile(h, 'lastPersistedBytes', formatBytes(storage.lastPersistedBytes)),
-								renderTile(h, 'pending', storage.pending === true ? 'yes' : 'no'),
-							]),
-						]),
-					]),
-				);
-
-				const computeBtn = h('button', { type: 'button', text: 'Compute archive size' });
-				if (archiveSizeLoading) {
-					computeBtn.classList.add('msghub-btn-loading');
-				}
-				computeBtn.addEventListener('click', e => {
-					e.preventDefault();
-					computeBtn.classList.add('msghub-btn-loading');
-					loadStats({ archiveSize: true, silent: false, source: 'archive' }).catch(() => undefined);
-				});
-
-				nodes.push(
-					h('div', { class: 'msghub-card' }, [
-						h('div', { class: 'msghub-card-body' }, [
-							h('div', { class: 'msghub-card-title', text: 'Archive' }),
-							h('div', { class: 'msghub-actions' }, [computeBtn]),
-							h('div', { class: 'msghub-stats-grid' }, [
-								renderTile(h, 'keepPreviousWeeks', String(archive.keepPreviousWeeks ?? 0)),
-								renderTile(h, 'lastFlushedAt', formatTs(archive.lastFlushedAt)),
-								renderTile(h, 'pending.events', String(pending.events ?? 0)),
-								renderTile(h, 'pending.refs', String(pending.refs ?? 0)),
-								renderTile(h, 'size', formatBytes(archive.approxSizeBytes)),
-							]),
-							archive.approxSizeUpdatedAt
-								? h('div', { class: 'msghub-muted msghub-stats-meta', text: `sizeUpdatedAt: ${formatTs(archive.approxSizeUpdatedAt)}` })
-								: null,
-							archive.approxSizeIsComplete === false && archive.approxSizeBytes != null
-								? h('div', { class: 'msghub-muted msghub-stats-meta', text: 'archive.size is incomplete (backend does not provide file sizes for all entries)' })
-								: null,
-						]),
-					]),
-				);
-
-				return nodes;
+			const scheduleByKind = renderScheduleByKind(h, schedule);
+			if (scheduleByKind) {
+				nodes.push(scheduleByKind);
 			}
+
+			nodes.push(
+				h('div', { class: 'msghub-card' }, [
+					h('div', { class: 'msghub-card-body' }, [
+						h('div', { class: 'msghub-card-title', text: 'Done (transition → closed)' }),
+						h('div', { class: 'msghub-stats-grid' }, [
+							renderTile(h, 'today', String(done?.today?.total ?? 0)),
+							renderTile(h, 'thisWeek', String(done?.thisWeek?.total ?? 0)),
+							renderTile(h, 'thisMonth', String(done?.thisMonth?.total ?? 0)),
+						]),
+						done?.lastClosedAt
+							? h('div', {
+									class: 'msghub-muted msghub-stats-meta',
+									text: `lastClosedAt: ${formatTs(done.lastClosedAt)}`,
+								})
+							: null,
+						h('div', { class: 'msghub-stats-block' }, [
+							h('div', { class: 'msghub-muted msghub-stats-subtitle', text: 'today by kind' }),
+							renderDoneByKind(h, done?.today),
+						]),
+					]),
+				]),
+			);
+
+			const storage = isObject(io.storage) ? io.storage : {};
+			const archive = isObject(io.archive) ? io.archive : {};
+			const pending = isObject(archive.pending) ? archive.pending : {};
+
+			nodes.push(
+				h('div', { class: 'msghub-card' }, [
+					h('div', { class: 'msghub-card-body' }, [
+						h('div', { class: 'msghub-card-title', text: 'Persistent Storage' }),
+						h('div', { class: 'msghub-stats-grid' }, [
+							renderTile(h, 'lastPersistedAt', formatTs(storage.lastPersistedAt)),
+							renderTile(h, 'lastPersistedBytes', formatBytes(storage.lastPersistedBytes)),
+							renderTile(h, 'pending', storage.pending === true ? 'yes' : 'no'),
+						]),
+					]),
+				]),
+			);
+
+			const computeBtn = h('button', { type: 'button', text: 'Compute archive size' });
+			if (archiveSizeLoading) {
+				computeBtn.classList.add('msghub-btn-loading');
+			}
+			computeBtn.addEventListener('click', e => {
+				e.preventDefault();
+				computeBtn.classList.add('msghub-btn-loading');
+				loadStats({ archiveSize: true, silent: false, source: 'archive' }).catch(() => undefined);
+			});
+
+			nodes.push(
+				h('div', { class: 'msghub-card' }, [
+					h('div', { class: 'msghub-card-body' }, [
+						h('div', { class: 'msghub-card-title', text: 'Archive' }),
+						h('div', { class: 'msghub-actions' }, [computeBtn]),
+						h('div', { class: 'msghub-stats-grid' }, [
+							renderTile(h, 'keepPreviousWeeks', String(archive.keepPreviousWeeks ?? 0)),
+							renderTile(h, 'lastFlushedAt', formatTs(archive.lastFlushedAt)),
+							renderTile(h, 'pending.events', String(pending.events ?? 0)),
+							renderTile(h, 'pending.refs', String(pending.refs ?? 0)),
+							renderTile(h, 'size', formatBytes(archive.approxSizeBytes)),
+						]),
+						archive.approxSizeUpdatedAt
+							? h('div', {
+									class: 'msghub-muted msghub-stats-meta',
+									text: `sizeUpdatedAt: ${formatTs(archive.approxSizeUpdatedAt)}`,
+								})
+							: null,
+						archive.approxSizeIsComplete === false && archive.approxSizeBytes != null
+							? h('div', {
+									class: 'msghub-muted msghub-stats-meta',
+									text: 'archive.size is incomplete (backend does not provide file sizes for all entries)',
+								})
+							: null,
+					]),
+				]),
+			);
+
+			return nodes;
+		}
 
 		function render() {
 			updateButtons();
@@ -506,13 +531,16 @@
 			if (!isTabVisible()) {
 				return;
 			}
-			autoTimer = setTimeout(() => {
-				autoTimer = null;
-				if (autoRefresh && isTabVisible() && !loading) {
-					loadStats({ archiveSize: false, silent: true, source: 'auto' }).catch(() => undefined);
-				}
-				scheduleAuto();
-			}, AUTO_REFRESH_MS + Math.trunc(Math.random() * 1200));
+			autoTimer = setTimeout(
+				() => {
+					autoTimer = null;
+					if (autoRefresh && isTabVisible() && !loading) {
+						loadStats({ archiveSize: false, silent: true, source: 'auto' }).catch(() => undefined);
+					}
+					scheduleAuto();
+				},
+				AUTO_REFRESH_MS + Math.trunc(Math.random() * 1200),
+			);
 		};
 
 		refreshBtn.addEventListener('click', e => {
@@ -564,4 +592,6 @@
 	win.MsghubAdminTabStats = Object.freeze({
 		init: initStatsSection,
 	});
+
+	void renderKeyValueTiles;
 })();

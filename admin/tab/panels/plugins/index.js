@@ -1,12 +1,11 @@
 /// <reference lib="dom" />
 /// <reference lib="dom.iterable" />
 
-/* global window, document */
+/* global window, document, HTMLElement, HTMLInputElement, HTMLTextAreaElement */
 (function () {
 	'use strict';
 
-	/** @type {any} */
-	const win = /** @type {any} */ (window);
+	const win = window;
 
 	function initPluginConfigSection(ctx) {
 		const elRoot = ctx?.elements?.pluginsRoot;
@@ -200,6 +199,7 @@
 			}
 			return { primary: type, secondary: '' };
 		}
+		void formatPluginLabel;
 
 		function cssSafe(s) {
 			return (
@@ -211,187 +211,214 @@
 			);
 		}
 
-			const confirmDialog = opts => {
-				if (ui?.dialog?.confirm) {
-					return ui.dialog.confirm(opts);
-				}
-				const text = typeof opts?.text === 'string' && opts.text.trim() ? opts.text : String(opts?.title || '');
-				return Promise.resolve(window.confirm(text));
-			};
+		const confirmDialog = opts => {
+			if (ui?.dialog?.confirm) {
+				return ui.dialog.confirm(opts);
+			}
+			const text = typeof opts?.text === 'string' && opts.text.trim() ? opts.text : String(opts?.title || '');
+			return Promise.resolve(window.confirm(text));
+		};
 
-			const isTextEditableElement = el => {
-				if (!el || typeof el !== 'object') {
-					return false;
-				}
-				if (el instanceof HTMLTextAreaElement) {
-					return true;
-				}
-				if (el instanceof HTMLInputElement) {
-					const type = String(el.type || '').toLowerCase();
-					return ![
-						'button',
-						'submit',
-						'reset',
-						'image',
-						'checkbox',
-						'radio',
-						'range',
-						'color',
-						'file',
-						'hidden',
-					].includes(type);
-				}
-				if (el instanceof HTMLElement && el.isContentEditable === true) {
-					return true;
-				}
+		const isTextEditableElement = el => {
+			if (!el || typeof el !== 'object') {
 				return false;
-			};
+			}
+			if (el instanceof HTMLTextAreaElement) {
+				return true;
+			}
+			if (el instanceof HTMLInputElement) {
+				const type = String(el.type || '').toLowerCase();
+				return ![
+					'button',
+					'submit',
+					'reset',
+					'image',
+					'checkbox',
+					'radio',
+					'range',
+					'color',
+					'file',
+					'hidden',
+				].includes(type);
+			}
+			if (el instanceof HTMLElement && el.isContentEditable === true) {
+				return true;
+			}
+			return false;
+		};
 
-			const isTextEditableTarget = target => {
-				if (!target || typeof target !== 'object' || typeof target.closest !== 'function') {
-					return false;
+		const isTextEditableTarget = target => {
+			if (!target || typeof target !== 'object' || typeof target.closest !== 'function') {
+				return false;
+			}
+			const el =
+				target.closest(
+					'textarea, input, [contenteditable=""], [contenteditable="true"], [contenteditable="plaintext-only"]',
+				) || null;
+			return isTextEditableElement(el);
+		};
+
+		const getAllInstanceWraps = () =>
+			Array.from(elRoot.querySelectorAll('.msghub-plugin-instance')).filter(Boolean);
+
+		const getCategoryTitle = categoryRaw => {
+			const raw = typeof categoryRaw === 'string' ? categoryRaw : '';
+			const cfg = CATEGORY_I18N[raw] || null;
+			if (cfg) {
+				return tOr(cfg.titleKey, cfg.fallbackTitle || raw);
+			}
+			return tOr(`msghub.i18n.core.admin.ui.plugins.category.${raw}.title`, raw);
+		};
+
+		const setAccordionChecked = (wraps, checked) => {
+			const list = Array.isArray(wraps) ? wraps : [];
+			for (const w of list) {
+				const input = w?.querySelector?.('.msghub-acc-input--instance');
+				if (!(input instanceof HTMLInputElement)) {
+					continue;
 				}
-				const el =
-					target.closest('textarea, input, [contenteditable=""], [contenteditable="true"], [contenteditable="plaintext-only"]') ||
-					null;
-				return isTextEditableElement(el);
-			};
-
-			const getAllInstanceWraps = () => Array.from(elRoot.querySelectorAll('.msghub-plugin-instance')).filter(Boolean);
-
-			const getCategoryTitle = categoryRaw => {
-				const raw = typeof categoryRaw === 'string' ? categoryRaw : '';
-				const cfg = CATEGORY_I18N[raw] || null;
-				if (cfg) {
-					return tOr(cfg.titleKey, cfg.fallbackTitle || raw);
+				if (input.checked === checked) {
+					continue;
 				}
-				return tOr(`msghub.i18n.core.admin.ui.plugins.category.${raw}.title`, raw);
-			};
-
-			const setAccordionChecked = (wraps, checked) => {
-				const list = Array.isArray(wraps) ? wraps : [];
-				for (const w of list) {
-					const input = w?.querySelector?.('.msghub-acc-input--instance');
-					if (!(input instanceof HTMLInputElement)) {
-						continue;
-					}
-					if (input.checked === checked) {
-						continue;
-					}
-					input.checked = checked;
-					try {
-						input.dispatchEvent(new Event('change', { bubbles: true }));
-					} catch {
-						// ignore
-					}
+				input.checked = checked;
+				try {
+					input.dispatchEvent(new Event('change', { bubbles: true }));
+				} catch {
+					// ignore
 				}
-			};
+			}
+		};
 
-			const getEnabledStats = wraps => {
-				const list = Array.isArray(wraps) ? wraps : [];
-				let enabledCount = 0;
-				let disabledCount = 0;
-				for (const w of list) {
-					const curEnabled = w?.getAttribute?.('data-enabled') === '1';
-					if (curEnabled) {
-						enabledCount += 1;
-					} else {
-						disabledCount += 1;
-					}
+		const getEnabledStats = wraps => {
+			const list = Array.isArray(wraps) ? wraps : [];
+			let enabledCount = 0;
+			let disabledCount = 0;
+			for (const w of list) {
+				const curEnabled = w?.getAttribute?.('data-enabled') === '1';
+				if (curEnabled) {
+					enabledCount += 1;
+				} else {
+					disabledCount += 1;
 				}
-				return { enabledCount, disabledCount, total: enabledCount + disabledCount };
-			};
+			}
+			return { enabledCount, disabledCount, total: enabledCount + disabledCount };
+		};
 
-			const setEnabledForWraps = async (wraps, enabled) => {
-				const list = Array.isArray(wraps) ? wraps : [];
-				const tasks = [];
-				for (const w of list) {
-					const type = String(w?.getAttribute?.('data-plugin-type') || '').trim();
-					const iid = Number(w?.getAttribute?.('data-instance-id'));
-					if (!type || !Number.isFinite(iid)) {
-						continue;
-					}
-					const curEnabled = w?.getAttribute?.('data-enabled') === '1';
-					if (curEnabled === enabled) {
-						continue;
-					}
-					tasks.push({ type, instanceId: Math.trunc(iid) });
+		const setEnabledForWraps = async (wraps, enabled) => {
+			const list = Array.isArray(wraps) ? wraps : [];
+			const tasks = [];
+			for (const w of list) {
+				const type = String(w?.getAttribute?.('data-plugin-type') || '').trim();
+				const iid = Number(w?.getAttribute?.('data-instance-id'));
+				if (!type || !Number.isFinite(iid)) {
+					continue;
 				}
-				for (const task of tasks) {
-					if (!pluginsApi?.setEnabled) {
-						throw new Error('Plugins API is not available');
-					}
-					await pluginsApi.setEnabled({
-						type: task.type,
-						instanceId: task.instanceId,
-						enabled,
-					});
+				const curEnabled = w?.getAttribute?.('data-enabled') === '1';
+				if (curEnabled === enabled) {
+					continue;
 				}
-				await refreshAll();
-			};
+				tasks.push({ type, instanceId: Math.trunc(iid) });
+			}
+			for (const task of tasks) {
+				if (!pluginsApi?.setEnabled) {
+					throw new Error('Plugins API is not available');
+				}
+				await pluginsApi.setEnabled({
+					type: task.type,
+					instanceId: task.instanceId,
+					enabled,
+				});
+			}
+			await refreshAll();
+		};
 
-			const openPluginsContextMenu = (e, ctx) => {
-				if (!e || typeof e !== 'object') {
-					return;
-				}
-				const context = ctx && typeof ctx === 'object' ? ctx : {};
-				const kind = typeof context.kind === 'string' ? context.kind : 'all';
+		const openPluginsContextMenu = (e, ctx) => {
+			if (!e || typeof e !== 'object') {
+				return;
+			}
+			const context = ctx && typeof ctx === 'object' ? ctx : {};
+			const kind = typeof context.kind === 'string' ? context.kind : 'all';
 
-				// Secret bypass: Ctrl+RightClick opens the native browser context menu (global handler).
-				if (e.ctrlKey === true) {
-					return;
-				}
-				// Keep the global input context menu for text-like editables.
-				if (isTextEditableTarget(e?.target)) {
-					return;
-				}
-				if (!ui?.contextMenu?.open) {
-					return;
-				}
-				if (typeof e.preventDefault === 'function') {
-					e.preventDefault();
-				}
+			// Secret bypass: Ctrl+RightClick opens the native browser context menu (global handler).
+			if (e.ctrlKey === true) {
+				return;
+			}
+			// Keep the global input context menu for text-like editables.
+			if (isTextEditableTarget(e?.target)) {
+				return;
+			}
+			if (!ui?.contextMenu?.open) {
+				return;
+			}
+			if (typeof e.preventDefault === 'function') {
+				e.preventDefault();
+			}
 
-				const wrapsAll = getAllInstanceWraps();
-				const wrapsThis = kind === 'instance' && context.instWrap ? [context.instWrap] : [];
-				const wrapsType =
-					kind === 'instance' && context.pluginType
-						? wrapsAll.filter(w => String(w.getAttribute('data-plugin-type') || '') === String(context.pluginType))
-						: [];
-				const wrapsCategory =
-					(kind === 'instance' || kind === 'category') && context.categorySafe
-						? wrapsAll.filter(w => String(w.getAttribute('data-plugin-category') || '') === String(context.categorySafe))
-						: [];
+			const wrapsAll = getAllInstanceWraps();
+			const wrapsThis = kind === 'instance' && context.instWrap ? [context.instWrap] : [];
+			const wrapsType =
+				kind === 'instance' && context.pluginType
+					? wrapsAll.filter(
+							w => String(w.getAttribute('data-plugin-type') || '') === String(context.pluginType),
+						)
+					: [];
+			const wrapsCategory =
+				(kind === 'instance' || kind === 'category') && context.categorySafe
+					? wrapsAll.filter(
+							w => String(w.getAttribute('data-plugin-category') || '') === String(context.categorySafe),
+						)
+					: [];
 
-				const canExpandAll = wrapsAll.some(w => w?.querySelector?.('.msghub-acc-input--instance'));
-				const canExpandCategory = wrapsCategory.some(w => w?.querySelector?.('.msghub-acc-input--instance'));
-				const canExpandType = wrapsType.some(w => w?.querySelector?.('.msghub-acc-input--instance'));
-				const canExpandThis = wrapsThis.some(w => w?.querySelector?.('.msghub-acc-input--instance'));
+			const canExpandAll = wrapsAll.some(w => w?.querySelector?.('.msghub-acc-input--instance'));
+			const canExpandCategory = wrapsCategory.some(w => w?.querySelector?.('.msghub-acc-input--instance'));
+			const canExpandType = wrapsType.some(w => w?.querySelector?.('.msghub-acc-input--instance'));
+			const canExpandThis = wrapsThis.some(w => w?.querySelector?.('.msghub-acc-input--instance'));
 
-				const categoryTitle = context.categoryRaw ? getCategoryTitle(context.categoryRaw) : '';
-				const categoryLabel =
-					kind === 'category'
-						? t('msghub.i18n.core.admin.ui.plugins.contextMenu.scope.this.label', categoryTitle || String(context.categoryRaw))
-						: t('msghub.i18n.core.admin.ui.plugins.contextMenu.scope.category.label', categoryTitle);
+			const categoryTitle = context.categoryRaw ? getCategoryTitle(context.categoryRaw) : '';
+			const categoryLabel =
+				kind === 'category'
+					? t(
+							'msghub.i18n.core.admin.ui.plugins.contextMenu.scope.this.label',
+							categoryTitle || String(context.categoryRaw),
+						)
+					: t('msghub.i18n.core.admin.ui.plugins.contextMenu.scope.category.label', categoryTitle);
 
-				const expandItems =
-					kind === 'instance'
+			const expandItems =
+				kind === 'instance'
+					? [
+							{
+								id: 'expand_this',
+								label: t(
+									'msghub.i18n.core.admin.ui.plugins.contextMenu.scope.this.label',
+									context.instanceName,
+								),
+								disabled: !canExpandThis,
+								onSelect: () => setAccordionChecked(wrapsThis, true),
+							},
+							{
+								id: 'expand_type',
+								label: t(
+									'msghub.i18n.core.admin.ui.plugins.contextMenu.scope.type.label',
+									String(context.pluginType || ''),
+								),
+								disabled: !canExpandType,
+								onSelect: () => setAccordionChecked(wrapsType, true),
+							},
+							{
+								id: 'expand_category',
+								label: categoryLabel,
+								disabled: !canExpandCategory,
+								onSelect: () => setAccordionChecked(wrapsCategory, true),
+							},
+							{
+								id: 'expand_all',
+								label: t('msghub.i18n.core.admin.ui.plugins.contextMenu.scope.all.label'),
+								disabled: !canExpandAll,
+								onSelect: () => setAccordionChecked(wrapsAll, true),
+							},
+						]
+					: kind === 'category'
 						? [
-								{
-									id: 'expand_this',
-									label: t('msghub.i18n.core.admin.ui.plugins.contextMenu.scope.this.label', context.instanceName),
-									disabled: !canExpandThis,
-									onSelect: () => setAccordionChecked(wrapsThis, true),
-								},
-								{
-									id: 'expand_type',
-									label: t(
-										'msghub.i18n.core.admin.ui.plugins.contextMenu.scope.type.label',
-										String(context.pluginType || ''),
-									),
-									disabled: !canExpandType,
-									onSelect: () => setAccordionChecked(wrapsType, true),
-								},
 								{
 									id: 'expand_category',
 									label: categoryLabel,
@@ -405,48 +432,51 @@
 									onSelect: () => setAccordionChecked(wrapsAll, true),
 								},
 							]
-						: kind === 'category'
-							? [
-									{
-										id: 'expand_category',
-										label: categoryLabel,
-										disabled: !canExpandCategory,
-										onSelect: () => setAccordionChecked(wrapsCategory, true),
-									},
-									{
-										id: 'expand_all',
-										label: t('msghub.i18n.core.admin.ui.plugins.contextMenu.scope.all.label'),
-										disabled: !canExpandAll,
-										onSelect: () => setAccordionChecked(wrapsAll, true),
-									},
-								]
-							: [
-									{
-										id: 'expand_all',
-										label: t('msghub.i18n.core.admin.ui.plugins.contextMenu.scope.all.label'),
-										disabled: !canExpandAll,
-										onSelect: () => setAccordionChecked(wrapsAll, true),
-									},
-								];
+						: [
+								{
+									id: 'expand_all',
+									label: t('msghub.i18n.core.admin.ui.plugins.contextMenu.scope.all.label'),
+									disabled: !canExpandAll,
+									onSelect: () => setAccordionChecked(wrapsAll, true),
+								},
+							];
 
-				const collapseItems =
-					kind === 'instance'
+			const collapseItems =
+				kind === 'instance'
+					? [
+							{
+								id: 'collapse_this',
+								label: t(
+									'msghub.i18n.core.admin.ui.plugins.contextMenu.scope.this.label',
+									context.instanceName,
+								),
+								disabled: !canExpandThis,
+								onSelect: () => setAccordionChecked(wrapsThis, false),
+							},
+							{
+								id: 'collapse_type',
+								label: t(
+									'msghub.i18n.core.admin.ui.plugins.contextMenu.scope.type.label',
+									String(context.pluginType || ''),
+								),
+								disabled: !canExpandType,
+								onSelect: () => setAccordionChecked(wrapsType, false),
+							},
+							{
+								id: 'collapse_category',
+								label: categoryLabel,
+								disabled: !canExpandCategory,
+								onSelect: () => setAccordionChecked(wrapsCategory, false),
+							},
+							{
+								id: 'collapse_all',
+								label: t('msghub.i18n.core.admin.ui.plugins.contextMenu.scope.all.label'),
+								disabled: !canExpandAll,
+								onSelect: () => setAccordionChecked(wrapsAll, false),
+							},
+						]
+					: kind === 'category'
 						? [
-								{
-									id: 'collapse_this',
-									label: t('msghub.i18n.core.admin.ui.plugins.contextMenu.scope.this.label', context.instanceName),
-									disabled: !canExpandThis,
-									onSelect: () => setAccordionChecked(wrapsThis, false),
-								},
-								{
-									id: 'collapse_type',
-									label: t(
-										'msghub.i18n.core.admin.ui.plugins.contextMenu.scope.type.label',
-										String(context.pluginType || ''),
-									),
-									disabled: !canExpandType,
-									onSelect: () => setAccordionChecked(wrapsType, false),
-								},
 								{
 									id: 'collapse_category',
 									label: categoryLabel,
@@ -460,53 +490,56 @@
 									onSelect: () => setAccordionChecked(wrapsAll, false),
 								},
 							]
-						: kind === 'category'
-							? [
-									{
-										id: 'collapse_category',
-										label: categoryLabel,
-										disabled: !canExpandCategory,
-										onSelect: () => setAccordionChecked(wrapsCategory, false),
-									},
-									{
-										id: 'collapse_all',
-										label: t('msghub.i18n.core.admin.ui.plugins.contextMenu.scope.all.label'),
-										disabled: !canExpandAll,
-										onSelect: () => setAccordionChecked(wrapsAll, false),
-									},
-								]
-							: [
-									{
-										id: 'collapse_all',
-										label: t('msghub.i18n.core.admin.ui.plugins.contextMenu.scope.all.label'),
-										disabled: !canExpandAll,
-										onSelect: () => setAccordionChecked(wrapsAll, false),
-									},
-								];
+						: [
+								{
+									id: 'collapse_all',
+									label: t('msghub.i18n.core.admin.ui.plugins.contextMenu.scope.all.label'),
+									disabled: !canExpandAll,
+									onSelect: () => setAccordionChecked(wrapsAll, false),
+								},
+							];
 
-				const statsAll = getEnabledStats(wrapsAll);
-				const statsCategory = getEnabledStats(wrapsCategory);
-				const statsType = getEnabledStats(wrapsType);
-				const statsThis = getEnabledStats(wrapsThis);
+			const statsAll = getEnabledStats(wrapsAll);
+			const statsCategory = getEnabledStats(wrapsCategory);
+			const statsType = getEnabledStats(wrapsType);
+			const statsThis = getEnabledStats(wrapsThis);
 
-				const disableItems =
-					kind === 'instance'
+			const disableItems =
+				kind === 'instance'
+					? [
+							{
+								id: 'disable_this',
+								label: t(
+									'msghub.i18n.core.admin.ui.plugins.contextMenu.scope.this.label',
+									context.instanceName,
+								),
+								disabled: statsThis.enabledCount === 0,
+								onSelect: () => setEnabledForWraps(wrapsThis, false),
+							},
+							{
+								id: 'disable_type',
+								label: t(
+									'msghub.i18n.core.admin.ui.plugins.contextMenu.scope.type.label',
+									String(context.pluginType || ''),
+								),
+								disabled: statsType.enabledCount === 0,
+								onSelect: () => setEnabledForWraps(wrapsType, false),
+							},
+							{
+								id: 'disable_category',
+								label: categoryLabel,
+								disabled: statsCategory.enabledCount === 0,
+								onSelect: () => setEnabledForWraps(wrapsCategory, false),
+							},
+							{
+								id: 'disable_all',
+								label: t('msghub.i18n.core.admin.ui.plugins.contextMenu.scope.all.label'),
+								disabled: statsAll.enabledCount === 0,
+								onSelect: () => setEnabledForWraps(wrapsAll, false),
+							},
+						]
+					: kind === 'category'
 						? [
-								{
-									id: 'disable_this',
-									label: t('msghub.i18n.core.admin.ui.plugins.contextMenu.scope.this.label', context.instanceName),
-									disabled: statsThis.enabledCount === 0,
-									onSelect: () => setEnabledForWraps(wrapsThis, false),
-								},
-								{
-									id: 'disable_type',
-									label: t(
-										'msghub.i18n.core.admin.ui.plugins.contextMenu.scope.type.label',
-										String(context.pluginType || ''),
-									),
-									disabled: statsType.enabledCount === 0,
-									onSelect: () => setEnabledForWraps(wrapsType, false),
-								},
 								{
 									id: 'disable_category',
 									label: categoryLabel,
@@ -520,48 +553,51 @@
 									onSelect: () => setEnabledForWraps(wrapsAll, false),
 								},
 							]
-						: kind === 'category'
-							? [
-									{
-										id: 'disable_category',
-										label: categoryLabel,
-										disabled: statsCategory.enabledCount === 0,
-										onSelect: () => setEnabledForWraps(wrapsCategory, false),
-									},
-									{
-										id: 'disable_all',
-										label: t('msghub.i18n.core.admin.ui.plugins.contextMenu.scope.all.label'),
-										disabled: statsAll.enabledCount === 0,
-										onSelect: () => setEnabledForWraps(wrapsAll, false),
-									},
-								]
-							: [
-									{
-										id: 'disable_all',
-										label: t('msghub.i18n.core.admin.ui.plugins.contextMenu.scope.all.label'),
-										disabled: statsAll.enabledCount === 0,
-										onSelect: () => setEnabledForWraps(wrapsAll, false),
-									},
-								];
+						: [
+								{
+									id: 'disable_all',
+									label: t('msghub.i18n.core.admin.ui.plugins.contextMenu.scope.all.label'),
+									disabled: statsAll.enabledCount === 0,
+									onSelect: () => setEnabledForWraps(wrapsAll, false),
+								},
+							];
 
-				const enableItems =
-					kind === 'instance'
+			const enableItems =
+				kind === 'instance'
+					? [
+							{
+								id: 'enable_this',
+								label: t(
+									'msghub.i18n.core.admin.ui.plugins.contextMenu.scope.this.label',
+									context.instanceName,
+								),
+								disabled: statsThis.disabledCount === 0,
+								onSelect: () => setEnabledForWraps(wrapsThis, true),
+							},
+							{
+								id: 'enable_type',
+								label: t(
+									'msghub.i18n.core.admin.ui.plugins.contextMenu.scope.type.label',
+									String(context.pluginType || ''),
+								),
+								disabled: statsType.disabledCount === 0,
+								onSelect: () => setEnabledForWraps(wrapsType, true),
+							},
+							{
+								id: 'enable_category',
+								label: categoryLabel,
+								disabled: statsCategory.disabledCount === 0,
+								onSelect: () => setEnabledForWraps(wrapsCategory, true),
+							},
+							{
+								id: 'enable_all',
+								label: t('msghub.i18n.core.admin.ui.plugins.contextMenu.scope.all.label'),
+								disabled: statsAll.disabledCount === 0,
+								onSelect: () => setEnabledForWraps(wrapsAll, true),
+							},
+						]
+					: kind === 'category'
 						? [
-								{
-									id: 'enable_this',
-									label: t('msghub.i18n.core.admin.ui.plugins.contextMenu.scope.this.label', context.instanceName),
-									disabled: statsThis.disabledCount === 0,
-									onSelect: () => setEnabledForWraps(wrapsThis, true),
-								},
-								{
-									id: 'enable_type',
-									label: t(
-										'msghub.i18n.core.admin.ui.plugins.contextMenu.scope.type.label',
-										String(context.pluginType || ''),
-									),
-									disabled: statsType.disabledCount === 0,
-									onSelect: () => setEnabledForWraps(wrapsType, true),
-								},
 								{
 									id: 'enable_category',
 									label: categoryLabel,
@@ -575,102 +611,92 @@
 									onSelect: () => setEnabledForWraps(wrapsAll, true),
 								},
 							]
-						: kind === 'category'
-							? [
-									{
-										id: 'enable_category',
-										label: categoryLabel,
-										disabled: statsCategory.disabledCount === 0,
-										onSelect: () => setEnabledForWraps(wrapsCategory, true),
-									},
-									{
-										id: 'enable_all',
-										label: t('msghub.i18n.core.admin.ui.plugins.contextMenu.scope.all.label'),
-										disabled: statsAll.disabledCount === 0,
-										onSelect: () => setEnabledForWraps(wrapsAll, true),
-									},
-								]
-							: [
-									{
-										id: 'enable_all',
-										label: t('msghub.i18n.core.admin.ui.plugins.contextMenu.scope.all.label'),
-										disabled: statsAll.disabledCount === 0,
-										onSelect: () => setEnabledForWraps(wrapsAll, true),
-									},
-								];
+						: [
+								{
+									id: 'enable_all',
+									label: t('msghub.i18n.core.admin.ui.plugins.contextMenu.scope.all.label'),
+									disabled: statsAll.disabledCount === 0,
+									onSelect: () => setEnabledForWraps(wrapsAll, true),
+								},
+							];
 
-				/** @type {any[]} */
-				const items = [];
-				if (kind === 'instance') {
-					items.push(
-						{
-							id: 'help',
-							label: t('msghub.i18n.core.admin.ui.plugins.contextMenu.help.label', String(context.pluginType || '')),
-							icon: 'help',
-							disabled: context.hasReadme !== true,
-							onSelect: () => context.openReadme?.(),
-						},
-						{
-							id: 'tools',
-							label: t('msghub.i18n.core.admin.ui.plugins.contextMenu.tools.label', String(context.pluginType || '')),
-							icon: 'tools',
-							disabled: context.hasToolsAvailable !== true,
-							items: Array.isArray(context.toolsItems) ? context.toolsItems : [],
-						},
-						{ type: 'separator' },
-					);
-				}
-
+			const items = [];
+			if (kind === 'instance') {
 				items.push(
 					{
-						id: 'expand',
-						label: t('msghub.i18n.core.admin.ui.plugins.contextMenu.expand.label'),
-						items: expandItems,
+						id: 'help',
+						label: t(
+							'msghub.i18n.core.admin.ui.plugins.contextMenu.help.label',
+							String(context.pluginType || ''),
+						),
+						icon: 'help',
+						disabled: context.hasReadme !== true,
+						onSelect: () => context.openReadme?.(),
 					},
 					{
-						id: 'collapse',
-						label: t('msghub.i18n.core.admin.ui.plugins.contextMenu.collapse.label'),
-						items: collapseItems,
+						id: 'tools',
+						label: t(
+							'msghub.i18n.core.admin.ui.plugins.contextMenu.tools.label',
+							String(context.pluginType || ''),
+						),
+						icon: 'tools',
+						disabled: context.hasToolsAvailable !== true,
+						items: Array.isArray(context.toolsItems) ? context.toolsItems : [],
 					},
 					{ type: 'separator' },
+				);
+			}
+
+			items.push(
+				{
+					id: 'expand',
+					label: t('msghub.i18n.core.admin.ui.plugins.contextMenu.expand.label'),
+					items: expandItems,
+				},
+				{
+					id: 'collapse',
+					label: t('msghub.i18n.core.admin.ui.plugins.contextMenu.collapse.label'),
+					items: collapseItems,
+				},
+				{ type: 'separator' },
+				{
+					id: 'disable',
+					label: t('msghub.i18n.core.admin.ui.plugins.contextMenu.disable.label'),
+					icon: 'pause',
+					items: disableItems,
+				},
+				{
+					id: 'enable',
+					label: t('msghub.i18n.core.admin.ui.plugins.contextMenu.enable.label'),
+					icon: 'play',
+					items: enableItems,
+				},
+			);
+
+			if (kind === 'instance') {
+				items.push(
+					{ type: 'separator' },
 					{
-						id: 'disable',
-						label: t('msghub.i18n.core.admin.ui.plugins.contextMenu.disable.label'),
-						icon: 'pause',
-						items: disableItems,
-					},
-					{
-						id: 'enable',
-						label: t('msghub.i18n.core.admin.ui.plugins.contextMenu.enable.label'),
-						icon: 'play',
-						items: enableItems,
+						id: 'remove',
+						label: t('msghub.i18n.core.admin.ui.plugins.contextMenu.remove.label'),
+						danger: true,
+						onSelect: () => context.removeInstance?.(),
 					},
 				);
+			}
 
-				if (kind === 'instance') {
-					items.push(
-						{ type: 'separator' },
-						{
-							id: 'remove',
-							label: t('msghub.i18n.core.admin.ui.plugins.contextMenu.remove.label'),
-							danger: true,
-							onSelect: () => context.removeInstance?.(),
-						},
-					);
-				}
+			ui.contextMenu.open({
+				anchorPoint: { x: e.clientX, y: e.clientY },
+				ariaLabel: 'Plugin context menu',
+				placement: 'bottom-start',
+				items,
+			});
+		};
 
-					ui.contextMenu.open({
-						anchorPoint: { x: e.clientX, y: e.clientY },
-						ariaLabel: 'Plugin context menu',
-						placement: 'bottom-start',
-						items,
-					});
-				};
-
-			function appendInlineCodeAware(parent, text) {
-				const s = String(text ?? '');
-				const parts = s.split(/(`[^`]+`)/g).filter(Boolean);
-				for (const part of parts) {
+		function appendInlineCodeAware(parent, text) {
+			const s = String(text ?? '');
+			const parts = s.split(/(`[^`]+`)/g).filter(Boolean);
+			for (const part of parts) {
 				if (part.startsWith('`') && part.endsWith('`') && part.length >= 2) {
 					parent.appendChild(h('code', { text: part.slice(1, -1) }));
 				} else {
@@ -679,7 +705,7 @@
 			}
 		}
 
-			function renderMarkdownLite(md) {
+		function renderMarkdownLite(md) {
 			const root = h('div', { class: 'msghub-readme' });
 			const text = String(md || '').replace(/\r\n/g, '\n');
 			const lines = text.split('\n');
@@ -800,7 +826,7 @@
 
 		let pluginReadmesByType = new Map();
 		let pluginReadmesLoadPromise = null;
-			async function ensurePluginReadmesLoaded() {
+		async function ensurePluginReadmesLoaded() {
 			if (pluginReadmesLoadPromise) {
 				return pluginReadmesLoadPromise;
 			}
@@ -2413,7 +2439,7 @@
 				const btnReload = h('button', {
 					type: 'button',
 					title: 'Reload',
-					onclick: e => {
+					onclick: _e => {
 						void loadList().catch(err => {
 							const msg = String(err?.message || err);
 							setError(msg);
@@ -3006,8 +3032,6 @@
 			return el;
 		}
 
-		let cachedPluginsWithUi = [];
-
 		function buildInstancesByType(instances) {
 			const byType = new Map();
 			for (const inst of instances || []) {
@@ -3032,6 +3056,7 @@
 			}
 			return null;
 		}
+		void getExistingCardForType;
 
 		function renderInstanceRow({ plugin, inst, instList, expandedById, readmesByType }) {
 			const statusSafe = cssSafe(inst?.status || 'unknown');
@@ -3148,14 +3173,14 @@
 				if (!ui?.contextMenu?.open) {
 					return;
 				}
-					ui.contextMenu.open({
-						anchorEl: anchorEl instanceof HTMLElement ? anchorEl : null,
-						anchorPoint: !anchorEl && e ? { x: e.clientX, y: e.clientY } : null,
-						ariaLabel: 'Plugin context menu',
-						placement: 'bottom-start',
-						items: cfg.items,
-					});
-				};
+				ui.contextMenu.open({
+					anchorEl: anchorEl instanceof HTMLElement ? anchorEl : null,
+					anchorPoint: !anchorEl && e ? { x: e.clientX, y: e.clientY } : null,
+					ariaLabel: 'Plugin context menu',
+					placement: 'bottom-start',
+					items: cfg.items,
+				});
+			};
 
 			const instWrap = h('div', {
 				class: [
@@ -3200,13 +3225,13 @@
 				inst?.enabled === true
 					? t('msghub.i18n.core.admin.ui.plugins.instance.action.stop')
 					: t('msghub.i18n.core.admin.ui.plugins.instance.action.start');
-					const toggleBtn = h('button', {
-						type: 'button',
-						class: 'msghub-instance-toggle msghub-uibutton-icon',
-						title: toggleLabel,
-						'aria-label': toggleLabel,
-						text: inst?.enabled === true ? '⏸' : '▶',
-						onclick: async () => {
+			const toggleBtn = h('button', {
+				type: 'button',
+				class: 'msghub-instance-toggle msghub-uibutton-icon',
+				title: toggleLabel,
+				'aria-label': toggleLabel,
+				text: inst?.enabled === true ? '⏸' : '▶',
+				onclick: async () => {
 					if (!pluginsApi?.setEnabled) {
 						throw new Error('Plugins API is not available');
 					}
@@ -3219,25 +3244,25 @@
 				},
 			});
 
-						const helpBtn = h('button', {
-							type: 'button',
-							class: `msghub-instance-help msghub-uibutton-icon${hasReadme ? '' : ' is-invisible'}`,
-							disabled: hasReadme ? undefined : true,
-							title: hasReadme ? t('msghub.i18n.core.admin.ui.plugins.instance.help.button') : '',
-							'aria-label': t('msghub.i18n.core.admin.ui.plugins.instance.help.button'),
-					text: 'i',
-					onclick: () => openReadme(),
-				});
+			const helpBtn = h('button', {
+				type: 'button',
+				class: `msghub-instance-help msghub-uibutton-icon${hasReadme ? '' : ' is-invisible'}`,
+				disabled: hasReadme ? undefined : true,
+				title: hasReadme ? t('msghub.i18n.core.admin.ui.plugins.instance.help.button') : '',
+				'aria-label': t('msghub.i18n.core.admin.ui.plugins.instance.help.button'),
+				text: 'i',
+				onclick: () => openReadme(),
+			});
 
-						const toolsBtn = h('button', {
-							type: 'button',
-							class: `msghub-instance-tools msghub-uibutton-icon${hasToolsAvailable ? '' : ' is-invisible'}`,
-							disabled: hasToolsAvailable ? undefined : true,
-							title: hasToolsAvailable ? t('msghub.i18n.core.admin.ui.plugins.instance.tools.button') : '',
-							'aria-label': t('msghub.i18n.core.admin.ui.plugins.instance.tools.button'),
-					text: t('msghub.i18n.core.admin.ui.plugins.instance.tools.button'),
-					onclick: e => openToolsMenu(toolsBtn, e),
-				});
+			const toolsBtn = h('button', {
+				type: 'button',
+				class: `msghub-instance-tools msghub-uibutton-icon${hasToolsAvailable ? '' : ' is-invisible'}`,
+				disabled: hasToolsAvailable ? undefined : true,
+				title: hasToolsAvailable ? t('msghub.i18n.core.admin.ui.plugins.instance.tools.button') : '',
+				'aria-label': t('msghub.i18n.core.admin.ui.plugins.instance.tools.button'),
+				text: t('msghub.i18n.core.admin.ui.plugins.instance.tools.button'),
+				onclick: e => openToolsMenu(toolsBtn, e),
+			});
 
 			const channelId = `ch_${plugin.type}_${inst.instanceId}_${adapterInstance}`;
 			const channelValue = typeof inst.native?.channel === 'string' ? inst.native.channel : '';
@@ -3304,49 +3329,49 @@
 				? h('label', { class: 'msghub-acc-toggle msghub-acc-toggle--instance', for: accId, text: '▾' })
 				: h('span', { class: 'msghub-acc-toggle msghub-acc-toggle--instance is-invisible', text: '▾' });
 
-				const head = h('div', { class: 'msghub-instance-head' }, [
-					statusEl,
-					iconSlot,
-					nameEl,
-					toggleBtn,
-					helpBtn,
-					toolsBtn,
-					titleValueEl,
-					channelEl,
-					chevron,
-				]);
+			const head = h('div', { class: 'msghub-instance-head' }, [
+				statusEl,
+				iconSlot,
+				nameEl,
+				toggleBtn,
+				helpBtn,
+				toolsBtn,
+				titleValueEl,
+				channelEl,
+				chevron,
+			]);
 
-				const removeInstance = async () => {
-					const name = instanceName;
-					const ok = await confirmDialog({
-						title: t('msghub.i18n.core.admin.ui.plugins.contextMenu.remove.title'),
-						text: t('msghub.i18n.core.admin.ui.plugins.contextMenu.remove.text', name),
-					});
-					if (!ok) {
-						return;
-					}
-					if (!pluginsApi?.deleteInstance) {
-						throw new Error('Plugins API is not available');
-					}
-					await pluginsApi.deleteInstance({ type: plugin.type, instanceId: inst.instanceId });
-					await refreshAll();
-				};
-
-				const instanceMenuCtx = Object.freeze({
-					kind: 'instance',
-					instWrap,
-					instanceName,
-					pluginType: String(plugin.type || ''),
-					categoryRaw,
-					categorySafe,
-					hasReadme: hasReadme === true,
-					hasToolsAvailable: hasToolsAvailable === true,
-					toolsItems: getToolsMenuConfig().items,
-					openReadme,
-					removeInstance,
+			const removeInstance = async () => {
+				const name = instanceName;
+				const ok = await confirmDialog({
+					title: t('msghub.i18n.core.admin.ui.plugins.contextMenu.remove.title'),
+					text: t('msghub.i18n.core.admin.ui.plugins.contextMenu.remove.text', name),
 				});
+				if (!ok) {
+					return;
+				}
+				if (!pluginsApi?.deleteInstance) {
+					throw new Error('Plugins API is not available');
+				}
+				await pluginsApi.deleteInstance({ type: plugin.type, instanceId: inst.instanceId });
+				await refreshAll();
+			};
 
-				head.oncontextmenu = e => openPluginsContextMenu(e, instanceMenuCtx);
+			const instanceMenuCtx = Object.freeze({
+				kind: 'instance',
+				instWrap,
+				instanceName,
+				pluginType: String(plugin.type || ''),
+				categoryRaw,
+				categorySafe,
+				hasReadme: hasReadme === true,
+				hasToolsAvailable: hasToolsAvailable === true,
+				toolsItems: getToolsMenuConfig().items,
+				openReadme,
+				removeInstance,
+			});
+
+			head.oncontextmenu = e => openPluginsContextMenu(e, instanceMenuCtx);
 
 			if (accInput) {
 				head.setAttribute('role', 'button');
@@ -3395,14 +3420,14 @@
 				});
 			}
 
-				instWrap.appendChild(head);
+			instWrap.appendChild(head);
 
-				if (hasOptions) {
-					const bodyWrap = h('div', { class: 'msghub-instance-body' });
-					bodyWrap.oncontextmenu = e => openPluginsContextMenu(e, instanceMenuCtx);
-					const fieldsContainer = h('div', { class: 'msghub-instance-fields' });
-					const inputs = {};
-					const initial = {};
+			if (hasOptions) {
+				const bodyWrap = h('div', { class: 'msghub-instance-body' });
+				bodyWrap.oncontextmenu = e => openPluginsContextMenu(e, instanceMenuCtx);
+				const fieldsContainer = h('div', { class: 'msghub-instance-fields' });
+				const inputs = {};
+				const initial = {};
 
 				const normalize = v => (v === undefined ? null : v);
 				const isEqual = (a, b) => Object.is(a, b);
@@ -3543,7 +3568,6 @@
 
 				const vm = buildPluginsViewModel({ plugins, instances, readmesByType });
 				const withUi = (vm.plugins || []).filter(p => p && p.options && typeof p.options === 'object');
-				cachedPluginsWithUi = withUi;
 
 				const entriesByCategory = new Map();
 				for (const plugin of withUi) {
@@ -3580,30 +3604,30 @@
 						continue;
 					}
 
-						const section = h('div', { class: 'msghub-plugin-category', 'data-category': category }, [
-							(() => {
-								const cfg = CATEGORY_I18N[category] || null;
-								const title = cfg
-									? tOr(cfg.titleKey, cfg.fallbackTitle || category)
-									: tOr(`msghub.i18n.core.admin.ui.plugins.category.${category}.title`, category);
-								const desc = cfg
-									? tOr(cfg.descKey, '')
-									: tOr(`msghub.i18n.core.admin.ui.plugins.category.${category}.desc`, '');
-								const categorySafe = cssSafe(category);
-								const row = h('div', { class: 'msghub-plugin-category-row' }, [
-									h('h6', {
-										class: 'msghub-plugin-category-title',
-										text: title || category,
-									}),
-									desc
-										? h('div', { class: 'msghub-muted msghub-plugin-category-desc', text: desc })
-										: null,
-								]);
-								row.oncontextmenu = e =>
-									openPluginsContextMenu(e, { kind: 'category', categoryRaw: category, categorySafe });
-								return row;
-							})(),
-						]);
+					const section = h('div', { class: 'msghub-plugin-category', 'data-category': category }, [
+						(() => {
+							const cfg = CATEGORY_I18N[category] || null;
+							const title = cfg
+								? tOr(cfg.titleKey, cfg.fallbackTitle || category)
+								: tOr(`msghub.i18n.core.admin.ui.plugins.category.${category}.title`, category);
+							const desc = cfg
+								? tOr(cfg.descKey, '')
+								: tOr(`msghub.i18n.core.admin.ui.plugins.category.${category}.desc`, '');
+							const categorySafe = cssSafe(category);
+							const row = h('div', { class: 'msghub-plugin-category-row' }, [
+								h('h6', {
+									class: 'msghub-plugin-category-title',
+									text: title || category,
+								}),
+								desc
+									? h('div', { class: 'msghub-muted msghub-plugin-category-desc', text: desc })
+									: null,
+							]);
+							row.oncontextmenu = e =>
+								openPluginsContextMenu(e, { kind: 'category', categoryRaw: category, categorySafe });
+							return row;
+						})(),
+					]);
 
 					for (const entry of entries) {
 						section.appendChild(
@@ -3631,7 +3655,7 @@
 			}
 		}
 
-		async function refreshPlugin(type) {
+		async function refreshPlugin(_type) {
 			return refreshAll();
 		}
 
