@@ -47,17 +47,37 @@
 		const onPageSizeChanged =
 			typeof opts.onPageSizeChanged === 'function' ? opts.onPageSizeChanged : () => undefined;
 
-		const actions = h('div', { class: 'msghub-actions' });
-		const refreshBtn = h('button', { type: 'button', text: 'Refresh' });
-		const deleteBtn = h('button', { class: 'msghub-danger', type: 'button', text: 'Delete' });
-		const autoBtn = h('button', { type: 'button', text: 'Auto: on' });
+		const actions = h('div', { class: 'msghub-toolbar__group' });
+		const refreshBtn = h('button', {
+			class: 'msghub-uibutton-text msghub-toolbarbutton-text',
+			type: 'button',
+			text: 'Refresh',
+		});
+		const deleteBtn = h('button', {
+			class: 'msghub-uibutton-text msghub-toolbarbutton-text msghub-toolbarbutton-danger',
+			type: 'button',
+			text: 'Delete',
+		});
+		const autoBtn = h('button', {
+			class: 'msghub-uibutton-text msghub-toolbarbutton-text',
+			type: 'button',
+			text: 'Auto: on',
+		});
 		actions.appendChild(refreshBtn);
 		actions.appendChild(deleteBtn);
 		actions.appendChild(autoBtn);
 
 		const sizeOptions = [10, 25, 50, 100, 250];
-		const prevBtn = h('button', { type: 'button', text: 'Prev' });
-		const nextBtn = h('button', { type: 'button', text: 'Next' });
+		const prevBtn = h('button', {
+			class: 'msghub-uibutton-text msghub-toolbarbutton-text',
+			type: 'button',
+			text: 'Prev',
+		});
+		const nextBtn = h('button', {
+			class: 'msghub-uibutton-text msghub-toolbarbutton-text',
+			type: 'button',
+			text: 'Next',
+		});
 		const pageInfoEl = h('div', {
 			class: 'msghub-muted',
 			text: t('msghub.i18n.core.admin.ui.pagination.pageOf.text', 1, 1),
@@ -74,7 +94,7 @@
 			sizeOptions.map(n => h('option', { value: String(n), text: String(n) })),
 		);
 
-		const paging = h('div', { class: 'msghub-messages-paging' }, [
+		const paging = h('div', { class: 'msghub-toolbar__group msghub-messages-paging' }, [
 			prevBtn,
 			pageInfoEl,
 			nextBtn,
@@ -84,7 +104,11 @@
 			]),
 		]);
 
-		const head = h('div', { class: 'msghub-messages-head' }, [actions, paging]);
+		const countMetaEl = h('div', {
+			class: 'msghub-toolbar__meta',
+			text: 'messages: 0 / 0',
+		});
+		const head = h('div', { class: 'msghub-toolbar msghub-messages-head' }, [actions, paging, countMetaEl]);
 		const progress = h(
 			'div',
 			{ class: 'msghub-progress is-hidden' },
@@ -201,11 +225,8 @@
 		 * @param {string} countText - Count text.
 		 */
 		function setMeta(generatedAtText, tzText, countText) {
-			metaEl.replaceChildren(
-				h('div', { text: generatedAtText }),
-				h('div', { text: tzText }),
-				h('div', { text: countText }),
-			);
+			countMetaEl.textContent = countText;
+			metaEl.replaceChildren(h('div', { text: generatedAtText }), h('div', { text: tzText }));
 		}
 
 		/**
