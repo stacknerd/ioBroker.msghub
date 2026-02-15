@@ -354,7 +354,24 @@ class Msghub extends utils.Adapter {
 				const adapterVersion = ioPackage?.common?.version ?? '0.0.0';
 				const adapterTitle =
 					ioPackage?.common?.titleLang?.de ?? ioPackage?.common?.titleLang?.en ?? 'Message Hub';
-				result = { ok: true, data: { title: adapterTitle, version: adapterVersion } };
+				let serverTimeZone = '';
+				try {
+					serverTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+				} catch {
+					serverTimeZone = '';
+				}
+				const timeZone = typeof serverTimeZone === 'string' ? serverTimeZone.trim() : '';
+				result = {
+					ok: true,
+					data: {
+						title: adapterTitle,
+						version: adapterVersion,
+						time: {
+							timeZone: timeZone || 'UTC',
+							source: timeZone ? 'server' : 'fallback-utc',
+						},
+					},
+				};
 			} else {
 				result = await this._msgPlugins?.dispatchMessagebox?.(obj);
 				if (result == null) {

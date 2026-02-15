@@ -3,7 +3,8 @@
 	'use strict';
 
 	const win = window;
-	let formatTsFormatter = null;
+	let fallbackFormatter = null;
+	let formatTsImpl = null;
 
 	/**
 	 * Messages panel state and utility module.
@@ -63,7 +64,7 @@
 	}
 
 	/**
-	 * Formats epoch milliseconds with local date/time formatter.
+	 * Formats epoch milliseconds with the active timezone formatter.
 	 *
 	 * @param {number} ts - Epoch timestamp in milliseconds.
 	 * @returns {string} Formatted timestamp or empty string.
@@ -73,8 +74,12 @@
 			return '';
 		}
 		try {
-			if (!formatTsFormatter) {
-				formatTsFormatter = new Intl.DateTimeFormat(undefined, {
+			if (typeof formatTsImpl === 'function') {
+				return String(formatTsImpl(ts) || '');
+			}
+			if (!fallbackFormatter) {
+				fallbackFormatter = new Intl.DateTimeFormat(undefined, {
+					timeZone: 'UTC',
 					year: 'numeric',
 					month: '2-digit',
 					day: '2-digit',
@@ -83,10 +88,19 @@
 					second: '2-digit',
 				});
 			}
-			return formatTsFormatter.format(new Date(ts));
+			return fallbackFormatter.format(new Date(ts));
 		} catch {
 			return String(ts);
 		}
+	}
+
+	/**
+	 * Sets the global timestamp formatter used by this panel module.
+	 *
+	 * @param {Function|null} formatter - Formatter `(ts:number) => string`.
+	 */
+	function setFormatTsFormatter(formatter) {
+		formatTsImpl = typeof formatter === 'function' ? formatter : null;
 	}
 
 	/**
@@ -170,5 +184,6 @@
 		safeStr,
 		pick,
 		formatTs,
+		setFormatTsFormatter,
 	});
 })();

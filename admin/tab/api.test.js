@@ -118,7 +118,7 @@ describe('admin/tab/api.js', function () {
 		assert.equal(iconVar(null), '');
 	});
 
-	it('builds stable admin API contracts and routes backend calls', async function () {
+		it('builds stable admin API contracts and routes backend calls', async function () {
 		const sentCommands = [];
 		let closeCalls = 0;
 		let openPayload = null;
@@ -181,11 +181,13 @@ describe('admin/tab/api.js', function () {
 		assert.equal(api.host.layout, 'tabs');
 		assert.deepEqual(JSON.parse(JSON.stringify(api.host.panels)), ['stats', 'messages', 'plugins']);
 		assert.equal(api.host.isConnected(), true);
-		assert.equal(api.i18n.lang(), 'de');
-		assert.equal(api.i18n.has('known.key'), true);
-		assert.equal(api.i18n.tOr('missing.key', 'fallback'), 'fallback');
+			assert.equal(api.i18n.lang(), 'de');
+			assert.equal(api.i18n.has('known.key'), true);
+			assert.equal(api.i18n.tOr('missing.key', 'fallback'), 'fallback');
+			assert.equal(typeof api.time.getPolicy, 'function');
+			assert.equal(typeof api.time.formatTs, 'function');
 
-		await api.constants.get();
+			await api.constants.get();
 		await api.stats.get({ fast: true });
 		await api.messages.query({ page: 1 });
 		await api.messages.delete(['ref-1']);
@@ -214,6 +216,35 @@ describe('admin/tab/api.js', function () {
 		await openPayload.items[0].onSelect();
 		assert.equal(closeCalls > 0, true, 'context menu should close before action execution');
 
-		assert.throws(() => api.notSupported('x'), err => err && err.code === 'NOT_SUPPORTED');
+			assert.throws(() => api.notSupported('x'), err => err && err.code === 'NOT_SUPPORTED');
+		});
+
+		it('normalizes timezone policy and formats timestamps with UTC fallback', async function () {
+			const sandbox = await loadApiSandbox();
+			const createAdminApi = sandbox.window.__apiFns.createAdminApi;
+			const api = createAdminApi({
+				sendTo: async () => ({}),
+				socket: { connected: true },
+				adapterInstance: 'msghub.0',
+				lang: 'en',
+				t: key => String(key),
+				pickText: value => String(value || ''),
+				ui: {},
+			});
+
+			const initial = api.time.getPolicy();
+			assert.equal(initial.timeZone, 'UTC');
+			assert.equal(initial.isFallbackUtc, true);
+
+			const policy = api.time.setPolicy({ timeZone: 'Europe/Berlin', source: 'server' });
+			assert.equal(policy.timeZone, 'Europe/Berlin');
+			assert.equal(policy.isFallbackUtc, false);
+			assert.notEqual(api.time.formatTs(1700000000000), '');
+
+			const invalid = api.time.setPolicy({ timeZone: 'Invalid/Zone', source: 'server' });
+			assert.equal(invalid.timeZone, 'UTC');
+			assert.equal(invalid.isFallbackUtc, true);
+			assert.match(invalid.warning, /timezone_fallback_utc/);
+			assert.equal(api.time.formatTs(NaN), '');
+		});
 	});
-});

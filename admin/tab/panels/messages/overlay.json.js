@@ -1,4 +1,4 @@
-/* global window, document, Node, requestAnimationFrame */
+/* global window, document */
 (function () {
 	'use strict';
 
@@ -10,7 +10,7 @@
 	 * Contains:
 	 * - Annotated JSON renderer for message payloads.
 	 * - Timestamp/duration helper comments.
-	 * - Timestamp hover tooltip in large overlay view.
+	 * - Timestamp comments in large overlay view.
 	 *
 	 * Integration:
 	 * - Uses `ctx.api.ui.overlayLarge`.
@@ -26,6 +26,7 @@
 	 * @param {object} options - Factory options.
 	 * @param {object} options.ui - UI API (`ctx.api.ui`).
 	 * @param {Function} options.getServerTimeZone - Getter for server timezone.
+	 * @param {Function} options.formatDate - Shared timezone-aware date formatter.
 	 * @param {Function} options.getLevelLabel - Resolver for numeric level labels.
 	 * @returns {{openMessageJson: Function}} JSON overlay controller.
 	 */
@@ -33,6 +34,7 @@
 		const opts = options && typeof options === 'object' ? options : {};
 		const ui = opts.ui;
 		const getServerTimeZone = typeof opts.getServerTimeZone === 'function' ? opts.getServerTimeZone : () => '';
+		const formatDate = typeof opts.formatDate === 'function' ? opts.formatDate : () => '';
 		const getLevelLabel = typeof opts.getLevelLabel === 'function' ? opts.getLevelLabel : value => String(value);
 
 		let jsonPre = null;
@@ -63,36 +65,6 @@
 			}
 
 			/**
-			 * Formats number with leading zeros.
-			 *
-			 * @param {number} value - Number value.
-			 * @returns {string} Padded value.
-			 */
-			function pad2(value) {
-				return String(value).padStart(2, '0');
-			}
-
-			/**
-			 * Formats date in local timezone.
-			 *
-			 * @param {Date} date - Date object.
-			 * @returns {string} Formatted text.
-			 */
-			function formatLocal(date) {
-				try {
-					const y = date.getFullYear();
-					const m = pad2(date.getMonth() + 1);
-					const day = pad2(date.getDate());
-					const hh = pad2(date.getHours());
-					const mm = pad2(date.getMinutes());
-					const ss = pad2(date.getSeconds());
-					return `${y}-${m}-${day} ${hh}:${mm}:${ss}`;
-				} catch {
-					return '';
-				}
-			}
-
-			/**
 			 * Formats date in a specific IANA timezone.
 			 *
 			 * @param {Date} date - Date object.
@@ -119,37 +91,6 @@
 				} catch {
 					return '';
 				}
-			}
-
-			/**
-			 * Parses string token into epoch timestamp.
-			 *
-			 * @param {string} token - Numeric token.
-			 * @returns {{ms:number,date:Date}|null} Parsed result.
-			 */
-			function parseTimestampToken(token) {
-				if (typeof token !== 'string' || !token) {
-					return null;
-				}
-				if (token.length < 10 || token.length > 17) {
-					return null;
-				}
-				if (!/^\d+$/.test(token)) {
-					return null;
-				}
-				const number = Number(token);
-				if (!Number.isFinite(number) || number <= 0) {
-					return null;
-				}
-				const ms = token.length === 10 ? number * 1000 : number;
-				if (ms < 946684800000 || ms > 4102444800000) {
-					return null;
-				}
-				const date = new Date(ms);
-				if (Number.isNaN(date.getTime())) {
-					return null;
-				}
-				return { ms, date };
 			}
 
 			/**
@@ -188,14 +129,13 @@
 				if (!parsed) {
 					return '';
 				}
-				const local = formatLocal(parsed.date);
 				const utc = parsed.date.toISOString();
-				const serverTimeZone = getServerTimeZone();
-				const server = serverTimeZone ? formatInTimeZone(parsed.date, serverTimeZone) : '';
+				const serverTimeZone = String(getServerTimeZone() || '').trim() || 'UTC';
+				const server = formatInTimeZone(parsed.date, serverTimeZone) || formatDate(parsed.date);
 				if (server) {
 					return `${server} (${serverTimeZone}) | ${utc} (UTC)`;
 				}
-				return `${local} (local) | ${utc} (UTC)`;
+				return `${utc} (UTC)`;
 			}
 
 			/**
@@ -405,124 +345,6 @@
 				const root = createLine(indent);
 				renderValue(value, pathParts, indent, root.valueEl);
 			}
-
-			/**
-			 * Resolves contiguous number token under mouse pointer.
-			 *
-			 * @param {HTMLElement} rootEl - Root element.
-			 * @param {number} x - Client X.
-			 * @param {number} y - Client Y.
-			 * @returns {string} Number token or empty string.
-			 */
-			function getNumberTokenAtPoint(rootEl, x, y) {
-				const doc = rootEl?.ownerDocument || document;
-				const pos = doc.caretPositionFromPoint?.(x, y);
-				if (pos && pos.offsetNode && typeof pos.offset === 'number') {
-					const node = pos.offsetNode;
-					if (!node || node.nodeType !== Node.TEXT_NODE || typeof node.textContent !== 'string') {
-						return '';
-					}
-					const text = node.textContent;
-					let i = Math.max(0, Math.min(pos.offset, text.length));
-					if (i > 0 && i === text.length) {
-						i -= 1;
-					}
-					const isDigit = ch => ch >= '0' && ch <= '9';
-					if (!isDigit(text[i]) && i > 0 && isDigit(text[i - 1])) {
-						i -= 1;
-					}
-					if (!isDigit(text[i])) {
-						return '';
-					}
-					let start = i;
-					let end = i + 1;
-					while (start > 0 && isDigit(text[start - 1])) {
-						start -= 1;
-					}
-					while (end < text.length && isDigit(text[end])) {
-						end += 1;
-					}
-					return text.slice(start, end);
-				}
-
-				const range = doc.caretRangeFromPoint?.(x, y);
-				const node = range?.startContainer;
-				const offset = range?.startOffset;
-				if (!node || node.nodeType !== Node.TEXT_NODE || typeof node.textContent !== 'string') {
-					return '';
-				}
-				if (typeof offset !== 'number') {
-					return '';
-				}
-				const text = node.textContent;
-				let i = Math.max(0, Math.min(offset, text.length));
-				if (i > 0 && i === text.length) {
-					i -= 1;
-				}
-				const isDigit = ch => ch >= '0' && ch <= '9';
-				if (!isDigit(text[i]) && i > 0 && isDigit(text[i - 1])) {
-					i -= 1;
-				}
-				if (!isDigit(text[i])) {
-					return '';
-				}
-				let start = i;
-				let end = i + 1;
-				while (start > 0 && isDigit(text[start - 1])) {
-					start -= 1;
-				}
-				while (end < text.length && isDigit(text[end])) {
-					end += 1;
-				}
-				return text.slice(start, end);
-			}
-
-			let lastTooltipToken = '';
-			let rafPending = false;
-			let pendingEvent = null;
-
-			/**
-			 * Applies tooltip content for hovered timestamp token.
-			 *
-			 * @param {MouseEvent|null} [event] - Latest pointer event.
-			 */
-			const applyTooltip = event => {
-				rafPending = false;
-				const ev = event || pendingEvent;
-				pendingEvent = null;
-				if (!ev || !ui?.overlayLarge?.isOpen?.()) {
-					return;
-				}
-
-				const token = getNumberTokenAtPoint(pre, ev.clientX, ev.clientY);
-				if (token === lastTooltipToken) {
-					return;
-				}
-				lastTooltipToken = token;
-				const parsed = parseTimestampToken(token);
-				if (!parsed) {
-					pre.removeAttribute('title');
-					return;
-				}
-				const local = parsed.date.toLocaleString();
-				const iso = parsed.date.toISOString();
-				pre.setAttribute('title', `${local}\n${iso}`);
-			};
-
-			pre.addEventListener('mousemove', event => {
-				pendingEvent = event;
-				if (rafPending) {
-					return;
-				}
-				rafPending = true;
-				requestAnimationFrame(() => applyTooltip());
-			});
-			pre.addEventListener('mouseleave', () => {
-				lastTooltipToken = '';
-				pendingEvent = null;
-				rafPending = false;
-				pre.removeAttribute('title');
-			});
 
 			renderAnnotatedFn = renderAnnotated;
 			jsonPre = pre;
