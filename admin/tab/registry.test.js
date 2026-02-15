@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const vm = require('node:vm');
 const fs = require('node:fs/promises');
 const path = require('node:path');
-const { readRepoFile, repoRoot } = require('../../test/adminTabCoreTestUtils');
+const { readRepoFile, repoRoot } = require('./_test.utils');
 
 describe('admin/tab/registry.js', function () {
 	it('builds a consistent, frozen registry', async function () {
