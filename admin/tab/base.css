@@ -1,0 +1,42 @@
+/* ========================================================================== */
+/* Environment (html/body)                                                   */
+/* ========================================================================== */
+@media (prefers-reduced-motion: reduce) {
+	.msghub-root {
+		--msghub-anim-overlay-in: 0ms;
+		--msghub-anim-overlay-out: 0ms;
+	}
+}
+
+html,
+body {
+	height: 100%;
+}
+body {
+	margin: 0;
+	overflow: hidden;
+}
+
+/* ========================================================================== */
+/* Base Root                                                                 */
+/* ========================================================================== */
+.msghub-root,
+.msghub-root * {
+	box-sizing: border-box;
+}
+
+.msghub-root {
+	background: var(--msghub-bg);
+	color: var(--msghub-text);
+	height: 100vh;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+	padding: var(--msghub-space-3);
+	font: var(--msghub-font-body);
+}
+
+.msghub-root a {
+	color: inherit;
+}
+
