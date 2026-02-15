@@ -44,7 +44,19 @@
 			initGlobal: 'MsghubAdminTabMessages',
 			assets: Object.freeze({
 				css: Object.freeze(['tab/panels/messages/styles.css']),
-				js: Object.freeze(['tab/panels/messages/index.js']),
+				js: Object.freeze([
+					'tab/panels/messages/state.js',
+					'tab/panels/messages/data.messages.js',
+					'tab/panels/messages/data.archive.js',
+					'tab/panels/messages/overlay.json.js',
+					'tab/panels/messages/overlay.archive.js',
+					'tab/panels/messages/menus.js',
+					'tab/panels/messages/render.table.js',
+					'tab/panels/messages/render.header.js',
+					'tab/panels/messages/render.meta.js',
+					'tab/panels/messages/lifecycle.js',
+					'tab/panels/messages/index.js',
+				]),
 			}),
 		}),
 
