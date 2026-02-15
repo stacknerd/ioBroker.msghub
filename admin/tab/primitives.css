@@ -66,13 +66,13 @@
 /* Components: Buttons                                                       */
 /* ========================================================================== */
 /* UI buttons (core primitives) */
-.msghub-root .msghub-uibutton-icon {
+.msghub-root .msghub-uibutton-icon,
+.msghub-root .msghub-uibutton-text,
+.msghub-root .msghub-uibutton-iconandtext {
 	appearance: none;
 	background: transparent;
 	border-radius: var(--msghub-radius);
 	border: 0;
-	padding: 0;
-	width: var(--msghub-size-iconButton);
 	height: var(--msghub-size-iconButton);
 	display: inline-flex;
 	align-items: center;
@@ -80,11 +80,28 @@
 	color: var(--msghub-muted);
 	cursor: pointer;
 	user-select: none;
+}
+
+.msghub-root .msghub-uibutton-icon,
+.msghub-root .msghub-uibutton-iconandtext {
+	gap: var(--msghub-space-1);
+}
+
+.msghub-root .msghub-uibutton-icon {
+	padding: 0;
+	width: var(--msghub-size-iconButton);
 	font-size: 0;
 	line-height: 0;
 }
 
-.msghub-root .msghub-uibutton-icon::before {
+.msghub-root .msghub-uibutton-text,
+.msghub-root .msghub-uibutton-iconandtext {
+	padding: 0 var(--msghub-space-2);
+	font: var(--msghub-font-body);
+}
+
+.msghub-root .msghub-uibutton-icon::before,
+.msghub-root .msghub-uibutton-iconandtext::before {
 	content: '';
 	width: 16px;
 	height: 16px;
@@ -99,13 +116,16 @@
 	mask-size: 16px 16px;
 }
 
-.msghub-root .msghub-uibutton-icon:not(:disabled):hover {
+.msghub-root .msghub-uibutton-icon:not(:disabled):hover,
+.msghub-root .msghub-uibutton-text:not(:disabled):hover,
+.msghub-root .msghub-uibutton-iconandtext:not(:disabled):hover {
 	color: var(--msghub-text);
 	background: var(--msghub-surface-selected);
 }
 
-.msghub-root .msghub-uibutton-icon:disabled {
+.msghub-root .msghub-uibutton-icon:disabled,
+.msghub-root .msghub-uibutton-text:disabled,
+.msghub-root .msghub-uibutton-iconandtext:disabled {
 	cursor: default;
 	opacity: 0.45;
 }
-

@@ -918,6 +918,7 @@
 				const discoverable = p?.discoverable === false ? false : true;
 				const supportsMultiple = p?.supportsMultiple === true;
 				const category = typeof p?.category === 'string' ? p.category : 'unknown';
+				const iconRef = typeof p?.icon === 'string' && p.icon.trim() ? p.icon.trim() : '';
 				const hasReadme = readmesByType instanceof Map ? !!readmesByType.get(type)?.md?.trim?.() : false;
 				metaByType.set(
 					type,
@@ -927,6 +928,7 @@
 						hasSchema,
 						discoverable,
 						supportsMultiple,
+						iconRef,
 						hasReadme,
 					}),
 				);
@@ -938,6 +940,116 @@
 				plugins: pluginList,
 			});
 		};
+
+		function buildAddMenuItems(viewModel) {
+			const vm = viewModel && typeof viewModel === 'object' ? viewModel : null;
+			const pluginList = Array.isArray(vm?.plugins) ? vm.plugins.filter(Boolean) : [];
+			const byType = vm?.byType instanceof Map ? vm.byType : new Map();
+
+			const grouped = new Map();
+			for (const plugin of pluginList) {
+				const type = typeof plugin?.type === 'string' ? plugin.type.trim() : '';
+				if (!type) {
+					continue;
+				}
+				if (plugin?.discoverable === false) {
+					continue;
+				}
+				const categoryRaw = typeof plugin?.category === 'string' ? plugin.category : 'unknown';
+				const list = grouped.get(categoryRaw) || [];
+				const existing = Array.isArray(byType.get(type)) ? byType.get(type) : [];
+				const canAdd = plugin?.supportsMultiple === true || existing.length === 0;
+				list.push({
+					type,
+					category: categoryRaw,
+					canAdd,
+				});
+				grouped.set(categoryRaw, list);
+			}
+
+			const categoriesOrdered = [
+				...CATEGORY_ORDER.filter(category => grouped.has(category)),
+				...Array.from(grouped.keys())
+					.filter(category => !CATEGORY_ORDER.includes(category))
+					.sort((a, b) => String(a).localeCompare(String(b))),
+			];
+
+			const menuItems = [];
+			for (const category of categoriesOrdered) {
+				const entries = grouped.get(category) || [];
+				entries.sort((a, b) => String(a.type).localeCompare(String(b.type)));
+				const categoryLabel = getCategoryTitle(category);
+
+				menuItems.push({
+					id: `add:${category}`,
+					label: categoryLabel,
+					items: entries.map(entry => ({
+						id: `add:${entry.category}:${entry.type}`,
+						label: entry.type,
+						disabled: entry.canAdd !== true,
+						onSelect: async () => {
+							if (!pluginsApi?.createInstance) {
+								throw new Error('Plugins API is not available');
+							}
+							try {
+								const created = await pluginsApi.createInstance({
+									category: entry.category,
+									type: entry.type,
+								});
+								await refreshAll();
+								const instanceId = Number.isFinite(created?.instanceId)
+									? Math.trunc(created.instanceId)
+									: NaN;
+								if (!Number.isFinite(instanceId)) {
+									return;
+								}
+								const target = elRoot.querySelector(
+									`.msghub-plugin-instance[data-plugin-type="${entry.type}"][data-instance-id="${instanceId}"]`,
+								);
+								if (!(target instanceof HTMLElement)) {
+									return;
+								}
+								target.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+							} catch (err) {
+								toast(String(err?.message || err));
+							}
+						},
+					})),
+				});
+			}
+
+			return menuItems;
+		}
+
+		function renderAddToolbar(viewModel) {
+			const menuItems = buildAddMenuItems(viewModel);
+			if (!menuItems.length) {
+				return null;
+			}
+			const addLabel = tOr('msghub.i18n.core.admin.ui.plugins.add.button', 'Plugin hinzufügen');
+			const addBtn = h('button', {
+				type: 'button',
+				class: 'msghub-plugin-toolbar-add msghub-uibutton-iconandtext msghub-toolbarbutton-text',
+				text: addLabel,
+				title: addLabel,
+				'aria-label': addLabel,
+			});
+			addBtn.onclick = e => {
+				e?.preventDefault?.();
+				if (!ui?.contextMenu?.open) {
+					return;
+				}
+				ui.contextMenu.open({
+					anchorEl: addBtn,
+					ariaLabel: 'Plugin context menu',
+					placement: 'bottom-start',
+					items: menuItems,
+				});
+			};
+			return h('div', { class: 'msghub-toolbar msghub-plugin-toolbar' }, [
+				h('div', { class: 'msghub-toolbar__group' }, [addBtn]),
+			]);
+		}
 
 		function parseCsvValues(csv) {
 			const s = typeof csv === 'string' ? csv : csv == null ? '' : String(csv);
@@ -1709,21 +1821,25 @@
 
 			const btnLoad = h('button', {
 				type: 'button',
+				class: 'msghub-uibutton-text',
 				text: 'Load from object',
 			});
 
 			const btnGenerateEmpty = h('button', {
 				type: 'button',
+				class: 'msghub-uibutton-text',
 				text: 'Generate empty',
 			});
 
 			const btnPreview = h('button', {
 				type: 'button',
+				class: 'msghub-uibutton-text',
 				text: 'Generate preview',
 			});
 
 			const btnApply = h('button', {
 				type: 'button',
+				class: 'msghub-uibutton-text',
 				disabled: true,
 				'aria-disabled': 'true',
 				text: 'Apply settings',
@@ -1946,7 +2062,7 @@
 							elSource,
 							h('label', { class: 'active', text: 'Import from existing config (object id)' }),
 						]),
-						h('div', { class: 'msghub-actions msghub-actions--inline' }, [btnLoad, btnGenerateEmpty]),
+						h('div', { class: 'msghub-toolbar__group' }, [btnLoad, btnGenerateEmpty]),
 					]),
 				]),
 				h('div', { class: 'msghub-bulk-step' }, [
@@ -1989,14 +2105,14 @@
 				h('div', { class: 'msghub-bulk-step' }, [
 					h('div', { class: 'msghub-bulk-step-title', text: 'Step 4: generate preview' }),
 					h('div', null, [
-						h('div', { class: 'msghub-actions msghub-actions--inline' }, [btnPreview]),
+						h('div', { class: 'msghub-toolbar__group' }, [btnPreview]),
 						h('div', null, [elStatus]),
 						h('div', null, [elPreview]),
 					]),
 				]),
 				h('div', { class: 'msghub-bulk-step' }, [
 					h('div', { class: 'msghub-bulk-step-title', text: 'Step 5: apply settings' }),
-					h('div', null, [h('div', { class: 'msghub-actions msghub-actions--inline' }, [btnApply])]),
+					h('div', null, [h('div', { class: 'msghub-toolbar__group' }, [btnApply])]),
 				]),
 			]);
 		}
@@ -2432,12 +2548,14 @@
 
 				const btnNew = h('button', {
 					type: 'button',
+					class: 'msghub-uibutton-text',
 					title: 'New',
 					onclick: () => void createNew(),
 					text: '+',
 				});
 				const btnReload = h('button', {
 					type: 'button',
+					class: 'msghub-uibutton-text',
 					title: 'Reload',
 					onclick: _e => {
 						void loadList().catch(err => {
@@ -2450,19 +2568,21 @@
 				});
 				const btnDup = h('button', {
 					type: 'button',
+					class: 'msghub-uibutton-text',
 					title: 'Duplicate',
 					onclick: () => void duplicateSelected(),
 					text: '⧉',
 				});
 				const btnDel = h('button', {
 					type: 'button',
+					class: 'msghub-uibutton-text',
 					title: 'Delete',
 					onclick: () => void deleteSelected(),
 					text: '×',
 				});
 
 				const listHeader = h('div', { class: 'msghub-tools-presets-list-head' }, [
-					h('div', { class: 'msghub-actions msghub-actions--inline' }, [btnNew, btnReload, btnDup, btnDel]),
+					h('div', { class: 'msghub-toolbar__group' }, [btnNew, btnReload, btnDup, btnDel]),
 				]);
 
 				let items = null;
@@ -2890,12 +3010,14 @@
 
 				const btnSave = h('button', {
 					type: 'button',
+					class: 'msghub-uibutton-text',
 					disabled: disabled ? true : undefined,
 					onclick: () => saveDraft(),
 					text: 'Save',
 				});
 				const btnAbort = h('button', {
 					type: 'button',
+					class: 'msghub-uibutton-text',
 					disabled: saving ? true : undefined,
 					onclick: () => abortEdit(),
 					text: 'Cancel',
@@ -2917,7 +3039,7 @@
 							: null,
 						elError,
 						...fields.map(f => f.wrapper),
-						h('div', { class: 'msghub-actions msghub-actions--inline' }, [btnSave, btnAbort]),
+						h('div', { class: 'msghub-toolbar__group' }, [btnSave, btnAbort]),
 					]),
 				]);
 
@@ -3583,26 +3705,23 @@
 					entriesByCategory.set(category, entries);
 				}
 
-				const allEntries = Array.from(entriesByCategory.values()).reduce((acc, v) => acc + (v?.length || 0), 0);
-
 				const fragment = document.createDocumentFragment();
-
-				if (allEntries === 0) {
-					fragment.appendChild(
-						h('p', { class: 'msghub-muted', text: t('msghub.i18n.core.admin.ui.plugins.empty.text') }),
-					);
+				const toolbar = renderAddToolbar(vm);
+				if (toolbar) {
+					fragment.appendChild(toolbar);
 				}
+				const categoriesToRender = [
+					...CATEGORY_ORDER,
+					...Array.from(entriesByCategory.keys()).filter(category => !CATEGORY_ORDER.includes(category)),
+				];
 
-				for (const category of CATEGORY_ORDER) {
+				for (const category of categoriesToRender) {
 					const entries = entriesByCategory.get(category) || [];
 					entries.sort(
 						(a, b) =>
 							String(a?.plugin?.type || '').localeCompare(String(b?.plugin?.type || '')) ||
 							(a?.inst?.instanceId ?? 0) - (b?.inst?.instanceId ?? 0),
 					);
-					if (entries.length === 0) {
-						continue;
-					}
 
 					const section = h('div', { class: 'msghub-plugin-category', 'data-category': category }, [
 						(() => {
@@ -3628,6 +3747,12 @@
 							return row;
 						})(),
 					]);
+
+					if (entries.length === 0) {
+						section.appendChild(
+							h('p', { class: 'msghub-muted', text: t('msghub.i18n.core.admin.ui.plugins.empty.text') }),
+						);
+					}
 
 					for (const entry of entries) {
 						section.appendChild(

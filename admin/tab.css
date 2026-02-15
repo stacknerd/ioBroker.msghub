@@ -15,5 +15,6 @@
 @import './tab/tokens.css';
 @import './tab/base.css';
 @import './tab/primitives.css';
+@import './tab/toolbar.css';
 @import './tab/layout.css';
 @import './tab/infrastructure.css';

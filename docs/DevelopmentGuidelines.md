@@ -72,6 +72,20 @@ This repo uses stable i18n keys (not English texts) and maintains language files
 - Sort keys (deterministic): `npm run i18n:sort`
 - Check key sync (CI-friendly): `npm run i18n:check`
 
+### Admin tab i18n update protocol (mandatory)
+
+For Admin-Tab UI work, use this workflow to keep review noise low and avoid accidental broad i18n churn:
+
+1. During implementation, update only:
+   - `admin/i18n/en.json`
+   - `admin/i18n/de.json`
+2. Right before commit, and only after explicit reviewer approval, run:
+   - `npm run i18n:generate`
+   - `npm run i18n:mirror:admin-to-runtime`
+   - `npm run i18n:sort`
+
+Do not run the full i18n generation/mirroring/sorting sequence earlier in the implementation phase unless explicitly requested.
+
 ## i18n keying guideline (new keys)
 
 New i18n strings should use stable keys (not default texts) so they are searchable, rename-safe and easy to audit.
