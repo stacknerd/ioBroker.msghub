@@ -28,8 +28,10 @@
 	 * @param {Function} options.onRefresh - Refresh button callback.
 	 * @param {Function} options.onDelete - Delete button callback.
 	 * @param {Function} options.onToggleAuto - Auto toggle callback.
+	 * @param {Function} options.onFirstPage - First page callback.
 	 * @param {Function} options.onPrevPage - Previous page callback.
 	 * @param {Function} options.onNextPage - Next page callback.
+	 * @param {Function} options.onLastPage - Last page callback.
 	 * @param {Function} options.onPageSizeChanged - Page size callback.
 	 * @returns {object} View facade and DOM handles.
 	 */
@@ -42,49 +44,79 @@
 		const onRefresh = typeof opts.onRefresh === 'function' ? opts.onRefresh : () => undefined;
 		const onDelete = typeof opts.onDelete === 'function' ? opts.onDelete : () => undefined;
 		const onToggleAuto = typeof opts.onToggleAuto === 'function' ? opts.onToggleAuto : () => undefined;
+		const onFirstPage = typeof opts.onFirstPage === 'function' ? opts.onFirstPage : () => undefined;
 		const onPrevPage = typeof opts.onPrevPage === 'function' ? opts.onPrevPage : () => undefined;
 		const onNextPage = typeof opts.onNextPage === 'function' ? opts.onNextPage : () => undefined;
+		const onLastPage = typeof opts.onLastPage === 'function' ? opts.onLastPage : () => undefined;
 		const onPageSizeChanged =
 			typeof opts.onPageSizeChanged === 'function' ? opts.onPageSizeChanged : () => undefined;
 
 		const actions = h('div', { class: 'msghub-toolbar__group' });
 		const refreshBtn = h('button', {
-			class: 'msghub-uibutton-text msghub-toolbarbutton-text',
+			class: 'msghub-uibutton-icon msghub-toolbarbutton-icon msghub-messages-toolbar-refresh',
 			type: 'button',
-			text: 'Refresh',
+			'aria-label': 'Refresh',
 		});
+		const deleteLabel = t('msghub.i18n.core.admin.ui.messages.toolbar.delete.action');
 		const deleteBtn = h('button', {
-			class: 'msghub-uibutton-text msghub-toolbarbutton-text msghub-toolbarbutton-danger',
+			class: 'msghub-uibutton-iconandtext msghub-toolbarbutton-iconandtext msghub-messages-toolbar-delete is-danger',
 			type: 'button',
-			text: 'Delete',
+			text: deleteLabel,
 		});
-		const autoBtn = h('button', {
-			class: 'msghub-uibutton-text msghub-toolbarbutton-text',
-			type: 'button',
-			text: 'Auto: on',
-		});
+		const autoRefreshLabel = t('msghub.i18n.core.admin.ui.messages.toolbar.autoRefresh.label');
+		const autoBtn = h(
+			'button',
+			{
+				class: 'msghub-uibutton-selectandtext msghub-toolbarbutton-selectandtext',
+				type: 'button',
+				role: 'switch',
+				'aria-checked': 'true',
+				title: autoRefreshLabel,
+				'aria-label': autoRefreshLabel,
+			},
+			[
+				h('span', { class: 'msghub-uibutton-selectandtext__box', 'aria-hidden': 'true' }, [
+					h('span', { class: 'msghub-uibutton-selectandtext__check' }),
+				]),
+				h('span', { class: 'msghub-uibutton-selectandtext__label', text: autoRefreshLabel }),
+			],
+		);
+		const deleteSeparator = h('span', { class: 'msghub-toolbar__separator', 'aria-hidden': 'true' });
 		actions.appendChild(refreshBtn);
-		actions.appendChild(deleteBtn);
 		actions.appendChild(autoBtn);
+		actions.appendChild(deleteSeparator);
+		actions.appendChild(deleteBtn);
 
 		const sizeOptions = [10, 25, 50, 100, 250];
-		const prevBtn = h('button', {
-			class: 'msghub-uibutton-text msghub-toolbarbutton-text',
+		const firstBtn = h('button', {
+			class: 'msghub-uibutton-icon msghub-toolbarbutton-icon msghub-messages-toolbar-first',
 			type: 'button',
-			text: 'Prev',
+			'aria-label': 'First page',
+		});
+		const prevBtn = h('button', {
+			class: 'msghub-uibutton-icon msghub-toolbarbutton-icon msghub-messages-toolbar-prev',
+			type: 'button',
+			'aria-label': 'Previous page',
 		});
 		const nextBtn = h('button', {
-			class: 'msghub-uibutton-text msghub-toolbarbutton-text',
+			class: 'msghub-uibutton-icon msghub-toolbarbutton-icon msghub-messages-toolbar-next',
 			type: 'button',
-			text: 'Next',
+			'aria-label': 'Next page',
+		});
+		const lastBtn = h('button', {
+			class: 'msghub-uibutton-icon msghub-toolbarbutton-icon msghub-messages-toolbar-last',
+			type: 'button',
+			'aria-label': 'Last page',
 		});
 		const pageInfoEl = h('div', {
 			class: 'msghub-muted',
 			text: t('msghub.i18n.core.admin.ui.pagination.pageOf.text', 1, 1),
 		});
+		const pageSizeLabel = t('msghub.i18n.core.admin.ui.messages.toolbar.itemsPerPage.label');
 		const pageSizeSelect = h(
 			'select',
 			{
+				class: 'msghub-uiselect',
 				onchange: e => {
 					const n = Number(e?.target?.value);
 					const nextSize = Number.isFinite(n) ? Math.max(0, Math.trunc(n)) : 50;
@@ -95,20 +127,21 @@
 		);
 
 		const paging = h('div', { class: 'msghub-toolbar__group msghub-messages-paging' }, [
+			firstBtn,
 			prevBtn,
 			pageInfoEl,
 			nextBtn,
-			h('div', { class: 'msghub-field msghub-messages-pagesize' }, [
-				h('label', { class: 'msghub-muted', text: 'Items / page' }),
-				pageSizeSelect,
-			]),
+			lastBtn,
 		]);
-
-		const countMetaEl = h('div', {
-			class: 'msghub-toolbar__meta',
-			text: 'messages: 0 / 0',
-		});
-		const head = h('div', { class: 'msghub-toolbar msghub-messages-head' }, [actions, paging, countMetaEl]);
+		const pageSizeControl = h('div', { class: 'msghub-toolbar__group msghub-messages-pagesize' }, [
+			h('label', { class: 'msghub-muted', text: pageSizeLabel }),
+			pageSizeSelect,
+		]);
+		const head = h('div', { class: 'msghub-toolbar msghub-toolbar--tripartite msghub-messages-head' }, [
+			h('div', { class: 'msghub-toolbar__left' }, [actions]),
+			h('div', { class: 'msghub-toolbar__center' }, [paging]),
+			h('div', { class: 'msghub-toolbar__right' }, [pageSizeControl]),
+		]);
 		const progress = h(
 			'div',
 			{ class: 'msghub-progress is-hidden' },
@@ -143,6 +176,10 @@
 			e.preventDefault();
 			onToggleAuto();
 		});
+		firstBtn.addEventListener('click', e => {
+			e.preventDefault();
+			onFirstPage();
+		});
 		prevBtn.addEventListener('click', e => {
 			e.preventDefault();
 			onPrevPage();
@@ -150,6 +187,10 @@
 		nextBtn.addEventListener('click', e => {
 			e.preventDefault();
 			onNextPage();
+		});
+		lastBtn.addEventListener('click', e => {
+			e.preventDefault();
+			onLastPage();
 		});
 
 		/**
@@ -159,6 +200,7 @@
 		 */
 		function mount(root) {
 			root.replaceChildren(head, progress, errorEl, metaEl, tableWrap, emptyEl);
+			updatePaging();
 		}
 
 		/**
@@ -166,13 +208,14 @@
 		 */
 		function updateDeleteButton() {
 			deleteBtn.classList.toggle('is-hidden', !state.expertMode);
+			deleteSeparator.classList.toggle('is-hidden', !state.expertMode);
 			if (!state.expertMode) {
 				deleteBtn.disabled = true;
-				deleteBtn.textContent = 'Delete';
+				deleteBtn.textContent = deleteLabel;
 				return;
 			}
 			const count = state.selectedRefs.size;
-			deleteBtn.textContent = count > 0 ? `Delete (${count})` : 'Delete';
+			deleteBtn.textContent = count > 0 ? `${deleteLabel} (${count})` : deleteLabel;
 			deleteBtn.disabled = count === 0 || (state.loading && !state.silentLoading);
 		}
 
@@ -182,9 +225,16 @@
 		function updatePaging() {
 			const pages = state.pages || 1;
 			const idx = Math.min(Math.max(1, state.pageIndex), pages);
+			const hasExtendedPaging = pages >= 10;
 			pageInfoEl.textContent = t('msghub.i18n.core.admin.ui.pagination.pageOf.text', idx, pages);
+			firstBtn.classList.toggle('is-hidden', !hasExtendedPaging);
+			lastBtn.classList.toggle('is-hidden', !hasExtendedPaging);
+			firstBtn.setAttribute('aria-hidden', hasExtendedPaging ? 'false' : 'true');
+			lastBtn.setAttribute('aria-hidden', hasExtendedPaging ? 'false' : 'true');
+			firstBtn.disabled = !hasExtendedPaging || idx <= 1;
 			prevBtn.disabled = idx <= 1;
 			nextBtn.disabled = idx >= pages;
+			lastBtn.disabled = !hasExtendedPaging || idx >= pages;
 			pageSizeSelect.value = String(state.pageSize);
 		}
 
@@ -194,7 +244,7 @@
 		function updateButtons() {
 			refreshBtn.disabled = state.loading && !state.silentLoading;
 			refreshBtn.classList.toggle('msghub-btn-loading', state.loading && state.silentLoading);
-			autoBtn.textContent = state.autoRefresh ? 'Auto: on' : 'Auto: off';
+			autoBtn.setAttribute('aria-checked', state.autoRefresh ? 'true' : 'false');
 			updateDeleteButton();
 		}
 
@@ -218,15 +268,27 @@
 		}
 
 		/**
-		 * Renders meta information rows.
+		 * Renders one-line meta text and tooltip details.
 		 *
-		 * @param {string} generatedAtText - Generated-at text.
-		 * @param {string} tzText - Timezone text.
-		 * @param {string} countText - Count text.
+		 * @param {object} meta - Meta payload.
+		 * @param {string} meta.generatedAtText - Visible one-line generatedAt text.
+		 * @param {string} meta.timeZone - Raw timezone string.
+		 * @param {string} meta.source - Raw source string.
 		 */
-		function setMeta(generatedAtText, tzText, countText) {
-			countMetaEl.textContent = countText;
-			metaEl.replaceChildren(h('div', { text: generatedAtText }), h('div', { text: tzText }));
+		function setMeta(meta) {
+			const generatedAtText =
+				typeof meta?.generatedAtText === 'string' && meta.generatedAtText.trim()
+					? meta.generatedAtText.trim()
+					: 'n/a';
+			const timeZone = typeof meta?.timeZone === 'string' && meta.timeZone.trim() ? meta.timeZone.trim() : 'n/a';
+			const source = typeof meta?.source === 'string' && meta.source.trim() ? meta.source.trim() : 'n/a';
+			const tooltip = [
+				`${t('msghub.i18n.core.admin.ui.messages.meta.timeZone.label')}: ${timeZone}`,
+				`${t('msghub.i18n.core.admin.ui.messages.meta.source.label')}: ${source}`,
+			].join('\n');
+			metaEl.title = tooltip;
+			metaEl.setAttribute('aria-label', tooltip);
+			metaEl.replaceChildren(h('div', { text: generatedAtText }));
 		}
 
 		/**
@@ -280,8 +342,10 @@
 				refreshBtn,
 				deleteBtn,
 				autoBtn,
+				firstBtn,
 				prevBtn,
 				nextBtn,
+				lastBtn,
 				pageInfoEl,
 				pageSizeSelect,
 				tableEl,

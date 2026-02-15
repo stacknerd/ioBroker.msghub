@@ -382,39 +382,39 @@ class Msghub extends utils.Adapter {
 		this.log?.silly?.(`MsgHub main.js onMessage: '${cmd}' ${JSON.stringify(sanitizeForLog(payload), null, 2)}`);
 		let result;
 
-			try {
-				if (typeof cmd === 'string' && cmd.startsWith('admin.')) {
-					result = await this._handleAdminCommand(cmd, payload);
-				} else if (typeof cmd === 'string' && cmd.startsWith('config.')) {
-					result = await this._handleConfigCommand(cmd, payload);
-				} else if (cmd === 'runtime.about') {
-					const adapterVersion = ioPackage?.common?.version ?? '0.0.0';
-					const adapterTitle =
-						ioPackage?.common?.titleLang?.de ?? ioPackage?.common?.titleLang?.en ?? 'Message Hub';
-					let serverTimeZone = '';
-					try {
-						serverTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
-					} catch {
-						serverTimeZone = '';
-					}
-					const timeZone = typeof serverTimeZone === 'string' ? serverTimeZone.trim() : '';
-					result = {
-						ok: true,
-						data: {
-							title: adapterTitle,
-							version: adapterVersion,
-							time: {
-								timeZone: timeZone || 'UTC',
-								source: timeZone ? 'server' : 'fallback-utc',
-							},
-						},
-					};
-				} else {
-					result = await this._msgPlugins?.dispatchMessagebox?.(obj);
-					if (result == null) {
-						result = { ok: false, error: { code: 'NOT_READY', message: 'No messagebox handler registered' } };
-					}
+		try {
+			if (typeof cmd === 'string' && cmd.startsWith('admin.')) {
+				result = await this._handleAdminCommand(cmd, payload);
+			} else if (typeof cmd === 'string' && cmd.startsWith('config.')) {
+				result = await this._handleConfigCommand(cmd, payload);
+			} else if (cmd === 'runtime.about') {
+				const adapterVersion = ioPackage?.common?.version ?? '0.0.0';
+				const adapterTitle =
+					ioPackage?.common?.titleLang?.de ?? ioPackage?.common?.titleLang?.en ?? 'Message Hub';
+				let serverTimeZone = '';
+				try {
+					serverTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+				} catch {
+					serverTimeZone = '';
 				}
+				const timeZone = typeof serverTimeZone === 'string' ? serverTimeZone.trim() : '';
+				result = {
+					ok: true,
+					data: {
+						title: adapterTitle,
+						version: adapterVersion,
+						time: {
+							timeZone: timeZone || 'UTC',
+							source: timeZone ? 'server' : 'fallback-utc',
+						},
+					},
+				};
+			} else {
+				result = await this._msgPlugins?.dispatchMessagebox?.(obj);
+				if (result == null) {
+					result = { ok: false, error: { code: 'NOT_READY', message: 'No messagebox handler registered' } };
+				}
+			}
 		} catch (e) {
 			this.log?.error?.(`onMessage error: ${e?.message || e}`);
 			result = { ok: false, error: { code: 'INTERNAL', message: String(e?.message || e) } };

@@ -25,6 +25,7 @@
 	 *
 	 * @param {object} options - Factory options.
 	 * @param {object} options.ui - UI API (`ctx.api.ui`).
+	 * @param {Function} options.t - I18n translation function.
 	 * @param {Function} options.getServerTimeZone - Getter for server timezone.
 	 * @param {Function} options.formatDate - Shared timezone-aware date formatter.
 	 * @param {Function} options.getLevelLabel - Resolver for numeric level labels.
@@ -33,6 +34,7 @@
 	function createJsonOverlay(options) {
 		const opts = options && typeof options === 'object' ? options : {};
 		const ui = opts.ui;
+		const t = typeof opts.t === 'function' ? opts.t : key => String(key);
 		const getServerTimeZone = typeof opts.getServerTimeZone === 'function' ? opts.getServerTimeZone : () => '';
 		const formatDate = typeof opts.formatDate === 'function' ? opts.formatDate : () => '';
 		const getLevelLabel = typeof opts.getLevelLabel === 'function' ? opts.getLevelLabel : value => String(value);
@@ -368,7 +370,7 @@
 				pre.textContent = String(e?.message || e);
 			}
 			ui?.overlayLarge?.open?.({
-				title: 'Message JSON',
+				title: t('msghub.i18n.core.admin.ui.messages.overlay.json.title'),
 				bodyEl: pre,
 			});
 		}

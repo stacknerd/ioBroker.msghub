@@ -1,5 +1,34 @@
 /* tab.messages.css — Messages panel styles (scoped to .msghub-root .msghub-messages) */
 
+.msghub-root .msghub-messages .msghub-messages-toolbar-refresh {
+	--msghub-uibutton-icon: var(--msghub-icon-refresh);
+}
+
+.msghub-root .msghub-messages .msghub-messages-toolbar-delete {
+	--msghub-uibutton-icon: var(--msghub-icon-delete);
+}
+
+.msghub-root .msghub-messages .msghub-messages-toolbar-first {
+	--msghub-uibutton-icon: var(--msghub-icon-first);
+}
+
+.msghub-root .msghub-messages .msghub-messages-toolbar-prev {
+	--msghub-uibutton-icon: var(--msghub-icon-prev);
+}
+
+.msghub-root .msghub-messages .msghub-messages-toolbar-next {
+	--msghub-uibutton-icon: var(--msghub-icon-next);
+}
+
+.msghub-root .msghub-messages .msghub-messages-toolbar-last {
+	--msghub-uibutton-icon: var(--msghub-icon-last);
+}
+
+.msghub-root .msghub-messages .msghub-messages-pagesize {
+	justify-content: flex-end;
+	white-space: nowrap;
+}
+
 /* Message JSON viewer (line-based; wraps long values without horizontal scrolling) */
 .msghub-root .msghub-overlay-body .msghub-messages-json {
 	margin: 0;

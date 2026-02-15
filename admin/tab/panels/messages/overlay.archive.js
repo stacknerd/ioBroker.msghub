@@ -139,7 +139,7 @@
 				items: [],
 			});
 			ui?.overlayLarge?.open?.({
-				title: 'Message Archive',
+				title: t('msghub.i18n.core.admin.ui.messages.overlay.archive.title'),
 				bodyEl,
 			});
 		}
