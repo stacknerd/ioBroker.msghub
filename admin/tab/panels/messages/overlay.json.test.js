@@ -18,6 +18,7 @@ describe('admin/tab/panels/messages/overlay.json.js', function () {
 					isOpen: () => true,
 				},
 			},
+			t: key => `i18n:${key}`,
 			getServerTimeZone: () => 'Europe/Berlin',
 			getLevelLabel: value => (Number(value) === 3 ? 'HIGH' : String(value)),
 		});
@@ -30,7 +31,7 @@ describe('admin/tab/panels/messages/overlay.json.js', function () {
 		overlay.openMessageJson({ level: 1, text: 'hello' });
 
 		assert.equal(openCalls.length, 2);
-		assert.equal(openCalls[0].title, 'Message JSON');
+		assert.equal(openCalls[0].title, 'i18n:msghub.i18n.core.admin.ui.messages.overlay.json.title');
 		assert.equal(openCalls[0].bodyEl, openCalls[1].bodyEl, 'overlay body should be lazily cached');
 	});
 
@@ -48,6 +49,7 @@ describe('admin/tab/panels/messages/overlay.json.js', function () {
 					isOpen: () => false,
 				},
 			},
+			t: key => `i18n:${key}`,
 			getServerTimeZone: () => '',
 			getLevelLabel: value => String(value),
 		});
@@ -55,7 +57,7 @@ describe('admin/tab/panels/messages/overlay.json.js', function () {
 		const cyclic = {};
 		cyclic.self = cyclic;
 		overlay.openMessageJson(cyclic);
-		assert.equal(openPayload.title, 'Message JSON');
+		assert.equal(openPayload.title, 'i18n:msghub.i18n.core.admin.ui.messages.overlay.json.title');
 		assert.ok(String(openPayload.bodyEl.textContent).length > 0);
 	});
 

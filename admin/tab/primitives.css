@@ -68,7 +68,8 @@
 /* UI buttons (core primitives) */
 .msghub-root .msghub-uibutton-icon,
 .msghub-root .msghub-uibutton-text,
-.msghub-root .msghub-uibutton-iconandtext {
+.msghub-root .msghub-uibutton-iconandtext,
+.msghub-root .msghub-uibutton-selectandtext {
 	appearance: none;
 	background: transparent;
 	border-radius: var(--msghub-radius);
@@ -95,7 +96,8 @@
 }
 
 .msghub-root .msghub-uibutton-text,
-.msghub-root .msghub-uibutton-iconandtext {
+.msghub-root .msghub-uibutton-iconandtext,
+.msghub-root .msghub-uibutton-selectandtext {
 	padding: 0 var(--msghub-space-2);
 	font: var(--msghub-font-body);
 }
@@ -118,14 +120,108 @@
 
 .msghub-root .msghub-uibutton-icon:not(:disabled):hover,
 .msghub-root .msghub-uibutton-text:not(:disabled):hover,
-.msghub-root .msghub-uibutton-iconandtext:not(:disabled):hover {
+.msghub-root .msghub-uibutton-iconandtext:not(:disabled):hover,
+.msghub-root .msghub-uibutton-selectandtext:not(:disabled):hover {
 	color: var(--msghub-text);
 	background: var(--msghub-surface-selected);
 }
 
 .msghub-root .msghub-uibutton-icon:disabled,
 .msghub-root .msghub-uibutton-text:disabled,
-.msghub-root .msghub-uibutton-iconandtext:disabled {
+.msghub-root .msghub-uibutton-iconandtext:disabled,
+.msghub-root .msghub-uibutton-selectandtext:disabled {
 	cursor: default;
 	opacity: 0.45;
+}
+
+.msghub-root .msghub-uibutton-icon.is-danger:not(:disabled):hover,
+.msghub-root .msghub-uibutton-text.is-danger:not(:disabled):hover,
+.msghub-root .msghub-uibutton-iconandtext.is-danger:not(:disabled):hover,
+.msghub-root .msghub-uibutton-selectandtext.is-danger:not(:disabled):hover {
+	color: var(--msghub-danger);
+}
+
+.msghub-root .msghub-uibutton-selectandtext {
+	gap: var(--msghub-space-2);
+}
+
+.msghub-root .msghub-uibutton-selectandtext__box {
+	position: relative;
+	width: 18px;
+	height: 18px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.msghub-root .msghub-uibutton-selectandtext__box::before {
+	content: '';
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	width: 14px;
+	height: 14px;
+	box-sizing: border-box;
+	transform: translate(-50%, -50%);
+	border: 1px solid var(--msghub-muted);
+	border-radius: var(--msghub-radius);
+	background: transparent;
+}
+
+.msghub-root .msghub-uibutton-selectandtext__check {
+	width: 12px;
+	height: 12px;
+	background-color: var(--msghub-bg);
+	-webkit-mask-image: var(--msghub-icon-check);
+	-webkit-mask-repeat: no-repeat;
+	-webkit-mask-position: center;
+	-webkit-mask-size: 12px 12px;
+	mask-image: var(--msghub-icon-check);
+	mask-repeat: no-repeat;
+	mask-position: center;
+	mask-size: 12px 12px;
+	opacity: 0;
+}
+
+.msghub-root .msghub-uibutton-selectandtext[aria-checked='true'] .msghub-uibutton-selectandtext__box::before {
+	background: var(--msghub-accent);
+	border-color: var(--msghub-accent);
+}
+
+.msghub-root .msghub-uibutton-selectandtext[aria-checked='true'] .msghub-uibutton-selectandtext__check {
+	opacity: 1;
+}
+
+/* ========================================================================== */
+/* Components: Select                                                        */
+/* ========================================================================== */
+.msghub-root .msghub-uiselect {
+	appearance: none;
+	min-height: var(--msghub-size-iconButton);
+	padding: 0 var(--msghub-space-3) 0 var(--msghub-space-2);
+	border: 1px solid var(--msghub-border);
+	border-radius: var(--msghub-radius);
+	background: var(--msghub-bg-overlay);
+	color: var(--msghub-text);
+	font: var(--msghub-font-body);
+}
+
+.msghub-root .msghub-uiselect:hover:not(:disabled) {
+	background: var(--msghub-surface-hover);
+}
+
+.msghub-root .msghub-uiselect:focus-visible {
+	outline: 2px solid var(--msghub-accent);
+	outline-offset: 1px;
+}
+
+.msghub-root .msghub-uiselect:disabled {
+	opacity: 0.45;
+	cursor: default;
+}
+
+.msghub-root .msghub-uiselect option {
+	background: var(--msghub-bg-overlay);
+	color: var(--msghub-text);
+	font: var(--msghub-font-body);
 }

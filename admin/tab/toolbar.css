@@ -19,12 +19,45 @@
 	background: transparent;
 }
 
+.msghub-root .msghub-toolbar--tripartite {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+	align-items: center;
+}
+
 .msghub-root .msghub-toolbar__group {
 	display: inline-flex;
 	align-items: center;
 	flex-wrap: wrap;
 	gap: var(--msghub-space-2);
 	min-width: 0;
+}
+
+.msghub-root .msghub-toolbar__left,
+.msghub-root .msghub-toolbar__center,
+.msghub-root .msghub-toolbar__right {
+	display: inline-flex;
+	align-items: center;
+	min-width: 0;
+	gap: var(--msghub-space-2);
+}
+
+.msghub-root .msghub-toolbar__left {
+	justify-self: start;
+}
+
+.msghub-root .msghub-toolbar__center {
+	justify-self: center;
+}
+
+.msghub-root .msghub-toolbar__right {
+	justify-self: end;
+}
+
+.msghub-root .msghub-toolbar__separator {
+	width: 1px;
+	height: 18px;
+	background: var(--msghub-border-light);
 }
 
 .msghub-root .msghub-toolbar__meta {

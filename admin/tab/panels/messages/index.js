@@ -147,6 +147,7 @@
 
 		const jsonOverlayApi = jsonOverlayModule.createJsonOverlay({
 			ui,
+			t,
 			getServerTimeZone: () => state.serverTz,
 			formatDate: date => api?.time?.formatDate?.(date) || '',
 			getLevelLabel: dataApi.getLevelLabel,
@@ -287,12 +288,20 @@
 				metaApi.updateButtons();
 				lifecycleApi.scheduleAuto();
 			},
+			onFirstPage: () => {
+				state.pageIndex = 1;
+				loadMessages({ silent: false }).catch(() => undefined);
+			},
 			onPrevPage: () => {
 				state.pageIndex = Math.max(1, state.pageIndex - 1);
 				loadMessages({ silent: false }).catch(() => undefined);
 			},
 			onNextPage: () => {
 				state.pageIndex = Math.min(state.pages || 1, state.pageIndex + 1);
+				loadMessages({ silent: false }).catch(() => undefined);
+			},
+			onLastPage: () => {
+				state.pageIndex = Math.max(1, state.pages || 1);
 				loadMessages({ silent: false }).catch(() => undefined);
 			},
 			onPageSizeChanged: nextSize => {
@@ -362,13 +371,15 @@
 			const meta = isObject(state.lastMeta) ? state.lastMeta : {};
 			const generatedAt = formatTs(meta.generatedAt) || 'n/a';
 			const tz = typeof meta.tz === 'string' && meta.tz.trim() ? meta.tz.trim() : null;
-			const policyTimeZone = String(api?.time?.getPolicy?.()?.timeZone || '').trim();
+			const policy = api?.time?.getPolicy?.() || {};
+			const policyTimeZone = String(policy.timeZone || '').trim();
+			const policySource = String(policy.source || '').trim();
 			state.serverTz = policyTimeZone || tz;
-			metaApi.setMeta(
-				`generatedAt: ${generatedAt}`,
-				tz ? `tz: ${tz}` : policyTimeZone ? `tz: ${policyTimeZone}` : 'tz: n/a',
-				`messages: ${state.items.length} / ${state.total}`,
-			);
+			metaApi.setMeta({
+				generatedAtText: `${t('msghub.i18n.core.admin.ui.messages.meta.generatedAt.label')}: ${generatedAt}`,
+				timeZone: policyTimeZone || state.serverTz || 'n/a',
+				source: policySource || 'n/a',
+			});
 
 			const showEmpty = !state.loading && !state.lastError && state.items.length === 0;
 			metaApi.setEmptyVisible(showEmpty);

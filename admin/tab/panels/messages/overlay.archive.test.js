@@ -20,7 +20,7 @@ describe('admin/tab/panels/messages/overlay.archive.js', function () {
 
 		overlay.openArchiveOverlay('ref.abc');
 		assert.equal(openCalls.length, 1);
-		assert.equal(openCalls[0].title, 'Message Archive');
+		assert.equal(openCalls[0].title, 'i18n:msghub.i18n.core.admin.ui.messages.overlay.archive.title');
 		assert.equal(typeof openCalls[0].bodyEl, 'object');
 	});
 
