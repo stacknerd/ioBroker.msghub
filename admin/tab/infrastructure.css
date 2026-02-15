@@ -1,0 +1,376 @@
+/* ========================================================================== */
+/* Infrastructure: Toast                                                     */
+/* ========================================================================== */
+/* Universal UI infrastructure */
+.msghub-root .msghub-toast-host {
+	position: fixed;
+	right: var(--msghub-space-3);
+	bottom: var(--msghub-space-3);
+	z-index: 1200;
+	display: flex;
+	flex-direction: column;
+	gap: var(--msghub-space-2);
+	align-items: flex-end;
+	pointer-events: none;
+}
+
+.msghub-root .msghub-toast {
+	pointer-events: auto;
+	max-width: min(520px, calc(100vw - 2 * var(--msghub-space-3)));
+	background: var(--msghub-bg);
+	color: var(--msghub-text);
+	border: 1px solid var(--msghub-border);
+	border-radius: var(--msghub-radius);
+	box-shadow: 0 6px 18px var(--msghub-shadow-md);
+	padding: var(--msghub-space-2) var(--msghub-space-3);
+	font: var(--msghub-font-body);
+}
+
+/* ========================================================================== */
+/* Infrastructure: Context Menu                                               */
+/* ========================================================================== */
+/* Context menu (core primitive; no visible backdrop) */
+.msghub-root .msghub-contextmenu-host {
+	position: fixed;
+	inset: 0;
+	z-index: 1075; /* above overlay (1050), below dialog (1100) */
+	pointer-events: none;
+}
+
+.msghub-root .msghub-contextmenu {
+	position: fixed;
+	pointer-events: auto;
+	min-width: 220px;
+	max-width: min(380px, calc(100vw - 2 * var(--msghub-space-3)));
+	max-height: min(60vh, calc(100vh - 2 * var(--msghub-space-3)));
+	overflow: auto;
+	background: var(--msghub-bg-overlay);
+	color: var(--msghub-text);
+	border: 1px solid var(--msghub-border);
+	border-radius: var(--msghub-radius);
+	box-shadow: var(--msghub-shadow-elevated);
+}
+
+.msghub-root .msghub-contextmenu-list {
+	list-style: none;
+	margin: 0;
+	padding: var(--msghub-space-1) 0;
+}
+
+.msghub-root .msghub-contextmenu-item,
+.msghub-root .msghub-contextmenu-heading,
+.msghub-root .msghub-contextmenu-footer {
+	width: 100%;
+	background: transparent;
+	color: inherit;
+	font: var(--msghub-font-body);
+	text-align: left;
+	padding: var(--msghub-space-2) var(--msghub-space-3);
+}
+
+.msghub-root .msghub-contextmenu-separator {
+	height: 1px;
+	background: var(--msghub-border-light);
+	margin: var(--msghub-space-1) 0;
+}
+
+.msghub-root .msghub-contextmenu-heading {
+	display: flex;
+	align-items: center;
+	gap: var(--msghub-space-2);
+	border: 0;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.msghub-root .msghub-contextmenu-heading-text {
+	flex: 1 1 auto;
+	min-width: 0;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.msghub-root .msghub-contextmenu-item {
+	border: 0;
+	cursor: pointer;
+}
+
+.msghub-root .msghub-contextmenu-item.msghub-contextmenu-item--checkbox {
+	padding-top: var(--msghub-space-1);
+	padding-bottom: var(--msghub-space-1);
+}
+
+.msghub-root .msghub-contextmenu-item.msghub-contextmenu-item--checkbox .msghub-contextmenu-row {
+	gap: var(--msghub-space-2);
+}
+
+.msghub-root .msghub-contextmenu-item.msghub-contextmenu-item--checkbox .msghub-contextmenu-icon-slot {
+	position: relative;
+	width: 18px;
+	height: 18px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.msghub-root .msghub-contextmenu-item.msghub-contextmenu-item--checkbox .msghub-contextmenu-icon-slot::before {
+	content: '';
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	width: 14px;
+	height: 14px;
+	box-sizing: border-box;
+	transform: translate(-50%, -50%);
+	border: 1px solid var(--msghub-muted);
+	border-radius: var(--msghub-radius);
+	background: transparent;
+}
+
+.msghub-root .msghub-contextmenu-item.msghub-contextmenu-item--checkbox .msghub-contextmenu-icon {
+	width: 12px;
+	height: 12px;
+	-webkit-mask-size: 12px 12px;
+	mask-size: 12px 12px;
+	background-color: var(--msghub-bg);
+}
+
+.msghub-root .msghub-contextmenu-item.msghub-contextmenu-item--checkbox[aria-checked='false'] .msghub-contextmenu-icon {
+	opacity: 0;
+}
+
+.msghub-root
+	.msghub-contextmenu-item.msghub-contextmenu-item--checkbox[aria-checked='true']
+	.msghub-contextmenu-icon-slot::before {
+	background: var(--msghub-accent);
+	border-color: var(--msghub-accent);
+}
+
+.msghub-root .msghub-contextmenu-item:hover {
+	background: var(--msghub-surface-hover);
+}
+
+.msghub-root .msghub-contextmenu-item.is-submenu-open {
+	background: var(--msghub-surface-hover);
+}
+
+.msghub-root .msghub-contextmenu-item:focus-visible {
+	outline: 2px solid var(--msghub-accent);
+	outline-offset: -2px;
+}
+
+.msghub-root .msghub-contextmenu-item:disabled {
+	cursor: default;
+}
+
+.msghub-root .msghub-contextmenu-item:disabled,
+.msghub-root .msghub-contextmenu-heading,
+.msghub-root .msghub-contextmenu-footer {
+	color: var(--msghub-muted);
+	cursor: default;
+}
+
+.msghub-root .msghub-contextmenu-heading,
+.msghub-root .msghub-contextmenu-footer {
+	font: var(--msghub-font-body-meta);
+	padding-top: var(--msghub-space-1);
+	padding-bottom: var(--msghub-space-1);
+	background: var(--msghub-bg-overlayHeader);
+}
+
+.msghub-root .msghub-contextmenu-item.is-primary {
+	font: var(--msghub-font-body-bold);
+}
+
+.msghub-root .msghub-contextmenu-item.is-danger {
+	color: var(--msghub-danger);
+}
+
+.msghub-root .msghub-contextmenu-row {
+	display: flex;
+	align-items: center;
+	gap: var(--msghub-space-2);
+}
+
+.msghub-root .msghub-contextmenu-icon-slot {
+	flex: 0 0 auto;
+	width: 18px;
+	height: 18px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.msghub-root .msghub-contextmenu-icon {
+	width: 16px;
+	height: 16px;
+	background-color: var(--msghub-muted);
+	-webkit-mask-image: var(--msghub-contextmenu-icon);
+	-webkit-mask-repeat: no-repeat;
+	-webkit-mask-position: center;
+	-webkit-mask-size: 16px 16px;
+	mask-image: var(--msghub-contextmenu-icon);
+	mask-repeat: no-repeat;
+	mask-position: center;
+	mask-size: 16px 16px;
+}
+
+.msghub-root .msghub-contextmenu-label {
+	flex: 1 1 auto;
+	min-width: 0;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.msghub-root .msghub-contextmenu-meta {
+	flex: 0 0 auto;
+	display: inline-flex;
+	align-items: baseline;
+	gap: var(--msghub-space-2);
+	color: var(--msghub-muted);
+}
+
+.msghub-root .msghub-contextmenu-submenu {
+	font: var(--msghub-font-tab);
+	line-height: var(--msghub-lh-solid);
+}
+
+.msghub-root .msghub-contextmenu-footer {
+	display: flex;
+	align-items: center;
+	gap: var(--msghub-space-2);
+	border: 0;
+	padding: var(--msghub-space-2) var(--msghub-space-3);
+	border-top: 1px solid var(--msghub-border);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.msghub-root .msghub-contextmenu-footer-text {
+	flex: 1 1 auto;
+	min-width: 0;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.msghub-root .msghub-overlay-backdrop,
+.msghub-root .msghub-dialog-backdrop {
+	position: fixed;
+	inset: 0;
+	z-index: 1100;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: var(--msghub-space-3);
+	background: var(--msghub-backdrop);
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity var(--msghub-anim-overlay-in) var(--msghub-ease-overlay);
+}
+
+.msghub-root .msghub-overlay-backdrop {
+	z-index: 1050;
+}
+
+.msghub-root .msghub-overlay-backdrop.is-open,
+.msghub-root .msghub-dialog-backdrop.is-open {
+	opacity: 1;
+	pointer-events: auto;
+}
+
+.msghub-root .msghub-overlay-backdrop.is-closing,
+.msghub-root .msghub-dialog-backdrop.is-closing {
+	transition-duration: var(--msghub-anim-overlay-out);
+}
+
+.msghub-root .msghub-overlay,
+.msghub-root .msghub-dialog {
+	width: min(980px, 100%);
+	max-height: min(86vh, 100%);
+	background: var(--msghub-bg-overlay);
+	color: var(--msghub-text);
+	border: 1px solid var(--msghub-border);
+	border-radius: var(--msghub-radius);
+	box-shadow: 0 10px 28px var(--msghub-shadow-md);
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	opacity: 0;
+	transform: translateY(6px);
+	transition:
+		opacity var(--msghub-anim-overlay-in) var(--msghub-ease-overlay),
+		transform var(--msghub-anim-overlay-in) var(--msghub-ease-overlay);
+}
+
+.msghub-root .msghub-dialog {
+	width: min(520px, 100%);
+	max-height: min(70vh, 100%);
+}
+
+.msghub-root .msghub-overlay-backdrop.is-open .msghub-overlay,
+.msghub-root .msghub-dialog-backdrop.is-open .msghub-dialog {
+	opacity: 1;
+	transform: translateY(0);
+}
+
+.msghub-root .msghub-overlay-backdrop.is-closing .msghub-overlay,
+.msghub-root .msghub-dialog-backdrop.is-closing .msghub-dialog {
+	transition-duration: var(--msghub-anim-overlay-out);
+}
+
+.msghub-root .msghub-overlay-head {
+	display: flex;
+	align-items: center;
+	gap: var(--msghub-space-2);
+	padding: var(--msghub-space-2) var(--msghub-space-3);
+	border-bottom: 1px solid var(--msghub-border);
+	background: var(--msghub-bg-overlayHeader);
+}
+
+.msghub-root .msghub-overlay-title {
+	flex: 1 1 auto;
+	min-width: 0;
+	font: var(--msghub-font-tab);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.msghub-root .msghub-overlay-body {
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow: auto;
+	padding: var(--msghub-space-3);
+}
+
+.msghub-root .msghub-dialog-title {
+	margin: 0;
+	padding: var(--msghub-space-3) var(--msghub-space-3) 0 var(--msghub-space-3);
+	font: var(--msghub-font-tab);
+}
+
+.msghub-root .msghub-dialog-body {
+	padding: var(--msghub-space-2) var(--msghub-space-3);
+	overflow: auto;
+}
+
+.msghub-root .msghub-dialog-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: var(--msghub-space-2);
+	padding: var(--msghub-space-2) var(--msghub-space-3) var(--msghub-space-3) var(--msghub-space-3);
+	border-top: 1px solid var(--msghub-border);
+}
+
+.msghub-root .msghub-overlay-body pre {
+	margin: 0;
+	font-family: var(--msghub-font-mono);
+	font-size: var(--msghub-fs-sm);
+	line-height: var(--msghub-lh-normal);
+	white-space: pre;
+}

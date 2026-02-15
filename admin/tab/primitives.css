@@ -1,0 +1,111 @@
+/* ========================================================================== */
+/* Components: Checkbox                                                      */
+/* ========================================================================== */
+/* UI checkbox (opt-in component; do not style all native checkboxes globally) */
+.msghub-root .msghub-uicheckbox {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 14px;
+	height: 14px;
+	cursor: pointer;
+	user-select: none;
+}
+
+.msghub-root .msghub-uicheckbox__input {
+	position: absolute;
+	inset: 0;
+	opacity: 0;
+	margin: 0;
+}
+
+.msghub-root .msghub-uicheckbox__box {
+	width: 14px;
+	height: 14px;
+	box-sizing: border-box;
+	border: 1px solid var(--msghub-muted);
+	border-radius: var(--msghub-radius);
+	background: transparent;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.msghub-root .msghub-uicheckbox__box::before {
+	content: '';
+	width: 12px;
+	height: 12px;
+	background-color: var(--msghub-bg);
+	-webkit-mask-image: var(--msghub-icon-check);
+	-webkit-mask-repeat: no-repeat;
+	-webkit-mask-position: center;
+	-webkit-mask-size: 12px 12px;
+	mask-image: var(--msghub-icon-check);
+	mask-repeat: no-repeat;
+	mask-position: center;
+	mask-size: 12px 12px;
+	opacity: 0;
+}
+
+.msghub-root .msghub-uicheckbox__input:checked + .msghub-uicheckbox__box {
+	background: var(--msghub-accent);
+	border-color: var(--msghub-accent);
+}
+
+.msghub-root .msghub-uicheckbox__input:checked + .msghub-uicheckbox__box::before {
+	opacity: 1;
+}
+
+.msghub-root .msghub-uicheckbox__input:focus-visible + .msghub-uicheckbox__box {
+	outline: 2px solid var(--msghub-accent);
+	outline-offset: 2px;
+}
+
+/* ========================================================================== */
+/* Components: Buttons                                                       */
+/* ========================================================================== */
+/* UI buttons (core primitives) */
+.msghub-root .msghub-uibutton-icon {
+	appearance: none;
+	background: transparent;
+	border-radius: var(--msghub-radius);
+	border: 0;
+	padding: 0;
+	width: var(--msghub-size-iconButton);
+	height: var(--msghub-size-iconButton);
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	color: var(--msghub-muted);
+	cursor: pointer;
+	user-select: none;
+	font-size: 0;
+	line-height: 0;
+}
+
+.msghub-root .msghub-uibutton-icon::before {
+	content: '';
+	width: 16px;
+	height: 16px;
+	background-color: currentColor;
+	-webkit-mask-image: var(--msghub-uibutton-icon);
+	-webkit-mask-repeat: no-repeat;
+	-webkit-mask-position: center;
+	-webkit-mask-size: 16px 16px;
+	mask-image: var(--msghub-uibutton-icon);
+	mask-repeat: no-repeat;
+	mask-position: center;
+	mask-size: 16px 16px;
+}
+
+.msghub-root .msghub-uibutton-icon:not(:disabled):hover {
+	color: var(--msghub-text);
+	background: var(--msghub-surface-selected);
+}
+
+.msghub-root .msghub-uibutton-icon:disabled {
+	cursor: default;
+	opacity: 0.45;
+}
+

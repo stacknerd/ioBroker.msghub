@@ -1,0 +1,99 @@
+/* ========================================================================== */
+/* Layout: Tabs / Connection Status                                          */
+/* ========================================================================== */
+/* Primary navigation (tabs) + connection status */
+.msghub-root #msghub-layout {
+	flex: 1 1 auto;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	gap: var(--msghub-space-3);
+}
+
+.msghub-root .msghub-tabs {
+	display: flex;
+	align-items: center;
+	gap: var(--msghub-space-2);
+	padding: var(--msghub-space-2);
+	border: 1px solid var(--msghub-border);
+	border-radius: var(--msghub-radius);
+	margin-bottom: var(--msghub-space-3);
+}
+
+.msghub-root .msghub-tab {
+	display: inline-flex;
+	align-items: center;
+	padding: 6px 10px;
+	border-radius: var(--msghub-radius);
+	text-decoration: none;
+	font: var(--msghub-font-tab);
+	white-space: nowrap;
+}
+
+.msghub-root .msghub-tab:hover {
+	background: var(--msghub-surface-hover);
+}
+
+.msghub-root .msghub-tab.is-active {
+	background: transparent;
+	color: var(--msghub-accent);
+}
+
+.msghub-root .msghub-tab.is-active:hover {
+	background: transparent;
+}
+
+.msghub-root #msghub-connection {
+	align-self: flex-end;
+	padding: 5px 10px;
+	border-radius: 999px;
+	border: 1px solid var(--msghub-border);
+	font: var(--msghub-font-badge);
+	white-space: nowrap;
+}
+
+html[data-msghub-layout='tabs'] .msghub-root #msghub-connection {
+	position: fixed;
+	top: 20px;
+	right: 20px;
+}
+
+.msghub-root #msghub-connection.online {
+	color: var(--msghub-ok);
+	border-color: var(--msghub-ok);
+	background: var(--msghub-ok-dim);
+}
+
+.msghub-root #msghub-connection.offline {
+	color: var(--msghub-danger);
+	border-color: var(--msghub-danger);
+	background: var(--msghub-danger-dim);
+}
+
+/* ========================================================================== */
+/* Layout: Panels                                                            */
+/* ========================================================================== */
+.msghub-root .msghub-panel[hidden] {
+	display: none !important;
+}
+
+.msghub-root .msghub-panel {
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow: auto;
+	overflow-x: hidden;
+	scrollbar-gutter: stable;
+}
+
+/* ========================================================================== */
+/* States                                                                    */
+/* ========================================================================== */
+/* States */
+.msghub-root .is-hidden {
+	display: none !important;
+}
+
+.msghub-root.is-modal-open .msghub-panel {
+	overflow: hidden;
+}
+
