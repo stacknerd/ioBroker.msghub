@@ -76,6 +76,9 @@ describe('admin/tab/panels/messages/render.meta.js', function () {
 
 		renderer.mount(root);
 		assert.equal(root.children.length, 6);
+		assert.equal(root.children[0].classList.contains('msghub-toolbar'), true);
+		assert.equal(renderer.elements.refreshBtn.classList.contains('msghub-uibutton-text'), true);
+		assert.equal(renderer.elements.refreshBtn.classList.contains('msghub-toolbarbutton-text'), true);
 
 		renderer.elements.refreshBtn.click();
 		renderer.elements.deleteBtn.click();
@@ -132,10 +135,14 @@ describe('admin/tab/panels/messages/render.meta.js', function () {
 
 		renderer.setProgressVisible(true);
 		renderer.setError('boom');
+		const mountedRoot = createElement('div');
+		renderer.mount(mountedRoot);
 		renderer.setMeta('generatedAt: x', 'tz: y', 'messages: 1');
 		renderer.setEmptyVisible(true);
 		renderer.updateTbody([], { showLoadingRow: true });
 		assert.equal(renderer.elements.tbodyEl.children.length, 1);
+		assert.equal(mountedRoot.children[0].children[2].textContent, 'messages: 1');
+		assert.equal(mountedRoot.children[3].children.length, 2);
 
 		const loadingRow = renderer.elements.tbodyEl.children[0].children[0];
 		const loadingCell = loadingRow.children[0];
