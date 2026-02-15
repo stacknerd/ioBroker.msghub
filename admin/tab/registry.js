@@ -26,17 +26,6 @@
 	}
 
 	const panels = Object.freeze({
-		stats: Object.freeze({
-			id: 'stats',
-			mountId: 'stats-root',
-			titleKey: 'msghub.i18n.core.admin.ui.tabs.stats.label',
-			initGlobal: 'MsghubAdminTabStats',
-			assets: Object.freeze({
-				css: Object.freeze(['tab/panels/stats/styles.css']),
-				js: Object.freeze(['tab/panels/stats/index.js']),
-			}),
-		}),
-
 		messages: Object.freeze({
 			id: 'messages',
 			mountId: 'messages-root',
@@ -76,16 +65,9 @@
 		adminTab: Object.freeze({
 			id: 'adminTab',
 			layout: 'tabs',
-			panels: Object.freeze(['stats', 'messages', 'plugins']),
-			defaultPanel: 'plugins',
+			panels: Object.freeze(['messages', 'plugins']),
+			defaultPanel: 'messages',
 			deviceMode: 'pc',
-		}),
-		dashboardStats: Object.freeze({
-			id: 'dashboardStats',
-			layout: 'single',
-			panels: Object.freeze(['stats']),
-			defaultPanel: 'stats',
-			deviceMode: 'screenOnly',
 		}),
 	});
 
