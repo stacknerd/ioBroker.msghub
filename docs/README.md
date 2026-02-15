@@ -21,7 +21,6 @@ Naming note: the adapter is called **Message Hub**. In code and ioBroker object 
 - Plugin API reference (details for `ctx.api` / `ctx.meta`): [`docs/plugins/API.md`](./plugins/API.md)
 - Plugin runtime wiring (enable switches, options in `native`): [`docs/plugins/IoPlugins.md`](./plugins/IoPlugins.md)
 - Core modules (store/factory/storage/notify/render): [`docs/modules/README.md`](./modules/README.md)
-- Development notes (repo conventions): [`docs/DevelopmentGuidelines.md`](./DevelopmentGuidelines.md)
 
 ## What This Repo Ships Today
 
@@ -34,7 +33,7 @@ Message Hub is built in two layers:
 - **Core modules** (`src/`): the internal engine (data model, store, persistence, rendering, dispatch).
 - **Plugins** (`lib/`): the IO layer (how messages come in, and how notification events go out).
 
-In other words: the core knows *what a message is* and *how to manage it*, while plugins connect Message Hub to ioBroker events and to real delivery channels.
+In other words: the core knows _what a message is_ and _how to manage it_, while plugins connect Message Hub to ioBroker events and to real delivery channels.
 
 ### Architecture at a Glance
 
