@@ -197,6 +197,53 @@ function toContextMenuIconVar(iconName) {
 }
 
 /**
+ * Validates and normalizes an IANA timezone identifier.
+ *
+ * @param {any} value - Candidate timezone value.
+ * @returns {string} Normalized timezone or empty string if invalid.
+ */
+function normalizeTimeZone(value) {
+	const tz = typeof value === 'string' ? value.trim() : '';
+	if (!tz) {
+		return '';
+	}
+	try {
+		new Intl.DateTimeFormat('en-US', { timeZone: tz }).format(0);
+		return tz;
+	} catch {
+		return '';
+	}
+}
+
+/**
+ * Normalizes a timezone policy object and enforces UTC fallback.
+ *
+ * @param {any} policy - Raw policy candidate.
+ * @returns {{timeZone:string,source:string,isFallbackUtc:boolean,warning:string}} Normalized timezone policy.
+ */
+function normalizeTimePolicy(policy) {
+	const raw = policy && typeof policy === 'object' ? policy : {};
+	const requestedTimeZone = typeof raw.timeZone === 'string' ? raw.timeZone.trim() : '';
+	const timeZone = normalizeTimeZone(requestedTimeZone);
+	const source = typeof raw.source === 'string' ? raw.source.trim() : '';
+	if (timeZone) {
+		return Object.freeze({
+			timeZone,
+			source: source || 'server',
+			isFallbackUtc: false,
+			warning: '',
+		});
+	}
+	const reason = requestedTimeZone ? 'invalid_timezone' : 'missing_timezone';
+	return Object.freeze({
+		timeZone: 'UTC',
+		source: 'fallback-utc',
+		isFallbackUtc: true,
+		warning: `timezone_fallback_utc:${reason}`,
+	});
+}
+
+/**
  * Erzeugt die stabile API-Fassade für alle Panels.
  *
  * @param {object} deps - Laufzeitabhängigkeiten aus dem Bootstrapping.
@@ -239,6 +286,37 @@ function createAdminApi({ sendTo, socket, adapterInstance, lang, t, pickText, ui
 		},
 		pickText: value => pickText(value),
 	});
+
+	let timePolicy = normalizeTimePolicy(null);
+	const timeFormatterCache = new Map();
+
+	/**
+	 * Returns a cached date formatter for one locale/timezone tuple.
+	 *
+	 * @param {string} locale - Resolved locale.
+	 * @param {string} timeZone - IANA timezone.
+	 * @param {boolean} includeTimeZone - Include timezone suffix.
+	 * @returns {Intl.DateTimeFormat} Formatter instance.
+	 */
+	const getTimeFormatter = (locale, timeZone, includeTimeZone) => {
+		const key = `${locale || ''}|${timeZone}|${includeTimeZone ? '1' : '0'}`;
+		const cached = timeFormatterCache.get(key);
+		if (cached) {
+			return cached;
+		}
+		const formatter = new Intl.DateTimeFormat(locale || undefined, {
+			timeZone,
+			year: 'numeric',
+			month: '2-digit',
+			day: '2-digit',
+			hour: '2-digit',
+			minute: '2-digit',
+			second: '2-digit',
+			...(includeTimeZone ? { timeZoneName: 'short' } : {}),
+		});
+		timeFormatterCache.set(key, formatter);
+		return formatter;
+	};
 
 	const rawContextMenu =
 		ui?.contextMenu ||
@@ -436,6 +514,34 @@ function createAdminApi({ sendTo, socket, adapterInstance, lang, t, pickText, ui
 		about: () => sendTo('runtime.about', {}),
 	});
 
+	const time = Object.freeze({
+		getPolicy: () => timePolicy,
+		setPolicy: policy => {
+			timePolicy = normalizeTimePolicy(policy);
+			return timePolicy;
+		},
+		formatTs: (ts, options) => {
+			if (typeof ts !== 'number' || !Number.isFinite(ts)) {
+				return '';
+			}
+			try {
+				const opts = options && typeof options === 'object' ? options : {};
+				const locale = typeof opts.locale === 'string' ? opts.locale.trim() : '';
+				const includeTimeZone = opts.includeTimeZone === true;
+				const formatter = getTimeFormatter(locale, timePolicy.timeZone, includeTimeZone);
+				return formatter.format(new Date(ts));
+			} catch {
+				return String(ts);
+			}
+		},
+		formatDate: (date, options) => {
+			if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+				return '';
+			}
+			return time.formatTs(date.getTime(), options);
+		},
+	});
+
 	// Stabile API-Oberfläche: Panels sprechen ausschließlich mit `ctx.api`.
 	return Object.freeze({
 		i18n,
@@ -444,6 +550,7 @@ function createAdminApi({ sendTo, socket, adapterInstance, lang, t, pickText, ui
 		host,
 		constants,
 		runtime,
+		time,
 		stats,
 		messages,
 		plugins,

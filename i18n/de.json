@@ -240,6 +240,7 @@
 	"msghub.i18n.core.admin.ui.tabs.messages.label": "Messages",
 	"msghub.i18n.core.admin.ui.tabs.plugins.label": "Plugin-Konfiguration",
 	"msghub.i18n.core.admin.ui.tabs.stats.label": "Statistiken",
+	"msghub.i18n.core.admin.ui.timezone.fallbackUtc.text": "Server-Zeitzone nicht verfuegbar (%s). UTC-Fallback wird verwendet.",
 	"msghub.i18n.core.common.MsgConstants.kind.appointment.label": "Termin",
 	"msghub.i18n.core.common.MsgConstants.kind.inventorylist.label": "Inventarliste",
 	"msghub.i18n.core.common.MsgConstants.kind.shoppinglist.label": "Einkaufsliste",

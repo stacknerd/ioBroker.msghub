@@ -2,6 +2,7 @@
 'use strict';
 
 const assert = require('node:assert/strict');
+const { readRepoFile } = require('../../_test.utils');
 const { loadPanelModule } = require('./_test.utils');
 
 describe('admin/tab/panels/messages/overlay.json.js', function () {
@@ -56,5 +57,12 @@ describe('admin/tab/panels/messages/overlay.json.js', function () {
 		overlay.openMessageJson(cyclic);
 		assert.equal(openPayload.title, 'Message JSON');
 		assert.ok(String(openPayload.bodyEl.textContent).length > 0);
+	});
+
+	it('does not contain hover tooltip logic anymore', async function () {
+		const source = await readRepoFile('admin/tab/panels/messages/overlay.json.js');
+		assert.doesNotMatch(source, /toLocaleString\(/);
+		assert.doesNotMatch(source, /addEventListener\(\s*['"]mousemove['"]/);
+		assert.doesNotMatch(source, /requestAnimationFrame\(/);
 	});
 });

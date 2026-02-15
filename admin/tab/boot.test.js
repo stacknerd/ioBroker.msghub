@@ -194,4 +194,92 @@ globalThis.__execCommandSafe = execCommandSafe;
 		assert.match(source, /\bsocket\.on\(\s*['"]connect['"]/);
 		assert.match(source, /\bsocket\.on\(\s*['"]disconnect['"]/);
 	});
+
+	it('applies runtime.about payload to branding and timezone policy', async function () {
+		const source = await readRepoFile('admin/tab/boot.js');
+		const applyRuntimeAboutPayloadSource = extractFunctionSource(source, 'applyRuntimeAboutPayload');
+		const toasts = [];
+		const warnings = [];
+		const policyCalls = [];
+		let branding = '';
+		const sandbox = runInSandbox(
+			`
+let timezoneFallbackToastShown = false;
+${applyRuntimeAboutPayloadSource}
+globalThis.__applyRuntimeAboutPayload = applyRuntimeAboutPayload;
+`,
+			{
+				api: {
+					time: {
+						setPolicy: payload => {
+							policyCalls.push(payload);
+							return { isFallbackUtc: false, warning: '' };
+						},
+					},
+					log: {
+						warn: msg => warnings.push(String(msg)),
+					},
+				},
+				ui: {
+					contextMenu: {
+						setBrandingText: value => {
+							branding = String(value);
+						},
+					},
+					toast: msg => toasts.push(String(msg)),
+				},
+				t: (key, arg) => `${key}:${arg || ''}`,
+			},
+			'boot-applyRuntimeAboutPayload.js',
+		);
+		const applyRuntimeAboutPayload = sandbox.__applyRuntimeAboutPayload;
+		applyRuntimeAboutPayload({
+			title: 'Message Hub',
+			version: '1.2.3',
+			time: { timeZone: 'Europe/Berlin', source: 'server' },
+		});
+
+		assert.equal(branding, 'Message Hub v1.2.3');
+		assert.equal(policyCalls.length, 1);
+		assert.equal(policyCalls[0].timeZone, 'Europe/Berlin');
+		assert.equal(toasts.length, 0);
+		assert.equal(warnings.length, 0);
+	});
+
+	it('shows fallback timezone warning only once', async function () {
+		const source = await readRepoFile('admin/tab/boot.js');
+		const applyRuntimeAboutPayloadSource = extractFunctionSource(source, 'applyRuntimeAboutPayload');
+		const toasts = [];
+		const warnings = [];
+		const sandbox = runInSandbox(
+			`
+let timezoneFallbackToastShown = false;
+${applyRuntimeAboutPayloadSource}
+globalThis.__applyRuntimeAboutPayload = applyRuntimeAboutPayload;
+`,
+			{
+				api: {
+					time: {
+						setPolicy: () => ({ isFallbackUtc: true, warning: 'timezone_fallback_utc:missing_timezone' }),
+					},
+					log: {
+						warn: msg => warnings.push(String(msg)),
+					},
+				},
+				ui: {
+					contextMenu: { setBrandingText() {} },
+					toast: msg => toasts.push(String(msg)),
+				},
+				t: (key, arg) => `${key}:${arg || ''}`,
+			},
+			'boot-timezoneFallbackOnce.js',
+		);
+		const applyRuntimeAboutPayload = sandbox.__applyRuntimeAboutPayload;
+		applyRuntimeAboutPayload({ title: 'Message Hub', version: '1.2.3', time: {} });
+		applyRuntimeAboutPayload({ title: 'Message Hub', version: '1.2.3', time: {} });
+
+		assert.equal(toasts.length, 1);
+		assert.equal(warnings.length, 1);
+		assert.match(toasts[0], /timezone\.fallbackUtc\.text/);
+	});
 });

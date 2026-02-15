@@ -238,6 +238,7 @@
 	"msghub.i18n.core.admin.ui.tabs.messages.label": "Messages",
 	"msghub.i18n.core.admin.ui.tabs.plugins.label": "Plugin config",
 	"msghub.i18n.core.admin.ui.tabs.stats.label": "Statistics",
+	"msghub.i18n.core.admin.ui.timezone.fallbackUtc.text": "Server timezone unavailable (%s). Using UTC fallback.",
 	"msghub.i18n.IngestStates.admin.jsonCustom.common.unit.label": "Unit",
 	"msghub.i18n.IngestStates.admin.jsonCustom.common.unit.option.days.label": "Days",
 	"msghub.i18n.IngestStates.admin.jsonCustom.common.unit.option.hours.label": "Hours",

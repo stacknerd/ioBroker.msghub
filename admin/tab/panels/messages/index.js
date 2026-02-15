@@ -116,6 +116,8 @@
 		const isObject = stateModule.isObject;
 		const safeStr = stateModule.safeStr;
 		const pick = stateModule.pick;
+		const policyFormatTs = ts => api?.time?.formatTs?.(ts) || '';
+		stateModule.setFormatTsFormatter?.(policyFormatTs);
 		const formatTs = stateModule.formatTs;
 		const ui = api?.ui || ctx.ui;
 		const t = api.i18n.t;
@@ -146,6 +148,7 @@
 		const jsonOverlayApi = jsonOverlayModule.createJsonOverlay({
 			ui,
 			getServerTimeZone: () => state.serverTz,
+			formatDate: date => api?.time?.formatDate?.(date) || '',
 			getLevelLabel: dataApi.getLevelLabel,
 		});
 
@@ -359,10 +362,11 @@
 			const meta = isObject(state.lastMeta) ? state.lastMeta : {};
 			const generatedAt = formatTs(meta.generatedAt) || 'n/a';
 			const tz = typeof meta.tz === 'string' && meta.tz.trim() ? meta.tz.trim() : null;
-			state.serverTz = tz;
+			const policyTimeZone = String(api?.time?.getPolicy?.()?.timeZone || '').trim();
+			state.serverTz = policyTimeZone || tz;
 			metaApi.setMeta(
 				`generatedAt: ${generatedAt}`,
-				tz ? `tz: ${tz}` : 'tz: n/a',
+				tz ? `tz: ${tz}` : policyTimeZone ? `tz: ${policyTimeZone}` : 'tz: n/a',
 				`messages: ${state.items.length} / ${state.total}`,
 			);
 

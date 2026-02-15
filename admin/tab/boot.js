@@ -77,17 +77,55 @@ const ctx = Object.freeze({
 	elements,
 });
 
-// Branding im Kontextmenü wird bei verfügbaren Runtime-Infos dynamisch aktualisiert.
-void api?.runtime
-	?.about?.()
-	.then(res => {
-		const data = res && typeof res === 'object' ? res : null;
-		const title = typeof data?.title === 'string' ? data.title.trim() : '';
-		const version = typeof data?.version === 'string' ? data.version.trim() : '';
-		const label = `${title || 'Message Hub'} v${version || '0.0.0'}`;
-		ui?.contextMenu?.setBrandingText?.(label);
-	})
-	.catch(() => undefined);
+let timezoneFallbackToastShown = false;
+
+/**
+ * Applies runtime metadata (branding + timezone policy) from `runtime.about`.
+ *
+ * @param {any} payload - `runtime.about` response payload.
+ */
+function applyRuntimeAboutPayload(payload) {
+	const data = payload && typeof payload === 'object' ? payload : null;
+	const title = typeof data?.title === 'string' ? data.title.trim() : '';
+	const version = typeof data?.version === 'string' ? data.version.trim() : '';
+	const label = `${title || 'Message Hub'} v${version || '0.0.0'}`;
+	ui?.contextMenu?.setBrandingText?.(label);
+
+	const timeData = data?.time && typeof data.time === 'object' ? data.time : null;
+	const policy = api?.time?.setPolicy?.({
+		timeZone: timeData?.timeZone,
+		source: timeData?.source,
+	});
+	if (policy?.isFallbackUtc && !timezoneFallbackToastShown) {
+		timezoneFallbackToastShown = true;
+		api?.log?.warn?.(`AdminTab timezone fallback active: ${policy.warning || 'unknown_reason'}`);
+		ui?.toast?.(t('msghub.i18n.core.admin.ui.timezone.fallbackUtc.text', policy.warning || 'unknown_reason'));
+	}
+}
+
+/**
+ * Refreshes runtime metadata and updates shared UI policy.
+ *
+ * @returns {Promise<void>}
+ */
+async function refreshRuntimeAbout() {
+	try {
+		const about = await api?.runtime?.about?.();
+		applyRuntimeAboutPayload(about);
+	} catch {
+		const policy = api?.time?.setPolicy?.({ timeZone: '', source: 'runtime-about-error' });
+		if (policy?.isFallbackUtc && !timezoneFallbackToastShown) {
+			timezoneFallbackToastShown = true;
+			api?.log?.warn?.(`AdminTab timezone fallback active: ${policy.warning || 'runtime_about_error'}`);
+			ui?.toast?.(
+				t('msghub.i18n.core.admin.ui.timezone.fallbackUtc.text', policy.warning || 'runtime_about_error'),
+			);
+		}
+	}
+}
+
+// Branding and timezone policy are refreshed as soon as runtime data is available.
+void refreshRuntimeAbout();
 
 /**
  * Liefert ein editierbares Ziel unterhalb eines Event-Targets.
@@ -655,6 +693,7 @@ socket.on('connect', () => {
 	connOnline = true;
 	setConnStatus(true);
 	void ensureBooted().then(() => {
+		void refreshRuntimeAbout();
 		applyStaticI18n();
 		setConnTextFromState();
 		for (const section of panelSections.values()) {

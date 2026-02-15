@@ -14,11 +14,14 @@ describe('admin/tab/panels/messages/state.js', function () {
 		assert.equal(api.isObject([]), false);
 		assert.equal(api.safeStr(null), '');
 		assert.equal(api.safeStr(7), '7');
-		assert.equal(api.pick({ a: { b: 2 } }, 'a.b'), 2);
-		assert.equal(api.pick({ a: 1 }, 'a.b'), undefined);
-		assert.equal(api.formatTs(NaN), '');
-		assert.notEqual(api.formatTs(1700000000000), '');
-	});
+			assert.equal(api.pick({ a: { b: 2 } }, 'a.b'), 2);
+			assert.equal(api.pick({ a: 1 }, 'a.b'), undefined);
+			assert.equal(api.formatTs(NaN), '');
+			assert.notEqual(api.formatTs(1700000000000), '');
+			api.setFormatTsFormatter(ts => `fmt:${ts}`);
+			assert.equal(api.formatTs(1700000000000), 'fmt:1700000000000');
+			api.setFormatTsFormatter(null);
+		});
 
 	it('initializes canonical defaults including archive-ready state', async function () {
 		const sandbox = await loadPanelModule('admin/tab/panels/messages/state.js');
