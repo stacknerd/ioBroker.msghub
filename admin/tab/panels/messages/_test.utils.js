@@ -1,7 +1,7 @@
 'use strict';
 
 const vm = require('node:vm');
-const { readRepoFile } = require('../../../../test/adminTabCoreTestUtils');
+const { readRepoFile } = require('../../_test.utils');
 
 /**
  * Messages panel test utility module.
@@ -58,7 +58,7 @@ function createElement(tagName = 'div') {
 	const listeners = new Map();
 	const element = {
 		tagName: String(tagName).toUpperCase(),
-		children: [],
+		children: JSON.parse('[]'),
 		style: {},
 		className: '',
 		classList: createClassList(),
@@ -76,7 +76,7 @@ function createElement(tagName = 'div') {
 			return child;
 		},
 		replaceChildren(...children) {
-			this.children = [];
+			this.children = JSON.parse('[]');
 			for (const child of children) {
 				if (child) {
 					child.parentNode = this;

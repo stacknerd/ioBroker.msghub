@@ -6,7 +6,7 @@ const {
 	readRepoFile,
 	extractFunctionSource,
 	runInSandbox,
-} = require('../../test/adminTabCoreTestUtils');
+} = require('./_test.utils');
 
 describe('admin/tab/boot.js', function () {
 	it('pickText resolves raw strings, i18n keys, and language maps', async function () {

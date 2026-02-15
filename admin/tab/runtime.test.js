@@ -3,7 +3,7 @@
 
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
-const { readRepoFile } = require('../../test/adminTabCoreTestUtils');
+const { readRepoFile } = require('./_test.utils');
 
 async function loadRuntimeSandbox(options = {}) {
 	const source = await readRepoFile('admin/tab/runtime.js');

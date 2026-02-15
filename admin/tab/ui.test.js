@@ -3,7 +3,7 @@
 
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
-const { readRepoFile } = require('../../test/adminTabCoreTestUtils');
+const { readRepoFile } = require('./_test.utils');
 
 function createClassList(initial = '') {
 	const values = new Set(String(initial || '').split(/\s+/g).filter(Boolean));
