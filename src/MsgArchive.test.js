@@ -34,7 +34,7 @@ async function withMockedNow(ts, fn) {
 function createAdapter({ withMkdir = true } = {}) {
 	const files = new Map();
 	const objects = new Map();
-	const logs = { debug: [], warn: [] };
+	const logs = { debug: [], warn: [], error: [] };
 	const mkdirs = [];
 
 	const adapter = {
@@ -43,6 +43,7 @@ function createAdapter({ withMkdir = true } = {}) {
 		log: {
 			debug: msg => logs.debug.push(msg),
 			warn: msg => logs.warn.push(msg),
+			error: msg => logs.error.push(msg),
 		},
 		getObjectAsync: async id => objects.get(id),
 		setObjectAsync: async (id, obj) => {
@@ -173,8 +174,8 @@ describe('MsgArchive', () => {
 		expect(mkdirs).to.deep.equal([`${adapter.namespace}/archive`]);
 	});
 
-	it('falls back to ioBroker strategy when native lock cannot resolve instance data dir', async () => {
-		const { adapter, files } = createAdapter();
+	it('keeps native lock and disables writes when native lock cannot resolve instance data dir', async () => {
+		const { adapter, files, logs } = createAdapter();
 		const archive = await createResolvedArchive(adapter, {
 			baseDir: 'archive',
 			flushIntervalMs: 0,
@@ -184,14 +185,18 @@ describe('MsgArchive', () => {
 		await archive.init();
 		const status = archive.getStatus();
 		expect(status.configuredStrategyLock).to.equal('native');
-		expect(status.effectiveStrategy).to.equal('iobroker');
-		expect(status.effectiveStrategyReason).to.equal('missing-instance-data-dir');
+		expect(status.effectiveStrategy).to.equal('native');
+		expect(status.effectiveStrategyReason).to.equal('native-lock-probe-failed:missing-instance-data-dir');
+		expect(status.writeDisabled).to.equal(true);
+		expect(logs.warn).to.have.length(0);
+		expect(logs.error.some(msg => String(msg).includes('MsgArchive writer disabled'))).to.equal(true);
 
 		await withMockedNow(123456, async () => {
 			await archive.appendSnapshot({ ref: 'fallback.ref', title: 'hello' });
 		});
 		const segmentKey = segmentKeyForLocalWeek(123456);
-		expect(files.has(`${adapter.namespace}/archive/fallback/ref.${segmentKey}.jsonl`)).to.equal(true);
+		expect(files.has(`${adapter.namespace}/archive/fallback/ref.${segmentKey}.jsonl`)).to.equal(false);
+		expect(logs.warn.some(msg => String(msg).includes('MsgArchive create failed for ref fallback.ref'))).to.equal(true);
 	});
 
 	it('writes archive entries via native fs when native strategy is active', async () => {

@@ -54,7 +54,7 @@ class MsgArchive {
 	 * @param {number} [options.maxPathSegmentLength] Max length (bytes) per path component derived from refs (default 120).
 	 * @param {(onMutated?: () => void) => any} options.createStorageBackend
 	 *   Platform-resolved backend factory injection.
-	 * @param {{ configuredStrategyLock?: string, effectiveStrategy?: string, effectiveStrategyReason?: string, nativeRootDir?: string, nativeProbeError?: string }} [options.archiveRuntime]
+	 * @param {{ configuredStrategyLock?: string, effectiveStrategy?: string, effectiveStrategyReason?: string, nativeRootDir?: string, nativeProbeError?: string, writeDisabled?: boolean }} [options.archiveRuntime]
 	 *   Platform-resolved runtime strategy diagnostics.
 	 */
 	constructor(adapter, options) {
@@ -109,6 +109,7 @@ class MsgArchive {
 		this.nativeRootDir = typeof runtimeRaw.nativeRootDir === 'string' ? runtimeRaw.nativeRootDir.trim() : '';
 		this._nativeProbeError =
 			typeof runtimeRaw.nativeProbeError === 'string' ? runtimeRaw.nativeProbeError.trim() : '';
+		this._writeDisabled = runtimeRaw.writeDisabled === true;
 
 		this._mapTypeMarker = DEFAULT_MAP_TYPE_MARKER;
 		const createStorageBackend = typeof opt.createStorageBackend === 'function' ? opt.createStorageBackend : null;
@@ -367,6 +368,11 @@ class MsgArchive {
 	 */
 	async init() {
 		await this._storageBackend.init();
+		if (this._writeDisabled === true) {
+			this.adapter?.log?.error?.(
+				`MsgArchive writer disabled: strategy=${this.effectiveStrategy} reason=${this.effectiveStrategyReason} nativeProbeError=${this._nativeProbeError || '-'}. Manual action required (retry native or downgrade to ioBroker File-API).`,
+			);
+		}
 		this.adapter?.log?.info?.(
 			`MsgArchive initialized: strategy=${this.effectiveStrategy} reason=${this.effectiveStrategyReason} baseDir=${this.baseDir || '.'}, nativeRoot=${this.nativeRootDir || '-'}, ext=${this.fileExtension}, interval=${this.flushIntervalMs}ms, keepPreviousWeeks=${this.keepPreviousWeeks}`,
 		);
@@ -1037,8 +1043,10 @@ class MsgArchive {
 			() => waiters.forEach(waiter => waiter.resolve()),
 			err => waiters.forEach(waiter => waiter.reject(err)),
 		);
+		// Prevent unhandled rejection noise when callers consume waiter promises instead of the internal write promise.
+		writePromise.catch(() => undefined);
 
-		writePromise.finally(() => {
+		const onSettled = () => {
 			pending.flushing = false;
 			pending.flushPromise = null;
 
@@ -1056,7 +1064,8 @@ class MsgArchive {
 			if (pending.waiters.length === 0) {
 				this._pending.delete(refKey);
 			}
-		});
+		};
+		writePromise.then(onSettled, onSettled);
 
 		return writePromise;
 	}
@@ -1124,7 +1133,7 @@ class MsgArchive {
 	/**
 	 * Return best-effort runtime status for diagnostics / UIs.
 	 *
-	 * @returns {{ baseDir: string, configuredStrategyLock: string, effectiveStrategy: string, effectiveStrategyReason: string, nativeRootDir: string, runtimeRoot: string, nativeProbeError: string, fileExtension: string, flushIntervalMs: number, maxBatchSize: number, keepPreviousWeeks: number, lastFlushedAt: number|null, pending: { refs: number, events: number, flushingRefs: number }, approxSizeBytes: number|null, approxSizeUpdatedAt: number|null, approxSizeIsComplete: boolean }} Status snapshot.
+	 * @returns {{ baseDir: string, configuredStrategyLock: string, effectiveStrategy: string, effectiveStrategyReason: string, nativeRootDir: string, runtimeRoot: string, nativeProbeError: string, writeDisabled: boolean, fileExtension: string, flushIntervalMs: number, maxBatchSize: number, keepPreviousWeeks: number, lastFlushedAt: number|null, pending: { refs: number, events: number, flushingRefs: number }, approxSizeBytes: number|null, approxSizeUpdatedAt: number|null, approxSizeIsComplete: boolean }} Status snapshot.
 	 */
 	getStatus() {
 		let pendingRefs = 0;
@@ -1152,6 +1161,7 @@ class MsgArchive {
 			nativeRootDir: this.nativeRootDir || '',
 			runtimeRoot: this._storageBackend.runtimeRoot(),
 			nativeProbeError: this._nativeProbeError || '',
+			writeDisabled: this._writeDisabled === true,
 			fileExtension: this.fileExtension,
 			flushIntervalMs: this.flushIntervalMs,
 			maxBatchSize: this.maxBatchSize,
