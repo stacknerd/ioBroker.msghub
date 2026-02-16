@@ -188,4 +188,36 @@ describe('MsgConfig', () => {
 			expect(res.pluginPublic.ai.openai).to.not.have.property('baseUrl');
 		});
 	});
+
+	describe('archive normalization', () => {
+		it('normalizes strategy lock metadata', () => {
+			const res = MsgConfig.normalize({
+				adapterConfig: {
+					quietHoursEnabled: false,
+					archiveEffectiveStrategyLock: ' NATIVE ',
+					archiveLockReason: 'manual-upgrade',
+					archiveLockedAt: '1700000000000',
+				},
+			});
+
+			expect(res.errors).to.deep.equal([]);
+			expect(res.corePrivate.archive).to.deep.include({
+				effectiveStrategyLock: 'native',
+				lockReason: 'manual-upgrade',
+				lockedAt: 1700000000000,
+			});
+		});
+
+		it('drops invalid strategy lock and reports normalization error', () => {
+			const res = MsgConfig.normalize({
+				adapterConfig: {
+					quietHoursEnabled: false,
+					archiveEffectiveStrategyLock: 'maybe',
+				},
+			});
+
+			expect(res.corePrivate.archive.effectiveStrategyLock).to.equal('');
+			expect(res.errors).to.include('archive.strategy.invalidLock');
+		});
+	});
 });

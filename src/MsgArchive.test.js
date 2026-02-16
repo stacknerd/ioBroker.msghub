@@ -1,6 +1,9 @@
 'use strict';
 
 const { expect } = require('chai');
+const fs = require('node:fs/promises');
+const os = require('node:os');
+const path = require('node:path');
 const { MsgArchive } = require('./MsgArchive');
 
 function segmentKeyForLocalWeek(ts) {
@@ -112,6 +115,84 @@ describe('MsgArchive', () => {
 		expect(meta).to.be.an('object');
 		expect(meta.type).to.equal('meta');
 		expect(mkdirs).to.deep.equal([`${adapter.namespace}/archive`]);
+	});
+
+	it('falls back to ioBroker strategy when native lock cannot resolve instance data dir', async () => {
+		const { adapter, files } = createAdapter();
+		const archive = new MsgArchive(adapter, {
+			baseDir: 'archive',
+			flushIntervalMs: 0,
+			effectiveStrategyLock: 'native',
+		});
+
+		await archive.init();
+		const status = archive.getStatus();
+		expect(status.configuredStrategyLock).to.equal('native');
+		expect(status.effectiveStrategy).to.equal('iobroker');
+		expect(status.effectiveStrategyReason).to.equal('missing-instance-data-dir');
+
+		await withMockedNow(123456, async () => {
+			await archive.appendSnapshot({ ref: 'fallback.ref', title: 'hello' });
+		});
+		const segmentKey = segmentKeyForLocalWeek(123456);
+		expect(files.has(`${adapter.namespace}/archive/fallback/ref.${segmentKey}.jsonl`)).to.equal(true);
+	});
+
+	it('writes archive entries via native fs when native strategy is active', async () => {
+		const { adapter, files } = createAdapter();
+		const nativeInstanceDir = await fs.mkdtemp(path.join(os.tmpdir(), 'msghub-archive-native-'));
+
+		try {
+			const archive = new MsgArchive(adapter, {
+				baseDir: 'archive',
+				flushIntervalMs: 0,
+				effectiveStrategyLock: 'native',
+				instanceDataDir: nativeInstanceDir,
+			});
+			await archive.init();
+
+			const status = archive.getStatus();
+			expect(status.effectiveStrategy).to.equal('native');
+			expect(status.nativeRootDir).to.equal(nativeInstanceDir);
+
+			await withMockedNow(123456, async () => {
+				await archive.appendSnapshot({ ref: 'native.ref', title: 'hello' });
+			});
+
+			const segmentKey = segmentKeyForLocalWeek(123456);
+			const nativeFile = path.join(nativeInstanceDir, 'archive', `native/ref.${segmentKey}.jsonl`);
+			const raw = await fs.readFile(nativeFile, 'utf8');
+			expect(raw).to.include('"event":"create"');
+			expect(raw).to.include('"ref":"native.ref"');
+			expect(files.size).to.equal(0);
+		} finally {
+			await fs.rm(nativeInstanceDir, { recursive: true, force: true });
+		}
+	});
+
+	it('keeps ioBroker strategy when lock is iobroker even if native dir exists', async () => {
+		const { adapter, files } = createAdapter();
+		const nativeInstanceDir = await fs.mkdtemp(path.join(os.tmpdir(), 'msghub-archive-iobroker-'));
+
+		try {
+			const archive = new MsgArchive(adapter, {
+				baseDir: 'archive',
+				flushIntervalMs: 0,
+				effectiveStrategyLock: 'iobroker',
+				instanceDataDir: nativeInstanceDir,
+			});
+			await archive.init();
+			const status = archive.getStatus();
+			expect(status.effectiveStrategy).to.equal('iobroker');
+
+			await withMockedNow(123456, async () => {
+				await archive.appendSnapshot({ ref: 'iobroker.ref', title: 'hello' });
+			});
+			const segmentKey = segmentKeyForLocalWeek(123456);
+			expect(files.has(`${adapter.namespace}/archive/iobroker/ref.${segmentKey}.jsonl`)).to.equal(true);
+		} finally {
+			await fs.rm(nativeInstanceDir, { recursive: true, force: true });
+		}
 	});
 
 	it('writes a snapshot event as JSONL', async () => {

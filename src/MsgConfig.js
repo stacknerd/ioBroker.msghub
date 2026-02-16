@@ -159,17 +159,35 @@ const MsgConfig = Object.freeze({
 		/**
 		 * Normalize archive configuration.
 		 *
-		 * @returns {{ keepPreviousWeeks: number, flushIntervalMs: number, maxBatchSize: number }} Archive config.
+		 * @returns {{ keepPreviousWeeks: number, flushIntervalMs: number, maxBatchSize: number, effectiveStrategyLock: ''|'native'|'iobroker', lockReason: string, lockedAt: number }} Archive config.
 		 */
 		const normalizeArchive = () => {
 			const keepPreviousWeeks = Math.max(0, safeTrunc(adapterConfig?.keepPreviousWeeks) ?? 3);
 			const archiveFlushIntervalSec = Math.max(0, safeTrunc(adapterConfig?.archiveFlushIntervalSec) ?? 10);
 			const archiveMaxBatchSize = Math.max(1, safeTrunc(adapterConfig?.archiveMaxBatchSize) ?? 200);
+			const lockRaw =
+				typeof adapterConfig?.archiveEffectiveStrategyLock === 'string'
+					? adapterConfig.archiveEffectiveStrategyLock.trim().toLowerCase()
+					: '';
+			const effectiveStrategyLock = lockRaw === 'native' || lockRaw === 'iobroker' ? lockRaw : '';
+			const lockReason =
+				typeof adapterConfig?.archiveLockReason === 'string' ? adapterConfig.archiveLockReason.trim() : '';
+			const lockedAt = Math.max(0, safeTrunc(adapterConfig?.archiveLockedAt) ?? 0);
+
+			if (lockRaw && !effectiveStrategyLock) {
+				pushError(
+					'archive.strategy.invalidLock',
+					`MsgConfig: invalid archiveEffectiveStrategyLock '${lockRaw}' (expected native|iobroker|empty)`,
+				);
+			}
 
 			return Object.freeze({
 				keepPreviousWeeks,
 				flushIntervalMs: archiveFlushIntervalSec * 1000,
 				maxBatchSize: archiveMaxBatchSize,
+				effectiveStrategyLock,
+				lockReason,
+				lockedAt,
 			});
 		};
 

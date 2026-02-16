@@ -37,6 +37,8 @@ const { DEFAULT_MAP_TYPE_MARKER, serializeWithMaps, ensureMetaObject, ensureBase
 	`${__dirname}/MsgUtils`,
 );
 const crypto = require('crypto');
+const fs = require('node:fs/promises');
+const path = require('node:path');
 
 /**
  * MsgArchive
@@ -54,6 +56,11 @@ class MsgArchive {
 	 * @param {number} [options.maxBatchSize] Max queued events per ref before forced flush (default 200).
 	 * @param {number} [options.keepPreviousWeeks] How many previous week segments to keep, in addition to the current one (default 3).
 	 * @param {number} [options.maxPathSegmentLength] Max length (bytes) per path component derived from refs (default 120).
+	 * @param {'native'|'iobroker'|''} [options.effectiveStrategyLock] Persisted strategy lock.
+	 * @param {string} [options.lockReason] Human-readable lock reason for diagnostics.
+	 * @param {number} [options.lockedAt] Lock timestamp (epoch ms).
+	 * @param {string} [options.instanceDataDir] Absolute adapter instance data directory for native mode.
+	 * @param {string} [options.nativeRelativeDir] Optional native prefix below `instanceDataDir` (default: none).
 	 */
 	constructor(adapter, options = {}) {
 		if (!adapter) {
@@ -87,6 +94,24 @@ class MsgArchive {
 				? Math.max(32, Math.trunc(options.maxPathSegmentLength))
 				: 120;
 
+		const lockRaw =
+			typeof options.effectiveStrategyLock === 'string' ? options.effectiveStrategyLock.trim().toLowerCase() : '';
+		this.configuredStrategyLock = lockRaw === 'native' || lockRaw === 'iobroker' ? lockRaw : '';
+		this.lockReason = typeof options.lockReason === 'string' ? options.lockReason.trim() : '';
+		this.lockedAt =
+			typeof options.lockedAt === 'number' && Number.isFinite(options.lockedAt)
+				? Math.max(0, Math.trunc(options.lockedAt))
+				: 0;
+		const instanceDataDir = typeof options.instanceDataDir === 'string' ? options.instanceDataDir.trim() : '';
+		this.instanceDataDir = instanceDataDir && path.isAbsolute(instanceDataDir) ? instanceDataDir : '';
+		const defaultNativeRelativeDir = '';
+		const nativeRelativeRaw =
+			typeof options.nativeRelativeDir === 'string' ? options.nativeRelativeDir : defaultNativeRelativeDir;
+		this.nativeRelativeDir = String(nativeRelativeRaw || '').replace(/^\/+|\/+$/g, '');
+		this.nativeRootDir = this.instanceDataDir ? path.join(this.instanceDataDir, this.nativeRelativeDir) : '';
+		this.effectiveStrategy = 'iobroker';
+		this.effectiveStrategyReason = 'startup-not-resolved';
+
 		this.schemaVersion = 1;
 
 		// Promise chain used as a simple mutex to serialize writes across refs.
@@ -105,6 +130,82 @@ class MsgArchive {
 		this._sizeEstimateAt = 0;
 		this._sizeEstimateBytes = null;
 		this._sizeEstimateIsComplete = false;
+		this._nativeProbeError = '';
+	}
+
+	/**
+	 * Resolve one relative archive path to the native filesystem root.
+	 *
+	 * @param {string} filePath Relative file path below archive base dir.
+	 * @returns {string} Absolute native filesystem path.
+	 */
+	_nativeAbsPath(filePath) {
+		const relative = String(filePath || '').replace(/^\/+/, '');
+		return path.join(this.nativeRootDir || '', relative);
+	}
+
+	/**
+	 * Perform a startup probe for native archive I/O capability.
+	 *
+	 * @returns {Promise<{ok:boolean, reason:string}>} Probe result.
+	 */
+	async _probeNativeStorage() {
+		if (!this.nativeRootDir) {
+			return { ok: false, reason: 'missing-instance-data-dir' };
+		}
+
+		const probeDir = path.join(this.nativeRootDir, '.probe');
+		const probeFile = path.join(probeDir, `native-probe-${process.pid || 'pid'}-${Date.now()}.jsonl`);
+		const line1 = JSON.stringify({ step: 1, ts: Date.now() });
+		const line2 = JSON.stringify({ step: 2, ts: Date.now() });
+
+		try {
+			await fs.mkdir(probeDir, { recursive: true });
+			await fs.writeFile(probeFile, `${line1}\n`, 'utf8');
+			const firstRead = await fs.readFile(probeFile, 'utf8');
+			if (!firstRead.includes(line1)) {
+				return { ok: false, reason: 'probe-read-mismatch-initial' };
+			}
+			await fs.appendFile(probeFile, `${line2}\n`, 'utf8');
+			const secondRead = await fs.readFile(probeFile, 'utf8');
+			if (!secondRead.includes(line1) || !secondRead.includes(line2)) {
+				return { ok: false, reason: 'probe-read-mismatch-append' };
+			}
+			return { ok: true, reason: 'ok' };
+		} catch (e) {
+			return { ok: false, reason: `native-probe-failed:${String(e?.message || e)}` };
+		} finally {
+			try {
+				await fs.unlink(probeFile);
+			} catch {
+				// best-effort cleanup
+			}
+		}
+	}
+
+	/**
+	 * Resolve runtime strategy once during startup.
+	 *
+	 * @returns {Promise<void>}
+	 */
+	async _resolveStorageStrategy() {
+		if (this.configuredStrategyLock === 'iobroker') {
+			this.effectiveStrategy = 'iobroker';
+			this.effectiveStrategyReason = this.lockReason || 'manual-downgrade';
+			return;
+		}
+
+		const probe = await this._probeNativeStorage();
+		if (probe.ok) {
+			this.effectiveStrategy = 'native';
+			this.effectiveStrategyReason =
+				this.lockReason || (this.configuredStrategyLock === 'native' ? 'manual-upgrade' : 'auto-native-first');
+			return;
+		}
+
+		this._nativeProbeError = probe.reason;
+		this.effectiveStrategy = 'iobroker';
+		this.effectiveStrategyReason = probe.reason || 'native-probe-failed';
 	}
 
 	/**
@@ -265,9 +366,21 @@ class MsgArchive {
 	 * @returns {Promise<void>}
 	 */
 	async _deleteFile(filePath) {
+		if (this.effectiveStrategy === 'native') {
+			const abs = this._nativeAbsPath(filePath);
+			try {
+				await fs.unlink(abs);
+				this._markArchiveMutated();
+			} catch {
+				// best-effort
+			}
+			return;
+		}
+
 		try {
 			if (typeof this.adapter.delFileAsync === 'function') {
 				await this.adapter.delFileAsync(this.metaId, filePath);
+				this._markArchiveMutated();
 				return;
 			}
 		} catch {
@@ -277,6 +390,7 @@ class MsgArchive {
 		try {
 			if (typeof this.adapter.unlinkAsync === 'function') {
 				await this.adapter.unlinkAsync(this.metaId, filePath);
+				this._markArchiveMutated();
 			}
 		} catch {
 			// best-effort
@@ -290,6 +404,10 @@ class MsgArchive {
 	 * @returns {Promise<void>}
 	 */
 	async _applyRetention(refKey) {
+		if (this.effectiveStrategy === 'native') {
+			return await this._applyRetentionNative(refKey);
+		}
+
 		const keep =
 			typeof this.keepPreviousWeeks === 'number' && Number.isFinite(this.keepPreviousWeeks)
 				? this.keepPreviousWeeks
@@ -344,6 +462,62 @@ class MsgArchive {
 	}
 
 	/**
+	 * Enforce retention for native filesystem mode.
+	 *
+	 * @param {string} refKey Encoded ref key.
+	 * @returns {Promise<void>}
+	 */
+	async _applyRetentionNative(refKey) {
+		const keep =
+			typeof this.keepPreviousWeeks === 'number' && Number.isFinite(this.keepPreviousWeeks)
+				? this.keepPreviousWeeks
+				: 0;
+		if (keep < 0) {
+			return;
+		}
+
+		const keepKeys = this._segmentKeysToKeep(Date.now());
+		const { dirPath, baseName } = this._refPathInfo(refKey);
+		const prefix = `${baseName}.`;
+		const suffix = `.${this.fileExtension}`;
+		const absoluteDir = this._nativeAbsPath(dirPath);
+
+		let entries;
+		try {
+			entries = await fs.readdir(absoluteDir, { withFileTypes: true });
+		} catch (e) {
+			this.adapter?.log?.debug?.(
+				`MsgArchive retention native readdir failed (${absoluteDir || '.'}): ${e?.message || e}`,
+			);
+			return;
+		}
+
+		const deletions = [];
+		for (const entry of entries || []) {
+			if (!entry || entry.isDirectory()) {
+				continue;
+			}
+			const file = entry.name;
+			if (typeof file !== 'string' || !file.startsWith(prefix) || !file.endsWith(suffix)) {
+				continue;
+			}
+			const segmentKey = file.slice(prefix.length, file.length - suffix.length);
+			if (!/^[0-9]{8}$/.test(segmentKey) || keepKeys.has(segmentKey)) {
+				continue;
+			}
+			const relativePath = dirPath ? `${dirPath}/${file}` : file;
+			deletions.push(this._deleteFile(relativePath));
+		}
+
+		if (deletions.length > 0) {
+			await Promise.allSettled(deletions);
+			this.adapter?.log?.debug?.(
+				`MsgArchive retention: deleted ${deletions.length} old segment file(s) for ${baseName} (keepPreviousWeeks=${keep})`,
+			);
+		}
+	}
+
+	/**
 	 * Call once during startup.
 	 *
 	 * Ensures the ioBroker file storage meta object exists and (optionally) creates the base directory.
@@ -352,10 +526,15 @@ class MsgArchive {
 	 * @returns {Promise<void>} Resolves when the archive is ready for writes.
 	 */
 	async init() {
-		await ensureMetaObject(this.adapter, this.metaId);
-		await ensureBaseDir(this.adapter, this.metaId, this.baseDir);
+		await this._resolveStorageStrategy();
+		if (this.effectiveStrategy === 'native') {
+			await fs.mkdir(this.nativeRootDir, { recursive: true });
+		} else {
+			await ensureMetaObject(this.adapter, this.metaId);
+			await ensureBaseDir(this.adapter, this.metaId, this.baseDir);
+		}
 		this.adapter?.log?.info?.(
-			`MsgArchive initialized: baseDir=${this.baseDir || '.'}, ext=${this.fileExtension}, interval=${this.flushIntervalMs}ms, keepPreviousWeeks=${this.keepPreviousWeeks}`,
+			`MsgArchive initialized: strategy=${this.effectiveStrategy} reason=${this.effectiveStrategyReason} baseDir=${this.baseDir || '.'}, nativeRoot=${this.nativeRootDir || '-'}, ext=${this.fileExtension}, interval=${this.flushIntervalMs}ms, keepPreviousWeeks=${this.keepPreviousWeeks}`,
 		);
 	}
 
@@ -1052,14 +1231,18 @@ class MsgArchive {
 	 * Appends events to the ref file (JSONL).
 	 *
 	 * Implementation detail:
-	 * - ioBroker file storage does not expose append, so this does a read + rewrite of the full file.
-	 * - We preserve a trailing newline and avoid accidental blank lines by trimming the existing tail.
+	 * - ioBroker mode: read + rewrite the full file (append API not available).
+	 * - Native mode: append directly via `fs.appendFile`.
 	 *
 	 * @param {string} refKey Normalized ref key.
 	 * @param {Array<object>} events Event entries to append in order.
-	 * @returns {Promise<void>} Resolves after the file has been rewritten with the new lines.
+	 * @returns {Promise<void>} Resolves after the events have been persisted.
 	 */
 	async _appendEvents(refKey, events) {
+		if (this.effectiveStrategy === 'native') {
+			return await this._appendEventsNative(refKey, events);
+		}
+
 		const bySegment = new Map();
 		for (const entry of events) {
 			const ts = typeof entry?.ts === 'number' && Number.isFinite(entry.ts) ? entry.ts : Date.now();
@@ -1078,10 +1261,7 @@ class MsgArchive {
 			const combined = existingTrimmed ? `${existingTrimmed}\n${newLines}\n` : `${newLines}\n`;
 
 			await this.adapter.writeFileAsync(this.metaId, filePath, combined);
-			this._lastFlushedAt = Date.now();
-			this._sizeEstimateAt = 0;
-			this._sizeEstimateBytes = null;
-			this._sizeEstimateIsComplete = false;
+			this._markArchiveMutated();
 
 			this.adapter?.log?.debug?.(
 				`MsgArchive append ${entries.length} event(s) -> ${filePath}, ${Buffer.byteLength(combined, 'utf8')} bytes`,
@@ -1097,12 +1277,66 @@ class MsgArchive {
 	}
 
 	/**
+	 * Appends events using native filesystem mode.
+	 *
+	 * @param {string} refKey Normalized ref key.
+	 * @param {Array<object>} events Event entries to append in order.
+	 * @returns {Promise<void>}
+	 */
+	async _appendEventsNative(refKey, events) {
+		const bySegment = new Map();
+		for (const entry of events) {
+			const ts = typeof entry?.ts === 'number' && Number.isFinite(entry.ts) ? entry.ts : Date.now();
+			const segmentKey = this._segmentKeyForTs(ts);
+			const list = bySegment.get(segmentKey) || [];
+			list.push(entry);
+			bySegment.set(segmentKey, list);
+		}
+
+		for (const [segmentKey, entries] of bySegment.entries()) {
+			const filePath = this._filePathForRef(refKey, segmentKey);
+			const absolutePath = this._nativeAbsPath(filePath);
+			await this._ensureDirForFilePath(filePath);
+			const newLines = entries.map(entry => serializeWithMaps(entry, this._mapTypeMarker)).join('\n');
+			await fs.appendFile(absolutePath, `${newLines}\n`, 'utf8');
+			this._markArchiveMutated();
+			this.adapter?.log?.debug?.(`MsgArchive append ${entries.length} event(s) -> ${absolutePath}`);
+		}
+
+		try {
+			await this._applyRetention(refKey);
+		} catch {
+			// must never break archiving
+		}
+	}
+
+	/**
+	 * Marks cached archive size status as stale after writes/deletions.
+	 */
+	_markArchiveMutated() {
+		this._lastFlushedAt = Date.now();
+		this._sizeEstimateAt = 0;
+		this._sizeEstimateBytes = null;
+		this._sizeEstimateIsComplete = false;
+	}
+
+	/**
 	 * Reads file text from storage (returns empty string when missing).
 	 *
 	 * @param {string} filePath File path under the file store.
 	 * @returns {Promise<string>} File content (utf8) or empty string.
 	 */
 	async _readFileText(filePath) {
+		if (this.effectiveStrategy === 'native') {
+			const absolutePath = this._nativeAbsPath(filePath);
+			try {
+				return await fs.readFile(absolutePath, 'utf8');
+			} catch (e) {
+				this.adapter?.log?.debug?.(`MsgArchive native read failed (${absolutePath}): ${e?.message || e}`);
+				return '';
+			}
+		}
+
 		try {
 			const res = await this.adapter.readFileAsync(this.metaId, filePath);
 			const raw = res && typeof res === 'object' && 'file' in res ? res.file : res;
@@ -1130,10 +1364,18 @@ class MsgArchive {
 			return;
 		}
 		const dir = filePath.slice(0, idx);
-		if (this._ensuredDirs.has(dir)) {
+		const key = this.effectiveStrategy === 'native' ? this._nativeAbsPath(dir) : dir;
+		if (!key) {
 			return;
 		}
-		this._ensuredDirs.add(dir);
+		if (this._ensuredDirs.has(key)) {
+			return;
+		}
+		this._ensuredDirs.add(key);
+		if (this.effectiveStrategy === 'native') {
+			await fs.mkdir(key, { recursive: true });
+			return;
+		}
 		await ensureBaseDir(this.adapter, this.metaId, dir);
 	}
 
@@ -1158,7 +1400,7 @@ class MsgArchive {
 	/**
 	 * Return best-effort runtime status for diagnostics / UIs.
 	 *
-	 * @returns {{ baseDir: string, fileExtension: string, flushIntervalMs: number, maxBatchSize: number, keepPreviousWeeks: number, lastFlushedAt: number|null, pending: { refs: number, events: number, flushingRefs: number }, approxSizeBytes: number|null, approxSizeUpdatedAt: number|null, approxSizeIsComplete: boolean }} Status snapshot.
+	 * @returns {{ baseDir: string, configuredStrategyLock: string, effectiveStrategy: string, effectiveStrategyReason: string, nativeRootDir: string, runtimeRoot: string, nativeProbeError: string, fileExtension: string, flushIntervalMs: number, maxBatchSize: number, keepPreviousWeeks: number, lastFlushedAt: number|null, pending: { refs: number, events: number, flushingRefs: number }, approxSizeBytes: number|null, approxSizeUpdatedAt: number|null, approxSizeIsComplete: boolean }} Status snapshot.
 	 */
 	getStatus() {
 		let pendingRefs = 0;
@@ -1180,6 +1422,15 @@ class MsgArchive {
 
 		return {
 			baseDir: this.baseDir || '',
+			configuredStrategyLock: this.configuredStrategyLock || '',
+			effectiveStrategy: this.effectiveStrategy,
+			effectiveStrategyReason: this.effectiveStrategyReason || '',
+			nativeRootDir: this.nativeRootDir || '',
+			runtimeRoot:
+				this.effectiveStrategy === 'native'
+					? this._nativeAbsPath(this.baseDir || '')
+					: `iobroker-file-api://${this.metaId}/${this.baseDir || ''}`,
+			nativeProbeError: this._nativeProbeError || '',
 			fileExtension: this.fileExtension,
 			flushIntervalMs: this.flushIntervalMs,
 			maxBatchSize: this.maxBatchSize,
@@ -1211,6 +1462,10 @@ class MsgArchive {
 				updatedAt: cachedAt,
 				isComplete: this._sizeEstimateIsComplete === true,
 			};
+		}
+
+		if (this.effectiveStrategy === 'native') {
+			return await this._estimateSizeBytesNative(now);
 		}
 
 		if (typeof this.adapter.readDirAsync !== 'function') {
@@ -1254,6 +1509,68 @@ class MsgArchive {
 				if (typeof size === 'number' && Number.isFinite(size)) {
 					total += size;
 				} else {
+					isComplete = false;
+				}
+			}
+		}
+
+		this._sizeEstimateAt = now;
+		this._sizeEstimateBytes = total;
+		this._sizeEstimateIsComplete = isComplete;
+		return { bytes: total, updatedAt: now, isComplete };
+	}
+
+	/**
+	 * Estimate archive size in native filesystem mode.
+	 *
+	 * @param {number} now Timestamp for cache metadata.
+	 * @returns {Promise<{ bytes: number|null, updatedAt: number, isComplete: boolean }>} Size estimate result.
+	 */
+	async _estimateSizeBytesNative(now) {
+		if (!this.nativeRootDir) {
+			this._sizeEstimateAt = now;
+			this._sizeEstimateBytes = null;
+			this._sizeEstimateIsComplete = false;
+			return { bytes: null, updatedAt: now, isComplete: false };
+		}
+
+		const queue = [this.nativeRootDir];
+		let total = 0;
+		let isComplete = true;
+
+		while (queue.length > 0) {
+			const dir = queue.shift();
+			if (!dir) {
+				continue;
+			}
+			let entries;
+			try {
+				entries = await fs.readdir(dir, { withFileTypes: true });
+			} catch {
+				isComplete = false;
+				continue;
+			}
+
+			for (const entry of entries || []) {
+				if (!entry) {
+					continue;
+				}
+				const abs = path.join(dir, entry.name);
+				if (entry.isDirectory()) {
+					queue.push(abs);
+					continue;
+				}
+				if (!entry.isFile()) {
+					continue;
+				}
+				try {
+					const st = await fs.stat(abs);
+					if (typeof st?.size === 'number' && Number.isFinite(st.size)) {
+						total += st.size;
+					} else {
+						isComplete = false;
+					}
+				} catch {
 					isComplete = false;
 				}
 			}

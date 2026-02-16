@@ -64,6 +64,130 @@
 					"md": 6,
 					"lg": 4,
 					"xl": 4
+				},
+				"_archiveStrategyHeader": {
+					"type": "header",
+					"text": "msghub.i18n.core.admin.jsonConfig.archive.strategy.header.text",
+					"newLine": true,
+					"size": 2
+				},
+				"_archiveStrategyWhyText": {
+					"type": "staticText",
+					"text": "msghub.i18n.core.admin.jsonConfig.archive.strategy.why.text",
+					"newLine": true,
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12,
+					"style": { "whiteSpace": "pre-wrap" }
+				},
+				"archiveEffectiveStrategyLock": {
+					"type": "text",
+					"label": "msghub.i18n.core.admin.jsonConfig.archive.strategy.active.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.archive.strategy.active.help",
+					"default": "",
+					"disabled": true,
+					"newLine": true,
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 4,
+					"xl": 4
+				},
+				"archiveLockReason": {
+					"type": "text",
+					"label": "msghub.i18n.core.admin.jsonConfig.archive.strategy.reason.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.archive.strategy.reason.help",
+					"default": "",
+					"disabled": true,
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 8,
+					"xl": 8
+				},
+				"archiveRetryNative": {
+					"type": "sendTo",
+					"label": "msghub.i18n.core.admin.jsonConfig.archive.strategy.retryNative.label",
+					"command": "admin.archive.retryNative",
+					"timeout": 10000,
+					"useNative": true,
+					"jsonData": "{}",
+					"newLine": true,
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 6,
+					"xl": 6
+				},
+				"archiveForceIobroker": {
+					"type": "sendTo",
+					"label": "msghub.i18n.core.admin.jsonConfig.archive.strategy.forceIobroker.label",
+					"command": "admin.archive.forceIobroker",
+					"timeout": 10000,
+					"useNative": true,
+					"jsonData": "{}",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 6,
+					"xl": 6
+				},
+				"_archiveStrategyNoMigrationText": {
+					"type": "staticText",
+					"text": "msghub.i18n.core.admin.jsonConfig.archive.strategy.noMigration.text",
+					"newLine": true,
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12,
+					"style": { "whiteSpace": "pre-wrap" }
+				},
+				"_archiveRuntimeHeader": {
+					"type": "header",
+					"text": "msghub.i18n.core.admin.jsonConfig.archive.strategy.runtime.header.text",
+					"newLine": true,
+					"size": 2
+				},
+				"archiveRuntimeStrategy": {
+					"type": "text",
+					"label": "msghub.i18n.core.admin.jsonConfig.archive.strategy.runtime.active.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.archive.strategy.runtime.active.help",
+					"default": "",
+					"disabled": true,
+					"newLine": true,
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 4,
+					"xl": 4
+				},
+				"archiveRuntimeReason": {
+					"type": "text",
+					"label": "msghub.i18n.core.admin.jsonConfig.archive.strategy.runtime.reason.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.archive.strategy.runtime.reason.help",
+					"default": "",
+					"disabled": true,
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 8,
+					"xl": 8
+				},
+				"archiveRuntimeRoot": {
+					"type": "text",
+					"label": "msghub.i18n.core.admin.jsonConfig.archive.strategy.runtime.root.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.archive.strategy.runtime.root.help",
+					"default": "",
+					"disabled": true,
+					"newLine": true,
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12
 				}
 			}
 		},

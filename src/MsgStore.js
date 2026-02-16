@@ -1671,6 +1671,12 @@ class MsgStore {
 		return typeof buildActions === 'function' ? buildActions.call(this.msgActions, rendered) : rendered;
 	}
 
+	/**
+	 * Create a shallow, output-safe clone of a message.
+	 *
+	 * @param {object|undefined} msg Raw canonical message.
+	 * @returns {object|undefined} Cloned output message.
+	 */
 	_cloneForOutput(msg) {
 		if (!msg || typeof msg !== 'object') {
 			return msg;

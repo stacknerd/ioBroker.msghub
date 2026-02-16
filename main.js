@@ -213,17 +213,29 @@ class Msghub extends utils.Adapter {
 
 		const msgAi = new MsgAi(this, msgCfg.corePrivate.ai);
 		this.msgAi = msgAi;
+		let instanceDataDir = '';
+		try {
+			if (typeof utils.getAbsoluteInstanceDataDir === 'function') {
+				instanceDataDir = String(utils.getAbsoluteInstanceDataDir(this) || '').trim();
+			}
+		} catch (e) {
+			this.log?.warn?.(`Could not resolve instance data dir for native archive mode: ${e?.message || e}`);
+		}
 
 		this.msgStore = new MsgStore(this, this.msgConstants, this.msgFactory, {
 			store: msgCfg.corePrivate.store,
 			storage: msgCfg.corePrivate.storage,
-			archive: msgCfg.corePrivate.archive,
+			archive: {
+				...msgCfg.corePrivate.archive,
+				instanceDataDir,
+			},
 			stats: msgCfg.corePrivate.stats,
 			quietHours: msgCfg.corePrivate.quietHours,
 			render: msgCfg.corePrivate.render,
 			ai: msgAi,
 		});
 		await this.msgStore.init();
+		await this._syncArchiveRuntimeNativeFields();
 
 		/////////////////////////////////////////
 		// Message Hub Plugins
@@ -376,6 +388,48 @@ class Msghub extends utils.Adapter {
 			return { ok: false, error: { code: 'NOT_READY', message: 'AdminTab runtime not ready' } };
 		}
 		return await this._adminTab.handleCommand(cmd, payload);
+	}
+
+	/**
+	 * Persist current archive runtime status into instance native config fields for jsonConfig visibility.
+	 *
+	 * This does not influence runtime behavior; it only mirrors diagnostics into read-only UI fields.
+	 *
+	 * @returns {Promise<void>}
+	 */
+	async _syncArchiveRuntimeNativeFields() {
+		const archive = this.msgStore?.msgArchive;
+		if (!archive || typeof archive.getStatus !== 'function') {
+			return;
+		}
+
+		const status = archive.getStatus();
+		const strategy = typeof status?.effectiveStrategy === 'string' ? status.effectiveStrategy : '';
+		const reason = typeof status?.effectiveStrategyReason === 'string' ? status.effectiveStrategyReason : '';
+		const root = typeof status?.runtimeRoot === 'string' ? status.runtimeRoot : '';
+
+		const id = `system.adapter.${this.namespace}`;
+		const obj = await this.getForeignObjectAsync(id);
+		if (!obj || typeof obj !== 'object') {
+			return;
+		}
+		const next = JSON.parse(JSON.stringify(obj));
+		if (!next.native || typeof next.native !== 'object') {
+			next.native = {};
+		}
+
+		const changed =
+			next.native.archiveRuntimeStrategy !== strategy ||
+			next.native.archiveRuntimeReason !== reason ||
+			next.native.archiveRuntimeRoot !== root;
+		if (!changed) {
+			return;
+		}
+
+		next.native.archiveRuntimeStrategy = strategy;
+		next.native.archiveRuntimeReason = reason;
+		next.native.archiveRuntimeRoot = root;
+		await this.setForeignObjectAsync(id, next);
 	}
 
 	async _handleCustomSelectOptions(cmd, payload) {
