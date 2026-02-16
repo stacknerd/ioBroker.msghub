@@ -4,6 +4,7 @@ const { expect } = require('chai');
 const { MsgStore } = require('./MsgStore');
 const { MsgConstants } = require('./MsgConstants');
 const { IoArchiveIobroker } = require('../lib/IoArchiveIobroker');
+const { IoStorageIobroker } = require('../lib/IoStorageIobroker');
 
 function createAdapter() {
 	const logs = { warn: [] };
@@ -49,6 +50,15 @@ function createRenderer() {
 		renderMessages: msgs => (Array.isArray(msgs) ? msgs.map(renderOne) : msgs),
 	};
 	return { msgRender, calls };
+}
+
+function createStorageBackendFactory(adapter, baseDir = 'data') {
+	return () =>
+		new IoStorageIobroker({
+			adapter,
+			metaId: adapter.namespace,
+			baseDir,
+		});
 }
 
 	function createFactory({ applyPatch } = {}) {
@@ -123,7 +133,9 @@ function createStore({
 
 	const store = new MsgStore(selectedAdapter, msgConstants || MsgConstants, msgFactory, {
 		store: defaultStoreCfg,
-		storage: {},
+		storage: {
+			createStorageBackend: createStorageBackendFactory(selectedAdapter, 'data'),
+		},
 		archive: {
 			createStorageBackend: onMutated =>
 				new IoArchiveIobroker({
@@ -694,7 +706,7 @@ describe('MsgStore', () => {
 			const { storage, writes } = createStorage();
 			const { msgRender } = createRenderer();
 			const msgFactory = {};
-				const store = new MsgStore(adapter, MsgConstants, msgFactory, {
+			const store = new MsgStore(adapter, MsgConstants, msgFactory, {
 				store: {
 					pruneIntervalMs: 30_000,
 					notifierIntervalMs: 0,
@@ -705,27 +717,29 @@ describe('MsgStore', () => {
 					hardDeleteStartupDelayMs: 1000 * 60,
 					deleteClosedIntervalMs: 1000 * 10,
 				},
-					storage: {},
-					archive: {
-						createStorageBackend: onMutated =>
-							new IoArchiveIobroker({
-								adapter,
-								metaId: adapter.namespace,
-								baseDir: 'data/archive',
-								fileExtension: 'jsonl',
-								onMutated,
-							}),
-						archiveRuntime: {
-							configuredStrategyLock: '',
-							effectiveStrategy: 'iobroker',
-							effectiveStrategyReason: 'test-default',
-							nativeRootDir: '',
-							nativeProbeError: '',
-						},
+				storage: {
+					createStorageBackend: createStorageBackendFactory(adapter, 'data'),
+				},
+				archive: {
+					createStorageBackend: onMutated =>
+						new IoArchiveIobroker({
+							adapter,
+							metaId: adapter.namespace,
+							baseDir: 'data/archive',
+							fileExtension: 'jsonl',
+							onMutated,
+						}),
+					archiveRuntime: {
+						configuredStrategyLock: '',
+						effectiveStrategy: 'iobroker',
+						effectiveStrategyReason: 'test-default',
+						nativeRootDir: '',
+						nativeProbeError: '',
 					},
-					stats: {},
-					initialMessages: [{ ref: 'r1', level: 10 }],
-				});
+				},
+				stats: {},
+				initialMessages: [{ ref: 'r1', level: 10 }],
+			});
 			store.msgStorage = storage;
 			store.msgRender = msgRender;
 			store.msgArchive = { appendSnapshot: () => {}, appendPatch: () => {}, appendDelete: () => {} };

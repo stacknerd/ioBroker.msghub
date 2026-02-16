@@ -95,6 +95,7 @@ class MsgStore {
 	 * @param {{ pruneIntervalMs: number, notifierIntervalMs: number, hardDeleteAfterMs: number, hardDeleteIntervalMs: number, hardDeleteBacklogIntervalMs: number, hardDeleteBatchSize: number, hardDeleteStartupDelayMs: number, deleteClosedIntervalMs: number }} options.store
 	 *   Normalized store config (source of truth: MsgConfig).
 	 * @param {object} options.storage Normalized storage config (source of truth: MsgConfig).
+	 * @param {() => any} options.storage.createStorageBackend Platform-resolved storage backend factory for MsgStorage.
 	 * @param {object} options.archive Normalized archive config (source of truth: MsgConfig).
 	 * @param {object} options.stats Normalized stats config (source of truth: MsgConfig).
 	 * @param {any} [options.render] Render-related options forwarded to `MsgRender` (e.g. prefix configuration).
@@ -186,9 +187,14 @@ class MsgStore {
 		);
 		this._lastDeleteClosedAt = 0;
 
+		const createStorageBackend =
+			typeof storage.createStorageBackend === 'function' ? storage.createStorageBackend : null;
+		if (!createStorageBackend) {
+			throw new Error('MsgStore: options.storage.createStorageBackend is required');
+		}
+
 		// File persistence (initialized in `init()`).
 		this.msgStorage = new MsgStorage(this.adapter, {
-			baseDir: 'data',
 			fileName: 'messages.json',
 			...storage,
 		});
@@ -212,7 +218,10 @@ class MsgStore {
 		this.msgActions = new MsgAction(this.adapter, this.msgConstants, this);
 
 		// Stats (read-only insights + rollups).
-		this.msgStats = new MsgStats(this.adapter, this.msgConstants, this, stats);
+		this.msgStats = new MsgStats(this.adapter, this.msgConstants, this, {
+			...stats,
+			createStorageBackend,
+		});
 
 		// Pruning and notification timers (timer starts in `init()`).
 		this._quietHours = options?.quietHours || null;

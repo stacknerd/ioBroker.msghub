@@ -2,6 +2,7 @@
 
 const { expect } = require('chai');
 const { MsgStorage } = require('./MsgStorage');
+const { IoStorageIobroker } = require('../lib/IoStorageIobroker');
 
 function createAdapter({ withRename = true } = {}) {
 	const files = new Map();
@@ -55,10 +56,24 @@ function createAdapter({ withRename = true } = {}) {
 	return { adapter, files, objects, logs };
 }
 
+function createStorage(adapter, options = {}) {
+	const opt = options && typeof options === 'object' && !Array.isArray(options) ? options : {};
+	const baseDir = typeof opt.baseDir === 'string' ? opt.baseDir : '';
+	return new MsgStorage(adapter, {
+		...opt,
+		createStorageBackend: () =>
+			new IoStorageIobroker({
+				adapter,
+				metaId: adapter.namespace,
+				baseDir,
+			}),
+	});
+}
+
 describe('MsgStorage', () => {
 	it('creates a meta object on init when missing', async () => {
 		const { adapter, objects } = createAdapter();
-		const storage = new MsgStorage(adapter);
+		const storage = createStorage(adapter);
 		await storage.init();
 
 		const meta = objects.get(adapter.namespace);
@@ -69,7 +84,7 @@ describe('MsgStorage', () => {
 	it('throws if the meta object exists with the wrong type', async () => {
 		const { adapter, objects } = createAdapter();
 		objects.set(adapter.namespace, { type: 'state' });
-		const storage = new MsgStorage(adapter);
+		const storage = createStorage(adapter);
 
 		try {
 			await storage.init();
@@ -81,7 +96,7 @@ describe('MsgStorage', () => {
 
 	it('returns fallback when file is missing', async () => {
 		const { adapter } = createAdapter();
-		const storage = new MsgStorage(adapter);
+		const storage = createStorage(adapter);
 		await storage.init();
 
 		const fallback = { ok: true };
@@ -91,7 +106,7 @@ describe('MsgStorage', () => {
 
 	it('returns fallback when file contains invalid JSON', async () => {
 		const { adapter, files } = createAdapter();
-		const storage = new MsgStorage(adapter);
+		const storage = createStorage(adapter);
 		await storage.init();
 
 		files.set(`${adapter.namespace}/messages.json`, '{ invalid');
@@ -101,7 +116,7 @@ describe('MsgStorage', () => {
 
 	it('reads and parses JSON from the file store', async () => {
 		const { adapter, files } = createAdapter();
-		const storage = new MsgStorage(adapter);
+		const storage = createStorage(adapter);
 		await storage.init();
 
 		files.set(`${adapter.namespace}/messages.json`, JSON.stringify({ a: 1, b: 'x' }));
@@ -111,7 +126,7 @@ describe('MsgStorage', () => {
 
 	it('preserves Map values during write and read', async () => {
 		const { adapter } = createAdapter();
-		const storage = new MsgStorage(adapter, { writeIntervalMs: 0 });
+		const storage = createStorage(adapter, { writeIntervalMs: 0 });
 		await storage.init();
 
 		const metrics = new Map([['temp', { val: 1, unit: 'C', ts: Date.UTC(2025, 0, 1) }]]);
@@ -124,7 +139,7 @@ describe('MsgStorage', () => {
 
 	it('writes JSON via rename when supported', async () => {
 		const { adapter, files } = createAdapter({ withRename: true });
-		const storage = new MsgStorage(adapter, { writeIntervalMs: 0 });
+		const storage = createStorage(adapter, { writeIntervalMs: 0 });
 		await storage.init();
 
 		await storage.writeJson({ a: 1 });
@@ -136,7 +151,7 @@ describe('MsgStorage', () => {
 
 	it('stores files under baseDir when configured', async () => {
 		const { adapter, files } = createAdapter({ withRename: true });
-		const storage = new MsgStorage(adapter, { baseDir: 'data', writeIntervalMs: 0 });
+		const storage = createStorage(adapter, { baseDir: 'data', writeIntervalMs: 0 });
 		await storage.init();
 
 		await storage.writeJson({ a: 1 });
@@ -147,7 +162,7 @@ describe('MsgStorage', () => {
 
 	it('writes JSON directly when rename is not supported', async () => {
 		const { adapter, files } = createAdapter({ withRename: false });
-		const storage = new MsgStorage(adapter, { writeIntervalMs: 0 });
+		const storage = createStorage(adapter, { writeIntervalMs: 0 });
 		await storage.init();
 
 		await storage.writeJson({ a: 2 });
@@ -158,7 +173,7 @@ describe('MsgStorage', () => {
 
 	it('throttles writes and persists only the latest value', async () => {
 		const { adapter, files } = createAdapter();
-		const storage = new MsgStorage(adapter, { writeIntervalMs: 50 });
+		const storage = createStorage(adapter, { writeIntervalMs: 50 });
 		await storage.init();
 
 		const p1 = storage.writeJson({ a: 1 });
@@ -172,7 +187,7 @@ describe('MsgStorage', () => {
 
 	it('does not write immediately when throttled, but flushPending persists latest value', async () => {
 		const { adapter, files } = createAdapter();
-		const storage = new MsgStorage(adapter, { writeIntervalMs: 100 });
+		const storage = createStorage(adapter, { writeIntervalMs: 100 });
 		await storage.init();
 
 		const p1 = storage.writeJson({ a: 1 });
@@ -188,7 +203,7 @@ describe('MsgStorage', () => {
 
 	it('writes after the throttle interval without flushPending', async () => {
 		const { adapter, files } = createAdapter();
-		const storage = new MsgStorage(adapter, { writeIntervalMs: 20 });
+		const storage = createStorage(adapter, { writeIntervalMs: 20 });
 		await storage.init();
 
 		const p1 = storage.writeJson({ a: 1 });
@@ -201,7 +216,7 @@ describe('MsgStorage', () => {
 
 	it('exposes status with lastPersistedAt after write', async () => {
 		const { adapter } = createAdapter({ withRename: false });
-		const storage = new MsgStorage(adapter, { writeIntervalMs: 0 });
+		const storage = createStorage(adapter, { writeIntervalMs: 0 });
 		await storage.init();
 
 		await storage.writeJson({ a: 1 });

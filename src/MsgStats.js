@@ -110,8 +110,9 @@ class MsgStats {
 	 * @param {import('./MsgStore').MsgStore} store Owning store instance (source of messages, storage, archive).
 	 * @param {object} [options] Optional configuration.
 	 * @param {number} [options.rollupKeepDays] Retention for rollup buckets (days).
+	 * @param {() => any} [options.createStorageBackend] Platform-resolved storage backend factory for rollup persistence.
 	 */
-	constructor(adapter, msgConstants, store, { rollupKeepDays = 400 } = {}) {
+	constructor(adapter, msgConstants, store, { rollupKeepDays = 400, createStorageBackend } = {}) {
 		if (!adapter?.namespace) {
 			throw new Error('MsgStats: adapter is required');
 		}
@@ -120,6 +121,9 @@ class MsgStats {
 		}
 		if (!store) {
 			throw new Error('MsgStats: store is required');
+		}
+		if (typeof createStorageBackend !== 'function') {
+			throw new Error('MsgStats: options.createStorageBackend is required');
 		}
 
 		this.adapter = adapter;
@@ -131,9 +135,9 @@ class MsgStats {
 				: 400;
 
 		this._rollupStorage = new MsgStorage(this.adapter, {
-			baseDir: 'data',
 			fileName: 'stats-rollup.json',
 			writeIntervalMs: 10000,
+			createStorageBackend,
 		});
 
 		this._initialized = false;

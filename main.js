@@ -14,6 +14,7 @@ const { MsgConfig } = require(`${__dirname}/src/MsgConfig`);
 const { MsgStore } = require(`${__dirname}/src/MsgStore`);
 const { MsgAi } = require(`${__dirname}/src/MsgAi`);
 const { IoArchiveResolver } = require(`${__dirname}/lib/IoArchiveResolver`);
+const { IoStorageIobroker } = require(`${__dirname}/lib/IoStorageIobroker`);
 
 function buildI18nRuntime(params) {
 	const p = params && typeof params === 'object' && !Array.isArray(params) ? params : {};
@@ -233,7 +234,15 @@ class Msghub extends utils.Adapter {
 
 		this.msgStore = new MsgStore(this, this.msgConstants, this.msgFactory, {
 			store: msgCfg.corePrivate.store,
-			storage: msgCfg.corePrivate.storage,
+			storage: {
+				...msgCfg.corePrivate.storage,
+				createStorageBackend: () =>
+					new IoStorageIobroker({
+						adapter: this,
+						metaId: this.namespace,
+						baseDir: 'data',
+					}),
+			},
 			archive: {
 				...msgCfg.corePrivate.archive,
 				createStorageBackend: archiveResolved.createStorageBackend,

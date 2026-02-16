@@ -6,6 +6,7 @@ const { MsgStorage } = require('./MsgStorage');
 const { MsgArchive } = require('./MsgArchive');
 const { MsgStats } = require('./MsgStats');
 const { IoArchiveIobroker } = require('../lib/IoArchiveIobroker');
+const { IoStorageIobroker } = require('../lib/IoStorageIobroker');
 
 function createAdapter() {
 	const files = new Map();
@@ -55,11 +56,23 @@ function withFixedNow(now, fn) {
 	}
 }
 
+function createStorageBackendFactory(adapter, baseDir = 'data') {
+	return () =>
+		new IoStorageIobroker({
+			adapter,
+			metaId: adapter.namespace,
+			baseDir,
+		});
+}
+
 describe('MsgStats', () => {
 	it('computes current + schedule + done snapshots', async () => {
 		const { adapter } = createAdapter();
 
-		const msgStorage = new MsgStorage(adapter, { baseDir: 'data', writeIntervalMs: 0 });
+		const msgStorage = new MsgStorage(adapter, {
+			writeIntervalMs: 0,
+			createStorageBackend: createStorageBackendFactory(adapter, 'data'),
+		});
 		await msgStorage.init();
 		await msgStorage.writeJson([{ ref: 'x' }]);
 
@@ -118,7 +131,9 @@ describe('MsgStats', () => {
 		];
 
 		const store = { fullList: messages, msgStorage, msgArchive };
-		const stats = new MsgStats(adapter, MsgConstants, store);
+		const stats = new MsgStats(adapter, MsgConstants, store, {
+			createStorageBackend: createStorageBackendFactory(adapter, 'data'),
+		});
 
 		withFixedNow(now, () => {
 			stats.recordClosed({
