@@ -33,12 +33,8 @@
  * - Entries are serialized via `serializeWithMaps()` so `Map` values (e.g. metrics) remain intact.
  */
 
-const { DEFAULT_MAP_TYPE_MARKER, serializeWithMaps, ensureMetaObject, ensureBaseDir, createOpQueue } = require(
-	`${__dirname}/MsgUtils`,
-);
+const { DEFAULT_MAP_TYPE_MARKER, serializeWithMaps, createOpQueue } = require(`${__dirname}/MsgUtils`);
 const crypto = require('crypto');
-const fs = require('node:fs/promises');
-const path = require('node:path');
 
 /**
  * MsgArchive
@@ -56,61 +52,71 @@ class MsgArchive {
 	 * @param {number} [options.maxBatchSize] Max queued events per ref before forced flush (default 200).
 	 * @param {number} [options.keepPreviousWeeks] How many previous week segments to keep, in addition to the current one (default 3).
 	 * @param {number} [options.maxPathSegmentLength] Max length (bytes) per path component derived from refs (default 120).
-	 * @param {'native'|'iobroker'|''} [options.effectiveStrategyLock] Persisted strategy lock.
-	 * @param {string} [options.lockReason] Human-readable lock reason for diagnostics.
-	 * @param {number} [options.lockedAt] Lock timestamp (epoch ms).
-	 * @param {string} [options.instanceDataDir] Absolute adapter instance data directory for native mode.
-	 * @param {string} [options.nativeRelativeDir] Optional native prefix below `instanceDataDir` (default: none).
+	 * @param {(onMutated?: () => void) => any} options.createStorageBackend
+	 *   Platform-resolved backend factory injection.
+	 * @param {{ configuredStrategyLock?: string, effectiveStrategy?: string, effectiveStrategyReason?: string, nativeRootDir?: string, nativeProbeError?: string }} [options.archiveRuntime]
+	 *   Platform-resolved runtime strategy diagnostics.
 	 */
-	constructor(adapter, options = {}) {
+	constructor(adapter, options) {
 		if (!adapter) {
 			throw new Error('MsgArchive: adapter is required');
 		}
+		const opt = options && typeof options === 'object' && !Array.isArray(options) ? options : {};
 
 		this.adapter = adapter;
-		this.metaId = options.metaId || adapter.namespace;
-		this.baseDir = typeof options.baseDir === 'string' ? options.baseDir.replace(/^\/+|\/+$/g, '') : '';
+		this.metaId = opt.metaId || adapter.namespace;
+		this.baseDir = typeof opt.baseDir === 'string' ? opt.baseDir.replace(/^\/+|\/+$/g, '') : '';
 		this.fileExtension =
-			typeof options.fileExtension === 'string' && options.fileExtension.trim()
-				? options.fileExtension.trim().replace(/^\./, '')
+			typeof opt.fileExtension === 'string' && opt.fileExtension.trim()
+				? opt.fileExtension.trim().replace(/^\./, '')
 				: 'jsonl';
 		this.flushIntervalMs =
-			typeof options.flushIntervalMs === 'number' && Number.isFinite(options.flushIntervalMs)
-				? Math.max(0, options.flushIntervalMs)
+			typeof opt.flushIntervalMs === 'number' && Number.isFinite(opt.flushIntervalMs)
+				? Math.max(0, opt.flushIntervalMs)
 				: 10000;
 		this.maxBatchSize =
-			typeof options.maxBatchSize === 'number' && Number.isFinite(options.maxBatchSize)
-				? Math.max(1, options.maxBatchSize)
+			typeof opt.maxBatchSize === 'number' && Number.isFinite(opt.maxBatchSize)
+				? Math.max(1, opt.maxBatchSize)
 				: 200;
 		this.keepPreviousWeeks =
-			typeof options.keepPreviousWeeks === 'number' && Number.isFinite(options.keepPreviousWeeks)
-				? Math.max(0, Math.trunc(options.keepPreviousWeeks))
+			typeof opt.keepPreviousWeeks === 'number' && Number.isFinite(opt.keepPreviousWeeks)
+				? Math.max(0, Math.trunc(opt.keepPreviousWeeks))
 				: 3;
 
 		// Bound file/path segment size to avoid ENAMETOOLONG crashes when refs are huge.
 		// (Most Linux filesystems limit a single path component to 255 bytes; encoded refs can exceed this easily.)
 		this.maxPathSegmentLength =
-			typeof options.maxPathSegmentLength === 'number' && Number.isFinite(options.maxPathSegmentLength)
-				? Math.max(32, Math.trunc(options.maxPathSegmentLength))
+			typeof opt.maxPathSegmentLength === 'number' && Number.isFinite(opt.maxPathSegmentLength)
+				? Math.max(32, Math.trunc(opt.maxPathSegmentLength))
 				: 120;
 
-		const lockRaw =
-			typeof options.effectiveStrategyLock === 'string' ? options.effectiveStrategyLock.trim().toLowerCase() : '';
-		this.configuredStrategyLock = lockRaw === 'native' || lockRaw === 'iobroker' ? lockRaw : '';
-		this.lockReason = typeof options.lockReason === 'string' ? options.lockReason.trim() : '';
-		this.lockedAt =
-			typeof options.lockedAt === 'number' && Number.isFinite(options.lockedAt)
-				? Math.max(0, Math.trunc(options.lockedAt))
-				: 0;
-		const instanceDataDir = typeof options.instanceDataDir === 'string' ? options.instanceDataDir.trim() : '';
-		this.instanceDataDir = instanceDataDir && path.isAbsolute(instanceDataDir) ? instanceDataDir : '';
-		const defaultNativeRelativeDir = '';
-		const nativeRelativeRaw =
-			typeof options.nativeRelativeDir === 'string' ? options.nativeRelativeDir : defaultNativeRelativeDir;
-		this.nativeRelativeDir = String(nativeRelativeRaw || '').replace(/^\/+|\/+$/g, '');
-		this.nativeRootDir = this.instanceDataDir ? path.join(this.instanceDataDir, this.nativeRelativeDir) : '';
-		this.effectiveStrategy = 'iobroker';
-		this.effectiveStrategyReason = 'startup-not-resolved';
+		const runtimeRaw =
+			opt.archiveRuntime && typeof opt.archiveRuntime === 'object' && !Array.isArray(opt.archiveRuntime)
+				? opt.archiveRuntime
+				: {};
+		const configuredRaw =
+			typeof runtimeRaw.configuredStrategyLock === 'string'
+				? runtimeRaw.configuredStrategyLock.trim().toLowerCase()
+				: '';
+		this.configuredStrategyLock = configuredRaw === 'native' || configuredRaw === 'iobroker' ? configuredRaw : '';
+		const effectiveRaw =
+			typeof runtimeRaw.effectiveStrategy === 'string' ? runtimeRaw.effectiveStrategy.trim().toLowerCase() : '';
+		this.effectiveStrategy = effectiveRaw === 'native' || effectiveRaw === 'iobroker' ? effectiveRaw : 'iobroker';
+		this.effectiveStrategyReason =
+			typeof runtimeRaw.effectiveStrategyReason === 'string' && runtimeRaw.effectiveStrategyReason.trim()
+				? runtimeRaw.effectiveStrategyReason.trim()
+				: 'platform-unset';
+		this.nativeRootDir = typeof runtimeRaw.nativeRootDir === 'string' ? runtimeRaw.nativeRootDir.trim() : '';
+		this._nativeProbeError =
+			typeof runtimeRaw.nativeProbeError === 'string' ? runtimeRaw.nativeProbeError.trim() : '';
+
+		this._mapTypeMarker = DEFAULT_MAP_TYPE_MARKER;
+		const createStorageBackend = typeof opt.createStorageBackend === 'function' ? opt.createStorageBackend : null;
+		if (!createStorageBackend) {
+			throw new Error('MsgArchive: options.createStorageBackend is required');
+		}
+		this._storageBackend = createStorageBackend(() => this._markArchiveMutated());
+		this._assertBackendContract(this._storageBackend, this.effectiveStrategy || 'resolved');
 
 		this.schemaVersion = 1;
 
@@ -120,92 +126,27 @@ class MsgArchive {
 		// Pending events per ref file key, along with timers and waiters.
 		this._pending = new Map();
 
-		// Best-effort cache of directories we already attempted to create.
-		this._ensuredDirs = new Set();
-
-		this._mapTypeMarker = DEFAULT_MAP_TYPE_MARKER;
-
 		// Best-effort runtime status for diagnostics / stats UIs.
 		this._lastFlushedAt = 0;
 		this._sizeEstimateAt = 0;
 		this._sizeEstimateBytes = null;
 		this._sizeEstimateIsComplete = false;
-		this._nativeProbeError = '';
 	}
 
 	/**
-	 * Resolve one relative archive path to the native filesystem root.
+	 * Assert minimal backend contract shape.
 	 *
-	 * @param {string} filePath Relative file path below archive base dir.
-	 * @returns {string} Absolute native filesystem path.
+	 * @param {any} backend Backend instance.
+	 * @param {string} label Backend label for diagnostics.
+	 * @returns {void}
 	 */
-	_nativeAbsPath(filePath) {
-		const relative = String(filePath || '').replace(/^\/+/, '');
-		return path.join(this.nativeRootDir || '', relative);
-	}
-
-	/**
-	 * Perform a startup probe for native archive I/O capability.
-	 *
-	 * @returns {Promise<{ok:boolean, reason:string}>} Probe result.
-	 */
-	async _probeNativeStorage() {
-		if (!this.nativeRootDir) {
-			return { ok: false, reason: 'missing-instance-data-dir' };
-		}
-
-		const probeDir = path.join(this.nativeRootDir, '.probe');
-		const probeFile = path.join(probeDir, `native-probe-${process.pid || 'pid'}-${Date.now()}.jsonl`);
-		const line1 = JSON.stringify({ step: 1, ts: Date.now() });
-		const line2 = JSON.stringify({ step: 2, ts: Date.now() });
-
-		try {
-			await fs.mkdir(probeDir, { recursive: true });
-			await fs.writeFile(probeFile, `${line1}\n`, 'utf8');
-			const firstRead = await fs.readFile(probeFile, 'utf8');
-			if (!firstRead.includes(line1)) {
-				return { ok: false, reason: 'probe-read-mismatch-initial' };
-			}
-			await fs.appendFile(probeFile, `${line2}\n`, 'utf8');
-			const secondRead = await fs.readFile(probeFile, 'utf8');
-			if (!secondRead.includes(line1) || !secondRead.includes(line2)) {
-				return { ok: false, reason: 'probe-read-mismatch-append' };
-			}
-			return { ok: true, reason: 'ok' };
-		} catch (e) {
-			return { ok: false, reason: `native-probe-failed:${String(e?.message || e)}` };
-		} finally {
-			try {
-				await fs.unlink(probeFile);
-			} catch {
-				// best-effort cleanup
+	_assertBackendContract(backend, label) {
+		const required = ['init', 'appendEntries', 'readDir', 'deleteFile', 'estimateSizeBytes', 'runtimeRoot'];
+		for (const method of required) {
+			if (typeof backend?.[method] !== 'function') {
+				throw new Error(`MsgArchive: ${label} backend missing method '${method}'`);
 			}
 		}
-	}
-
-	/**
-	 * Resolve runtime strategy once during startup.
-	 *
-	 * @returns {Promise<void>}
-	 */
-	async _resolveStorageStrategy() {
-		if (this.configuredStrategyLock === 'iobroker') {
-			this.effectiveStrategy = 'iobroker';
-			this.effectiveStrategyReason = this.lockReason || 'manual-downgrade';
-			return;
-		}
-
-		const probe = await this._probeNativeStorage();
-		if (probe.ok) {
-			this.effectiveStrategy = 'native';
-			this.effectiveStrategyReason =
-				this.lockReason || (this.configuredStrategyLock === 'native' ? 'manual-upgrade' : 'auto-native-first');
-			return;
-		}
-
-		this._nativeProbeError = probe.reason;
-		this.effectiveStrategy = 'iobroker';
-		this.effectiveStrategyReason = probe.reason || 'native-probe-failed';
 	}
 
 	/**
@@ -360,41 +301,13 @@ class MsgArchive {
 	}
 
 	/**
-	 * Best-effort delete a file from adapter file storage.
+	 * Best-effort delete a file via the active archive backend.
 	 *
-	 * @param {string} filePath Full file path under the adapter file store.
+	 * @param {string} filePath Relative archive file path.
 	 * @returns {Promise<void>}
 	 */
 	async _deleteFile(filePath) {
-		if (this.effectiveStrategy === 'native') {
-			const abs = this._nativeAbsPath(filePath);
-			try {
-				await fs.unlink(abs);
-				this._markArchiveMutated();
-			} catch {
-				// best-effort
-			}
-			return;
-		}
-
-		try {
-			if (typeof this.adapter.delFileAsync === 'function') {
-				await this.adapter.delFileAsync(this.metaId, filePath);
-				this._markArchiveMutated();
-				return;
-			}
-		} catch {
-			// fall through
-		}
-
-		try {
-			if (typeof this.adapter.unlinkAsync === 'function') {
-				await this.adapter.unlinkAsync(this.metaId, filePath);
-				this._markArchiveMutated();
-			}
-		} catch {
-			// best-effort
-		}
+		await this._storageBackend.deleteFile(filePath);
 	}
 
 	/**
@@ -404,18 +317,11 @@ class MsgArchive {
 	 * @returns {Promise<void>}
 	 */
 	async _applyRetention(refKey) {
-		if (this.effectiveStrategy === 'native') {
-			return await this._applyRetentionNative(refKey);
-		}
-
 		const keep =
 			typeof this.keepPreviousWeeks === 'number' && Number.isFinite(this.keepPreviousWeeks)
 				? this.keepPreviousWeeks
 				: 0;
 		if (keep < 0) {
-			return;
-		}
-		if (typeof this.adapter.readDirAsync !== 'function') {
 			return;
 		}
 
@@ -424,77 +330,10 @@ class MsgArchive {
 		const prefix = `${baseName}.`;
 		const suffix = `.${this.fileExtension}`;
 
-		let entries;
-		try {
-			entries = await this.adapter.readDirAsync(this.metaId, dirPath || '');
-		} catch (e) {
-			this.adapter?.log?.debug?.(`MsgArchive retention readDir failed (${dirPath || '.'}): ${e?.message || e}`);
-			return;
-		}
-
+		const entries = await this._storageBackend.readDir(dirPath || '');
 		const deletions = [];
 		for (const entry of entries || []) {
 			if (!entry || entry.isDir) {
-				continue;
-			}
-			const file = entry.file;
-			if (typeof file !== 'string' || !file.startsWith(prefix) || !file.endsWith(suffix)) {
-				continue;
-			}
-			const segmentKey = file.slice(prefix.length, file.length - suffix.length);
-			if (!/^[0-9]{8}$/.test(segmentKey)) {
-				continue;
-			}
-			if (keepKeys.has(segmentKey)) {
-				continue;
-			}
-
-			const fullPath = dirPath ? `${dirPath}/${file}` : file;
-			deletions.push(this._deleteFile(fullPath));
-		}
-
-		if (deletions.length > 0) {
-			await Promise.allSettled(deletions);
-			this.adapter?.log?.debug?.(
-				`MsgArchive retention: deleted ${deletions.length} old segment file(s) for ${baseName} (keepPreviousWeeks=${keep})`,
-			);
-		}
-	}
-
-	/**
-	 * Enforce retention for native filesystem mode.
-	 *
-	 * @param {string} refKey Encoded ref key.
-	 * @returns {Promise<void>}
-	 */
-	async _applyRetentionNative(refKey) {
-		const keep =
-			typeof this.keepPreviousWeeks === 'number' && Number.isFinite(this.keepPreviousWeeks)
-				? this.keepPreviousWeeks
-				: 0;
-		if (keep < 0) {
-			return;
-		}
-
-		const keepKeys = this._segmentKeysToKeep(Date.now());
-		const { dirPath, baseName } = this._refPathInfo(refKey);
-		const prefix = `${baseName}.`;
-		const suffix = `.${this.fileExtension}`;
-		const absoluteDir = this._nativeAbsPath(dirPath);
-
-		let entries;
-		try {
-			entries = await fs.readdir(absoluteDir, { withFileTypes: true });
-		} catch (e) {
-			this.adapter?.log?.debug?.(
-				`MsgArchive retention native readdir failed (${absoluteDir || '.'}): ${e?.message || e}`,
-			);
-			return;
-		}
-
-		const deletions = [];
-		for (const entry of entries || []) {
-			if (!entry || entry.isDirectory()) {
 				continue;
 			}
 			const file = entry.name;
@@ -505,8 +344,9 @@ class MsgArchive {
 			if (!/^[0-9]{8}$/.test(segmentKey) || keepKeys.has(segmentKey)) {
 				continue;
 			}
-			const relativePath = dirPath ? `${dirPath}/${file}` : file;
-			deletions.push(this._deleteFile(relativePath));
+
+			const fullPath = dirPath ? `${dirPath}/${file}` : file;
+			deletions.push(this._deleteFile(fullPath));
 		}
 
 		if (deletions.length > 0) {
@@ -526,13 +366,7 @@ class MsgArchive {
 	 * @returns {Promise<void>} Resolves when the archive is ready for writes.
 	 */
 	async init() {
-		await this._resolveStorageStrategy();
-		if (this.effectiveStrategy === 'native') {
-			await fs.mkdir(this.nativeRootDir, { recursive: true });
-		} else {
-			await ensureMetaObject(this.adapter, this.metaId);
-			await ensureBaseDir(this.adapter, this.metaId, this.baseDir);
-		}
+		await this._storageBackend.init();
 		this.adapter?.log?.info?.(
 			`MsgArchive initialized: strategy=${this.effectiveStrategy} reason=${this.effectiveStrategyReason} baseDir=${this.baseDir || '.'}, nativeRoot=${this.nativeRootDir || '-'}, ext=${this.fileExtension}, interval=${this.flushIntervalMs}ms, keepPreviousWeeks=${this.keepPreviousWeeks}`,
 		);
@@ -1228,21 +1062,13 @@ class MsgArchive {
 	}
 
 	/**
-	 * Appends events to the ref file (JSONL).
-	 *
-	 * Implementation detail:
-	 * - ioBroker mode: read + rewrite the full file (append API not available).
-	 * - Native mode: append directly via `fs.appendFile`.
+	 * Appends events to the ref file (JSONL) via the active backend.
 	 *
 	 * @param {string} refKey Normalized ref key.
 	 * @param {Array<object>} events Event entries to append in order.
 	 * @returns {Promise<void>} Resolves after the events have been persisted.
 	 */
 	async _appendEvents(refKey, events) {
-		if (this.effectiveStrategy === 'native') {
-			return await this._appendEventsNative(refKey, events);
-		}
-
 		const bySegment = new Map();
 		for (const entry of events) {
 			const ts = typeof entry?.ts === 'number' && Number.isFinite(entry.ts) ? entry.ts : Date.now();
@@ -1254,55 +1080,12 @@ class MsgArchive {
 
 		for (const [segmentKey, entries] of bySegment.entries()) {
 			const filePath = this._filePathForRef(refKey, segmentKey);
-			await this._ensureDirForFilePath(filePath);
-			const existing = await this._readFileText(filePath);
-			const existingTrimmed = existing ? existing.replace(/\s+$/, '') : '';
-			const newLines = entries.map(entry => serializeWithMaps(entry, this._mapTypeMarker)).join('\n');
-			const combined = existingTrimmed ? `${existingTrimmed}\n${newLines}\n` : `${newLines}\n`;
-
-			await this.adapter.writeFileAsync(this.metaId, filePath, combined);
-			this._markArchiveMutated();
-
-			this.adapter?.log?.debug?.(
-				`MsgArchive append ${entries.length} event(s) -> ${filePath}, ${Buffer.byteLength(combined, 'utf8')} bytes`,
+			await this._storageBackend.appendEntries(filePath, entries, entry =>
+				serializeWithMaps(entry, this._mapTypeMarker),
 			);
 		}
 
 		// Best-effort retention cleanup for this ref.
-		try {
-			await this._applyRetention(refKey);
-		} catch {
-			// must never break archiving
-		}
-	}
-
-	/**
-	 * Appends events using native filesystem mode.
-	 *
-	 * @param {string} refKey Normalized ref key.
-	 * @param {Array<object>} events Event entries to append in order.
-	 * @returns {Promise<void>}
-	 */
-	async _appendEventsNative(refKey, events) {
-		const bySegment = new Map();
-		for (const entry of events) {
-			const ts = typeof entry?.ts === 'number' && Number.isFinite(entry.ts) ? entry.ts : Date.now();
-			const segmentKey = this._segmentKeyForTs(ts);
-			const list = bySegment.get(segmentKey) || [];
-			list.push(entry);
-			bySegment.set(segmentKey, list);
-		}
-
-		for (const [segmentKey, entries] of bySegment.entries()) {
-			const filePath = this._filePathForRef(refKey, segmentKey);
-			const absolutePath = this._nativeAbsPath(filePath);
-			await this._ensureDirForFilePath(filePath);
-			const newLines = entries.map(entry => serializeWithMaps(entry, this._mapTypeMarker)).join('\n');
-			await fs.appendFile(absolutePath, `${newLines}\n`, 'utf8');
-			this._markArchiveMutated();
-			this.adapter?.log?.debug?.(`MsgArchive append ${entries.length} event(s) -> ${absolutePath}`);
-		}
-
 		try {
 			await this._applyRetention(refKey);
 		} catch {
@@ -1318,65 +1101,6 @@ class MsgArchive {
 		this._sizeEstimateAt = 0;
 		this._sizeEstimateBytes = null;
 		this._sizeEstimateIsComplete = false;
-	}
-
-	/**
-	 * Reads file text from storage (returns empty string when missing).
-	 *
-	 * @param {string} filePath File path under the file store.
-	 * @returns {Promise<string>} File content (utf8) or empty string.
-	 */
-	async _readFileText(filePath) {
-		if (this.effectiveStrategy === 'native') {
-			const absolutePath = this._nativeAbsPath(filePath);
-			try {
-				return await fs.readFile(absolutePath, 'utf8');
-			} catch (e) {
-				this.adapter?.log?.debug?.(`MsgArchive native read failed (${absolutePath}): ${e?.message || e}`);
-				return '';
-			}
-		}
-
-		try {
-			const res = await this.adapter.readFileAsync(this.metaId, filePath);
-			const raw = res && typeof res === 'object' && 'file' in res ? res.file : res;
-
-			if (raw == null) {
-				return '';
-			}
-
-			return Buffer.isBuffer(raw) ? raw.toString('utf8') : String(raw);
-		} catch (e) {
-			this.adapter?.log?.debug?.(`MsgArchive read failed (${filePath}): ${e?.message || e}`);
-			return '';
-		}
-	}
-
-	/**
-	 * Ensure the folder path for a file exists (best-effort).
-	 *
-	 * @param {string} filePath File path under the file store.
-	 * @returns {Promise<void>}
-	 */
-	async _ensureDirForFilePath(filePath) {
-		const idx = typeof filePath === 'string' ? filePath.lastIndexOf('/') : -1;
-		if (idx <= 0) {
-			return;
-		}
-		const dir = filePath.slice(0, idx);
-		const key = this.effectiveStrategy === 'native' ? this._nativeAbsPath(dir) : dir;
-		if (!key) {
-			return;
-		}
-		if (this._ensuredDirs.has(key)) {
-			return;
-		}
-		this._ensuredDirs.add(key);
-		if (this.effectiveStrategy === 'native') {
-			await fs.mkdir(key, { recursive: true });
-			return;
-		}
-		await ensureBaseDir(this.adapter, this.metaId, dir);
 	}
 
 	/**
@@ -1426,10 +1150,7 @@ class MsgArchive {
 			effectiveStrategy: this.effectiveStrategy,
 			effectiveStrategyReason: this.effectiveStrategyReason || '',
 			nativeRootDir: this.nativeRootDir || '',
-			runtimeRoot:
-				this.effectiveStrategy === 'native'
-					? this._nativeAbsPath(this.baseDir || '')
-					: `iobroker-file-api://${this.metaId}/${this.baseDir || ''}`,
+			runtimeRoot: this._storageBackend.runtimeRoot(),
 			nativeProbeError: this._nativeProbeError || '',
 			fileExtension: this.fileExtension,
 			flushIntervalMs: this.flushIntervalMs,
@@ -1464,122 +1185,25 @@ class MsgArchive {
 			};
 		}
 
-		if (this.effectiveStrategy === 'native') {
-			return await this._estimateSizeBytesNative(now);
+		let estimate;
+		try {
+			estimate = await this._storageBackend.estimateSizeBytes();
+		} catch {
+			estimate = { bytes: null, isComplete: false };
 		}
 
-		if (typeof this.adapter.readDirAsync !== 'function') {
+		if (!estimate || typeof estimate !== 'object') {
 			this._sizeEstimateAt = now;
 			this._sizeEstimateBytes = null;
 			this._sizeEstimateIsComplete = false;
 			return { bytes: null, updatedAt: now, isComplete: false };
 		}
 
-		const startDir = this.baseDir || '';
-		const queue = [startDir];
-		let total = 0;
-		let isComplete = true;
-
-		while (queue.length > 0) {
-			const dir = queue.shift();
-			if (typeof dir !== 'string') {
-				continue;
-			}
-			let entries;
-			try {
-				entries = await this.adapter.readDirAsync(this.metaId, dir);
-			} catch {
-				continue;
-			}
-
-			for (const entry of entries || []) {
-				if (!entry) {
-					continue;
-				}
-				const name = typeof entry.file === 'string' ? entry.file : '';
-				if (!name) {
-					continue;
-				}
-				if (entry.isDir) {
-					queue.push(dir ? `${dir}/${name}` : name);
-					continue;
-				}
-
-				const size = entry?.stats?.size;
-				if (typeof size === 'number' && Number.isFinite(size)) {
-					total += size;
-				} else {
-					isComplete = false;
-				}
-			}
-		}
-
 		this._sizeEstimateAt = now;
-		this._sizeEstimateBytes = total;
-		this._sizeEstimateIsComplete = isComplete;
-		return { bytes: total, updatedAt: now, isComplete };
-	}
-
-	/**
-	 * Estimate archive size in native filesystem mode.
-	 *
-	 * @param {number} now Timestamp for cache metadata.
-	 * @returns {Promise<{ bytes: number|null, updatedAt: number, isComplete: boolean }>} Size estimate result.
-	 */
-	async _estimateSizeBytesNative(now) {
-		if (!this.nativeRootDir) {
-			this._sizeEstimateAt = now;
-			this._sizeEstimateBytes = null;
-			this._sizeEstimateIsComplete = false;
-			return { bytes: null, updatedAt: now, isComplete: false };
-		}
-
-		const queue = [this.nativeRootDir];
-		let total = 0;
-		let isComplete = true;
-
-		while (queue.length > 0) {
-			const dir = queue.shift();
-			if (!dir) {
-				continue;
-			}
-			let entries;
-			try {
-				entries = await fs.readdir(dir, { withFileTypes: true });
-			} catch {
-				isComplete = false;
-				continue;
-			}
-
-			for (const entry of entries || []) {
-				if (!entry) {
-					continue;
-				}
-				const abs = path.join(dir, entry.name);
-				if (entry.isDirectory()) {
-					queue.push(abs);
-					continue;
-				}
-				if (!entry.isFile()) {
-					continue;
-				}
-				try {
-					const st = await fs.stat(abs);
-					if (typeof st?.size === 'number' && Number.isFinite(st.size)) {
-						total += st.size;
-					} else {
-						isComplete = false;
-					}
-				} catch {
-					isComplete = false;
-				}
-			}
-		}
-
-		this._sizeEstimateAt = now;
-		this._sizeEstimateBytes = total;
-		this._sizeEstimateIsComplete = isComplete;
-		return { bytes: total, updatedAt: now, isComplete };
+		this._sizeEstimateBytes =
+			typeof estimate.bytes === 'number' && Number.isFinite(estimate.bytes) ? estimate.bytes : null;
+		this._sizeEstimateIsComplete = estimate.isComplete === true;
+		return { bytes: this._sizeEstimateBytes, updatedAt: now, isComplete: this._sizeEstimateIsComplete };
 	}
 }
 

@@ -5,6 +5,7 @@ const { MsgConstants } = require('./MsgConstants');
 const { MsgStorage } = require('./MsgStorage');
 const { MsgArchive } = require('./MsgArchive');
 const { MsgStats } = require('./MsgStats');
+const { IoArchiveIobroker } = require('../lib/IoArchiveIobroker');
 
 function createAdapter() {
 	const files = new Map();
@@ -62,7 +63,25 @@ describe('MsgStats', () => {
 		await msgStorage.init();
 		await msgStorage.writeJson([{ ref: 'x' }]);
 
-		const msgArchive = new MsgArchive(adapter, { baseDir: 'data/archive', flushIntervalMs: 0 });
+		const msgArchive = new MsgArchive(adapter, {
+			baseDir: 'data/archive',
+			flushIntervalMs: 0,
+			createStorageBackend: onMutated =>
+				new IoArchiveIobroker({
+					adapter,
+					metaId: adapter.namespace,
+					baseDir: 'data/archive',
+					fileExtension: 'jsonl',
+					onMutated,
+				}),
+			archiveRuntime: {
+				configuredStrategyLock: '',
+				effectiveStrategy: 'iobroker',
+				effectiveStrategyReason: 'test-default',
+				nativeRootDir: '',
+				nativeProbeError: '',
+			},
+		});
 
 		const ts = (y, m, d, h) => new Date(y, m - 1, d, h, 0, 0, 0).getTime();
 		const now = ts(2026, 1, 15, 12);
@@ -134,4 +153,3 @@ describe('MsgStats', () => {
 		expect(snap.io.archive).to.have.property('keepPreviousWeeks');
 	});
 });
-

@@ -5,6 +5,9 @@ const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
 const { MsgArchive } = require('./MsgArchive');
+const { IoArchiveNative } = require('../lib/IoArchiveNative');
+const { IoArchiveIobroker } = require('../lib/IoArchiveIobroker');
+const { IoArchiveResolver } = require('../lib/IoArchiveResolver');
 
 function segmentKeyForLocalWeek(ts) {
 	const d = new Date(ts);
@@ -95,6 +98,59 @@ function createAdapter({ withMkdir = true } = {}) {
 	return { adapter, files, objects, logs, mkdirs };
 }
 
+function createArchive(adapter, options = {}) {
+	const opts = options && typeof options === 'object' && !Array.isArray(options) ? options : {};
+	const baseDir = typeof opts.baseDir === 'string' ? opts.baseDir : '';
+	const metaId = typeof opts.metaId === 'string' && opts.metaId.trim() ? opts.metaId.trim() : adapter.namespace;
+	const fileExtension =
+		typeof opts.fileExtension === 'string' && opts.fileExtension.trim()
+			? opts.fileExtension.trim().replace(/^\./, '')
+			: 'jsonl';
+
+	return new MsgArchive(adapter, {
+		...opts,
+		createStorageBackend: onMutated =>
+			new IoArchiveIobroker({
+				adapter,
+				metaId,
+				baseDir,
+				fileExtension,
+				onMutated,
+			}),
+		archiveRuntime: {
+			configuredStrategyLock: '',
+			effectiveStrategy: 'iobroker',
+			effectiveStrategyReason: 'test-default',
+			nativeRootDir: '',
+			nativeProbeError: '',
+		},
+	});
+}
+
+async function createResolvedArchive(adapter, options = {}) {
+	const opts = options && typeof options === 'object' && !Array.isArray(options) ? options : {};
+	const resolved = await IoArchiveResolver.resolveFor({
+		adapter,
+		metaId: typeof opts.metaId === 'string' && opts.metaId.trim() ? opts.metaId.trim() : adapter.namespace,
+		baseDir: typeof opts.baseDir === 'string' ? opts.baseDir : '',
+		fileExtension:
+			typeof opts.fileExtension === 'string' && opts.fileExtension.trim()
+				? opts.fileExtension.trim().replace(/^\./, '')
+				: 'jsonl',
+		configuredStrategyLock: typeof opts.effectiveStrategyLock === 'string' ? opts.effectiveStrategyLock : '',
+		lockReason: typeof opts.lockReason === 'string' ? opts.lockReason : '',
+		instanceDataDir: typeof opts.instanceDataDir === 'string' ? opts.instanceDataDir : '',
+		nativeRelativeDir: typeof opts.nativeRelativeDir === 'string' ? opts.nativeRelativeDir : '',
+		createNative: ctx => new IoArchiveNative(ctx),
+		createIobroker: ctx => new IoArchiveIobroker(ctx),
+	});
+	return new MsgArchive(adapter, {
+		...opts,
+		createStorageBackend: resolved.createStorageBackend,
+		archiveRuntime: resolved.archiveRuntime,
+	});
+}
+
 function readJsonl(files, key) {
 	const raw = files.get(key) || '';
 	return raw
@@ -107,7 +163,7 @@ function readJsonl(files, key) {
 describe('MsgArchive', () => {
 	it('creates meta object and base dir on init', async () => {
 		const { adapter, objects, mkdirs } = createAdapter({ withMkdir: true });
-		const archive = new MsgArchive(adapter, { baseDir: 'archive' });
+		const archive = createArchive(adapter, { baseDir: 'archive' });
 
 		await archive.init();
 
@@ -119,7 +175,7 @@ describe('MsgArchive', () => {
 
 	it('falls back to ioBroker strategy when native lock cannot resolve instance data dir', async () => {
 		const { adapter, files } = createAdapter();
-		const archive = new MsgArchive(adapter, {
+		const archive = await createResolvedArchive(adapter, {
 			baseDir: 'archive',
 			flushIntervalMs: 0,
 			effectiveStrategyLock: 'native',
@@ -143,7 +199,7 @@ describe('MsgArchive', () => {
 		const nativeInstanceDir = await fs.mkdtemp(path.join(os.tmpdir(), 'msghub-archive-native-'));
 
 		try {
-			const archive = new MsgArchive(adapter, {
+			const archive = await createResolvedArchive(adapter, {
 				baseDir: 'archive',
 				flushIntervalMs: 0,
 				effectiveStrategyLock: 'native',
@@ -175,7 +231,7 @@ describe('MsgArchive', () => {
 		const nativeInstanceDir = await fs.mkdtemp(path.join(os.tmpdir(), 'msghub-archive-iobroker-'));
 
 		try {
-			const archive = new MsgArchive(adapter, {
+			const archive = await createResolvedArchive(adapter, {
 				baseDir: 'archive',
 				flushIntervalMs: 0,
 				effectiveStrategyLock: 'iobroker',
@@ -197,7 +253,7 @@ describe('MsgArchive', () => {
 
 	it('writes a snapshot event as JSONL', async () => {
 		const { adapter, files } = createAdapter();
-		const archive = new MsgArchive(adapter, { baseDir: 'archive', flushIntervalMs: 0 });
+		const archive = createArchive(adapter, { baseDir: 'archive', flushIntervalMs: 0 });
 		await archive.init();
 
 		await withMockedNow(123456, async () => {
@@ -222,7 +278,7 @@ describe('MsgArchive', () => {
 
 	it('splits dotted refs into nested directories', async () => {
 		const { adapter, files } = createAdapter();
-		const archive = new MsgArchive(adapter, { baseDir: 'archive', flushIntervalMs: 0 });
+		const archive = createArchive(adapter, { baseDir: 'archive', flushIntervalMs: 0 });
 		await archive.init();
 
 		const now = new Date(2025, 0, 6, 12, 0, 0).getTime();
@@ -241,7 +297,7 @@ describe('MsgArchive', () => {
 
 	it('shortens very long ref path segments to avoid ENAMETOOLONG', async () => {
 		const { adapter, files } = createAdapter();
-		const archive = new MsgArchive(adapter, { baseDir: 'archive', flushIntervalMs: 0 });
+		const archive = createArchive(adapter, { baseDir: 'archive', flushIntervalMs: 0 });
 		await archive.init();
 
 		const now = new Date(2025, 0, 6, 12, 0, 0).getTime();
@@ -273,7 +329,7 @@ describe('MsgArchive', () => {
 
 	it('supports overriding the snapshot event name', async () => {
 		const { adapter, files } = createAdapter();
-		const archive = new MsgArchive(adapter, { baseDir: 'archive', flushIntervalMs: 0 });
+		const archive = createArchive(adapter, { baseDir: 'archive', flushIntervalMs: 0 });
 		await archive.init();
 
 		const now = new Date(2025, 0, 6, 12, 0, 0).getTime();
@@ -290,7 +346,7 @@ describe('MsgArchive', () => {
 
 	it('appends patch and delete events to the same ref file', async () => {
 		const { adapter, files } = createAdapter();
-		const archive = new MsgArchive(adapter, { baseDir: 'archive', flushIntervalMs: 0 });
+		const archive = createArchive(adapter, { baseDir: 'archive', flushIntervalMs: 0 });
 		await archive.init();
 
 		const now = new Date(2025, 0, 6, 12, 0, 0).getTime();
@@ -319,7 +375,7 @@ describe('MsgArchive', () => {
 
 	it('allows delete by ref without snapshot payload', async () => {
 		const { adapter, files } = createAdapter();
-		const archive = new MsgArchive(adapter, { baseDir: 'archive', flushIntervalMs: 0 });
+		const archive = createArchive(adapter, { baseDir: 'archive', flushIntervalMs: 0 });
 		await archive.init();
 
 		const now = new Date(2025, 0, 6, 12, 0, 0).getTime();
@@ -337,7 +393,7 @@ describe('MsgArchive', () => {
 
 	it('logs and resolves when ref is missing (default behavior)', async () => {
 		const { adapter, files, logs } = createAdapter();
-		const archive = new MsgArchive(adapter, { baseDir: 'archive', flushIntervalMs: 0 });
+		const archive = createArchive(adapter, { baseDir: 'archive', flushIntervalMs: 0 });
 		await archive.init();
 
 		await archive.appendPatch('  ', { a: 1 });
@@ -347,7 +403,7 @@ describe('MsgArchive', () => {
 
 	it('rejects when throwOnError is enabled', async () => {
 		const { adapter, logs } = createAdapter();
-		const archive = new MsgArchive(adapter, { baseDir: 'archive', flushIntervalMs: 0 });
+		const archive = createArchive(adapter, { baseDir: 'archive', flushIntervalMs: 0 });
 		await archive.init();
 
 		try {
@@ -361,7 +417,7 @@ describe('MsgArchive', () => {
 
 	it('flushes immediately when flushNow is set', async () => {
 		const { adapter, files } = createAdapter();
-		const archive = new MsgArchive(adapter, { baseDir: 'archive', flushIntervalMs: 1000 });
+		const archive = createArchive(adapter, { baseDir: 'archive', flushIntervalMs: 1000 });
 		await archive.init();
 
 		const now = new Date(2025, 0, 6, 12, 0, 0).getTime();
@@ -376,7 +432,7 @@ describe('MsgArchive', () => {
 
 	it('flushes pending writes when throttled', async () => {
 		const { adapter, files } = createAdapter();
-		const archive = new MsgArchive(adapter, { baseDir: 'archive', flushIntervalMs: 1000 });
+		const archive = createArchive(adapter, { baseDir: 'archive', flushIntervalMs: 1000 });
 		await archive.init();
 
 		const now = new Date(2025, 0, 6, 12, 0, 0).getTime();
@@ -395,7 +451,7 @@ describe('MsgArchive', () => {
 
 	it('flushes when maxBatchSize is reached', async () => {
 		const { adapter, files } = createAdapter();
-		const archive = new MsgArchive(adapter, { baseDir: 'archive', flushIntervalMs: 1000, maxBatchSize: 2 });
+		const archive = createArchive(adapter, { baseDir: 'archive', flushIntervalMs: 1000, maxBatchSize: 2 });
 		await archive.init();
 
 		const now = new Date(2025, 0, 6, 12, 0, 0).getTime();
@@ -415,7 +471,7 @@ describe('MsgArchive', () => {
 
 	it('records added/removed diff for patch payloads', async () => {
 		const { adapter, files } = createAdapter();
-		const archive = new MsgArchive(adapter, { baseDir: 'archive', flushIntervalMs: 0 });
+		const archive = createArchive(adapter, { baseDir: 'archive', flushIntervalMs: 0 });
 		await archive.init();
 
 		const ref = 'diff-1';
@@ -442,7 +498,7 @@ describe('MsgArchive', () => {
 
 	it('diffs id-based arrays by id (delete)', async () => {
 		const { adapter, files } = createAdapter();
-		const archive = new MsgArchive(adapter, { baseDir: 'archive', flushIntervalMs: 0 });
+		const archive = createArchive(adapter, { baseDir: 'archive', flushIntervalMs: 0 });
 		await archive.init();
 
 		const ref = 'list-1';
@@ -475,7 +531,7 @@ describe('MsgArchive', () => {
 
 	it('diffs id-based arrays by id (update)', async () => {
 		const { adapter, files } = createAdapter();
-		const archive = new MsgArchive(adapter, { baseDir: 'archive', flushIntervalMs: 0 });
+		const archive = createArchive(adapter, { baseDir: 'archive', flushIntervalMs: 0 });
 		await archive.init();
 
 		const ref = 'list-2';
@@ -504,7 +560,7 @@ describe('MsgArchive', () => {
 
 	it('does not emit diffs for id-based reorder-only arrays', async () => {
 		const { adapter, files } = createAdapter();
-		const archive = new MsgArchive(adapter, { baseDir: 'archive', flushIntervalMs: 0 });
+		const archive = createArchive(adapter, { baseDir: 'archive', flushIntervalMs: 0 });
 		await archive.init();
 
 		const ref = 'list-reorder-1';
@@ -540,7 +596,7 @@ describe('MsgArchive', () => {
 
 	it('diffs arrays of unique primitives as sets', async () => {
 		const { adapter, files } = createAdapter();
-		const archive = new MsgArchive(adapter, { baseDir: 'archive', flushIntervalMs: 0 });
+		const archive = createArchive(adapter, { baseDir: 'archive', flushIntervalMs: 0 });
 		await archive.init();
 
 		const ref = 'prim-1';
@@ -563,7 +619,7 @@ describe('MsgArchive', () => {
 
 	it('does not emit diffs for primitive reorder-only arrays', async () => {
 		const { adapter, files } = createAdapter();
-		const archive = new MsgArchive(adapter, { baseDir: 'archive', flushIntervalMs: 0 });
+		const archive = createArchive(adapter, { baseDir: 'archive', flushIntervalMs: 0 });
 		await archive.init();
 
 		const ref = 'prim-reorder-1';
@@ -587,7 +643,7 @@ describe('MsgArchive', () => {
 
 	it('deletes old weekly segment files based on keepPreviousWeeks', async () => {
 		const { adapter, files } = createAdapter();
-		const archive = new MsgArchive(adapter, { baseDir: 'archive', flushIntervalMs: 0, keepPreviousWeeks: 0 });
+		const archive = createArchive(adapter, { baseDir: 'archive', flushIntervalMs: 0, keepPreviousWeeks: 0 });
 		await archive.init();
 
 		const ref = 'retention.0.demo';
