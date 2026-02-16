@@ -1052,6 +1052,22 @@ describe('MsgStore', () => {
 			expect(result.items.map(msg => msg.ref)).to.deep.equal(['r2', 'r1', 'r3']);
 		});
 
+		it('supports sorting by progress.percentage (missing values last)', () => {
+			const messages = [
+				{ ref: 'r1', level: 10, progress: { percentage: 20 } },
+				{ ref: 'r2', level: 10, progress: { percentage: 10 } },
+				{ ref: 'r3', level: 10, progress: {} },
+				{ ref: 'r4', level: 10 },
+			];
+			const { store } = createStore({ messages });
+
+			const asc = store.queryMessages({ sort: [{ field: 'progress.percentage', dir: 'asc' }] });
+			expect(asc.items.map(msg => msg.ref)).to.deep.equal(['r2', 'r1', 'r3', 'r4']);
+
+			const desc = store.queryMessages({ sort: [{ field: 'progress.percentage', dir: 'desc' }] });
+			expect(desc.items.map(msg => msg.ref)).to.deep.equal(['r1', 'r2', 'r3', 'r4']);
+		});
+
 			it('supports sorting by icon (missing values last)', () => {
 				const messages = [
 					{ ref: 'r1', level: 10, icon: 'B' },

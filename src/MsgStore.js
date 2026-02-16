@@ -1063,6 +1063,7 @@ class MsgStore {
 			'timing.dueAt',
 			'timing.startAt',
 			'timing.endAt',
+			'progress.percentage',
 		]);
 
 		const sortSpec = Array.isArray(sort) ? sort : [];
