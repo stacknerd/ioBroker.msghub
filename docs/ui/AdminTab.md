@@ -56,7 +56,7 @@ The **Stats** tab provides a read-only snapshot of:
 Notes:
 
 - The archive size estimate is intentionally **opt-in** because it can be expensive depending on file backend and file count.
-- The backend is powered by `MsgStats` (see [`docs/modules/MsgStats.md`](./modules/MsgStats.md)).
+- The backend is powered by `MsgStats` (see [`docs/modules/MsgStats.md`](../modules/MsgStats.md)).
 
 ---
 

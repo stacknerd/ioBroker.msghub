@@ -533,6 +533,12 @@ async function main() {
 
   const readmes = [
     { kind: 'modules', docsDir: 'docs/modules', readmePath: 'docs/modules/README.md' },
+    { kind: 'io', docsDir: 'docs/io', readmePath: 'docs/io/README.md' },
+    {
+      kind: 'ui',
+      docsDir: 'docs/ui',
+      readmePath: 'docs/ui/README.md',
+    },
     {
       kind: 'plugins',
       docsDir: 'docs/plugins',
@@ -552,6 +558,8 @@ async function main() {
   if (CHECK_MODE) {
     const todoWarnings = [
       ...(await scanTodoPlaceholders({ docsDir: 'docs/modules' })),
+      ...(await scanTodoPlaceholders({ docsDir: 'docs/io' })),
+      ...(await scanTodoPlaceholders({ docsDir: 'docs/ui' })),
       ...(await scanTodoPlaceholders({ docsDir: 'docs/plugins' })),
     ];
 
@@ -577,7 +585,7 @@ async function main() {
     }
     if (changedReadmes.length) {
       problems.push(
-        `Outdated module indexes:\n${changedReadmes.map((p) => `- ${p}`).join('\n')}`,
+        `Outdated README indexes:\n${changedReadmes.map((p) => `- ${p}`).join('\n')}`,
       );
     }
     if (pluginIndex.changed) {

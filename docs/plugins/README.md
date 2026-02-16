@@ -1,9 +1,9 @@
-# Message Hub Plugins (IO Layer) – Developer Guide
+# Message Hub Plugins (Integrations) – Developer Guide
 
 This document focuses on **how to integrate your own custom plugin** into Message Hub:
 what interfaces exist, what data you receive, and how the adapter wires plugins at runtime.
 
-If you want the “big picture” first, see [`docs/README.md`](../README.md). For the core internals, see [`docs/modules/README.md`](../modules/README.md).
+If you want the “big picture” first, see [`docs/README.md`](../README.md). For the core internals, see [`docs/modules/README.md`](../modules/README.md). For platform/runtime IO internals, see [`docs/io/README.md`](../io/README.md).
 For a full reference table of `ctx.api` / `ctx.meta`, see [`docs/plugins/API.md`](./API.md).
 
 ## Mental model: code-level plugins vs. runtime wiring

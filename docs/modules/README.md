@@ -4,7 +4,7 @@ This document explains the **core engine** of Message Hub: the classes in `src/`
 The core is responsible for the message model and lifecycle (store, validation, persistence, rendering, dispatch).
 
 This is “the inside” of Message Hub. It is designed to be stable and integration-agnostic.
-If you are looking for the ioBroker-facing parts, jump to [`docs/plugins/README.md`](../plugins/README.md).
+If you are looking for ioBroker-facing/runtime parts, jump to [`docs/io/README.md`](../io/README.md) and [`docs/plugins/README.md`](../plugins/README.md).
 
 Detailed docs for each module are linked at the bottom of this page.
 
@@ -23,8 +23,8 @@ Core modules intentionally do not:
 - Listen to ioBroker events directly
 - Deliver notifications to “real” channels
 
-Those IO responsibilities live in plugins (`lib/`). The adapter wires everything together in `main.js`.
-For runtime enable/disable + configuration of plugins (including bidirectional `Bridge...` plugins wired via `MsgBridge`), the adapter uses `IoPlugins` (see [`docs/plugins/IoPlugins.md`](../plugins/IoPlugins.md)).
+Those IO/runtime responsibilities live in the IO layer + plugins (`lib/`). The adapter wires everything together in `main.js`.
+For runtime enable/disable + configuration of integration plugins (including bidirectional `Bridge...` plugins wired via `MsgBridge`), the adapter uses `IoPlugins` (see [`docs/plugins/IoPlugins.md`](../plugins/IoPlugins.md)).
 
 ## Data Flow (Simplified)
 

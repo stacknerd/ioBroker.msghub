@@ -25,7 +25,7 @@ Instance ids are numeric (`0`, `1`, `2`, …). Most built-ins run as instance `0
 
 Recommended: use the adapter’s **Admin Tab** (“Plugin Config”) to enable/disable plugins, create instances (when supported),
 and edit options. Option changes apply immediately because `IoPlugins` restarts the affected instance (no adapter restart).
-See: [`docs/AdminTab.md`](./AdminTab.md)
+See: [`docs/ui/AdminTab.md`](./ui/AdminTab.md)
 
 For the initial release, the important built-ins are:
 
