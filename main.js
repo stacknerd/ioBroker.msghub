@@ -261,6 +261,7 @@ class Msghub extends utils.Adapter {
 		/////////////////////////////////////////
 
 		const { IoAdminTab } = require(`${__dirname}/lib/IoAdminTab`);
+		const { IoAdminConfig } = require(`${__dirname}/lib/IoAdminConfig`);
 
 		try {
 			const { IoPlugins } = require(`${__dirname}/lib/IoPlugins`);
@@ -274,7 +275,11 @@ class Msghub extends utils.Adapter {
 
 		// Keep AdminTab operational even if plugin wiring fails,
 		// so Stats/Messages diagnostics remain available.
-		this._adminTab = new IoAdminTab(this, this._msgPlugins, { ai: msgAi, msgStore: this.msgStore });
+		this._adminTab = new IoAdminTab(this, this._msgPlugins, { msgStore: this.msgStore });
+		this._adminConfig = new IoAdminConfig(this, {
+			ai: msgAi,
+			msgStore: this.msgStore,
+		});
 
 		// Always start ingestion (even when some plugins failed to wire),
 		// otherwise timer-based producers (e.g. IngestRandomChaos) never run.
@@ -373,13 +378,10 @@ class Msghub extends utils.Adapter {
 		let result;
 
 		try {
-			// ioBroker jsonCustom `selectSendTo` expects a plain options array (not `{ ok, data }`).
-			// Keep this as a dedicated non-`admin.*` command so the AdminTab UI can continue to use
-			// the structured `{ ok, data }` responses.
-			if (typeof cmd === 'string' && cmd.startsWith('ingestStates.presets.selectOptions')) {
-				result = await this._handleCustomSelectOptions(cmd, payload);
-			} else if (typeof cmd === 'string' && cmd.startsWith('admin.')) {
+			if (typeof cmd === 'string' && cmd.startsWith('admin.')) {
 				result = await this._handleAdminCommand(cmd, payload);
+			} else if (typeof cmd === 'string' && cmd.startsWith('config.')) {
+				result = await this._handleConfigCommand(cmd, payload);
 			} else {
 				result = await this._msgPlugins?.dispatchMessagebox?.(obj);
 				if (result == null) {
@@ -401,12 +403,16 @@ class Msghub extends utils.Adapter {
 
 	async _handleAdminCommand(cmd, payload) {
 		if (!this._adminTab) {
-			if (cmd === 'admin.ai.test') {
-				return { native: { aiTestLastResult: 'ERROR NOT_READY: AdminTab runtime not ready' } };
-			}
 			return { ok: false, error: { code: 'NOT_READY', message: 'AdminTab runtime not ready' } };
 		}
 		return await this._adminTab.handleCommand(cmd, payload);
+	}
+
+	async _handleConfigCommand(cmd, payload) {
+		if (!this._adminConfig) {
+			return { ok: false, error: { code: 'NOT_READY', message: 'Config runtime not ready' } };
+		}
+		return await this._adminConfig.handleCommand(cmd, payload);
 	}
 
 	/**
@@ -449,58 +455,6 @@ class Msghub extends utils.Adapter {
 		next.native.archiveRuntimeReason = reason;
 		next.native.archiveRuntimeRoot = root;
 		await this.setForeignObjectAsync(id, next);
-	}
-
-	async _handleCustomSelectOptions(cmd, payload) {
-		const baseCmd = 'ingestStates.presets.selectOptions';
-		const rawCmd = typeof cmd === 'string' ? cmd.trim() : '';
-
-		if (!rawCmd.startsWith(baseCmd)) {
-			return [];
-		}
-
-		function ensureOptionsArray(items) {
-			const list = Array.isArray(items) ? items : [];
-			const next = [];
-			for (const it of list) {
-				const value = typeof it?.value === 'string' ? it.value : '';
-				const label = typeof it?.label === 'string' ? it.label : '';
-				if (!value) {
-					continue;
-				}
-				next.push({ value, label });
-			}
-			// Ensure the select isn't treated as "offline" when no presets exist yet.
-			// (jsonCustom `selectSendTo` shows an offline error when the options array is empty.)
-			return [{ value: '', label: '' }, ...next];
-		}
-
-		if (!this._adminTab) {
-			return ensureOptionsArray([]);
-		}
-
-		let suffix = rawCmd.slice(baseCmd.length);
-		if (suffix.startsWith('.')) {
-			suffix = suffix.slice(1);
-		}
-		const parts = suffix ? suffix.split('.').filter(Boolean) : [];
-
-		const rule = parts[0] || null; // z.B. 'session' | 'freshness'
-		const subset = parts[1] || null; // z.B. 'start' | null
-
-		const nextPayload = payload && typeof payload === 'object' && !Array.isArray(payload) ? { ...payload } : {};
-		// Respect explicitly provided filter params (do not override).
-		if (!Object.prototype.hasOwnProperty.call(nextPayload, 'rule')) {
-			nextPayload.rule = rule;
-		}
-		if (!Object.prototype.hasOwnProperty.call(nextPayload, 'subset')) {
-			nextPayload.subset = subset;
-		}
-
-		const res = await this._adminTab.handleCommand('admin.ingestStates.presets.list', nextPayload);
-		const items = res?.ok && Array.isArray(res?.data) ? res.data : [];
-
-		return ensureOptionsArray(items);
 	}
 
 	async _i18ninit(locale) {

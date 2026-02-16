@@ -110,7 +110,7 @@
 				"archiveRetryNative": {
 					"type": "sendTo",
 					"label": "msghub.i18n.core.admin.jsonConfig.archive.strategy.retryNative.label",
-					"command": "admin.archive.retryNative",
+					"command": "config.archive.retryNative",
 					"timeout": 10000,
 					"useNative": true,
 					"jsonData": "{}",
@@ -124,7 +124,7 @@
 				"archiveForceIobroker": {
 					"type": "sendTo",
 					"label": "msghub.i18n.core.admin.jsonConfig.archive.strategy.forceIobroker.label",
-					"command": "admin.archive.forceIobroker",
+					"command": "config.archive.forceIobroker",
 					"timeout": 10000,
 					"useNative": true,
 					"jsonData": "{}",
@@ -815,7 +815,7 @@
 				"aiTestRun": {
 					"type": "sendTo",
 					"label": "msghub.i18n.core.admin.jsonConfig.ai.test.run.label",
-					"command": "admin.ai.test",
+					"command": "config.ai.test",
 					"timeout": 15000,
 					"useNative": true,
 					"jsonData": "{\n  \"purpose\": ${JSON.stringify(data.aiTestPurpose || 'ai-test')},\n  \"quality\": ${JSON.stringify(data.aiTestQuality || 'balanced')},\n  \"prompt\": ${JSON.stringify(data.aiTestPrompt || '')},\n  \"provider\": ${JSON.stringify(data.aiProvider || 'openai')},\n  \"openai\": {\n    \"apiKey\": ${JSON.stringify(data.aiOpenAiApiKey || '')},\n    \"baseUrl\": ${JSON.stringify(data.aiOpenAiBaseUrl || '')},\n    \"modelsByQuality\": {\n      \"fast\": ${JSON.stringify(data.aiOpenAiModelFast || '')},\n      \"balanced\": ${JSON.stringify(data.aiOpenAiModelBalanced || data.aiOpenAiModel || '')},\n      \"best\": ${JSON.stringify(data.aiOpenAiModelBest || '')}\n    },\n    \"purposeModelOverrides\": ${data.aiPurposeModelOverrides || '[]'}\n  }\n}",

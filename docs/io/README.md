@@ -17,6 +17,8 @@ Design boundary:
 ## IO Documents
 
 <!-- AUTO-GENERATED:MODULE-INDEX:START -->
+- `IoAdminConfig`: [`./IoAdminConfig.md`](./IoAdminConfig.md)
+- `IoAdminTab`: [`./IoAdminTab.md`](./IoAdminTab.md)
 - `IoArchiveIobroker`: [`./IoArchiveIobroker.md`](./IoArchiveIobroker.md)
 - `IoArchiveNative`: [`./IoArchiveNative.md`](./IoArchiveNative.md)
 - `IoArchiveResolver`: [`./IoArchiveResolver.md`](./IoArchiveResolver.md)
