@@ -107,8 +107,8 @@ If your datapoint is assigned to an ioBroker room (`enum.rooms.*`), IngestStates
 Some rule defaults (and your own texts) can include placeholders like:
 
 - `{{m.state-value}}` (current value)
-- `{{m.lastSeenAt.val|datetime}}` (timestamp as date/time)
-- `{{m.lastSeenAt|durationSince}}` (“how long ago”)
+- `{{m.state-ts.val|datetime}}` / `{{m.state-lc.val|datetime}}` (timestamp as date/time)
+- `{{m.state-ts|durationSince}}` / `{{m.state-lc|durationSince}}` (“how long ago”)
 
 Formatting note for `durationSince` / `durationUntil`:
 
@@ -140,11 +140,11 @@ These are useful for UI sorting/filters. For text templates, prefer metrics like
 
 | Rule | Metrics (keys) | Meaning (short) |
 | --- | --- | --- |
-| Threshold | `state-name`, `state-value`, `state-min`, `state-max` | Name/value of the target; recovery bounds used to clear the message. |
-| Freshness | `state-name`, `state-value`, `state-ts`, `state-lc` | Name/value; last update (`ts`) and last change (`lc`) timestamps. |
+| Threshold | `state-name`, `state-value`, `state-min`, `state-max`, `state-recovered-at?` | Name/value of the target; recovery bounds used to clear the message; optional recovery timestamp (bad -> good transition). |
+| Freshness | `state-name`, `state-value`, `state-ts`, `state-lc`, `state-recovered-at?` | Name/value; last update (`ts`) and last change (`lc`) timestamps; optional recovery timestamp (bad -> good transition). |
 | Cycle | `state-name`, `cycle-lastResetAt`, `cycle-subCounter`, `cycle-period?`, `cycle-remaining?`, `cycle-timeMs?`, `cycle-timeBasedDueAt?` | Name; last reset; progress since reset; optional count/time targets and next time-based due timestamp. |
-| Triggered | `state-name`, `state-value`, `trigger-value` | Name and current value of target plus trigger value (for debugging expectation failures). |
-| Non-settling | `state-name`, `state-value`, `trendStartedAt`, `trendStartValue`, `trendMin`, `trendMax`, `trendMinToMax`, `trendDir` | Name/value plus trend/activity diagnostics: when instability started, min/max span, and direction. |
+| Triggered | `state-name`, `state-value`, `trigger-value`, `state-recovered-at?` | Name and current value of target plus trigger value (for debugging expectation failures); optional recovery timestamp (bad -> good transition). |
+| Non-settling | `state-name`, `state-value`, `trendStartedAt`, `trendStartValue`, `trendMin`, `trendMax`, `trendMinToMax`, `trendDir`, `state-recovered-at?` | Name/value plus trend/activity diagnostics: when instability started, min/max span, and direction; optional recovery timestamp (bad -> good transition). |
 | Session | `state-name`, `session-start`, `session-startval`, `session-counter`, `session-cost` | Name plus session start time, counter baseline, delta since start, and computed cost. |
 
 ---
@@ -554,6 +554,9 @@ Title/text resolution:
 - If the user configured a custom title/text, it overrides the rule defaults.
 - If the user left a field empty, the rule default is used.
 - The writer requires both title and text to be present after merging (otherwise it throws; rules must provide defaults).
+- `message.textRecovered` is optional and preset-only in 0.0.2 (no dedicated Admin UI field).
+  It is used in the manual-close path (`resetOnNormal=false`) and switches the message text in `onClose(...)`.
+  Normal `onUpsert(...)` operations continue to use `message.text`.
 
 Lifecycle “active” semantics:
 
@@ -563,6 +566,8 @@ Lifecycle “active” semantics:
 Actions:
 
 - If `resetOnNormal=false`, the writer injects a `close` action (so the message is always dismissible).
+- If `resetOnNormal=false` and `message.textRecovered` is a non-empty string,
+  the writer patches `text` to this recovery variant in `onClose(...)`.
 
 Details / location:
 
@@ -648,8 +653,12 @@ Metrics patches are intentionally silent and throttled:
 - `evaluateBy`: `ts` (update) or `lc` (change)
 - Threshold: `everyValue` × `everyUnit` seconds
 - Opens when `now - lastSeenAt > thresholdMs`
-- Metric:
-  - `lastSeenAt`: `{ val: <ms>, unit: 'ms', ts: <now> }`
+Metrics:
+
+- `state-ts`: last update timestamp (`ts`) when available
+- `state-lc`: last value-change timestamp (`lc`) when available
+- `state-value`: last observed value (when available)
+- `state-recovered-at` (optional): bad -> good transition timestamp
 
 State timestamps:
 
@@ -698,6 +707,7 @@ Metrics:
 - `state-value`: `{ val: <current>, unit: <object.common.unit>, ts: <now> }`
 - `state-min`: recovery lower bound (includes hysteresis when configured)
 - `state-max`: recovery upper bound (includes hysteresis when configured)
+- `state-recovered-at` (optional): bad -> good transition timestamp
 
 Actions:
 
@@ -746,6 +756,7 @@ Metrics:
 
 - `state-value`: target current value (best-effort normalized)
 - `trigger-value`: trigger current value
+- `state-recovered-at` (optional): bad -> good transition timestamp
 
 #### NonSettling (`mode=nonSettling`, config block `nonset-*`)
 
@@ -775,6 +786,7 @@ Metrics (trend and activity reuse the same keys):
 
 - `state-value`
 - `trendStartedAt`, `trendStartValue`, `trendMin`, `trendMax`, `trendMinToMax`, `trendDir`
+- `state-recovered-at` (optional): bad -> good transition timestamp
 
 #### Session (`mode=session`, config block `sess-*`)
 
