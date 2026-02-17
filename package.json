@@ -1,6 +1,6 @@
 {
   "name": "iobroker.msghub",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "a hub for all your messages, tasks and notifications",
   "author": {
     "name": "Ben",
