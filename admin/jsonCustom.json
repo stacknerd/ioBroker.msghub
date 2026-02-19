@@ -329,6 +329,7 @@
 					"xl": 12,
 					"default": "",
 					"command": "admin.ingestStates.presets.selectOptions.cycle",
+					"jsonData": "{\"currentValue\": ${JSON.stringify(data['msg-CycleId'] || '')}}",
 					"noTranslation": true,
 					"manual": false
 				},
@@ -539,7 +540,7 @@
 					"xl": 12,
 					"default": "",
 					"command": "admin.ingestStates.presets.selectOptions.threshold",
-					"jsonData": "{\"subset\": ${JSON.stringify(data['thr-mode'] || '')}}",
+					"jsonData": "{\"subset\": ${JSON.stringify(data['thr-mode'] || '')}, \"currentValue\": ${JSON.stringify(data['msg-ThresholdId'] || '')}}",
 					"noTranslation": true,
 					"alsoDependsOn": ["thr-mode"],
 					"manual": false
@@ -862,7 +863,7 @@
 					"xl": 12,
 					"default": "",
 					"command": "admin.ingestStates.presets.selectOptions.triggered",
-					"jsonData": "{\"subset\": ${JSON.stringify(data['trg-expectation'] || '')}}",
+					"jsonData": "{\"subset\": ${JSON.stringify(data['trg-expectation'] || '')}, \"currentValue\": ${JSON.stringify(data['msg-TriggeredId'] || '')}}",
 					"noTranslation": true,
 					"alsoDependsOn": ["trg-expectation"],
 					"manual": false
@@ -1184,7 +1185,7 @@
 					"xl": 12,
 					"default": "",
 					"command": "admin.ingestStates.presets.selectOptions.nonSettling",
-					"jsonData": "{\"subset\": ${JSON.stringify(data['nonset-profile'] || '')}}",
+					"jsonData": "{\"subset\": ${JSON.stringify(data['nonset-profile'] || '')}, \"currentValue\": ${JSON.stringify(data['msg-NonSettlingId'] || '')}}",
 					"noTranslation": true,
 					"alsoDependsOn": ["nonset-profile"],
 					"manual": false
@@ -1505,6 +1506,7 @@
 					"xl": 12,
 					"default": "",
 					"command": "admin.ingestStates.presets.selectOptions.session.start",
+					"jsonData": "{\"currentValue\": ${JSON.stringify(data['msg-SessionStartId'] || '')}}",
 					"noTranslation": true,
 					"manual": false
 				},
@@ -1519,6 +1521,7 @@
 					"xl": 12,
 					"default": "",
 					"command": "admin.ingestStates.presets.selectOptions.session.end",
+					"jsonData": "{\"currentValue\": ${JSON.stringify(data['msg-SessionEndId'] || '')}}",
 					"noTranslation": true,
 					"manual": false
 				},
@@ -1696,7 +1699,7 @@
 					"xl": 12,
 					"default": "",
 					"command": "admin.ingestStates.presets.selectOptions.freshness",
-					"jsonData": "{\"subset\": ${JSON.stringify(data['fresh-evaluateBy'] || '')}}",
+					"jsonData": "{\"subset\": ${JSON.stringify(data['fresh-evaluateBy'] || '')}, \"currentValue\": ${JSON.stringify(data['msg-FreshnessId'] || '')}}",
 					"noTranslation": true,
 					"alsoDependsOn": ["fresh-evaluateBy"],
 					"manual": false

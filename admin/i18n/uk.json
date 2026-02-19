@@ -192,6 +192,7 @@
 	"msghub.i18n.IngestStates.admin.jsonCustom.mode.ruleType.option.threshold.label": "Threshold",
 	"msghub.i18n.IngestStates.admin.jsonCustom.mode.ruleType.option.triggered.label": "Dependency (Trigger)",
 	"msghub.i18n.IngestStates.admin.jsonCustom.preset.custom.label": "Custom",
+	"msghub.i18n.IngestStates.admin.jsonCustom.preset.incompatible.label": "[‼️INCOMPATIBLE‼️] %s",
 	"msghub.i18n.IngestStates.admin.jsonCustom.rules.cycle.field.period.help": "Create a message when subCounter reaches this value (0 = disable count-based).",
 	"msghub.i18n.IngestStates.admin.jsonCustom.rules.cycle.field.period.label": "Period (count)",
 	"msghub.i18n.IngestStates.admin.jsonCustom.rules.cycle.field.time.value.help": "Optional: Create a message when this time since last reset has elapsed (0 = disable time-based).",

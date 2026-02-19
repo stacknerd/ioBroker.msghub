@@ -192,6 +192,7 @@
 	"msghub.i18n.IngestStates.admin.jsonCustom.mode.ruleType.option.threshold.label": "Schwellenwert",
 	"msghub.i18n.IngestStates.admin.jsonCustom.mode.ruleType.option.triggered.label": "Abhängigkeit (Trigger)",
 	"msghub.i18n.IngestStates.admin.jsonCustom.preset.custom.label": "Eigener",
+	"msghub.i18n.IngestStates.admin.jsonCustom.preset.incompatible.label": "[‼️INKOMPATIBEL‼️] %s",
 	"msghub.i18n.IngestStates.admin.jsonCustom.rules.cycle.field.period.help": "Erzeugt eine Meldung, wenn subCounter diesen Wert erreicht (0 = Zähler-basiert aus).",
 	"msghub.i18n.IngestStates.admin.jsonCustom.rules.cycle.field.period.label": "Intervall (Zähler)",
 	"msghub.i18n.IngestStates.admin.jsonCustom.rules.cycle.field.time.value.help": "Optional: Erzeugt eine Meldung, wenn seit dem letzten Reset diese Zeit vergangen ist (0 = Zeit-basiert aus).",
