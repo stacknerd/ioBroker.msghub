@@ -1141,6 +1141,10 @@
 					"hidden": "data['nonset-profile'] !== 'trend'",
 					"options": [
 						{
+							"label": "msghub.i18n.IngestStates.admin.jsonCustom.common.unit.option.minutes.label",
+							"value": 60
+						},
+						{
 							"label": "msghub.i18n.IngestStates.admin.jsonCustom.common.unit.option.hours.label",
 							"value": 3600
 						},
