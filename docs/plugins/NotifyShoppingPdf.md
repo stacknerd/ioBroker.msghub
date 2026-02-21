@@ -93,7 +93,8 @@ Common options:
   - `checked=false` → empty box
   - `checked=true` → checkmark (and greyed out text if `includeChecked=true`)
 
-The PDF subtitle is a localized “generated at” timestamp derived from `system.config.common.language`
+The PDF subtitle is a localized “generated at” timestamp derived from `ctx.api.i18n.locale`
+(format locale from adapter config `locale`)
 (example: `Sonntag, 04.01.2026 02:10`).
 
 ---

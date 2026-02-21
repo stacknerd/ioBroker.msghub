@@ -176,6 +176,7 @@ class Msghub extends utils.Adapter {
 		this.msgConstants = MsgConstants;
 
 		// Default locale (overridden via instance config in onReady)
+		// This is the format locale (numbers/date-time), not the i18n text language.
 		this.locale = 'en-US';
 
 		// Runtime plugin enable/disable handler  (initialized in onReady)
@@ -193,7 +194,10 @@ class Msghub extends utils.Adapter {
 		//    Translator Interface
 		/////////////////////////////////////////
 
-		this.locale = typeof this.config.locale === 'string' ? this.config.locale.trim() : this.locale;
+		const configuredLocale = typeof this.config.locale === 'string' ? this.config.locale.trim() : '';
+		if (configuredLocale) {
+			this.locale = configuredLocale;
+		}
 		await this._i18ninit(this.locale);
 
 		/////////////////////////////////////////
@@ -459,18 +463,44 @@ class Msghub extends utils.Adapter {
 
 	async _i18ninit(locale) {
 		const _i18ndebug = false;
-		// decide on locale for translation
-		const i18nSupport = new Set(['de', 'en', 'es', 'fr', 'it', 'nl', 'pl', 'pt', 'ru', 'uk', 'zh-cn']);
-		const lang = locale.split('-')[0].trim().toLowerCase();
-		const i18nlocale = i18nSupport.has(lang) ? lang : locale;
+		const normalizeLangTag = value =>
+			String(value || '')
+				.trim()
+				.replace(/_/g, '-')
+				.toLowerCase();
+		const splitBaseLang = value => {
+			const normalized = normalizeLangTag(value);
+			return normalized ? normalized.split('-')[0] : '';
+		};
 
-		await utils.I18n.init(__dirname, i18nlocale);
-		this.log?.debug?.(`MsgHub main.js config locale: ${locale} (time and date) / ${i18nlocale} (i18n)`);
+		const formatLocale = typeof locale === 'string' && locale.trim() ? locale.trim() : this.locale || 'en-US';
+
+		// Text language must follow ioBroker's system language, not the adapter's format locale config.
+		let systemLanguage = '';
+		try {
+			const sys = await this.getForeignObjectAsync('system.config');
+			const raw = typeof sys?.common?.language === 'string' ? sys.common.language : '';
+			systemLanguage = normalizeLangTag(raw);
+		} catch (e) {
+			this.log?.warn?.(`MsgHub main.js: failed to read system language from system.config: ${e?.message || e}`);
+		}
+		if (!systemLanguage) {
+			systemLanguage = splitBaseLang(this.language) || 'en';
+		}
+
+		// Initialize adapter-core i18n from adapter context, so translate() follows system.config.common.language.
+		await utils.I18n.init(__dirname, this);
+		const lang = splitBaseLang(systemLanguage) || 'en';
+		const i18nlocale = systemLanguage;
+
+		this.log?.debug?.(
+			`MsgHub main.js locale policy: formatLocale=${formatLocale} / systemLanguage=${i18nlocale} (i18n)`,
+		);
 
 		const { i18n } = buildI18nRuntime({
 			adapter: this,
 			baseI18n: utils.I18n,
-			locale,
+			locale: formatLocale,
 			i18nlocale,
 			lang,
 			debug: _i18ndebug,

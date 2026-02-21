@@ -66,6 +66,12 @@ Builds an optional i18n facade:
 - Returns `null` when i18n is not available (for example, when `main.js` did not attach `adapter.i18n`).
 - Otherwise returns `{ t, getTranslatedObject, locale, i18nlocale, lang }` from the adapter-scoped i18n instance.
 
+Semantics of these fields:
+
+- `locale`: format locale for date/number rendering (adapter config `locale`, fallback `en-US`).
+- `i18nlocale`: effective ioBroker text language (`system.config.common.language`, normalized).
+- `lang`: base language code derived from `i18nlocale` (for example `de` from `de-DE`).
+
 This makes translation support opt-in without breaking plugins that do not need it.
 
 ### `buildConfigApi(snapshot)`
