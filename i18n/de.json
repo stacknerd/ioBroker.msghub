@@ -333,6 +333,7 @@
 	"msghub.i18n.IngestStates.admin.jsonCustom.rules.freshness.panel.label": "Aktualisierungsintervall",
 	"msghub.i18n.IngestStates.admin.jsonCustom.rules.freshness.section.examples.header.text": "Beispiele",
 	"msghub.i18n.IngestStates.admin.jsonCustom.rules.freshness.section.timing.header.text": "Zeit",
+	"msghub.i18n.IngestStates.admin.jsonCustom.rules.info.activationPending.text": "Hinweis: Diese Regel ist noch nicht aktiv. Nach dem Speichern kann die Übernahme bis zu 5 Minuten dauern.",
 	"msghub.i18n.IngestStates.admin.jsonCustom.rules.nonSettling.field.direction.help": "Bei Lecks ist meist „steigend“ passend (z.B. Wasserzähler).",
 	"msghub.i18n.IngestStates.admin.jsonCustom.rules.nonSettling.field.direction.label": "Trendrichtung",
 	"msghub.i18n.IngestStates.admin.jsonCustom.rules.nonSettling.field.direction.option.any.label": "egal",

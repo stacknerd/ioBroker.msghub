@@ -247,6 +247,18 @@
 					"lg": 12,
 					"xl": 12
 				},
+				"_cycActivationInfo": {
+					"newLine": true,
+					"type": "staticText",
+					"text": "msghub.i18n.IngestStates.admin.jsonCustom.rules.info.activationPending.text",
+					"hidden": "((data['managedMeta-managedBy'] || '').indexOf('IngestStates') !== -1) && (((data['managedMeta-managedText'] || '').toLowerCase()).indexOf('cycle') !== -1)",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12,
+					"style": { "color": "red", "whiteSpace": "pre-wrap" }
+				},
 				"_cycInfo0": {
 					"newLine": true,
 					"type": "staticText",
@@ -360,6 +372,18 @@
 					"md": 12,
 					"lg": 12,
 					"xl": 12
+				},
+				"_thrActivationInfo": {
+					"newLine": true,
+					"type": "staticText",
+					"text": "msghub.i18n.IngestStates.admin.jsonCustom.rules.info.activationPending.text",
+					"hidden": "((data['managedMeta-managedBy'] || '').indexOf('IngestStates') !== -1) && (((data['managedMeta-managedText'] || '').toLowerCase()).indexOf('threshold') !== -1)",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12,
+					"style": { "color": "red", "whiteSpace": "pre-wrap" }
 				},
 				"_thrInfo0": {
 					"newLine": true,
@@ -594,6 +618,18 @@
 					"md": 12,
 					"lg": 12,
 					"xl": 12
+				},
+				"_trgActivationInfo": {
+					"newLine": true,
+					"type": "staticText",
+					"text": "msghub.i18n.IngestStates.admin.jsonCustom.rules.info.activationPending.text",
+					"hidden": "((data['managedMeta-managedBy'] || '').indexOf('IngestStates') !== -1) && (((data['managedMeta-managedText'] || '').toLowerCase()).indexOf('triggered') !== -1)",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12,
+					"style": { "color": "red", "whiteSpace": "pre-wrap" }
 				},
 				"_trgInfo0": {
 					"newLine": true,
@@ -917,6 +953,18 @@
 					"md": 12,
 					"lg": 12,
 					"xl": 12
+				},
+				"_nsActivationInfo": {
+					"newLine": true,
+					"type": "staticText",
+					"text": "msghub.i18n.IngestStates.admin.jsonCustom.rules.info.activationPending.text",
+					"hidden": "((data['managedMeta-managedBy'] || '').indexOf('IngestStates') !== -1) && (((data['managedMeta-managedText'] || '').toLowerCase()).indexOf('nonsettling') !== -1)",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12,
+					"style": { "color": "red", "whiteSpace": "pre-wrap" }
 				},
 				"_nsInfo0": {
 					"newLine": true,
@@ -1283,6 +1331,18 @@
 					"lg": 12,
 					"xl": 12
 				},
+				"_sessActivationInfo": {
+					"newLine": true,
+					"type": "staticText",
+					"text": "msghub.i18n.IngestStates.admin.jsonCustom.rules.info.activationPending.text",
+					"hidden": "((data['managedMeta-managedBy'] || '').indexOf('IngestStates') !== -1) && (((data['managedMeta-managedText'] || '').toLowerCase()).indexOf('session') !== -1)",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12,
+					"style": { "color": "red", "whiteSpace": "pre-wrap" }
+				},
 				"_sessInfo0": {
 					"newLine": true,
 					"type": "staticText",
@@ -1617,6 +1677,18 @@
 					"md": 12,
 					"lg": 12,
 					"xl": 12
+				},
+				"_freshActivationInfo": {
+					"newLine": true,
+					"type": "staticText",
+					"text": "msghub.i18n.IngestStates.admin.jsonCustom.rules.info.activationPending.text",
+					"hidden": "((data['managedMeta-managedBy'] || '').indexOf('IngestStates') !== -1) && (((data['managedMeta-managedText'] || '').toLowerCase()).indexOf('freshness') !== -1)",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12,
+					"style": { "color": "red", "whiteSpace": "pre-wrap" }
 				},
 				"_modeFreshnessInfo": {
 					"newLine": true,

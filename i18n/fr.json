@@ -333,6 +333,7 @@
   "msghub.i18n.IngestStates.admin.jsonCustom.rules.freshness.panel.label": "Freshness",
   "msghub.i18n.IngestStates.admin.jsonCustom.rules.freshness.section.examples.header.text": "Examples",
   "msghub.i18n.IngestStates.admin.jsonCustom.rules.freshness.section.timing.header.text": "Timing",
+  "msghub.i18n.IngestStates.admin.jsonCustom.rules.info.activationPending.text": "Note: This rule is not active yet. After saving, activation can take up to 5 minutes.",
   "msghub.i18n.IngestStates.admin.jsonCustom.rules.nonSettling.field.direction.help": "For leaks, “rising” is usually appropriate (e.g. water meter).",
   "msghub.i18n.IngestStates.admin.jsonCustom.rules.nonSettling.field.direction.label": "Trend direction",
   "msghub.i18n.IngestStates.admin.jsonCustom.rules.nonSettling.field.direction.option.any.label": "any",
