@@ -1116,15 +1116,29 @@
 						}
 					]
 				},
+				"nonset-minTotalDelta": {
+					"type": "number",
+					"label": "msghub.i18n.IngestStates.admin.jsonCustom.rules.nonSettling.field.minTotalDelta.label",
+					"help": "msghub.i18n.IngestStates.admin.jsonCustom.rules.nonSettling.field.minTotalDelta.help",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 3,
+					"xl": 3,
+					"min": 0,
+					"default": 0,
+					"hidden": "data['nonset-profile'] !== 'trend'"
+				},
 				"nonset-trendWindowValue": {
+					"newLine": true,
 					"type": "number",
 					"label": "msghub.i18n.IngestStates.admin.jsonCustom.rules.nonSettling.field.trendWindow.value.label",
 					"help": "msghub.i18n.IngestStates.admin.jsonCustom.rules.nonSettling.field.trendWindow.value.help",
 					"xs": 12,
-					"sm": 6,
-					"md": 3,
-					"lg": 3,
-					"xl": 3,
+					"sm": 8,
+					"md": 4,
+					"lg": 4,
+					"xl": 4,
 					"min": 1,
 					"default": 6,
 					"hidden": "data['nonset-profile'] !== 'trend'"
@@ -1133,8 +1147,8 @@
 					"type": "select",
 					"label": "msghub.i18n.IngestStates.admin.jsonCustom.common.unit.label",
 					"xs": 12,
-					"sm": 6,
-					"md": 3,
+					"sm": 4,
+					"md": 2,
 					"lg": 2,
 					"xl": 2,
 					"default": 3600,
@@ -1154,18 +1168,43 @@
 						}
 					]
 				},
-				"nonset-minTotalDelta": {
+				"nonset-trendQuietGapValue": {
 					"type": "number",
-					"label": "msghub.i18n.IngestStates.admin.jsonCustom.rules.nonSettling.field.minTotalDelta.label",
-					"help": "msghub.i18n.IngestStates.admin.jsonCustom.rules.nonSettling.field.minTotalDelta.help",
+					"label": "msghub.i18n.IngestStates.admin.jsonCustom.rules.nonSettling.field.trendQuietGap.value.label",
+					"help": "msghub.i18n.IngestStates.admin.jsonCustom.rules.nonSettling.field.trendQuietGap.value.help",
 					"xs": 12,
-					"sm": 12,
-					"md": 6,
+					"sm": 8,
+					"md": 4,
 					"lg": 4,
 					"xl": 4,
 					"min": 0,
 					"default": 0,
 					"hidden": "data['nonset-profile'] !== 'trend'"
+				},
+				"nonset-trendQuietGapUnit": {
+					"type": "select",
+					"label": "msghub.i18n.IngestStates.admin.jsonCustom.common.unit.label",
+					"xs": 12,
+					"sm": 4,
+					"md": 2,
+					"lg": 2,
+					"xl": 2,
+					"default": 60,
+					"hidden": "data['nonset-profile'] !== 'trend'",
+					"options": [
+						{
+							"label": "msghub.i18n.IngestStates.admin.jsonCustom.common.unit.option.minutes.label",
+							"value": 60
+						},
+						{
+							"label": "msghub.i18n.IngestStates.admin.jsonCustom.common.unit.option.hours.label",
+							"value": 3600
+						},
+						{
+							"label": "msghub.i18n.IngestStates.admin.jsonCustom.common.unit.option.days.label",
+							"value": 86400
+						}
+					]
 				},
 				"_nsH4Message": {
 					"newLine": true,

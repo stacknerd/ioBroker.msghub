@@ -231,6 +231,8 @@
 	"msghub.i18n.IngestStates.admin.jsonCustom.rules.nonSettling.field.profile.option.trend.label": "Leak/trend (rises/falls over long time)",
 	"msghub.i18n.IngestStates.admin.jsonCustom.rules.nonSettling.field.quietGap.value.help": "It must be quiet for this long to count as “settled”.",
 	"msghub.i18n.IngestStates.admin.jsonCustom.rules.nonSettling.field.quietGap.value.label": "Quiet phase",
+	"msghub.i18n.IngestStates.admin.jsonCustom.rules.nonSettling.field.trendQuietGap.value.help": "Recovery on trend standstill: 0 = disabled (only direction break). > 0 = alert recovers when no trend progress happens for this duration.",
+	"msghub.i18n.IngestStates.admin.jsonCustom.rules.nonSettling.field.trendQuietGap.value.label": "Trend quiet window",
 	"msghub.i18n.IngestStates.admin.jsonCustom.rules.nonSettling.field.trendWindow.value.help": "How long the trend must persist before alerting.",
 	"msghub.i18n.IngestStates.admin.jsonCustom.rules.nonSettling.field.trendWindow.value.label": "Trend window",
 	"msghub.i18n.IngestStates.admin.jsonCustom.rules.nonSettling.header.text": "Non-settling value",

@@ -336,6 +336,7 @@ You control:
 
 - Direction (up / down / any)
 - How long the trend must persist (trend window)
+- How long the trend may stay without directional progress before recovery (trend quiet gap)
 - How much total movement must happen before it counts (minimum total delta)
 
 Tip:
@@ -352,8 +353,12 @@ Example (trend):
 
 Important note:
 
-- This rule clears based on new incoming values (a “broken trend”), not based on silence. If the device stops reporting,
-  the rule does not treat that as “back to normal” (use Freshness for missing updates).
+- Open condition stays tied to trend persistence (`trend window`) and meaningful movement (`minimum total delta`).
+- Recovery happens in two ways:
+  - immediate on direction break (classic behavior), or
+  - after `trend quiet gap` with no trend progress (either no updates, or only updates within `minDelta`).
+- Set `trend quiet gap = 0` to disable stillstand-based recovery and keep classic break-only recovery.
+- Freshness is still the right rule if missing updates themselves should raise an alert.
 
 ### Session (Start/Stop): “Detect a run and summarize”
 
@@ -770,17 +775,29 @@ Profiles:
   - `minDelta`: minimum step size to determine/break a direction
   - `direction`: `up|down|any`
   - `trendWindow*`: how long a trend must persist before alerting
+  - `trendQuietGap*`: how long missing trend progress is tolerated before recovery (`0` disables this path)
   - `minTotalDelta`: required `max-min` before alerting
 
 Persistent timers:
 
-- An “open” timer is stored via `TimerService` (kind `nonSettling.<profile>.open`) to survive restarts.
+- Open and recovery timers are stored via `TimerService` to survive restarts.
 
 Timer details:
 
-- Timer id: `ns:<targetId>:open:<profile>`
-- Kind: `nonSettling.activity.open` or `nonSettling.trend.open`
-- Timer payload stores the start timestamp and min/max bounds collected so far.
+- Open timer id: `ns:<targetId>:open:<profile>`
+- Open kind: `nonSettling.activity.open` or `nonSettling.trend.open`
+- Recovery timer id (activity): `ns:<targetId>:recover:activity` (kind `nonSettling.activity.recover`)
+- Recovery timer id (trend): `ns:<targetId>:recover:trend` (kind `nonSettling.trend.recover`)
+- Timer payload stores start timestamps plus current diagnostic bounds/baseline data.
+
+Trend recovery semantics:
+
+- Trend progress is directional extension beyond noise:
+  - `up`: progress only if `value > trendMax + minDelta`
+  - `down`: progress only if `value < trendMin - minDelta`
+  - `any`: same logic after direction was resolved
+- Recovery via `trendQuietGap` triggers if no progress occurred for the configured duration.
+- Recovery on explicit direction break remains immediate and unchanged.
 
 Metrics (trend and activity reuse the same keys):
 
@@ -886,7 +903,7 @@ NonSettling (`nonset-*`):
 - `nonset-profile`: `activity|trend`
 - `nonset-minDelta`
 - activity-only: `nonset-maxContinuousValue`, `nonset-maxContinuousUnit`, `nonset-quietGapValue`, `nonset-quietGapUnit`
-- trend-only: `nonset-direction`, `nonset-trendWindowValue`, `nonset-trendWindowUnit`, `nonset-minTotalDelta`
+- trend-only: `nonset-direction`, `nonset-trendWindowValue`, `nonset-trendWindowUnit`, `nonset-trendQuietGapValue`, `nonset-trendQuietGapUnit`, `nonset-minTotalDelta`
 
 Session (`sess-*`):
 

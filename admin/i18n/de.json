@@ -231,6 +231,8 @@
 	"msghub.i18n.IngestStates.admin.jsonCustom.rules.nonSettling.field.profile.option.trend.label": "Leck/Trend (steigt/fällt über lange Zeit)",
 	"msghub.i18n.IngestStates.admin.jsonCustom.rules.nonSettling.field.quietGap.value.help": "So lange muss es ruhig sein, damit es als „stabil“ zählt.",
 	"msghub.i18n.IngestStates.admin.jsonCustom.rules.nonSettling.field.quietGap.value.label": "Ruhephase",
+	"msghub.i18n.IngestStates.admin.jsonCustom.rules.nonSettling.field.trendQuietGap.value.help": "Entwarnung bei Trend-Stillstand: 0 = deaktiviert (nur Trendbruch). > 0 = Meldung endet, wenn so lange kein Trendfortschritt mehr vorliegt.",
+	"msghub.i18n.IngestStates.admin.jsonCustom.rules.nonSettling.field.trendQuietGap.value.label": "Trend-Ruhefenster",
 	"msghub.i18n.IngestStates.admin.jsonCustom.rules.nonSettling.field.trendWindow.value.help": "Wie lange der Trend anhalten muss, bevor gemeldet wird.",
 	"msghub.i18n.IngestStates.admin.jsonCustom.rules.nonSettling.field.trendWindow.value.label": "Trendfenster",
 	"msghub.i18n.IngestStates.admin.jsonCustom.rules.nonSettling.header.text": "Unruhiger Wert",
