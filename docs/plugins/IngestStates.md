@@ -145,7 +145,7 @@ These are useful for UI sorting/filters. For text templates, prefer metrics like
 | Cycle | `state-name`, `cycle-lastResetAt`, `cycle-subCounter`, `cycle-period?`, `cycle-remaining?`, `cycle-timeMs?`, `cycle-timeBasedDueAt?` | Name; last reset; progress since reset; optional count/time targets and next time-based due timestamp. |
 | Triggered | `state-name`, `state-value`, `trigger-value`, `state-recovered-at?` | Name and current value of target plus trigger value (for debugging expectation failures); optional recovery timestamp (bad -> good transition). |
 | Non-settling | `state-name`, `state-value`, `trendStartedAt`, `trendStartValue`, `trendMin`, `trendMax`, `trendMinToMax`, `trendDir`, `state-recovered-at?` | Name/value plus trend/activity diagnostics: when instability started, min/max span, and direction; optional recovery timestamp (bad -> good transition). |
-| Session | `state-name`, `session-start`, `session-startval`, `session-counter`, `session-cost` | Name plus session start time, counter baseline, delta since start, and computed cost. |
+| Session | `state-name`, `session-start`, `session-startval?`, `session-counter?`, `session-cost?` | Always: name + session start time. Optional summary metrics are present only when summary is enabled for that session. |
 
 ---
 
@@ -374,25 +374,34 @@ How it behaves:
 
 - Start: power rises above the start threshold (optionally must stay above it for a minimum hold time).
 - End: power falls below the stop threshold (optionally must stay below it for a stop delay).
-- Optional gate: a separate on/off datapoint can enable/disable monitoring; switching the gate off ends a running session.
-- Optional counter + price datapoints can be used to calculate session consumption/cost metrics.
+- Optional gate: when enabled, a separate on/off datapoint controls if starting is allowed; switching the gate off ends a running session.
+- Optional summary: counter + price datapoints can be enabled to calculate consumption/cost metrics.
+- Grace behavior on stop is fixed: if power rises above the stop threshold again, a pending stop-delay is always canceled.
 
 Options you will see in the Session tab:
 
 - **Gate (optional)**
-  - Lets you “enable/disable” monitoring from another datapoint (e.g. a mode switch).
+  - Enable/disable gate handling (`enable gate`).
+  - Lets you control start permission from another datapoint (e.g. a mode switch).
   - If the gate turns off during a running session, the session ends.
+- **Start gate semantics**
+  - `gate_then_hold` (default): gate must be open first, then hold time counts while power is above start threshold.
+  - `hold_independent`: hold time counts independently from gate; start happens once hold is fulfilled and gate is open.
 - **Start threshold + start hold (optional)**
   - The value must rise above the threshold to be considered “started”.
   - Start hold requires it to stay above the threshold for a minimum time (debounce).
 - **Stop threshold + stop delay (optional)**
   - The value must fall below the threshold to be considered “ended”.
   - Stop delay requires it to stay below the threshold for a minimum time (debounce).
-- **Cancel stop when value rises again**
-  - Prevents false “end” detections when the value briefly dips below the stop threshold.
-- **Energy counter + price (optional)**
-  - Lets MsgHub compute “consumed” and “cost” metrics for the end message.
+- **Summary (optional)**
+  - Enable/disable summary metrics (`enable summary`).
+  - With summary enabled, MsgHub computes “consumed” and “cost” metrics for the end message.
   - Units are taken from the datapoints themselves (could be anything, not just kWh / €).
+
+Runtime note:
+
+- Session-relevant config is latched at session start. Config changes while a session is already active are applied only to the next session.
+- After adapter restart, running sessions and pending start/stop debounce timers are not continued.
 
 Messages:
 
@@ -810,16 +819,19 @@ Metrics (trend and activity reuse the same keys):
 Inputs:
 
 - Power datapoint: `targetId`
-- Optional gate: `sess-onOffId` (+ gate logic)
-- Optional energy counter: `sess-energyCounterId`
-- Optional price-per-unit: `sess-pricePerKwhId`
+- Optional gate (when `sess-enableGate=true`): `sess-onOffId` (+ gate logic)
+- Optional summary inputs (when `sess-enableSummary=true`): `sess-energyCounterId`, `sess-pricePerKwhId`
 
 Start/stop detection:
 
-- Start: above `sess-startThreshold` (optional hold: `sess-startMinHold*`)
+- Start: above `sess-startThreshold` (optional hold: `sess-startMinHold*`), with mode:
+  - `sess-startGateSemantics=gate_then_hold` (default): gate must be active; hold starts from that point.
+  - `sess-startGateSemantics=hold_independent`: hold is gate-independent; start when gate becomes active after hold is satisfied.
+- If gate is enabled but cannot be evaluated: best-effort gate read; if still unknown, rule logs `error` and does not start.
 - Stop: below `sess-stopThreshold` (optional delay: `sess-stopDelay*`)
-- Optional: `sess-cancelStopIfAboveStopThreshold` cancels a pending stop timer when power rises again
+- Stop-delay cancellation on recovery is fixed (always on): if power rises above stop threshold, pending stop timer is canceled.
 - Gate off ends the session immediately
+- Session config is latched at start (gate/summary behavior and related ids/modes stay stable for the running session).
 
 Messages:
 
@@ -830,18 +842,21 @@ Messages:
 
 Persistent timers:
 
-- `session.startHold`, `session.stopDelay`, and a far-future `session.active` marker.
+- `session.startHold` and `session.stopDelay`.
 
 Timer details:
 
 - Start-hold timer id: `sess:startHold:<targetId>` (kind `session.startHold`)
 - Stop-delay timer id: `sess:stopDelay:<targetId>` (kind `session.stopDelay`)
-- Active marker id: `sess:active:<targetId>` (kind `session.active`)
-  - Stored as a far-future due timestamp so it survives restarts and acts like durable state.
+- Active marker id: `sess:active:<targetId>` is treated as a legacy/cleanup artifact.
+  - Running sessions are not restored after restart.
+  - If an old active marker is found, the interrupted session is closed once to avoid orphan start messages.
+  - Start-hold and stop-delay debounce windows are reset after restart.
 
 Metrics:
 
-- `session-start`, `session-startval`, `session-counter`, `session-cost`
+- always: `session-start`
+- summary-enabled only: `session-startval`, `session-counter`, `session-cost`
 
 ---
 
@@ -907,11 +922,11 @@ NonSettling (`nonset-*`):
 
 Session (`sess-*`):
 
-- gate: `sess-onOffId`, `sess-onOffActive` (`truthy|falsy|eq`), `sess-onOffValue` (string compare value for `eq`)
+- gate enable + semantics: `sess-enableGate`, `sess-startGateSemantics` (`gate_then_hold|hold_independent`)
+- gate details: `sess-onOffId`, `sess-onOffActive` (`truthy|falsy|eq`), `sess-onOffValue` (string compare value for `eq`)
 - power thresholds: `sess-startThreshold`, `sess-stopThreshold`
 - debounce: `sess-startMinHoldValue`, `sess-startMinHoldUnit`, `sess-stopDelayValue`, `sess-stopDelayUnit`
-- stop canceling: `sess-cancelStopIfAboveStopThreshold`
-- optional metrics inputs: `sess-energyCounterId`, `sess-pricePerKwhId`
+- summary enable + inputs: `sess-enableSummary`, `sess-energyCounterId`, `sess-pricePerKwhId`
 
 ---
 

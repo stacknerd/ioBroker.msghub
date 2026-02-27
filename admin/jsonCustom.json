@@ -1343,87 +1343,16 @@
 					"xl": 12,
 					"style": { "color": "red", "whiteSpace": "pre-wrap" }
 				},
-				"_sessInfo0": {
+				"_sessInfoIntro": {
 					"newLine": true,
 					"type": "staticText",
-					"text": "msghub.i18n.IngestStates.admin.jsonCustom.rules.session.info.summary.text",
+					"text": "msghub.i18n.IngestStates.admin.jsonCustom.rules.session.info.intro.text",
 					"xs": 12,
 					"sm": 12,
 					"md": 12,
 					"lg": 12,
 					"xl": 12,
 					"style": { "whiteSpace": "pre-wrap" }
-				},
-				"_sessH4Inputs": {
-					"newLine": true,
-					"type": "header",
-					"size": 4,
-					"text": "msghub.i18n.IngestStates.admin.jsonCustom.rules.session.section.inputs.header.text",
-					"xs": 12,
-					"sm": 12,
-					"md": 12,
-					"lg": 12,
-					"xl": 12
-				},
-				"_sessInfoInputs0": {
-					"newLine": true,
-					"type": "staticText",
-					"text": "msghub.i18n.IngestStates.admin.jsonCustom.rules.session.info.inputs.text",
-					"xs": 12,
-					"sm": 12,
-					"md": 12,
-					"lg": 12,
-					"xl": 12
-				},
-				"sess-onOffId": {
-					"newLine": true,
-					"type": "objectId",
-					"label": "msghub.i18n.IngestStates.admin.jsonCustom.rules.session.field.gate.objectId.label",
-					"help": "msghub.i18n.IngestStates.admin.jsonCustom.rules.session.field.gate.objectId.help",
-					"xs": 12,
-					"sm": 12,
-					"md": 6,
-					"lg": 6,
-					"xl": 6,
-					"default": ""
-				},
-				"sess-onOffActive": {
-					"newLine": true,
-					"type": "select",
-					"label": "msghub.i18n.IngestStates.admin.jsonCustom.rules.session.field.gate.activeWhen.label",
-					"xs": 12,
-					"sm": 12,
-					"md": 6,
-					"lg": 6,
-					"xl": 6,
-					"default": "truthy",
-					"options": [
-						{
-							"label": "msghub.i18n.IngestStates.admin.jsonCustom.rules.session.field.gate.activeWhen.option.truthy.label",
-							"value": "truthy"
-						},
-						{
-							"label": "msghub.i18n.IngestStates.admin.jsonCustom.rules.session.field.gate.activeWhen.option.falsy.label",
-							"value": "falsy"
-						},
-						{
-							"label": "msghub.i18n.IngestStates.admin.jsonCustom.rules.session.field.gate.activeWhen.option.eq.label",
-							"value": "eq"
-						}
-					],
-					"hidden": "!(data['sess-onOffId'])"
-				},
-				"sess-onOffValue": {
-					"type": "text",
-					"label": "msghub.i18n.IngestStates.admin.jsonCustom.rules.session.field.gate.comparisonValue.label",
-					"help": "msghub.i18n.IngestStates.admin.jsonCustom.rules.session.field.gate.comparisonValue.help",
-					"xs": 12,
-					"sm": 12,
-					"md": 6,
-					"lg": 6,
-					"xl": 6,
-					"default": "true",
-					"hidden": "!(data['sess-onOffId']) || (data['sess-onOffActive'] !== 'eq')"
 				},
 				"_sessH4Start": {
 					"newLine": true,
@@ -1541,17 +1470,111 @@
 						}
 					]
 				},
-				"sess-cancelStopIfAboveStopThreshold": {
+				"_sessH4Gate": {
+					"newLine": true,
+					"type": "header",
+					"size": 4,
+					"text": "msghub.i18n.IngestStates.admin.jsonCustom.rules.session.section.gate.header.text",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12
+				},
+				"sess-enableGate": {
 					"newLine": true,
 					"type": "checkbox",
-					"label": "msghub.i18n.IngestStates.admin.jsonCustom.rules.session.field.stop.cancelIfAbove.label",
-					"help": "msghub.i18n.IngestStates.admin.jsonCustom.rules.session.field.stop.cancelIfAbove.help",
+					"label": "msghub.i18n.IngestStates.admin.jsonCustom.rules.session.field.gate.enable.label",
 					"xs": 12,
 					"sm": 12,
 					"md": 12,
 					"lg": 12,
 					"xl": 12,
-					"default": true
+					"default": false
+				},
+				"_sessInfogate0": {
+					"newLine": true,
+					"type": "staticText",
+					"text": "msghub.i18n.IngestStates.admin.jsonCustom.rules.session.info.gate.text",
+					"hidden": "!data['sess-enableGate']",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12
+				},
+				"sess-onOffId": {
+					"newLine": true,
+					"type": "objectId",
+					"label": "msghub.i18n.IngestStates.admin.jsonCustom.rules.session.field.gate.objectId.label",
+					"help": "msghub.i18n.IngestStates.admin.jsonCustom.rules.session.field.gate.objectId.help",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 6,
+					"xl": 6,
+					"default": "",
+					"hidden": "!data['sess-enableGate']"
+				},
+				"sess-startGateSemantics": {
+					"type": "select",
+					"label": "msghub.i18n.IngestStates.admin.jsonCustom.rules.session.field.start.gateSemantics.label",
+					"help": "msghub.i18n.IngestStates.admin.jsonCustom.rules.session.field.start.gateSemantics.help",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 6,
+					"xl": 6,
+					"default": "gate_then_hold",
+					"options": [
+						{
+							"label": "msghub.i18n.IngestStates.admin.jsonCustom.rules.session.field.start.gateSemantics.option.gateThenHold.label",
+							"value": "gate_then_hold"
+						},
+						{
+							"label": "msghub.i18n.IngestStates.admin.jsonCustom.rules.session.field.start.gateSemantics.option.holdIndependent.label",
+							"value": "hold_independent"
+						}
+					],
+					"hidden": "!data['sess-enableGate'] || !(data['sess-onOffId'])"
+				},
+				"sess-onOffActive": {
+					"newLine": true,
+					"type": "select",
+					"label": "msghub.i18n.IngestStates.admin.jsonCustom.rules.session.field.gate.activeWhen.label",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 6,
+					"xl": 6,
+					"default": "truthy",
+					"options": [
+						{
+							"label": "msghub.i18n.IngestStates.admin.jsonCustom.rules.session.field.gate.activeWhen.option.truthy.label",
+							"value": "truthy"
+						},
+						{
+							"label": "msghub.i18n.IngestStates.admin.jsonCustom.rules.session.field.gate.activeWhen.option.falsy.label",
+							"value": "falsy"
+						},
+						{
+							"label": "msghub.i18n.IngestStates.admin.jsonCustom.rules.session.field.gate.activeWhen.option.eq.label",
+							"value": "eq"
+						}
+					],
+					"hidden": "!data['sess-enableGate'] || !(data['sess-onOffId'])"
+				},
+				"sess-onOffValue": {
+					"type": "text",
+					"label": "msghub.i18n.IngestStates.admin.jsonCustom.rules.session.field.gate.comparisonValue.label",
+					"help": "msghub.i18n.IngestStates.admin.jsonCustom.rules.session.field.gate.comparisonValue.help",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 6,
+					"xl": 6,
+					"default": "true",
+					"hidden": "!data['sess-enableGate'] || !(data['sess-onOffId']) || (data['sess-onOffActive'] !== 'eq')"
 				},
 				"_sessH4Summary": {
 					"newLine": true,
@@ -1564,6 +1587,29 @@
 					"lg": 12,
 					"xl": 12
 				},
+				"sess-enableSummary": {
+					"newLine": true,
+					"type": "checkbox",
+					"label": "msghub.i18n.IngestStates.admin.jsonCustom.rules.session.field.summary.enable.label",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12,
+					"default": false
+				},
+				"_sessInfoSummary0": {
+					"newLine": true,
+					"type": "staticText",
+					"text": "msghub.i18n.IngestStates.admin.jsonCustom.rules.session.info.summary.text",
+					"hidden": "!data['sess-enableSummary']",
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12,
+					"style": { "whiteSpace": "pre-wrap" }
+				},
 				"sess-energyCounterId": {
 					"newLine": true,
 					"type": "objectId",
@@ -1574,7 +1620,8 @@
 					"md": 6,
 					"lg": 6,
 					"xl": 6,
-					"default": ""
+					"default": "",
+					"hidden": "!data['sess-enableSummary']"
 				},
 				"sess-pricePerKwhId": {
 					"type": "objectId",
@@ -1585,7 +1632,8 @@
 					"md": 6,
 					"lg": 6,
 					"xl": 6,
-					"default": ""
+					"default": "",
+					"hidden": "!data['sess-enableSummary']"
 				},
 				"_sessH4Message": {
 					"newLine": true,
@@ -1624,8 +1672,9 @@
 					"xl": 12,
 					"default": "",
 					"command": "admin.ingestStates.presets.selectOptions.session.end",
-					"jsonData": "{\"currentValue\": ${JSON.stringify(data['msg-SessionEndId'] || '')}}",
+					"jsonData": "{\"subset\": ${JSON.stringify(data['sess-enableSummary'] ? 'end+summary' : 'end')}, \"currentValue\": ${JSON.stringify(data['msg-SessionEndId'] || '')}}",
 					"noTranslation": true,
+					"alsoDependsOn": ["sess-enableSummary"],
 					"manual": false
 				},
 				"_sessMessageInfo": {
