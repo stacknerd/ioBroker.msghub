@@ -135,8 +135,8 @@ Domain timestamps live in the message timing, not in metrics:
 - `timing.endAt`: planned/actual end (used by Session end)
 - `timing.dueAt`: deadline derived from preset `dueInMs` (relative to `startAt`)
 
-These are useful for UI sorting/filters. For text templates, prefer metrics like
-`{{m.session-start|datetime}}` or `{{m.cycle-timeBasedDueAt.val|durationUntil}}`.
+These are useful for UI sorting/filters. For text templates, prefer
+`{{t.startAt|datetime}}`, `{{t.endAt|datetime}}`, or `{{m.cycle-timeBasedDueAt.val|durationUntil}}`.
 
 | Rule | Metrics (keys) | Meaning (short) |
 | --- | --- | --- |
@@ -145,7 +145,7 @@ These are useful for UI sorting/filters. For text templates, prefer metrics like
 | Cycle | `state-name`, `cycle-lastResetAt`, `cycle-subCounter`, `cycle-period?`, `cycle-remaining?`, `cycle-timeMs?`, `cycle-timeBasedDueAt?` | Name; last reset; progress since reset; optional count/time targets and next time-based due timestamp. |
 | Triggered | `state-name`, `state-value`, `trigger-value`, `state-recovered-at?` | Name and current value of target plus trigger value (for debugging expectation failures); optional recovery timestamp (bad -> good transition). |
 | Non-settling | `state-name`, `state-value`, `trendStartedAt`, `trendStartValue`, `trendMin`, `trendMax`, `trendMinToMax`, `trendDir`, `state-recovered-at?` | Name/value plus trend/activity diagnostics: when instability started, min/max span, and direction; optional recovery timestamp (bad -> good transition). |
-| Session | `state-name`, `session-start`, `session-startval?`, `session-counter?`, `session-cost?` | Always: name + session start time. Optional summary metrics are present only when summary is enabled for that session. |
+| Session | `state-name`, `session-counter-start?`, `session-counter?`, `session-cost?` | Always: name. Start/end timestamps are in `timing.startAt` / `timing.endAt`. Optional summary metrics are present only when summary is enabled for that session. |
 
 ---
 
@@ -285,6 +285,8 @@ How to configure it (in simple terms):
 Common pitfalls:
 
 - If you choose “greater/less than”, the trigger value must be numeric (strings like `"12"` still work; non-numeric does not).
+- `truthy/falsy` uses raw value truthiness. Example: the string `"false"` is still truthy (because it is a non-empty string).
+- If your trigger stores textual booleans (`"true"` / `"false"`), use `eq` with value type `boolean` instead of `truthy/falsy`.
 - Choose a window that matches real-world latency (slow devices and adapter schedules can easily need minutes).
 
 Example (valve → meter):
@@ -740,6 +742,8 @@ Operator/value matching:
 - Operator: `truthy|falsy|eq|neq|gt|lt`
 - Value type: `boolean|number|string`
 - Compare value comes from the matching config field (`valueBool|valueNumber|valueString`) and is validated on startup.
+- `truthy|falsy` evaluates the raw trigger value directly (no compare value, no type coercion by `valueType`).
+- `eq|neq` with `valueType=boolean` uses boolean parsing (including textual `"true"` / `"false"`).
 
 Window and expectation:
 
@@ -855,8 +859,8 @@ Timer details:
 
 Metrics:
 
-- always: `session-start`
-- summary-enabled only: `session-startval`, `session-counter`, `session-cost`
+- always: `state-name`
+- summary-enabled only: `session-counter-start`, `session-counter`, `session-cost`
 
 ---
 
