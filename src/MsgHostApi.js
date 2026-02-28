@@ -25,7 +25,11 @@ function buildLogApi(adapter, { hostName }) {
 			throw new TypeError(`${name}: ctx.api.log.${method}(message) expects a string`);
 		}
 	};
-	return Object.freeze({
+	const base = Object.freeze({
+		silly: message => {
+			assertString('silly', message);
+			adapter?.log?.silly?.(message);
+		},
 		debug: message => {
 			assertString('debug', message);
 			adapter?.log?.debug?.(message);
@@ -43,21 +47,84 @@ function buildLogApi(adapter, { hostName }) {
 			adapter?.log?.error?.(message);
 		},
 	});
+
+	// Internal hook: IoPlugins binds per-plugin identity into ctx.api.log for consistent prefixes.
+	return Object.freeze({
+		...base,
+		__bindCaller: pluginMeta => {
+			const baseOwnId = typeof pluginMeta?.baseOwnId === 'string' ? pluginMeta.baseOwnId.trim() : '';
+			if (!baseOwnId) {
+				return base;
+			}
+			const prefix = `${baseOwnId}: `;
+			return Object.freeze({
+				silly: message => base.silly(`${prefix}${message}`),
+				debug: message => base.debug(`${prefix}${message}`),
+				info: message => base.info(`${prefix}${message}`),
+				warn: message => base.warn(`${prefix}${message}`),
+				error: message => base.error(`${prefix}${message}`),
+			});
+		},
+	});
 }
 
 /**
  * Build an optional i18n facade. Returns null when i18n is not wired.
  *
- * @param {import('@iobroker/adapter-core').AdapterInstance & { i18n?: ({ t?: Function, getTranslatedObject?: Function } | null) }} adapter Adapter instance.
+ * @param {import('@iobroker/adapter-core').AdapterInstance & { i18n?: ({ t?: Function, getTranslatedObject?: Function, locale?: string, i18nlocale?: string, lang?: string } | null) }} adapter Adapter instance.
  */
 function buildI18nApi(adapter) {
 	if (!adapter?.i18n || typeof adapter.i18n.t !== 'function') {
 		return null;
 	}
+	// `main.js` wires a patched `adapter.i18n` object that already contains the effective locale fields.
+	// This facade intentionally just forwards those values so plugins have one stable place (`ctx.api.i18n`)
+	// and still get `null` when i18n is not wired at all.
+	const i18n = adapter.i18n;
+	const locale = typeof i18n?.locale === 'string' ? i18n.locale : '';
+	const i18nlocale = typeof i18n?.i18nlocale === 'string' ? i18n.i18nlocale : '';
+	const lang = typeof i18n?.lang === 'string' ? i18n.lang : '';
 	return Object.freeze({
-		t: adapter.i18n.t,
-		getTranslatedObject: adapter.i18n.getTranslatedObject,
+		t: i18n.t,
+		getTranslatedObject: i18n.getTranslatedObject,
+		locale,
+		i18nlocale,
+		lang,
 	});
+}
+
+/**
+ * Build a read-only "effective config" facade for plugins.
+ *
+ * Source of truth:
+ * - `main.js` runs `MsgConfig.normalize(...)` and stores the plugin-facing snapshot on the adapter instance.
+ * - Hosts (`MsgIngest` / `MsgNotify`) expose this snapshot as `ctx.api.config`.
+ *
+ * Notes for plugin authors:
+ * - Treat this as a snapshot. It does not auto-update at runtime.
+ * - Always use `schemaVersion` to interpret the shape.
+ *
+ * @param {import('@iobroker/adapter-core').AdapterInstance|{ _msgConfigPublic?: any }|any} adapterOrSnapshot Adapter instance or a public snapshot.
+ * @returns {any|null} Config snapshot or `null` when not wired.
+ */
+function buildConfigApi(adapterOrSnapshot) {
+	// Intentionally lean: MsgConfig owns the plugin-facing schema and `main.js` stores it as-is.
+	// This builder does not re-shape or whitelist fields; it only ensures a schemaVersion exists.
+	const obj =
+		adapterOrSnapshot && typeof adapterOrSnapshot === 'object' && !Array.isArray(adapterOrSnapshot)
+			? adapterOrSnapshot
+			: null;
+	const snapshot =
+		obj && obj._msgConfigPublic && typeof obj._msgConfigPublic === 'object' && !Array.isArray(obj._msgConfigPublic)
+			? obj._msgConfigPublic
+			: obj;
+
+	const schemaVersion = snapshot?.schemaVersion;
+	if (typeof schemaVersion !== 'number' || !Number.isFinite(schemaVersion) || schemaVersion <= 0) {
+		return null;
+	}
+
+	return snapshot;
 }
 
 /**
@@ -79,7 +146,7 @@ function buildStoreApi(store, { hostName = 'Host' } = {}) {
 	const isIngestHost = /Ingest/i.test(name);
 
 	const api = {
-		getMessageByRef: ref => store.getMessageByRef(ref),
+		getMessageByRef: (ref, filter) => store.getMessageByRef(ref, filter),
 		getMessages: () => store.getMessages(),
 		queryMessages: options => store.queryMessages(options),
 	};
@@ -91,7 +158,49 @@ function buildStoreApi(store, { hostName = 'Host' } = {}) {
 		// api.updateMessage = (msgOrRef, patch, stealthMode = false) => store.updateMessage(msgOrRef, patch, stealthMode);
 		api.updateMessage = (msgOrRef, patch) => store.updateMessage(msgOrRef, patch);
 		api.addOrUpdateMessage = msg => store.addOrUpdateMessage(msg);
-		api.removeMessage = ref => store.removeMessage(ref);
+		api.removeMessage = (ref, options = {}) => {
+			const msgRef = typeof ref === 'string' ? ref.trim() : '';
+			if (!msgRef) {
+				return false;
+			}
+			const actor = Object.prototype.hasOwnProperty.call(options || {}, 'actor') ? options.actor : undefined;
+			return store.removeMessage(msgRef, actor === undefined ? undefined : { actor });
+		};
+
+		// "Shortcut" for Ingest-Plugins to remove Messages that have been "resoved by taking action"
+		// on a easy and standardized way.
+		api.completeAfterCauseEliminated = (ref, options = {}) => {
+			const msgRef = typeof ref === 'string' ? ref.trim() : '';
+			if (!msgRef) {
+				return false;
+			}
+			const actor = typeof options?.actor === 'string' && options.actor.trim() ? options.actor.trim() : null;
+
+			const msg = store.getMessageByRef(msgRef);
+			if (!msg) {
+				return false;
+			}
+
+			if (msg?.kind === store?.msgConstants?.kind?.status) {
+				if (msg?.lifecycle?.state === store?.msgConstants?.lifecycle?.state?.deleted) {
+					return true;
+				}
+				return store.removeMessage(msgRef, actor ? { actor } : undefined);
+			}
+
+			if (msg?.kind === store?.msgConstants?.kind?.task) {
+				return store.updateMessage(msgRef, {
+					lifecycle: {
+						state: 'closed',
+						...(actor ? { stateChangedBy: actor } : {}),
+					},
+					timing: { notifyAt: null },
+					progress: { percentage: 100 },
+				});
+			}
+
+			return true;
+		};
 	}
 
 	return Object.freeze(api);
@@ -125,8 +234,10 @@ function buildActionApi(adapter, msgConstants, store, { hostName = 'Host' } = {}
 	}
 
 	try {
-		const { MsgAction } = require(`${__dirname}/MsgAction`);
-		const msgAction = new MsgAction(adapter, msgConstants, store);
+		const msgAction = store?.msgActions;
+		if (!msgAction || typeof msgAction.execute !== 'function') {
+			return null;
+		}
 		return Object.freeze({
 			execute: options => msgAction.execute(options),
 		});
@@ -161,6 +272,57 @@ function buildFactoryApi(msgFactory, { hostName = 'Host' } = {}) {
 	// - createMessage() is for "create" paths only (it always sets timing.createdAt = now).
 	return Object.freeze({
 		createMessage: data => msgFactory.createMessage(data),
+	});
+}
+
+/**
+ * Build the MsgStats facade for plugins.
+ *
+ * @param {object} store MsgStore instance.
+ */
+function buildStatsApi(store) {
+	if (!store || typeof store !== 'object') {
+		return null;
+	}
+	if (typeof store.getStats !== 'function') {
+		return null;
+	}
+
+	return Object.freeze({
+		getStats: options => store.getStats(options),
+	});
+}
+
+/**
+ * Build the MsgAi facade for plugins.
+ *
+ * Derivation rule:
+ * - When MsgAi is wired: expose `ctx.api.ai.*` as a best-effort helper that never throws/rejects.
+ * - When MsgAi is not wired: return null.
+ *
+ * @param {import('./MsgAi').MsgAi|null} msgAi MsgAi instance.
+ */
+function buildAiApi(msgAi) {
+	if (!msgAi || typeof msgAi !== 'object' || typeof msgAi.getStatus !== 'function') {
+		return null;
+	}
+
+	const base = Object.freeze({
+		getStatus: () => msgAi.getStatus(),
+		text: request => msgAi.text(request, null),
+		json: request => msgAi.json(request, null),
+	});
+
+	// Internal hook: IoPlugins binds per-plugin identity into ctx.api.ai for rate limiting/caching partition.
+	return Object.freeze({
+		...base,
+		__bindCaller: pluginMeta => {
+			if (typeof msgAi.createCallerApi !== 'function') {
+				return base;
+			}
+			const regId = typeof pluginMeta?.regId === 'string' ? pluginMeta.regId.trim() : '';
+			return msgAi.createCallerApi({ regId });
+		},
 	});
 }
 
@@ -204,6 +366,7 @@ function buildIdsApi(adapter) {
 function buildIoBrokerApi(adapter, { hostName }) {
 	const name = typeof hostName === 'string' && hostName.trim() ? hostName.trim() : 'Host';
 	const ids = buildIdsApi(adapter);
+	const isNotifyHost = /Notify/i.test(name);
 
 	const requireFn = (fn, label) => {
 		if (typeof fn !== 'function') {
@@ -214,6 +377,77 @@ function buildIoBrokerApi(adapter, { hostName }) {
 
 	return Object.freeze({
 		ids,
+		/**
+		 * Promisified wrapper for ioBroker messagebox calls via `adapter.sendTo(...)`.
+		 *
+		 * @param {string} instance Target adapter instance (e.g. "telegram.0").
+		 * @param {string} command Command name.
+		 * @param {any} [message] Payload passed as `obj.message`.
+		 * @param {{ timeoutMs?: number }|number} [options] Optional timeout (ms). Use `<= 0` to disable timeout.
+		 * @returns {Promise<any>} Promise that resolves with the callback response.
+		 */
+		sendTo: (instance, command, message = undefined, options = undefined) => {
+			const target = typeof instance === 'string' ? instance.trim() : '';
+			const cmd = typeof command === 'string' ? command.trim() : '';
+			if (!target) {
+				throw new TypeError(
+					`${name}: ctx.api.iobroker.sendTo(instance, command, ...) expects instance to be a non-empty string`,
+				);
+			}
+			if (!cmd) {
+				throw new TypeError(
+					`${name}: ctx.api.iobroker.sendTo(instance, command, ...) expects command to be a non-empty string`,
+				);
+			}
+			if (ids.namespace && target === ids.namespace) {
+				throw new Error(
+					`${name}: ctx.api.iobroker.sendTo(...) cannot target own namespace ('${ids.namespace}')`,
+				);
+			}
+
+			const timeoutMsRaw =
+				typeof options === 'number'
+					? options
+					: options && typeof options === 'object' && typeof options.timeoutMs === 'number'
+						? options.timeoutMs
+						: 10000;
+			const timeoutMs =
+				typeof timeoutMsRaw === 'number' && Number.isFinite(timeoutMsRaw) ? Math.trunc(timeoutMsRaw) : 10000;
+
+			const fn = requireFn(adapter?.sendTo, 'sendTo');
+
+			const exec = () =>
+				new Promise((resolve, reject) => {
+					try {
+						fn.call(adapter, target, cmd, message, response => resolve(response));
+					} catch (e) {
+						reject(e);
+					}
+				});
+
+			if (timeoutMs <= 0) {
+				return exec();
+			}
+
+			return new Promise((resolve, reject) => {
+				const timer = setTimeout(() => {
+					reject(
+						new Error(`${name}: adapter.sendTo('${target}', '${cmd}', ...) timed out after ${timeoutMs}ms`),
+					);
+				}, timeoutMs);
+
+				exec().then(
+					result => {
+						clearTimeout(timer);
+						resolve(result);
+					},
+					err => {
+						clearTimeout(timer);
+						reject(err);
+					},
+				);
+			});
+		},
 		objects: Object.freeze({
 			setObjectNotExists: (ownId, obj) => {
 				if (typeof adapter?.setObjectNotExistsAsync === 'function') {
@@ -233,13 +467,28 @@ function buildIoBrokerApi(adapter, { hostName }) {
 					adapter.delObject(ownId, err => (err ? reject(err) : resolve(undefined)));
 				});
 			},
-			getForeignObjects: pattern => {
+			getObjectView: (design, search, params) => {
+				if (typeof adapter?.getObjectViewAsync === 'function') {
+					return adapter.getObjectViewAsync(design, search, params);
+				}
+				requireFn(adapter?.getObjectView, 'getObjectView');
+				return new Promise((resolve, reject) => {
+					adapter.getObjectView(design, search, params, (err, res) => (err ? reject(err) : resolve(res)));
+				});
+			},
+			getForeignObjects: (pattern, type = undefined) => {
 				if (typeof adapter?.getForeignObjectsAsync === 'function') {
-					return adapter.getForeignObjectsAsync(pattern);
+					return type === undefined
+						? adapter.getForeignObjectsAsync(pattern)
+						: adapter.getForeignObjectsAsync(pattern, type);
 				}
 				requireFn(adapter?.getForeignObjects, 'getForeignObjects');
 				return new Promise((resolve, reject) => {
-					adapter.getForeignObjects(pattern, (err, objs) => (err ? reject(err) : resolve(objs)));
+					if (type === undefined) {
+						adapter.getForeignObjects(pattern, (err, objs) => (err ? reject(err) : resolve(objs)));
+						return;
+					}
+					adapter.getForeignObjects(pattern, type, (err, objs) => (err ? reject(err) : resolve(objs)));
 				});
 			},
 			getForeignObject: id => {
@@ -271,6 +520,15 @@ function buildIoBrokerApi(adapter, { hostName }) {
 					adapter.setState(ownId, state, err => (err ? reject(err) : resolve(undefined)));
 				});
 			},
+			setForeignState: (id, state) => {
+				if (typeof adapter?.setForeignStateAsync === 'function') {
+					return adapter.setForeignStateAsync(id, state).then(() => undefined);
+				}
+				requireFn(adapter?.setForeignState, 'setForeignState');
+				return new Promise((resolve, reject) => {
+					adapter.setForeignState(id, state, err => (err ? reject(err) : resolve(undefined)));
+				});
+			},
 			getForeignState: id => {
 				if (typeof adapter?.getForeignStateAsync === 'function') {
 					return adapter.getForeignStateAsync(id);
@@ -281,19 +539,128 @@ function buildIoBrokerApi(adapter, { hostName }) {
 				});
 			},
 		}),
-		subscribe: Object.freeze({
-			subscribeStates: pattern => requireFn(adapter?.subscribeStates, 'subscribeStates')(pattern),
-			unsubscribeStates: pattern => requireFn(adapter?.unsubscribeStates, 'unsubscribeStates')(pattern),
-			subscribeObjects: pattern => requireFn(adapter?.subscribeObjects, 'subscribeObjects')(pattern),
-			unsubscribeObjects: pattern => requireFn(adapter?.unsubscribeObjects, 'unsubscribeObjects')(pattern),
-			subscribeForeignStates: pattern =>
-				requireFn(adapter?.subscribeForeignStates, 'subscribeForeignStates')(pattern),
-			unsubscribeForeignStates: pattern =>
-				requireFn(adapter?.unsubscribeForeignStates, 'unsubscribeForeignStates')(pattern),
-			subscribeForeignObjects: pattern =>
-				requireFn(adapter?.subscribeForeignObjects, 'subscribeForeignObjects')(pattern),
-			unsubscribeForeignObjects: pattern =>
-				requireFn(adapter?.unsubscribeForeignObjects, 'unsubscribeForeignObjects')(pattern),
+		...(isNotifyHost
+			? {}
+			: {
+					subscribe: Object.freeze({
+						subscribeStates: pattern =>
+							requireFn(adapter?.subscribeStates, 'subscribeStates').call(adapter, pattern),
+						unsubscribeStates: pattern =>
+							requireFn(adapter?.unsubscribeStates, 'unsubscribeStates').call(adapter, pattern),
+						subscribeObjects: pattern =>
+							requireFn(adapter?.subscribeObjects, 'subscribeObjects').call(adapter, pattern),
+						unsubscribeObjects: pattern =>
+							requireFn(adapter?.unsubscribeObjects, 'unsubscribeObjects').call(adapter, pattern),
+						subscribeForeignStates: pattern =>
+							requireFn(adapter?.subscribeForeignStates, 'subscribeForeignStates').call(adapter, pattern),
+						unsubscribeForeignStates: pattern =>
+							requireFn(adapter?.unsubscribeForeignStates, 'unsubscribeForeignStates').call(
+								adapter,
+								pattern,
+							),
+						subscribeForeignObjects: pattern =>
+							requireFn(adapter?.subscribeForeignObjects, 'subscribeForeignObjects').call(
+								adapter,
+								pattern,
+							),
+						unsubscribeForeignObjects: pattern =>
+							requireFn(adapter?.unsubscribeForeignObjects, 'unsubscribeForeignObjects').call(
+								adapter,
+								pattern,
+							),
+					}),
+				}),
+		files: Object.freeze({
+			/**
+			 * Read a file from ioBroker file storage.
+			 *
+			 * Return value is passed through as returned by ioBroker (commonly `{ file, mimeType? }`).
+			 *
+			 * @param {string} metaId File storage root (example: adapter namespace like "msghub.0").
+			 * @param {string} filePath File path below metaId (example: "documents/x.pdf").
+			 * @returns {Promise<any>} ioBroker readFile result.
+			 */
+			readFile: (metaId, filePath) => {
+				if (typeof adapter?.readFileAsync === 'function') {
+					return adapter.readFileAsync(metaId, filePath);
+				}
+				requireFn(adapter?.readFile, 'readFile');
+				return new Promise((resolve, reject) => {
+					adapter.readFile(metaId, filePath, (err, res) => (err ? reject(err) : resolve(res)));
+				});
+			},
+			/**
+			 * Write a file into ioBroker file storage.
+			 *
+			 * @param {string} metaId File storage root (example: adapter namespace like "msghub.0").
+			 * @param {string} filePath File path below metaId (example: "documents/x.pdf").
+			 * @param {Buffer|string} data File content.
+			 * @returns {Promise<void>} Resolves when the write completes.
+			 */
+			writeFile: (metaId, filePath, data) => {
+				if (typeof adapter?.writeFileAsync === 'function') {
+					return adapter.writeFileAsync(metaId, filePath, data).then(() => undefined);
+				}
+				requireFn(adapter?.writeFile, 'writeFile');
+				return new Promise((resolve, reject) => {
+					adapter.writeFile(metaId, filePath, data, err => (err ? reject(err) : resolve(undefined)));
+				});
+			},
+			/**
+			 * Create a folder in ioBroker file storage.
+			 *
+			 * @param {string} metaId File storage root.
+			 * @param {string} dirPath Directory path below metaId.
+			 * @returns {Promise<void>} Resolves when the directory exists.
+			 */
+			mkdir: (metaId, dirPath) => {
+				if (typeof adapter?.mkdirAsync === 'function') {
+					return adapter.mkdirAsync(metaId, dirPath).then(() => undefined);
+				}
+				requireFn(adapter?.mkdir, 'mkdir');
+				return new Promise((resolve, reject) => {
+					adapter.mkdir(metaId, dirPath, err => (err ? reject(err) : resolve(undefined)));
+				});
+			},
+			/**
+			 * Rename/move a file in ioBroker file storage.
+			 *
+			 * @param {string} metaId File storage root.
+			 * @param {string} oldPath Old path below metaId.
+			 * @param {string} newPath New path below metaId.
+			 * @returns {Promise<void>} Resolves when the rename completes.
+			 */
+			renameFile: (metaId, oldPath, newPath) => {
+				// @ts-expect-error renameFileAsync may not be available
+				if (typeof adapter?.renameFileAsync === 'function') {
+					// @ts-expect-error renameFileAsync may not be available
+					return adapter.renameFileAsync(metaId, oldPath, newPath).then(() => undefined);
+				}
+				// @ts-expect-error renameFile may not be available
+				requireFn(adapter?.renameFile, 'renameFile');
+				return new Promise((resolve, reject) => {
+					// @ts-expect-error renameFile may not be available
+					adapter.renameFile(metaId, oldPath, newPath, err => (err ? reject(err) : resolve(undefined)));
+				});
+			},
+			/**
+			 * Delete a file in ioBroker file storage.
+			 *
+			 * Adapter API name is `delFile` / `delFileAsync`; this facade uses `deleteFile` for clarity.
+			 *
+			 * @param {string} metaId File storage root.
+			 * @param {string} filePath Path below metaId.
+			 * @returns {Promise<void>} Resolves when the delete completes.
+			 */
+			deleteFile: (metaId, filePath) => {
+				if (typeof adapter?.delFileAsync === 'function') {
+					return adapter.delFileAsync(metaId, filePath).then(() => undefined);
+				}
+				requireFn(adapter?.delFile, 'delFile');
+				return new Promise((resolve, reject) => {
+					adapter.delFile(metaId, filePath, err => (err ? reject(err) : resolve(undefined)));
+				});
+			},
 		}),
 	});
 }
@@ -301,9 +668,12 @@ function buildIoBrokerApi(adapter, { hostName }) {
 module.exports = {
 	buildLogApi,
 	buildI18nApi,
+	buildConfigApi,
 	buildIoBrokerApi,
 	buildIdsApi,
 	buildStoreApi,
 	buildActionApi,
 	buildFactoryApi,
+	buildStatsApi,
+	buildAiApi,
 };

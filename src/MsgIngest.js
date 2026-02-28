@@ -18,10 +18,19 @@
  *
  * Conventions
  * - Producer plugins live in `lib/` and are loaded via `lib/index.js`.
- * - Plugin entry files typically live at `lib/Ingest<System>/index.js` (e.g. `lib/IngestIoBrokerStates/index.js`).
+ * - Plugin entry files typically live at `lib/Ingest<System>/index.js` (e.g. `lib/IngestStates/index.js`).
  */
 
-const { buildIoBrokerApi, buildI18nApi, buildLogApi, buildStoreApi, buildFactoryApi } = require('./MsgHostApi');
+const {
+	buildIoBrokerApi,
+	buildI18nApi,
+	buildLogApi,
+	buildConfigApi,
+	buildStoreApi,
+	buildFactoryApi,
+	buildStatsApi,
+	buildAiApi,
+} = require('./MsgHostApi');
 
 /**
  * MsgIngest
@@ -34,8 +43,9 @@ class MsgIngest {
 	 * @param {import('./MsgConstants').MsgConstants} msgConstants Centralized enum-like constants (optional for plugins).
 	 * @param {import('./MsgFactory').MsgFactory} msgFactory Factory (used to create normalized messages on "create" paths).
 	 * @param {import('./MsgStore').MsgStore} msgStore Store API (single write path).
+	 * @param {{ ai?: import('./MsgAi').MsgAi|null }} [options] Optional host extensions.
 	 */
-	constructor(adapter, msgConstants, msgFactory, msgStore) {
+	constructor(adapter, msgConstants, msgFactory, msgStore, options = {}) {
 		if (!adapter) {
 			throw new Error('MsgIngest: adapter is required');
 		}
@@ -63,7 +73,10 @@ class MsgIngest {
 		const hostName = this?.constructor?.name || 'MsgIngest';
 		const store = buildStoreApi(this.msgStore, { hostName });
 		const factory = buildFactoryApi(this.msgFactory, { hostName });
+		const stats = buildStatsApi(this.msgStore);
+		const ai = buildAiApi(options?.ai || null);
 
+		const config = buildConfigApi(this.adapter);
 		const i18n = buildI18nApi(this.adapter);
 
 		const iobroker = buildIoBrokerApi(this.adapter, { hostName });
@@ -72,8 +85,11 @@ class MsgIngest {
 		// Stable plugin surface: separate API (capabilities) from meta (dispatch metadata).
 		this.api = Object.freeze({
 			constants: this.msgConstants,
+			config,
 			factory,
 			store,
+			stats,
+			ai,
 			i18n,
 			iobroker,
 			log,
@@ -87,7 +103,7 @@ class MsgIngest {
 	 *
 	 * Handler shapes:
 	 * - Function: `(id, value, ctx) => void` (treated as `onStateChange`)
-	 * - Object: `{ start(ctx)?, stop(ctx)?, onStateChange(id, state, ctx)?, onObjectChange(id, obj, ctx)? }`
+	 * - Object: `{ start(ctx)?, stop(ctx)?, onStateChange(id, state, ctx)?, onObjectChange(id, obj, ctx)?, onAction(actionInfo, ctx)? }`
 	 *
 	 * Notes:
 	 * - Registering the same `id` again overwrites the previous plugin.
@@ -110,11 +126,12 @@ class MsgIngest {
 			typeof handler?.start === 'function' ||
 			typeof handler?.stop === 'function' ||
 			typeof handler?.onStateChange === 'function' ||
-			typeof handler?.onObjectChange === 'function';
+			typeof handler?.onObjectChange === 'function' ||
+			typeof handler?.onAction === 'function';
 
 		if (!hasAny) {
 			throw new Error(
-				'MsgIngest.registerPlugin: handler must be a function or an object with start/stop/onStateChange/onObjectChange',
+				'MsgIngest.registerPlugin: handler must be a function or an object with start/stop/onStateChange/onObjectChange/onAction',
 			);
 		}
 
@@ -139,6 +156,7 @@ class MsgIngest {
 					: null,
 			onObjectChangeFn:
 				typeof handler?.onObjectChange === 'function' ? handler.onObjectChange.bind(handler) : null,
+			onActionFn: typeof handler?.onAction === 'function' ? handler.onAction.bind(handler) : null,
 		};
 
 		this._plugins.set(id, plugin);
@@ -180,7 +198,7 @@ class MsgIngest {
 	 * @param {object} [meta] Startup metadata (exposed to plugins via `ctx.meta`).
 	 */
 	start(meta = {}) {
-		// Persist only stable, host-provided meta keys across subsequent ctx builds (e.g. managedObjects reporter).
+		// Persist only stable, host-provided meta keys across subsequent ctx builds.
 		// Call-specific meta (like { boot: true }) should not leak into later calls (stop/register/unregister).
 		this._baseMeta = meta && meta.managedObjects ? { managedObjects: meta.managedObjects } : {};
 		this._running = true;
@@ -273,6 +291,37 @@ class MsgIngest {
 				plugin.onObjectChangeFn(id, obj, pluginCtx);
 			} catch (e) {
 				this.adapter?.log?.warn?.(`MsgIngest: plugin '${pid}' failed on objectChange: ${e?.message || e}`);
+			}
+		}
+		return called;
+	}
+
+	/**
+	 * Dispatch an action execution event to all registered producer plugins.
+	 *
+	 * `actionInfo` is expected to be a plain object and should minimally contain:
+	 * `{ ref, actionId, type, ts, actor?, payload?, message? }`.
+	 *
+	 * @param {object} actionInfo Action info (see above).
+	 * @param {object} [meta] Dispatch metadata (exposed to plugins via `ctx.meta`).
+	 * @returns {number} Number of plugins that were called.
+	 */
+	dispatchAction(actionInfo, meta = {}) {
+		if (!actionInfo || typeof actionInfo !== 'object') {
+			return 0;
+		}
+		const pluginCtx = this._buildCtx(meta);
+
+		let called = 0;
+		for (const [pid, plugin] of this._plugins.entries()) {
+			if (!plugin.onActionFn) {
+				continue;
+			}
+			try {
+				called += 1;
+				plugin.onActionFn(actionInfo, pluginCtx);
+			} catch (e) {
+				this.adapter?.log?.warn?.(`MsgIngest: plugin '${pid}' failed on action: ${e?.message || e}`);
 			}
 		}
 		return called;

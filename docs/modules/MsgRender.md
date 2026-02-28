@@ -1,8 +1,8 @@
-# MsgRender (Message Hub): render a “display view” from raw messages
+# MsgRender (Message Hub): render a view from raw messages
 
 `MsgRender` is a lightweight template renderer for Message Hub messages.
-It resolves simple placeholders like `{{m.temperature}}` or `{{t.createdAt|datetime}}` and writes the result into a
-separate `display` block.
+It resolves simple placeholders like `{{m.temperature}}` or `{{t.createdAt|datetime}}` and returns a rendered **view**
+of `title`, `text` and selected `details` fields.
 
 Important: `MsgRender` is **view-only**. It does not change the stored/canonical message.
 
@@ -14,8 +14,8 @@ Simplified flow:
 
 1. A producer plugin creates or patches a message (usually via `MsgFactory` and `MsgStore`).
 2. `MsgStore` stores the **raw** message in its canonical list (`fullList`).
-3. When a consumer reads messages (`getMessages()`, `getMessageByRef()`, …), `MsgStore` returns a **rendered view**:
-   - `MsgRender.renderMessage(msg)` adds `msg.display` with resolved strings.
+3. When a consumer reads messages for UI/human output (`getMessageByRef()`, `queryMessages()`, …), `MsgStore` returns a **rendered view**:
+   - `MsgRender.renderMessage(msg)` returns the message with rendered `title`/`text`/`details` plus a view-only `display` block.
 4. The rendered output is used for UI or human-facing text, but it is not written back to storage.
 
 This keeps the persisted data stable and compact, while still allowing dynamic display text.
@@ -33,7 +33,8 @@ Some messages should show values that are only known at runtime, for example:
 Instead of rebuilding the entire title/text every time, a message can contain templates, and the actual values live in:
 
 - `msg.metrics` (a `Map` of measured values), and/or
-- `msg.timing` (timestamps like `createdAt`, `updatedAt`, `notifyAt`, …).
+- `msg.timing` (time-related fields like `createdAt`, `notifyAt`, `remindEvery`, `timeBudget`, …).
+- `msg.details` (structured message context like `location`, `task`, `tools`, …)
 
 `MsgRender` combines both into human-readable strings.
 
@@ -41,11 +42,26 @@ Instead of rebuilding the entire title/text every time, a message can contain te
 
 ## What gets rendered?
 
-`MsgRender` creates a `display` block with rendered strings:
+`MsgRender` renders these fields:
 
-- `display.title` from `msg.title`
-- `display.text` from `msg.text`
-- `display.details` from selected `msg.details` fields
+- `title` from `msg.title` (Stage 1)
+- `text` from `msg.text` (Stage 1)
+- `details` from selected `msg.details` fields
+- `display` (view-only) from Stage-2 render templates
+
+The `display` block is intended for presentation helpers and is not part of the canonical persisted message.
+
+Additionally, `MsgRender` may attach view-only freshness metadata:
+
+- `display.renderedDataTs` (optional, unix ms): maximum `ts` of metric entries that were actually resolved while rendering
+  templates in `title` / `text` / rendered `details` fields. When no metrics are rendered (or no usable `ts` exists),
+  this field is omitted.
+
+Stage-2 display output fields:
+
+- `display.icon`: rendered icon string (Stage 2)
+- `display.title`: rendered title string (Stage 2)
+- `display.text`: rendered text string (Stage 2)
 
 Only a small subset of `details` is rendered on purpose (predictability and safety):
 
@@ -61,6 +77,12 @@ All other `details` keys (and non-string values) are left unchanged.
 A placeholder always uses this shape:
 
 `{{ <path> | <filter> | <filter> ... }}`
+
+MsgRender evaluates templates in two stages:
+
+- Stage 1 (message field rendering): templates inside `msg.title`, `msg.text` and selected `msg.details.*` are resolved.
+- Stage 2 (display composition): admin-configured templates compose `display.title`, `display.text`, `display.icon`
+  from Stage-1 strings plus selected fields.
 
 Examples:
 
@@ -101,6 +123,7 @@ Practical note: metric keys are split by `.` internally, so keep metric keys sim
 Timing values come from `msg.timing` (plain object). Example fields:
 
 - `createdAt`, `updatedAt`
+- `remindEvery`, `timeBudget` (durations in ms)
 - `notifyAt`, `dueAt`, `expiresAt`
 - `startAt`, `endAt`
 
@@ -112,7 +135,46 @@ Example:
 {{t.createdAt|datetime}} // formatted date/time (locale-aware)
 ```
 
+#### Details: `d.<field>` (or `details.<field>`)
+
+Details values come from `msg.details` (plain object). Common fields include:
+
+- `location`, `task`, `reason` (strings)
+- `tools`, `consumables` (arrays)
+
+Rules:
+
+- Scalars are returned as-is.
+- Arrays are joined with `', '` (for example `{{d.tools}}`).
+
+Examples:
+
+```js
+At {{d.location}}: {{d.task}}
+Tools: {{d.tools}}
+Consumables: {{details.consumables}}
+```
+
 ---
+
+## Stage 2 templates (display composition)
+
+Stage-2 templates are configured in the adapter instance config and are applied after Stage 1.
+
+Available base placeholders:
+
+- `{{title}}`: the Stage-1 rendered message title
+- `{{text}}`: the Stage-1 rendered message text
+- `{{icon}}`: `msg.icon` (canonical icon token; may be empty)
+- `{{kindPrefix}}`: configured prefix token for this message kind
+- `{{levelPrefix}}`: configured prefix token for this message level
+
+Additionally allowed:
+
+- `{{t.*}}` / `{{timing.*}}`: reads from `msg.timing`
+- `{{d.*}}` / `{{details.*}}`: reads from `msg.details` (after Stage-1 details rendering)
+
+Supported filters are the same as Stage 1.
 
 ## Resolution rules (important behavior)
 
@@ -153,8 +215,45 @@ Works for numbers and numeric strings.
 Formats a Unix ms timestamp (or a numeric/date string) as a localized date/time:
 
 ```js
+{{m.lastSeen.val|datetime}}
 {{m.lastSeen.ts|datetime}}
 {{t.createdAt|datetime}}
+```
+
+### `durationSince`
+
+Formats the duration since a Unix ms timestamp (relative to server time via `Date.now()`):
+
+- `< 1 min`: `56s`
+- `< 1 h`: `34m` (rounded)
+- `< 1 day`: `3:45h` (rounded)
+- `>= 1 day`: `1d 4h` (rounded)
+
+If the timestamp is in the future, the output is an empty string.
+
+Examples:
+
+```js
+{{m.lastSeenAt|durationSince}}
+{{m.lastSeenAt.val|durationSince}}
+```
+
+Practical note: for metrics, this filter implies `raw` resolution, so `{{m.lastSeenAt|durationSince}}` works even when
+the metric has a unit.
+
+### `durationUntil`
+
+Formats the duration until a Unix ms timestamp (relative to server time via `Date.now()`).
+
+Formatting rules are the same as `durationSince`.
+
+If the timestamp is in the past, the output is an empty string.
+
+Examples:
+
+```js
+{{m.nextRunAt|durationUntil}}
+{{t.notifyAt|durationUntil}}
 ```
 
 ### `bool:trueLabel/falseLabel`
@@ -191,19 +290,25 @@ Replaces `null`, `undefined`, or `''` with a fallback string:
 Returns a **new** message object:
 
 - original message fields are copied (shallow)
-- `display` is added:
-  - `display.title`, `display.text`, `display.details`
+- `title`, `text`, and selected `details` fields are returned in their rendered form
+
+### `renderMessages(messages, { locale }): Array<object>`
+
+Returns a **new** message list:
+
+- each entry is rendered as if by `renderMessage(msg, { locale })`
+- the input list is not mutated
 
 ### `renderTemplate(input, { msg, locale }): string`
 
-Renders a single string and resolves placeholders using `msg.metrics` + `msg.timing`.
+Renders a single string and resolves placeholders using `msg.metrics` + `msg.timing` + `msg.details`.
 Non-strings (and strings without `{{`) are returned unchanged.
 
 ---
 
 ## Design guidelines / invariants (the key rules)
 
-- Canonical vs. view: never mutate the input message; only add a `display` view.
+- Canonical vs. view: never mutate the input message; return a rendered view.
 - No hidden state: templates are evaluated on-demand; there is no caching or compilation.
 - Graceful degradation: missing metrics/timing do not throw; they resolve to empty output (use `default` if needed).
 - Minimal template language: no loops, no conditions, no function calls; just paths + filters.
@@ -214,4 +319,4 @@ Non-strings (and strings without `{{`) are returned unchanged.
 
 - Implementation: `src/MsgRender.js`
 - Tests / examples: `src/MsgRender.test.js`
-- Where it is used (render on reads): `src/MsgStore.js` and `src/MsgStore.md`
+- Where it is used (render on reads/notify): `src/MsgStore.js` and `docs/modules/MsgStore.md`

@@ -35,10 +35,13 @@ This module exports small builder functions. Hosts call them once and then pass 
 
 - `buildLogApi(adapter, { hostName })` → `ctx.api.log`
 - `buildI18nApi(adapter)` → `ctx.api.i18n` (or `null`)
+- `buildConfigApi(snapshot)` → `ctx.api.config` (or `null`)
 - `buildIoBrokerApi(adapter, { hostName })` → `ctx.api.iobroker`
 - `buildStoreApi(store, { hostName })` → `ctx.api.store`
+- `buildStatsApi(store)` → `ctx.api.stats` (or `null`)
 - `buildFactoryApi(msgFactory, { hostName })` → `ctx.api.factory` (or `null`)
 - `buildActionApi(adapter, msgConstants, store, { hostName })` → `ctx.api.action` (or `null`)
+- `buildAiApi(msgAi)` → `ctx.api.ai` (or `null`)
 - `buildIdsApi(adapter)` → `ctx.api.iobroker.ids` (also exported for reuse)
 
 ### `buildLogApi(adapter, { hostName })`
@@ -61,9 +64,31 @@ Why this exists:
 Builds an optional i18n facade:
 
 - Returns `null` when i18n is not available (for example, when `main.js` did not attach `adapter.i18n`).
-- Otherwise returns `{ t, getTranslatedObject }` from the adapter-scoped i18n instance.
+- Otherwise returns `{ t, getTranslatedObject, locale, i18nlocale, lang }` from the adapter-scoped i18n instance.
+
+Semantics of these fields:
+
+- `locale`: format locale for date/number rendering (adapter config `locale`, fallback `en-US`).
+- `i18nlocale`: effective ioBroker text language (`system.config.common.language`, normalized).
+- `lang`: base language code derived from `i18nlocale` (for example `de` from `de-DE`).
 
 This makes translation support opt-in without breaking plugins that do not need it.
+
+### `buildConfigApi(snapshot)`
+
+Builds a read-only snapshot of the effective, normalized MsgHub configuration as `ctx.api.config`.
+
+Source of truth:
+
+- `main.js` builds a normalized config via `MsgConfig.normalize(...)`.
+- The plugin-facing subset is stored as a frozen snapshot (for example `this._msgConfigPublic`) and passed into the hosts.
+- `MsgHostApi` does not re-interpret config values; it only forwards the snapshot.
+
+Notes:
+
+- The snapshot is schema-versioned (`ctx.api.config.schemaVersion`).
+- Only whitelisted, safe fields are included.
+- Designed for diagnostics/help commands (for example `/config` in EngageTelegram).
 
 ### `buildIdsApi(adapter)`
 
@@ -89,15 +114,19 @@ Edge cases are handled on purpose:
 Builds a small ioBroker facade used by plugins. It contains:
 
 - `iobroker.ids` – the same ID helper object as `buildIdsApi()`
+- `iobroker.sendTo(instance, command, message, options?)` – promisified wrapper for `adapter.sendTo(...)` (messagebox)
 - `iobroker.objects.*` – basic object access helpers (promisified)
 - `iobroker.states.*` – basic state access helpers (promisified)
 - `iobroker.subscribe.*` – subscribe/unsubscribe helpers for states and objects
+- `iobroker.files.*` – ioBroker file storage helpers (promisified; supports async + callback adapter APIs)
 
 Currently exposed helpers (overview):
 
-- `iobroker.objects`: `setObjectNotExists`, `delObject`, `getForeignObjects`, `getForeignObject`, `extendForeignObject`
-- `iobroker.states`: `setState`, `getForeignState`
+- `iobroker.sendTo`: `sendTo(instance, command, message, options?)`
+- `iobroker.objects`: `setObjectNotExists`, `delObject`, `getObjectView`, `getForeignObjects`, `getForeignObject`, `extendForeignObject`
+- `iobroker.states`: `setState`, `setForeignState`, `getForeignState`
 - `iobroker.subscribe`: `subscribeStates/Objects/ForeignStates/ForeignObjects` and matching `unsubscribe...`
+- `iobroker.files`: `readFile`, `writeFile`, `mkdir`, `renameFile`, `deleteFile`
 
 Compatibility behavior:
 
@@ -118,6 +147,90 @@ function onStateChange(id, state, ctx) {
 }
 ```
 
+#### `iobroker.sendTo(instance, command, message, options?)`
+
+Promisified wrapper for ioBroker messagebox calls via `adapter.sendTo(...)`.
+
+Behavior:
+
+- Returns a Promise that resolves with the target adapter’s response (whatever the callback receives).
+- Rejects when `adapter.sendTo` is missing.
+- Throws when `instance === ctx.api.iobroker.ids.namespace` (self-send is blocked by design).
+- Best-effort timeout: defaults to `10000`ms; disable by passing `{ timeoutMs: 0 }` (or any `<= 0`).
+
+Example:
+
+```js
+try {
+  const res = await ctx.api.iobroker.sendTo('telegram.0', 'send', { text: 'Hello' }, { timeoutMs: 15000 });
+  ctx.api.log.debug(`sendTo result: ${JSON.stringify(res)}`);
+} catch (e) {
+  ctx.api.log.warn(`sendTo failed: ${e?.message || e}`);
+}
+```
+
+#### `iobroker.objects.getForeignObjects(pattern, type?)`
+
+`getForeignObjects` supports an optional `type` argument. This is useful when you need to fetch non-state objects such as
+enums:
+
+```js
+// Example: load all room enums
+const rooms = await ctx.api.iobroker.objects.getForeignObjects('enum.rooms.*', 'enum');
+```
+
+Note: Without `type`, some ioBroker installations return primarily state objects. When you expect `type: "enum"` entries,
+pass `type: "enum"` explicitly.
+
+#### `iobroker.objects.getObjectView(design, search, params)`
+
+Provides access to ioBroker’s Objects DB views via `adapter.getObjectView(...)` / `adapter.getObjectViewAsync(...)`.
+
+This is the preferred way to do *performant* lookups for certain global indexes like `system/custom` (instead of scanning
+all objects via `getForeignObjects('*')`).
+
+Example: list objects that have a `common.custom['msghub.0']` entry:
+
+```js
+const customKey = ctx.api.iobroker.ids.namespace; // e.g. "msghub.0"
+const res = await ctx.api.iobroker.objects.getObjectView('system', 'custom', {
+	startkey: customKey,
+	endkey: `${customKey}\u9999`,
+	include_docs: true,
+});
+
+// ioBroker returns rows; with include_docs, each row may contain row.doc (the object)
+const rows = Array.isArray(res?.rows) ? res.rows : [];
+```
+
+#### `iobroker.states.setForeignState(id, state)`
+
+Promisified wrapper for `adapter.setForeignState(...)` / `adapter.setForeignStateAsync(...)`.
+
+Example:
+
+```js
+await ctx.api.iobroker.states.setForeignState('some.0.device.switch', { val: true, ack: false });
+```
+
+#### `iobroker.files.writeFile(metaId, filePath, data)`
+
+Promisified wrapper for ioBroker file storage writes.
+
+Notes:
+
+- `metaId` is the ioBroker “file namespace root”, usually the adapter instance namespace (example: `msghub.0`).
+- `filePath` is the path below `metaId` (example: `documents/NotifyShoppingPdf.0.pdf`).
+- `data` can be a `Buffer` (binary PDFs) or a string.
+
+Example:
+
+```js
+const metaId = ctx.api.iobroker.ids.namespace; // "msghub.0"
+await ctx.api.iobroker.files.mkdir(metaId, 'documents');
+await ctx.api.iobroker.files.writeFile(metaId, 'documents/out.pdf', pdfBuffer);
+```
+
 ### `buildStoreApi(store, { hostName })`
 
 Builds a small `MsgStore` facade for plugins (`ctx.api.store`).
@@ -130,7 +243,7 @@ Derivation rule:
 Read APIs:
 
 - `getMessageByRef(ref)`
-- `getMessages()`
+- `getMessages()` (raw/unrendered snapshot)
 - `queryMessages({ where, page?, sort? })`
 
 Write APIs (ingest only):
@@ -138,7 +251,31 @@ Write APIs (ingest only):
 - `addMessage(msg)`
 - `updateMessage(msgOrRef, patch)`
 - `addOrUpdateMessage(msg)`
-- `removeMessage(ref)`
+- `removeMessage(ref, { actor? })`
+- `completeAfterCauseEliminated(ref, { actor? })`
+
+Notes:
+
+- `removeMessage(ref, { actor? })` performs a soft delete (`lifecycle.state="deleted"`, clears `timing.notifyAt`). `actor` is stored as `lifecycle.stateChangedBy`.
+- `completeAfterCauseEliminated(...)` is meant for condition-based ingest plugins: when the external cause becomes OK again,
+  the plugin can trigger a standardized workflow depending on `message.kind`:
+  - `kind="task"`: patches the message to `lifecycle.state="closed"`, clears `timing.notifyAt`, sets `progress.percentage=100`
+  - `kind="status"`: soft-deletes the message via `removeMessage(ref, { actor? })`
+  - otherwise: no-op (returns `true`)
+
+### `buildStatsApi(store)`
+
+Builds a small stats facade for plugins (`ctx.api.stats`).
+
+API:
+
+- `stats.getStats(options?)` → returns the same JSON-serializable stats snapshot as `MsgStore.getStats(...)`.
+
+Notes:
+
+- This is a **read-only** helper.
+- Some fields can be expensive (for example archive size estimation). Callers should use include flags sparingly.
+- This facade returns `null` if the provided store does not expose `getStats(...)`.
 
 ### `buildFactoryApi(msgFactory, { hostName })`
 
@@ -155,11 +292,18 @@ Builds a small `MsgAction` facade for plugins (`ctx.api.action`).
 
 Derivation rule:
 
-- For engage hosts (`hostName` contains `"Engage"`): exposes `execute({ ref, actionId, actor?, payload? })`.
+- For engage hosts (`hostName` contains `"Engage"`): exposes `execute({ ref, actionId, actor?, payload?, snoozeForMs? })`.
 - For other hosts: returns `null` (actions are reserved for Engage).
 
-`execute(...)` runs through `src/MsgAction.js` and mutates messages via `MsgStore.updateMessage(...)` (whitelist semantics:
-only actions present in `message.actions[]` can be executed).
+Implementation note:
+
+- The action executor is owned by the store (`store.msgActions`).
+- `ctx.api.action.execute(...)` forwards into that instance.
+
+This keeps policy consistent:
+
+- inbound: `execute(...)` rejects actions that are not allowed in the current lifecycle state
+- outbound: store read APIs and notification dispatch may expose `actionsInactive[]` and filter `actions[]` for the same reason
 
 ---
 

@@ -20,23 +20,17 @@
  * - Map-safe JSON: values that contain `Map` instances are encoded via `serializeWithMaps()` and revived on read via
  *   `deserializeWithMaps()`. This allows the message model to contain metrics or other maps without losing structure.
  *
- * Required adapter APIs:
- * - `readFileAsync(metaId, path)`
- * - `writeFileAsync(metaId, path, data)`
- *
- * Optional adapter APIs:
- * - `mkdirAsync(metaId, dir)` (used for baseDir creation)
- * - `renameFileAsync(metaId, oldPath, newPath)` + `delFileAsync(metaId, path)` (used for atomic writes)
+ * Required backend APIs (`options.createStorageBackend`):
+ * - `init()`
+ * - `filePathFor(fileName)`
+ * - `readText(filePath)`
+ * - `writeTextAtomic(filePath, text)`
+ * - `runtimeRoot()` (for diagnostics)
  */
 
-const {
-	DEFAULT_MAP_TYPE_MARKER,
-	serializeWithMaps,
-	deserializeWithMaps,
-	ensureMetaObject,
-	ensureBaseDir,
-	createOpQueue,
-} = require(`${__dirname}/MsgUtils`);
+const { DEFAULT_MAP_TYPE_MARKER, serializeWithMaps, deserializeWithMaps, createOpQueue } = require(
+	`${__dirname}/MsgUtils`,
+);
 
 /**
  * Storage helper that serializes adapter file I/O for message data.
@@ -46,17 +40,14 @@ class MsgStorage {
 	 * Create a new MsgStorage instance.
 	 *
 	 * Notes:
-	 * - `metaId` is the ioBroker “file namespace root” (usually the adapter instance namespace).
-	 * - `baseDir` is a logical folder below `metaId` (slashes are trimmed).
 	 * - `writeIntervalMs` enables write coalescing: multiple `writeJson()` calls within the interval
 	 *   result in a single persisted write containing the latest value.
 	 *
 	 * @param {import('@iobroker/adapter-core').AdapterInstance} adapter Adapter instance (ioBroker file APIs).
 	 * @param {object} [options] Optional configuration.
-	 * @param {string} [options.metaId] Object ID of the "meta" root. Defaults to adapter.namespace.
-	 * @param {string} [options.baseDir] Base folder for storage file (e.g. "data").
 	 * @param {string} [options.fileName] File name (e.g. "messages.json").
 	 * @param {number} [options.writeIntervalMs] Throttle window in ms (0 = write immediately).
+	 * @param {() => any} [options.createStorageBackend] Platform-resolved backend factory injection.
 	 */
 	constructor(adapter, options = {}) {
 		if (!adapter) {
@@ -64,13 +55,18 @@ class MsgStorage {
 		}
 
 		this.adapter = adapter;
-		this.metaId = options.metaId || adapter.namespace;
-		this.baseDir = typeof options.baseDir === 'string' ? options.baseDir.replace(/^\/+|\/+$/g, '') : '';
 		this.fileName = options.fileName || 'messages.json';
 		this.writeIntervalMs =
 			typeof options.writeIntervalMs === 'number' && Number.isFinite(options.writeIntervalMs)
 				? Math.max(0, options.writeIntervalMs)
 				: 10000;
+		const createStorageBackend =
+			typeof options.createStorageBackend === 'function' ? options.createStorageBackend : null;
+		if (!createStorageBackend) {
+			throw new Error('MsgStorage: options.createStorageBackend is required');
+		}
+		this._storageBackend = createStorageBackend();
+		this._assertBackendContract(this._storageBackend);
 
 		// Promise chain used as a simple mutex to serialize operations.
 		this._queue = createOpQueue();
@@ -83,19 +79,40 @@ class MsgStorage {
 		this._flushReject = null;
 
 		this._mapTypeMarker = DEFAULT_MAP_TYPE_MARKER;
+
+		// Best-effort status for diagnostics / stats UIs.
+		this._lastPersistedAt = 0;
+		this._lastPersistedBytes = 0;
+		this._lastPersistedPath = null;
+		this._lastPersistedMode = null;
+	}
+
+	/**
+	 * Assert minimal backend contract shape.
+	 *
+	 * @param {any} backend Backend instance.
+	 * @returns {void}
+	 */
+	_assertBackendContract(backend) {
+		const required = ['init', 'filePathFor', 'readText', 'writeTextAtomic', 'runtimeRoot'];
+		for (const method of required) {
+			if (typeof backend?.[method] !== 'function') {
+				throw new Error(`MsgStorage: backend missing method '${method}'`);
+			}
+		}
 	}
 
 	/**
 	 * Call once during startup.
 	 *
-	 * Ensures the ioBroker file storage meta object exists and (optionally) creates the base directory.
-	 * This method is async because it may create meta objects and folders.
+	 * Delegates backend initialization and logs the effective storage path.
 	 */
 	async init() {
-		await ensureMetaObject(this.adapter, this.metaId);
-		await ensureBaseDir(this.adapter, this.metaId, this.baseDir);
+		await this._storageBackend.init();
 		const filePath = this._filePathFor(this.fileName);
-		this.adapter?.log?.info?.(`MsgStorage initialized: file=${filePath}, interval=${this.writeIntervalMs}ms`);
+		this.adapter?.log?.info?.(
+			`MsgStorage initialized: file=${filePath}, root=${this._storageBackend.runtimeRoot()}, interval=${this.writeIntervalMs}ms`,
+		);
 	}
 
 	/**
@@ -113,50 +130,18 @@ class MsgStorage {
 	 * @param {any} value File content (will be JSON serialized).
 	 */
 	async _writeNow(value) {
-		const tmpName = `${this.fileName}.tmp`;
 		const filePath = this._filePathFor(this.fileName);
-		const tmpPath = this._filePathFor(tmpName);
 		const json = serializeWithMaps(value, this._mapTypeMarker);
 		const sizeBytes = Buffer.byteLength(json, 'utf8');
 
-		// If rename is unavailable, fall back to a direct write.
-		// @ts-expect-error renameFileAsync may not be available
-		if (typeof this.adapter.renameFileAsync !== 'function') {
-			await this.adapter.writeFileAsync(this.metaId, filePath, json);
-			this.adapter?.log?.debug?.(`MsgStorage: ${filePath} written, mode=override, ${sizeBytes} bytes`);
-			return;
-		}
-
-		// Atomic write: write tmp file, then replace the target via rename.
-		try {
-			await this.adapter.writeFileAsync(this.metaId, tmpPath, json);
-
-			if (typeof this.adapter.delFileAsync === 'function') {
-				try {
-					await this.adapter.delFileAsync(this.metaId, filePath);
-				} catch {
-					// Ignore if the target does not exist or deletion is unsupported.
-				}
-			}
-
-			// @ts-expect-error renameFileAsync may not be available
-			await this.adapter.renameFileAsync(this.metaId, tmpPath, filePath);
-			this.adapter?.log?.debug?.(`MsgStorage: ${filePath} written, mode=rename, ${sizeBytes} bytes`);
-		} catch (e) {
-			// If rename fails, log and fall back to direct write.
-			this.adapter?.log?.warn?.(`Atomic write failed (${e?.message || e}), writing directly to ${filePath}`);
-			await this.adapter.writeFileAsync(this.metaId, filePath, json);
-			this.adapter?.log?.debug?.(`MsgStorage: ${filePath} written, mode=fallback, ${sizeBytes} bytes`);
-		} finally {
-			// Best-effort cleanup of the tmp file.
-			if (typeof this.adapter.delFileAsync === 'function') {
-				try {
-					await this.adapter.delFileAsync(this.metaId, tmpPath);
-				} catch {
-					// ignore
-				}
-			}
-		}
+		const result = await this._storageBackend.writeTextAtomic(filePath, json);
+		const mode = typeof result?.mode === 'string' ? result.mode : 'override';
+		const bytes = Number.isFinite(result?.bytes) ? Math.max(0, Math.trunc(result.bytes)) : sizeBytes;
+		this._lastPersistedAt = Date.now();
+		this._lastPersistedBytes = bytes;
+		this._lastPersistedPath = filePath;
+		this._lastPersistedMode = mode;
+		this.adapter?.log?.debug?.(`MsgStorage: ${filePath} written, mode=${mode}, ${bytes} bytes`);
 	}
 
 	/**
@@ -172,17 +157,11 @@ class MsgStorage {
 		const filePath = this._filePathFor(this.fileName);
 		return this._queue(async () => {
 			try {
-				const res = await this.adapter.readFileAsync(this.metaId, filePath);
-
-				// Controller/adapter-core may return { file: Buffer|string } or a raw Buffer/string.
-				const raw = res && typeof res === 'object' && 'file' in res ? res.file : res;
-
-				if (raw == null) {
+				const text = await this._storageBackend.readText(filePath);
+				if (text == null) {
 					this.adapter?.log?.warn?.(`MsgStorage: '${filePath}' - file missing or empty`);
 					return fallback;
 				}
-
-				const text = Buffer.isBuffer(raw) ? raw.toString('utf8') : String(raw);
 				if (!text.trim()) {
 					this.adapter?.log?.warn?.(`MsgStorage: '${filePath}' - empty or whitespace only`);
 					return fallback;
@@ -292,7 +271,24 @@ class MsgStorage {
 	 * @returns {string} File path.
 	 */
 	_filePathFor(fileName) {
-		return this.baseDir ? `${this.baseDir}/${fileName}` : fileName;
+		return this._storageBackend.filePathFor(fileName);
+	}
+
+	/**
+	 * Return best-effort runtime status for diagnostics / UIs.
+	 *
+	 * @returns {{ filePath: string, runtimeRoot: string, writeIntervalMs: number, lastPersistedAt: number|null, lastPersistedBytes: number|null, lastPersistedMode: string|null, pending: boolean }} Status snapshot.
+	 */
+	getStatus() {
+		return {
+			filePath: this._filePathFor(this.fileName),
+			runtimeRoot: this._storageBackend.runtimeRoot(),
+			writeIntervalMs: this.writeIntervalMs,
+			lastPersistedAt: this._lastPersistedAt || null,
+			lastPersistedBytes: this._lastPersistedBytes || null,
+			lastPersistedMode: this._lastPersistedMode || null,
+			pending: !!this._flushPromise,
+		};
 	}
 }
 

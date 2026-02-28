@@ -9,19 +9,20 @@
  * - Own the canonical in-memory list (`this.fullList`) and be the single place where the list is mutated.
  * - Provide a small set of mutation APIs (`addMessage`, `updateMessage`, `removeMessage`, `addOrUpdateMessage`)
  *   that coordinate side-effects consistently.
- * - Provide read APIs (`getMessageByRef`, `getMessages`, `queryMessages`) that return a rendered view of the
- *   canonical data without mutating stored messages.
+ * - Provide read APIs:
+ *   - `getMessages()` returns a raw snapshot (unrendered) of the canonical data.
+ *   - `getMessageByRef()` and `queryMessages()` return rendered views of the canonical data (without mutating stored messages).
  * - Run lifecycle maintenance (`_pruneOldMessages`) and optionally dispatch due notifications on a timer
  *   (`_initiateNotifications`).
  *
  * Design guidelines / invariants
- * - Canonical vs. view: `this.fullList` stores raw message objects only. Rendering happens at the boundary (read methods).
+ * - Canonical vs. view: `this.fullList` stores raw message objects only. Rendering happens at the boundary (rendered read methods).
  * - Best-effort side-effects: persistence/archiving/notifications must not block the core mutation. They are called without
  *   awaiting and failures are handled inside their respective components (or via adapter logging).
  * - Single source of truth for validation: `MsgFactory.applyPatch()` is responsible for schema/normalization rules during updates.
  *   The store only performs minimal guards (presence of adapter/constants/factory, ref checks, and the integer level guard on add).
  * - External scheduling: this class does not “schedule” notifications beyond polling `notifyAt`. If a message remains due, it will be
- *   re-dispatched on every tick until something else updates/removes it (or moves `notifyAt` into the future).
+ *   dispatched when `notifyAt <= now` and then rescheduled (via `remindEvery`) or cleared (one-shot).
  * - Predictable ordering: when a mutation succeeds, the store updates `fullList` first, then triggers persistence/notifications/archive
  *   so downstream consumers observe the post-mutation state.
  *
@@ -32,7 +33,8 @@
  * - `onUnload()` calls `flushPending()` to best-effort persist the latest state.
  *
  * Archiving (MsgArchive)
- * - Appends lifecycle events to a per-ref JSONL archive (default: `data/archive/<ref>.jsonl`).
+ * - Appends lifecycle events to a per-ref, per-week JSONL archive (default: `data/archive/<refPath>.<YYYYMMDD>.jsonl`).
+ *   Dots in the ref create folder levels, except the first `.<digits>` (plugin instance) which stays together (e.g. `IngestHue.0/...`).
  * - Archiving is best-effort and must never block core operations.
  * - Note on naming: archive events default to `"create"|"patch"|"delete"`, while notifications use
  *   `MsgConstants.notfication.events.*` (e.g. `"deleted"` / `"expired"`).
@@ -40,9 +42,8 @@
  * Notifications (MsgNotify)
  * - The store does not deliver notifications itself; it only dispatches events to `MsgNotify`, which
  *   forwards them to registered plugins.
- * - The store does not mark messages as "already notified". If a message is due (`notifyAt <= now`),
- *   `_initiateNotifications()` will dispatch it again on every tick until some external actor updates/
- *   removes the message (or moves `notifyAt` into the future).
+ * - Due notifications are one-shot by default: after dispatching `due`, `_initiateNotifications()` clears `timing.notifyAt`
+ *   (or moves it to `now + timing.remindEvery` when configured) using a stealth patch.
  *
  * Ingest (MsgIngest)
  * - The store does not interpret incoming ioBroker events; it provides a host (`MsgIngest`) that
@@ -56,16 +57,21 @@
  * - Pruning is throttled by `pruneIntervalMs` to avoid scanning on every call.
  *
  * Rendering (MsgRender)
- * - Read methods return a view of messages (`msgRender.renderMessage`) without mutating stored data.
+ * - Rendered read methods return a view of messages (`msgRender.renderMessage`) without mutating stored data.
  * - The canonical data is always `this.fullList`; rendered output is view-only.
  */
 
-const { serializeWithMaps } = require(`${__dirname}/MsgUtils`);
+const { serializeWithMaps, shouldDispatchByAudienceChannels } = require(`${__dirname}/MsgUtils`);
 const { MsgStorage } = require(`${__dirname}/MsgStorage`);
 const { MsgArchive } = require(`${__dirname}/MsgArchive`);
 const { MsgRender } = require(`${__dirname}/MsgRender`);
 const { MsgNotify } = require(`${__dirname}/MsgNotify`);
 const { MsgIngest } = require(`${__dirname}/MsgIngest`);
+const { MsgStats } = require(`${__dirname}/MsgStats`);
+const { MsgNotificationPolicy } = require(`${__dirname}/MsgNotificationPolicy`);
+const { MsgAction } = require(`${__dirname}/MsgAction`);
+
+const _CORE_LIFECYCLE_TOKEN = Symbol('MsgStore.coreLifecycle');
 
 /**
  * MsgStore
@@ -84,25 +90,25 @@ class MsgStore {
 	 * @param {import('@iobroker/adapter-core').AdapterInstance & { locale?: string }} adapter Adapter instance for logging and utilities.
 	 * @param {import('./MsgConstants').MsgConstants} msgConstants Centralized enum-like constants.
 	 * @param {import('./MsgFactory').MsgFactory} msgFactory Factory used for patching/validation.
-	 * @param {object} [options] Optional configuration.
+	 * @param {object} options Configuration.
 	 * @param {Array<object>} [options.initialMessages] Initial in-memory message list (primarily for tests/imports).
-	 * @param {number} [options.pruneIntervalMs] Expiration scan throttle in ms (default: 30000).
-	 * @param {number} [options.notifierIntervalMs] Due-notification polling interval in ms (default: 10000, 0 disables).
-	 * @param {number} [options.hardDeleteAfterMs] After this time in "deleted"/"expired", messages are hard-deleted (default: 259200000).
-	 * @param {number} [options.hardDeleteIntervalMs] Interval for checking hard-deletes (default: 14400000).
-	 * @param {object} [options.storage] Options forwarded to `MsgStorage` (e.g. `baseDir`, `fileName`, `writeIntervalMs`).
-	 * @param {object} [options.archive] Options forwarded to `MsgArchive` (e.g. `baseDir`, `fileExtension`, `flushIntervalMs`).
+	 * @param {{ pruneIntervalMs: number, notifierIntervalMs: number, hardDeleteAfterMs: number, hardDeleteIntervalMs: number, hardDeleteBacklogIntervalMs: number, hardDeleteBatchSize: number, hardDeleteStartupDelayMs: number, deleteClosedIntervalMs: number }} options.store
+	 *   Normalized store config (source of truth: MsgConfig).
+	 * @param {object} options.storage Normalized storage config (source of truth: MsgConfig).
+	 * @param {() => any} options.storage.createStorageBackend Platform-resolved storage backend factory for MsgStorage.
+	 * @param {object} options.archive Normalized archive config (source of truth: MsgConfig).
+	 * @param {object} options.stats Normalized stats config (source of truth: MsgConfig).
+	 * @param {any} [options.render] Render-related options forwarded to `MsgRender` (e.g. prefix configuration).
+	 * @param {{ enabled: boolean, startMin: number, endMin: number, maxLevel: number, spreadMs: number }} [options.quietHours] Optional quiet-hours configuration (fully normalized by `MsgConfig`).
+	 * @param {() => number} [options.quietHoursRandomFn] Optional random function injection (tests).
+	 * @param {any} [options.ai] Optional AI helper instance.
 	 */
-	constructor(adapter, msgConstants, msgFactory, options = {}) {
-		const {
-			initialMessages = [],
-			pruneIntervalMs = 30000,
-			notifierIntervalMs = 10000,
-			hardDeleteAfterMs = 1000 * 60 * 60 * 24 * 3,
-			hardDeleteIntervalMs = 1000 * 60 * 60 * 4,
-			storage = {},
-			archive = {},
-		} = options || {};
+	constructor(adapter, msgConstants, msgFactory, options) {
+		const opt = options && typeof options === 'object' && !Array.isArray(options) ? options : null;
+		if (!opt) {
+			throw new Error('MsgStore: options is required');
+		}
+		const { initialMessages = [], store, storage, archive, stats, ai = null } = opt;
 
 		if (!adapter) {
 			throw new Error('MsgStore: adapter is required');
@@ -119,37 +125,110 @@ class MsgStore {
 		}
 		this.msgFactory = msgFactory;
 
+		const isObject = v => !!v && typeof v === 'object' && !Array.isArray(v);
+		if (!isObject(store)) {
+			throw new Error('MsgStore: options.store is required');
+		}
+		if (!isObject(storage)) {
+			throw new Error('MsgStore: options.storage is required');
+		}
+		if (!isObject(archive)) {
+			throw new Error('MsgStore: options.archive is required');
+		}
+		if (!isObject(stats)) {
+			throw new Error('MsgStore: options.stats is required');
+		}
+
+		const requireFinite = (value, label) => {
+			if (typeof value !== 'number' || !Number.isFinite(value)) {
+				throw new Error(`MsgStore: options.store.${label} must be a finite number`);
+			}
+			return value;
+		};
+
+		// Pruning and notification timers (timer starts in `init()`).
+		this.lastPruneAt = 0;
+		this.pruneIntervalMs = Math.max(0, Math.trunc(requireFinite(store.pruneIntervalMs, 'pruneIntervalMs')));
+		this.notifierIntervalMs = Math.max(
+			0,
+			Math.trunc(requireFinite(store.notifierIntervalMs, 'notifierIntervalMs')),
+		);
+
+		// Hard-delete scheduling (timer starts in `init()`).
+		this._keepDeletedAndExpiredFilesMs = Math.max(
+			0,
+			Math.trunc(requireFinite(store.hardDeleteAfterMs, 'hardDeleteAfterMs')),
+		);
+		this._hardDeleteIntervalMs = Math.max(
+			0,
+			Math.trunc(requireFinite(store.hardDeleteIntervalMs, 'hardDeleteIntervalMs')),
+		);
+		this._lastHardDeleteAt = 0;
+		this._hardDeleteBatchSize = Math.max(
+			1,
+			Math.trunc(requireFinite(store.hardDeleteBatchSize, 'hardDeleteBatchSize')),
+		);
+		this._hardDeleteBacklogIntervalMs = Math.max(
+			0,
+			Math.trunc(requireFinite(store.hardDeleteBacklogIntervalMs, 'hardDeleteBacklogIntervalMs')),
+		);
+		this._hardDeleteStartupDelayMs = Math.max(
+			0,
+			Math.trunc(requireFinite(store.hardDeleteStartupDelayMs, 'hardDeleteStartupDelayMs')),
+		);
+		this._hardDeleteDisabledUntil = 0;
+		this._hardDeleteTimer = null;
+		this._hardDeleteTimerDueAt = 0;
+
+		// Closed-message cleanup (not user-configurable yet).
+		this._deleteClosedIntervalMs = Math.max(
+			0,
+			Math.trunc(requireFinite(store.deleteClosedIntervalMs, 'deleteClosedIntervalMs')),
+		);
+		this._lastDeleteClosedAt = 0;
+
+		const createStorageBackend =
+			typeof storage.createStorageBackend === 'function' ? storage.createStorageBackend : null;
+		if (!createStorageBackend) {
+			throw new Error('MsgStore: options.storage.createStorageBackend is required');
+		}
+
 		// File persistence (initialized in `init()`).
 		this.msgStorage = new MsgStorage(this.adapter, {
-			baseDir: 'data',
 			fileName: 'messages.json',
-			...(storage || {}),
+			...storage,
 		});
 
 		// Append-only archive (initialized in `init()`).
-		this.msgArchive = new MsgArchive(this.adapter, { baseDir: 'data/archive', ...(archive || {}) });
+		this.msgArchive = new MsgArchive(this.adapter, { baseDir: 'data/archive', ...archive });
 
 		// View rendering (pure transformation; no I/O).
-		this.msgRender = new MsgRender(this.adapter, { locale: this.adapter?.locale });
+		this.msgRender = new MsgRender(this.adapter, { locale: this.adapter?.locale, render: options?.render || null });
 
 		// Notification dispatcher (plugins register elsewhere).
-		this.msgNotify = new MsgNotify(this.adapter, this.msgConstants, { store: this });
+		this.msgNotify = new MsgNotify(this.adapter, this.msgConstants, { store: this, ai });
 
 		// Producer host for inbound events (plugins register elsewhere).
-		this.msgIngest = new MsgIngest(this.adapter, this.msgConstants, this.msgFactory, this);
+		this.msgIngest = new MsgIngest(this.adapter, this.msgConstants, this.msgFactory, this, { ai });
 
 		// Canonical in-memory list (do not store rendered output here).
 		this.fullList = Array.isArray(initialMessages) ? initialMessages : [];
 
+		// Action executor + view policy (core).
+		this.msgActions = new MsgAction(this.adapter, this.msgConstants, this);
+
+		// Stats (read-only insights + rollups).
+		this.msgStats = new MsgStats(this.adapter, this.msgConstants, this, {
+			...stats,
+			createStorageBackend,
+		});
+
 		// Pruning and notification timers (timer starts in `init()`).
-		this.lastPruneAt = 0;
-		this.pruneIntervalMs = pruneIntervalMs;
-		this.notifierIntervalMs = notifierIntervalMs;
+		this._quietHours = options?.quietHours || null;
+		this._quietHoursRandomFn =
+			typeof options?.quietHoursRandomFn === 'function' ? options.quietHoursRandomFn : Math.random;
 		this._notifyTimer = null;
 		this._initialized = false;
-		this._keepDeletedAndExpiredFilesMs = hardDeleteAfterMs;
-		this._hardDeleteIntervalMs = hardDeleteIntervalMs;
-		this._lastHardDeleteAt = 0;
 
 		this.adapter?.log?.info?.(
 			`MsgStore initialized: pruneIntervalMs=${this.pruneIntervalMs}ms, notifierIntervalMs=${this.notifierIntervalMs}ms`,
@@ -173,6 +252,7 @@ class MsgStore {
 
 		await this.msgStorage.init();
 		await this.msgArchive.init();
+		await this.msgStats.init();
 
 		if (loadFromStorage) {
 			const loaded = await this.msgStorage.readJson([]);
@@ -197,41 +277,105 @@ class MsgStore {
 	 *
 	 * Side-effects on success:
 	 * - Persists the updated full list via `MsgStorage` (not awaited).
-	 * - If `timing.notifyAt` is missing or not finite, dispatches an immediate `"due"` notification.
-	 *   (only when `lifecycle.state === "open"`; non-open messages are not considered due-on-create).
+	 * - Dispatches a creation notification:
+	 *   - `"added"` when the `ref` was not present in the store
+	 *   - `"recreated"` when the `ref` existed only in quasi-deleted states (closed/deleted/expired) and is now replaced
+	 *   - `"recovered"` when the `ref` existed only in quasi-deleted states and is recreated within `timing.cooldown`
+	 * - If `timing.notifyAt` is missing or not finite, dispatches an immediate `"due"` notification
+	 *   (only when `lifecycle.state === "open"` and the recreate cooldown is not active).
 	 * - Appends an archive snapshot (best-effort, not awaited).
 	 *
 	 * @param {object} msg Normalized message object.
 	 * @returns {boolean} True when added, false when rejected by guards.
 	 */
 	addMessage(msg) {
+		const isQuasiDeletedState = this.msgConstants.lifecycle.isQuasiDeletedState;
+		const ref = typeof msg?.ref === 'string' ? msg.ref.trim() : '';
+		const cooldownMs = msg?.timing?.cooldown;
+		const wantsCooldownGate = Number.isFinite(cooldownMs) && cooldownMs > 0;
+
+		// For recreate/cooldown semantics we need a snapshot from *before* store maintenance.
+		// `_deleteClosedMessages` / `_pruneOldMessages` may update lifecycle.stateChangedAt and would distort the cooldown base.
+		let previousQuasiDeletedChangedAt = null;
+		if (wantsCooldownGate && ref) {
+			for (const candidate of this.fullList) {
+				if (candidate?.ref !== ref) {
+					continue;
+				}
+				const state = candidate?.lifecycle?.state;
+				const stateChangedAt = candidate?.lifecycle?.stateChangedAt;
+				if (!isQuasiDeletedState(state) || !Number.isFinite(stateChangedAt)) {
+					continue;
+				}
+				previousQuasiDeletedChangedAt =
+					previousQuasiDeletedChangedAt == null
+						? stateChangedAt
+						: Math.max(previousQuasiDeletedChangedAt, stateChangedAt);
+			}
+		}
+
 		// Keep the list clean before inserting anything new.
+		this._deleteClosedMessages();
 		this._pruneOldMessages();
 
-		// Guard: enforce numeric integer levels (no coercion, no numeric strings).
-		if (msg.level !== parseInt(msg.level, 10)) {
+		// Guards: msg must be a normalized object, with integer level (no numeric strings).
+		if (!msg || typeof msg !== 'object') {
 			return false;
 		}
-		// Guard: reject duplicates by ref.
-		if (this.getMessageByRef(msg.ref) != null) {
+		if (!ref) {
 			return false;
+		}
+		if (typeof msg.level !== 'number' || !Number.isInteger(msg.level)) {
+			return false;
+		}
+
+		// Guard: reject duplicates by ref.
+		const candidates = this.fullList.filter(item => item?.ref === ref);
+		const isRecreate = candidates.length > 0;
+		if (isRecreate) {
+			const nonReplaceable = candidates.find(item => !isQuasiDeletedState(item?.lifecycle?.state));
+			if (nonReplaceable) {
+				return false;
+			}
+
+			// Hard-delete existing messages with the same ref so the new message can be recreated.
+			for (const existing of candidates) {
+				this.msgArchive?.appendDelete?.(existing, { event: 'purgeOnRecreate' });
+			}
+			this.fullList = this.fullList.filter(item => item?.ref !== ref);
 		}
 
 		// Mutate canonical list.
 		this.fullList.push(msg);
+
 		// Persist the entire list (best-effort; MsgStorage may throttle).
 		this.msgStorage.writeJson(this.fullList);
+
+		// Archive the creation for audit/replay. This must not block the store.
+		// Note: notification markers (`timing.notifiedAt`) are appended as separate patches after dispatch.
+		this.msgArchive?.appendSnapshot?.(msg);
+
+		// Notify about the new entry: truly new vs. recreated vs. recovered (cooldown).
+		const now = Date.now();
+		const isWithinCooldown =
+			isRecreate &&
+			wantsCooldownGate &&
+			Number.isFinite(previousQuasiDeletedChangedAt) &&
+			now < previousQuasiDeletedChangedAt + cooldownMs;
+		const createEvent = isRecreate
+			? isWithinCooldown
+				? this.msgConstants.notfication.events.recovered
+				: this.msgConstants.notfication.events.recreated
+			: this.msgConstants.notfication.events.added;
+		this._dispatchNotify(createEvent, msg);
 
 		// If no future notifyAt exists, treat the message as immediately due.
 		const isOpen =
 			(msg?.lifecycle?.state || this.msgConstants.lifecycle?.state?.open) ===
 			this.msgConstants.lifecycle?.state?.open;
-		if (isOpen && !Number.isFinite(msg?.timing?.notifyAt)) {
-			this.msgNotify?.dispatch?.(this.msgConstants.notfication.events.due, msg);
+		if (isOpen && !isWithinCooldown && !Number.isFinite(msg?.timing?.notifyAt)) {
+			this._dispatchNotify(this.msgConstants.notfication.events.due, msg);
 		}
-
-		// Archive the creation for audit/replay. This must not block the store.
-		this.msgArchive?.appendSnapshot?.(msg);
 		this.adapter?.log?.debug?.(`MsgStore: added Message '${msg.ref}'`);
 		this.adapter?.log?.silly?.(`MsgStore: added Message '${serializeWithMaps(msg)}'`);
 
@@ -263,9 +407,10 @@ class MsgStore {
 	 * @param {object|string} msgOrRef Patch object that includes a ref, or a ref string.
 	 * @param {object} [patch] Patch object when ref is provided separately.
 	 * @param {boolean} [stealthMode] When true, applies a "silent" patch (no `timing.updatedAt` bump). As a result, the store will not dispatch `"updated"` (and also not trigger the immediate-due-on-update rule); the change is still persisted and archived.
+	 * @param {any} [_coreToken] Internal token (core only).
 	 * @returns {boolean} True when updated, false when rejected by guards or validation.
 	 */
-	updateMessage(msgOrRef, patch = undefined, stealthMode = false) {
+	updateMessage(msgOrRef, patch = undefined, stealthMode = false, _coreToken = undefined) {
 		// Ensure consumers don't update already-expired entries.
 		this._pruneOldMessages();
 
@@ -295,7 +440,9 @@ class MsgStore {
 		}
 
 		// Delegate validation + normalization to the factory (single source of truth).
-		const updated = factory.applyPatch(existing, msg, stealthMode);
+		const updated = factory.applyPatch(existing, msg, stealthMode, {
+			allowCoreLifecycleStates: _coreToken === _CORE_LIFECYCLE_TOKEN,
+		});
 		if (!updated) {
 			this.adapter?.log?.warn?.(`MsgStore: '${msg.ref}' could not be updated (validation failed)`);
 			return false;
@@ -303,7 +450,12 @@ class MsgStore {
 
 		// Replace the entry and persist.
 		this.fullList[index] = updated;
+		// Persist the updated list (best-effort; MsgStorage may throttle).
 		this.msgStorage.writeJson(this.fullList);
+
+		// Archive patch information for audit and debugging (best-effort).
+		// Note: notification markers (`timing.notifiedAt`) are appended as separate patches after dispatch.
+		this.msgArchive?.appendPatch?.(msg.ref, msg, existing, updated);
 
 		// Detect whether this was a non-silent update by comparing updatedAt.
 		const t = updated?.timing;
@@ -318,8 +470,13 @@ class MsgStore {
 				state === this.msgConstants.lifecycle?.state?.expired) &&
 			state !== existingState;
 
+		const isClosedTransition = state === this.msgConstants.lifecycle?.state?.closed && state !== existingState;
+		if (isClosedTransition) {
+			this.msgStats?.recordClosed?.(updated);
+		}
+
 		if (hadUpdate && !isSoftDeletedTransition) {
-			this.msgNotify?.dispatch?.(this.msgConstants.notfication.events.update, updated);
+			this._dispatchNotify(this.msgConstants.notfication.events.update, updated);
 		}
 
 		// Immediate due semantics (only for non-silent updates and only when not expired).
@@ -330,11 +487,8 @@ class MsgStore {
 			(updated?.lifecycle?.state || this.msgConstants.lifecycle?.state?.open) ===
 			this.msgConstants.lifecycle?.state?.open;
 		if (!Number.isFinite(t?.notifyAt) && hadUpdate && notExpired && isOpen) {
-			this.msgNotify?.dispatch?.(this.msgConstants.notfication.events.due, updated);
+			this._dispatchNotify(this.msgConstants.notfication.events.due, updated);
 		}
-
-		// Archive patch information for audit and debugging (best-effort).
-		this.msgArchive?.appendPatch?.(msg.ref, msg, existing, updated);
 		this.adapter?.log?.debug?.(`MsgStore: updated Message '${updated.ref}'`);
 		this.adapter?.log?.silly?.(`MsgStore: updated Message '${serializeWithMaps(updated)}'`);
 
@@ -353,7 +507,9 @@ class MsgStore {
 	addOrUpdateMessage(msg) {
 		this._pruneOldMessages();
 		// Existence check uses getMessageByRef(), which returns rendered output for existing entries.
-		if (this.getMessageByRef(msg.ref) != null) {
+		// Important: treat quasi-deleted entries (deleted/closed/expired) as non-existent so recreate semantics
+		// run through `addMessage()` (and dispatch `recreated`/`recovered`).
+		if (this.getMessageByRef(msg.ref, 'quasiOpen') != null) {
 			return this.updateMessage(msg);
 		}
 		return this.addMessage(msg);
@@ -368,15 +524,54 @@ class MsgStore {
 	 * - Does not mutate stored data.
 	 *
 	 * @param {string} reference Message ref.
+	 * @param {'all'|'quasiDeleted'|'quasiOpen'|string[]|undefined} [filter] Optional lifecycle filter.
+	 *  - `'all'`: no lifecycle filtering (current behavior / default)
+	 *  - `'quasiDeleted'`: only `deleted|closed|expired`
+	 *  - `'quasiOpen'`: only `open|snoozed|acked`
+	 *  - `string[]`: explicit allowlist of lifecycle state values (1:1 match)
 	 * @returns {object|undefined} Matching message, if found.
 	 */
-	getMessageByRef(reference) {
+	getMessageByRef(reference, filter = 'all') {
 		this._pruneOldMessages();
-		const msg = this.fullList.filter(obj => {
-			return obj.ref === reference;
-		})[0];
-		// Render only on output; keep `fullList` unmodified.
-		return this.msgRender?.renderMessage(msg) || msg;
+		const ref = typeof reference === 'string' ? reference.trim() : '';
+		if (!ref) {
+			return undefined;
+		}
+
+		const lifecycle = this.msgConstants.lifecycle || {};
+		const isQuasiDeletedState = lifecycle.isQuasiDeletedState;
+		const isQuasiOpenState = lifecycle.isQuasiOpenState;
+
+		let matches = null;
+		if (Array.isArray(filter)) {
+			const set = new Set(
+				filter
+					.filter(v => typeof v === 'string')
+					.map(v => v.trim())
+					.filter(Boolean),
+			);
+			matches = msg => set.has(msg?.lifecycle?.state);
+		} else {
+			const f = typeof filter === 'string' ? filter.trim().toLowerCase() : '';
+			if (!f || f === 'all') {
+				matches = () => true;
+			} else if (f === 'quasideleted') {
+				matches = msg => {
+					const state = msg?.lifecycle?.state || lifecycle?.state?.open;
+					return typeof isQuasiDeletedState === 'function' ? isQuasiDeletedState(state) : false;
+				};
+			} else if (f === 'quasiopen') {
+				matches = msg => {
+					const state = msg?.lifecycle?.state || lifecycle?.state?.open;
+					return typeof isQuasiOpenState === 'function' ? isQuasiOpenState(state) : false;
+				};
+			} else {
+				matches = () => true;
+			}
+		}
+
+		const msg = this.fullList.find(obj => obj?.ref === ref && matches(obj));
+		return this._renderForOutput(msg);
 	}
 
 	/**
@@ -384,13 +579,13 @@ class MsgStore {
 	 *
 	 * Behavior:
 	 * - Triggers a throttled prune before returning.
-	 * - Returns rendered views when `MsgRender` is available.
+	 * - Returns a raw snapshot view (unrendered).
 	 *
 	 * @returns {Array<object>} All messages.
 	 */
 	getMessages() {
 		this._pruneOldMessages();
-		return this.fullList.map(msg => this.msgRender?.renderMessage(msg) || msg);
+		return this.fullList.map(msg => this._cloneForOutput(msg));
 	}
 
 	/**
@@ -413,6 +608,7 @@ class MsgStore {
 	 * 1) Enum-like filters (`string` or `{ in }` / `{ notIn }`)
 	 * - `where.kind`
 	 * - `where.origin.type`
+	 * - `where.origin.system`
 	 * - `where.lifecycle.state`
 	 *
 	 * Shapes:
@@ -446,7 +642,7 @@ class MsgStore {
 	 * 3) Timing range filters (`where.timing`)
 	 * - `where.timing` is an object; each supported timing field may be filtered by a range.
 	 * - Supported keys:
-	 *   - `createdAt`, `updatedAt`, `expiresAt`, `notifyAt`, `remindEvery`, `dueAt`, `startAt`, `endAt`
+	 *   - `createdAt`, `updatedAt`, `expiresAt`, `notifyAt`, `remindEvery`, `timeBudget`, `dueAt`, `startAt`, `endAt`
 	 *
 	 * Shapes per field:
 	 * - Exact number: `where.timing.notifyAt = 1730000000000`
@@ -455,6 +651,9 @@ class MsgStore {
 	 * Notes:
 	 * - Range implies existence: if a field is missing/null/not a finite number, the message does NOT match.
 	 *   (Example: filtering on `notifyAt` will naturally exclude messages where `notifyAt` is unset.)
+	 * - `orMissing`: when set on a range object (e.g. `{ max: now, orMissing: true }`), `undefined`/`null` values are treated as a match.
+	 *   (Note: non-finite values do NOT count as missing.)
+	 * - If a range object only specifies `{ orMissing: true }` (no `min/max`), it matches missing values only.
 	 *
 	 * 4) Details location allowlist (`where.details.location`)
 	 * - Intended as a small "dimension" filter for location-based views.
@@ -480,14 +679,17 @@ class MsgStore {
 	 *
 	 * Notes:
 	 * - Includes filters imply existence: if the target array is missing/empty, the message does NOT match.
+	 * - `orMissing`: when set on an includes object (e.g. `{ any: [...], orMissing: true }`), missing/empty arrays are treated as a match.
+	 *   - For `audience.tags`, an empty array (`[]`) is treated as missing.
+	 * - If an includes object only specifies `{ orMissing: true }` (no `any/all`), it matches missing/empty arrays only.
 	 *
 	 * Sort (`sort`)
 	 * - `sort` is optional and must be an array of `{ field, dir? }`.
 	 * - `dir` defaults to `"asc"`; `"desc"` reverses the order.
 	 * - Only the following fields are allowed (others are ignored):
-	 *   - `ref`, `level`, `kind`, `origin.type`, `lifecycle.state`, `details.location`
-	 *   - `timing.createdAt`, `timing.updatedAt`, `timing.expiresAt`, `timing.notifyAt`, `timing.remindEvery`, `timing.dueAt`,
-	 *     `timing.startAt`, `timing.endAt`
+	 *   - `ref`, `icon`, `title`, `text`, `level`, `kind`, `origin.type`, `origin.system`, `lifecycle.state`, `details.location`
+	 *   - `timing.createdAt`, `timing.updatedAt`, `timing.expiresAt`, `timing.notifyAt`, `timing.remindEvery`, `timing.timeBudget`,
+	 *     `timing.dueAt`, `timing.startAt`, `timing.endAt`
 	 *
 	 * Notes:
 	 * - Missing values (`null`/`undefined`) are always sorted last (regardless of direction).
@@ -558,17 +760,22 @@ class MsgStore {
 
 		const getRange = spec => {
 			if (typeof spec === 'number' && Number.isFinite(spec)) {
-				return { min: spec, max: spec };
+				return { min: spec, max: spec, orMissing: false };
 			}
 			if (!isPlainObject(spec)) {
 				return null;
 			}
 			const min = typeof spec.min === 'number' && Number.isFinite(spec.min) ? spec.min : undefined;
 			const max = typeof spec.max === 'number' && Number.isFinite(spec.max) ? spec.max : undefined;
-			if (min === undefined && max === undefined) {
+			const orMissing = spec.orMissing === true;
+			if (min === undefined && max === undefined && !orMissing) {
 				return null;
 			}
-			return { ...(min !== undefined ? { min } : {}), ...(max !== undefined ? { max } : {}) };
+			return {
+				...(min !== undefined ? { min } : {}),
+				...(max !== undefined ? { max } : {}),
+				orMissing,
+			};
 		};
 
 		const matchEnum = (value, spec) => {
@@ -665,21 +872,31 @@ class MsgStore {
 						.map(x => x.trim())
 						.filter(Boolean)
 				: [];
-			if (list.length === 0) {
-				return false;
-			}
+			const isMissing = list.length === 0;
 			if (typeof spec === 'string') {
-				return list.includes(spec);
+				return !isMissing && list.includes(spec);
 			}
 			if (Array.isArray(spec)) {
 				const any = toStringList(spec);
-				return any.length === 0 ? true : any.some(x => list.includes(x));
+				if (any.length === 0) {
+					return true;
+				}
+				return !isMissing && any.some(x => list.includes(x));
 			}
 			if (!isPlainObject(spec)) {
 				return true;
 			}
+			if (isMissing && spec.orMissing === true) {
+				return true;
+			}
+			if (isMissing) {
+				return false;
+			}
 			const any = toStringList(spec.any);
 			const all = toStringList(spec.all);
+			if (spec.orMissing === true && any.length === 0 && all.length === 0) {
+				return false;
+			}
 			if (any.length > 0 && all.length > 0) {
 				throw new TypeError('queryMessages: includes filter must use either {any} or {all}, not both');
 			}
@@ -692,12 +909,38 @@ class MsgStore {
 			return true;
 		};
 
+		const matchAudienceChannels = (message, spec) => {
+			if (spec === undefined) {
+				return true;
+			}
+			if (spec === null) {
+				return shouldDispatchByAudienceChannels(message, '');
+			}
+			if (typeof spec === 'string') {
+				return shouldDispatchByAudienceChannels(message, spec);
+			}
+			if (Array.isArray(spec)) {
+				const channels = toStringList(spec);
+				return channels.length === 0
+					? true
+					: channels.some(ch => shouldDispatchByAudienceChannels(message, ch));
+			}
+			if (!isPlainObject(spec)) {
+				return true;
+			}
+			if (!Object.prototype.hasOwnProperty.call(spec, 'routeTo')) {
+				return true;
+			}
+			return matchAudienceChannels(message, spec.routeTo);
+		};
+
 		const timingKeys = new Set([
 			'createdAt',
 			'updatedAt',
 			'expiresAt',
 			'notifyAt',
 			'remindEvery',
+			'timeBudget',
 			'dueAt',
 			'startAt',
 			'endAt',
@@ -716,6 +959,12 @@ class MsgStore {
 				}
 				const raw = timing?.[key];
 				if (raw === undefined || raw === null) {
+					if (range.orMissing === true) {
+						continue;
+					}
+					return false;
+				}
+				if (range.orMissing === true && range.min === undefined && range.max === undefined) {
 					return false;
 				}
 				const v = Number(raw);
@@ -768,6 +1017,9 @@ class MsgStore {
 			if (!matchEnum(msg?.origin?.type, filter?.origin?.type)) {
 				return false;
 			}
+			if (!matchEnum(msg?.origin?.system, filter?.origin?.system)) {
+				return false;
+			}
 			if (!matchEnum(lifecycleState, filter?.lifecycle?.state)) {
 				return false;
 			}
@@ -780,6 +1032,9 @@ class MsgStore {
 			if (!matchIncludes(msg?.audience?.tags, filter?.audience?.tags)) {
 				return false;
 			}
+			if (!matchAudienceChannels(msg, filter?.audience?.channels)) {
+				return false;
+			}
 			if (!matchIncludes(msg?.dependencies, filter?.dependencies)) {
 				return false;
 			}
@@ -790,9 +1045,13 @@ class MsgStore {
 
 		const allowedSortFields = new Set([
 			'ref',
+			'icon',
+			'title',
+			'text',
 			'level',
 			'kind',
 			'origin.type',
+			'origin.system',
 			'lifecycle.state',
 			'details.location',
 			'timing.createdAt',
@@ -800,9 +1059,11 @@ class MsgStore {
 			'timing.expiresAt',
 			'timing.notifyAt',
 			'timing.remindEvery',
+			'timing.timeBudget',
 			'timing.dueAt',
 			'timing.startAt',
 			'timing.endAt',
+			'progress.percentage',
 		]);
 
 		const sortSpec = Array.isArray(sort) ? sort : [];
@@ -882,9 +1143,7 @@ class MsgStore {
 		const pages = size > 0 ? Math.ceil(total / size) : 1;
 		const sliceStart = size > 0 ? (index - 1) * size : 0;
 		const sliceEnd = size > 0 ? sliceStart + size : undefined;
-		const items = (size > 0 ? sorted.slice(sliceStart, sliceEnd) : sorted).map(
-			msg => this.msgRender?.renderMessage(msg) || msg,
-		);
+		const items = (size > 0 ? sorted.slice(sliceStart, sliceEnd) : sorted).map(msg => this._renderForOutput(msg));
 
 		return { total, pages, items };
 	}
@@ -898,9 +1157,10 @@ class MsgStore {
 	 * - A later hard-delete pass physically removes the message and appends an archive delete snapshot.
 	 *
 	 * @param {string} reference Message ref.
-	 * @returns {void}
+	 * @param {{ actor?: string|null }} [options] Optional attribution.
+	 * @returns {boolean} True when a message existed and was removed.
 	 */
-	removeMessage(reference) {
+	removeMessage(reference, options = {}) {
 		this._pruneOldMessages();
 
 		// Find the message to remove; if missing, do nothing.
@@ -908,25 +1168,40 @@ class MsgStore {
 			return obj.ref === reference;
 		})[0];
 		if (remove == null) {
-			return;
+			return false;
 		}
 
+		const actorProvided =
+			options && typeof options === 'object' && !Array.isArray(options)
+				? Object.prototype.hasOwnProperty.call(options, 'actor')
+				: false;
+		const actor = actorProvided
+			? typeof options.actor === 'string' && options.actor.trim()
+				? options.actor.trim()
+				: null
+			: 'MsgStore';
+
 		// Soft delete Message (do not remove from list yet).
-		const ok = this.updateMessage(remove.ref, {
-			lifecycle: {
-				state: this.msgConstants.lifecycle.state.deleted,
-				stateChangedAt: Date.now(),
-				stateChangedBy: 'MsgStore',
+		const ok = this.updateMessage(
+			remove.ref,
+			{
+				lifecycle: {
+					state: this.msgConstants.lifecycle.state.deleted,
+					stateChangedBy: actor,
+				},
+				timing: { notifyAt: null },
 			},
-			timing: { notifyAt: null },
-		});
+			false,
+			_CORE_LIFECYCLE_TOKEN,
+		);
 		const deleted = ok ? this.fullList.find(item => item.ref === remove.ref) || remove : remove;
 
 		// Notify plugins (semantic delete).
-		this.msgNotify?.dispatch?.(this.msgConstants.notfication.events.deleted, deleted);
+		this._dispatchNotify(this.msgConstants.notfication.events.deleted, deleted);
 
 		this.adapter?.log?.debug?.(`MsgStore: removed Message '${reference}'`);
 		this.adapter?.log?.silly?.(`MsgStore: removed Message '${serializeWithMaps(deleted)}'`);
+		return true;
 	}
 
 	/**
@@ -945,6 +1220,7 @@ class MsgStore {
 	onUnload() {
 		// Stop producer plugins first so they can stop timers/subscriptions before storage flushes.
 		this.msgIngest?.stop?.({ reason: 'unload' });
+		this.msgNotify?.stop?.({ reason: 'unload' });
 
 		// Stop dispatching due messages to msgNotify
 		if (this._notifyTimer) {
@@ -952,9 +1228,61 @@ class MsgStore {
 			this._notifyTimer = null;
 		}
 
+		if (this._hardDeleteTimer) {
+			clearTimeout(this._hardDeleteTimer);
+			this._hardDeleteTimer = null;
+			this._hardDeleteTimerDueAt = 0;
+		}
+
 		// Best-effort flush of buffered writes.
 		this.msgStorage.flushPending();
 		this.msgArchive?.flushPending?.();
+		this.msgStats?.onUnload?.();
+	}
+
+	/**
+	 * Schedule a background hard-delete run (best-effort).
+	 *
+	 * @param {number} delayMs Delay in ms.
+	 * @returns {void}
+	 */
+	_scheduleHardDelete(delayMs) {
+		const delay = typeof delayMs === 'number' && Number.isFinite(delayMs) ? Math.max(0, Math.trunc(delayMs)) : 0;
+		const dueAt = Date.now() + delay;
+
+		if (this._hardDeleteTimer && this._hardDeleteTimerDueAt && this._hardDeleteTimerDueAt <= dueAt) {
+			return;
+		}
+
+		if (this._hardDeleteTimer) {
+			clearTimeout(this._hardDeleteTimer);
+			this._hardDeleteTimer = null;
+			this._hardDeleteTimerDueAt = 0;
+		}
+
+		this._hardDeleteTimerDueAt = dueAt;
+		this._hardDeleteTimer = setTimeout(() => {
+			this._hardDeleteTimer = null;
+			this._hardDeleteTimerDueAt = 0;
+			this._hardDeleteMessages({ force: true });
+		}, delay);
+
+		// Do not keep the Node event loop alive (tests / shutdown flows).
+		this._hardDeleteTimer?.unref?.();
+	}
+
+	/**
+	 * Return a JSON-serializable stats snapshot for UI/diagnostics.
+	 *
+	 * @param {object} [options] Options forwarded to MsgStats.
+	 * @returns {Promise<any>} Stats object.
+	 */
+	async getStats(options = {}) {
+		this._pruneOldMessages();
+		if (!this.msgStats || typeof this.msgStats.getStats !== 'function') {
+			return null;
+		}
+		return await this.msgStats.getStats(options);
 	}
 
 	/**
@@ -990,30 +1318,69 @@ class MsgStore {
 		);
 
 		if (removals.length === 0) {
+			this._deleteClosedMessages();
 			this._hardDeleteMessages();
 			return;
 		}
 
 		const expiredNow = [];
 		for (const msg of removals) {
-			const ok = this.updateMessage(msg.ref, {
-				lifecycle: {
-					state: expiredState,
-					stateChangedAt: now,
-					stateChangedBy: 'MsgStore',
+			const ok = this.updateMessage(
+				msg.ref,
+				{
+					lifecycle: {
+						state: expiredState,
+						stateChangedBy: 'MsgStore',
+					},
+					timing: { notifyAt: null },
 				},
-				timing: { notifyAt: null },
-			});
+				false,
+				_CORE_LIFECYCLE_TOKEN,
+			);
 			expiredNow.push(ok ? this.fullList.find(item => item.ref === msg.ref) || msg : msg);
 		}
 
 		// Notify plugins once per prune cycle with the list of removed messages.
-		this.msgNotify?.dispatch?.(this.msgConstants.notfication.events.expired, expiredNow);
+		this._dispatchNotify(this.msgConstants.notfication.events.expired, expiredNow);
 
 		this.adapter?.log?.debug?.(`MsgStore: soft-expired Message(s) '${expiredNow.map(msg => msg.ref).join(', ')}'`);
 		this.adapter?.log?.silly?.(`MsgStore: soft-expired Message(s) '${serializeWithMaps(expiredNow)}'`);
 
+		this._deleteClosedMessages();
 		this._hardDeleteMessages();
+	}
+
+	/**
+	 * Soft-delete messages that are in `lifecycle.state === "closed"`.
+	 *
+	 * Closed messages are transitioned to `deleted` via `removeMessage` so they can be removed
+	 * later by the regular hard-delete retention logic (`_hardDeleteMessages`).
+	 *
+	 * @returns {void} No return value.
+	 */
+	_deleteClosedMessages() {
+		const now = Date.now();
+		// Throttle scans to reduce CPU overhead on frequent reads/writes.
+		if (now - this._lastDeleteClosedAt < this._deleteClosedIntervalMs) {
+			return;
+		}
+		this._lastDeleteClosedAt = now;
+
+		// Determine which entries are due to be deleted. make sure tey remain at least 30s as "closed" before deleting them
+		const needsDeletion = item =>
+			item?.lifecycle?.state === this.msgConstants.lifecycle.state.closed &&
+			typeof item?.lifecycle?.stateChangedAt === 'number' &&
+			item?.lifecycle?.stateChangedAt < now - 1000 * 30;
+
+		const removals = this.fullList.filter(needsDeletion);
+
+		if (removals.length === 0) {
+			return;
+		}
+
+		for (const msg of removals) {
+			this.removeMessage(msg?.ref);
+		}
 	}
 
 	/**
@@ -1026,14 +1393,15 @@ class MsgStore {
 	 * - persists the updated `fullList`
 	 * - appends an archive entry with `{ event: "purge" }`
 	 *
+	 * @param {object} [options] Options.
+	 * @param {boolean} [options.force] When true, bypass throttling.
 	 * @returns {void}
 	 */
-	_hardDeleteMessages() {
+	_hardDeleteMessages({ force = false } = {}) {
 		const now = Date.now();
-		if (now - this._lastHardDeleteAt < this._hardDeleteIntervalMs) {
+		if (!force && now - this._lastHardDeleteAt < this._hardDeleteIntervalMs) {
 			return;
 		}
-		this._lastHardDeleteAt = now;
 
 		// Determine which entries are due to be deleted.
 		const needsDeletion = item =>
@@ -1042,17 +1410,53 @@ class MsgStore {
 			typeof item?.lifecycle?.stateChangedAt === 'number' &&
 			item.lifecycle.stateChangedAt + this._keepDeletedAndExpiredFilesMs <= now;
 
-		const removals = this.fullList.filter(needsDeletion);
+		if (!this._hardDeleteDisabledUntil && this._hardDeleteStartupDelayMs > 0) {
+			this._hardDeleteDisabledUntil = now + this._hardDeleteStartupDelayMs;
+		}
+
+		const disabledUntil = this._hardDeleteDisabledUntil || 0;
+		if (now < disabledUntil) {
+			const hasCandidates = this.fullList.some(needsDeletion);
+			if (hasCandidates) {
+				this._scheduleHardDelete(disabledUntil - now);
+			}
+			return;
+		}
+
+		this._lastHardDeleteAt = now;
+
+		const removals = [];
+		const keep = [];
+		let hasBacklog = false;
+
+		for (const item of this.fullList) {
+			if (!needsDeletion(item)) {
+				keep.push(item);
+				continue;
+			}
+
+			if (removals.length < this._hardDeleteBatchSize) {
+				removals.push(item);
+				continue;
+			}
+
+			hasBacklog = true;
+			keep.push(item);
+		}
 
 		if (removals.length === 0) {
 			return;
 		}
 
-		this.fullList = this.fullList.filter(item => !needsDeletion(item));
+		this.fullList = keep;
 		this.msgStorage.writeJson(this.fullList);
 
 		for (const msg of removals) {
 			this.msgArchive?.appendDelete?.(msg, { event: 'purge' });
+		}
+
+		if (hasBacklog) {
+			this._scheduleHardDelete(this._hardDeleteBacklogIntervalMs);
 		}
 
 		this.adapter?.log?.debug?.(`MsgStore: hard-deleted Message(s) '${removals.map(msg => msg.ref).join(', ')}'`);
@@ -1064,6 +1468,7 @@ class MsgStore {
 	 *
 	 * Selection logic:
 	 * - `timing.notifyAt` must be a number and `<= now`.
+	 * - Only messages in `lifecycle.state === "open"|"snoozed"` are eligible.
 	 * - Expired messages are excluded (`expiresAt` missing or `> now`).
 	 *
 	 * Side-effects:
@@ -1081,10 +1486,18 @@ class MsgStore {
 	_initiateNotifications() {
 		const now = Date.now();
 
-		// Determine which entries are currently due.
+		// Determine which entries are currently due (only open/snoozed messages).
+		const openState = this.msgConstants.lifecycle?.state?.open;
+		const snoozedState = this.msgConstants.lifecycle?.state?.snoozed;
+		const isEligibleState = item => {
+			const state = item?.lifecycle?.state || openState;
+			return state === openState || state === snoozedState;
+		};
+
 		const isDue = item =>
 			typeof item?.timing?.notifyAt === 'number' &&
 			item.timing.notifyAt <= now &&
+			isEligibleState(item) &&
 			(typeof item?.timing?.expiresAt !== 'number' || item.timing.expiresAt > now);
 		const notifications = this.fullList.filter(isDue);
 
@@ -1092,14 +1505,7 @@ class MsgStore {
 			return;
 		}
 
-		// Dispatch as a batch; MsgNotify will fan out per message internally.
-		this.msgNotify?.dispatch?.(this.msgConstants.notfication.events.due, notifications);
-
-		// Update notifyAt to reschedule notification as needed.
-		for (const msg of notifications) {
-			const newNotifyAt = Number.isFinite(msg.timing.remindEvery) ? now + msg.timing.remindEvery : null;
-			this.updateMessage(msg.ref, { timing: { notifyAt: newNotifyAt } }, true);
-		}
+		this._dispatchNotify(this.msgConstants.notfication.events.due, notifications);
 
 		this.adapter?.log?.debug?.(
 			`MsgStore: initiated Notification for Message(s) '${notifications.map(msg => msg.ref).join(', ')}'`,
@@ -1107,6 +1513,198 @@ class MsgStore {
 		this.adapter?.log?.silly?.(
 			`MsgStore: initiated Notification for Message(s) '${serializeWithMaps(notifications)}'`,
 		);
+	}
+
+	/**
+	 * Apply store-owned dispatch policies to a message payload.
+	 *
+	 * Notes:
+	 * - This method may apply stealth patches via `updateMessage(..., true)` before dispatch.
+	 * - It supports both single-message and list payloads and preserves the input shape.
+	 * - For now, only `event === "due"` is handled; other events return the payload unchanged.
+	 *
+	 * Current policies for `event === "due"`:
+	 * - If lifecycle is `snoozed`, patch it back to `open` (stealth).
+	 * - If quiet-hours suppression applies (repeat due only), reschedule `timing.notifyAt` into the quiet-hours end (stealth) and suppress dispatch.
+	 * - Otherwise, reschedule `timing.notifyAt` based on `timing.remindEvery` (stealth).
+	 *
+	 * @param {string} event Notification event value (see MsgConstants.notfication.events).
+	 * @param {object|Array<object>} payload Message or list of messages.
+	 * @returns {object|Array<object>|undefined} Policy-adjusted message payload.
+	 */
+	_applyMsgPolicy(event, payload) {
+		// Normalize event name and decide early whether this policy layer applies.
+		const eventName = typeof event === 'string' ? event.trim() : '';
+		if (!eventName) {
+			return payload;
+		}
+		const dueEvent = this.msgConstants.notfication?.events?.due;
+		if (eventName !== dueEvent) {
+			return payload;
+		}
+
+		// Normalize payload shape (accept single message or list) and preserve it on return.
+		const list = Array.isArray(payload) ? payload : payload ? [payload] : [];
+		if (list.length === 0) {
+			return payload;
+		}
+
+		// Policy context: these are store-owned semantics and are applied immediately before dispatch.
+		const now = Date.now();
+		const openState = this.msgConstants.lifecycle?.state?.open;
+		const snoozedState = this.msgConstants.lifecycle?.state?.snoozed;
+		const quietHours = this._quietHours;
+		const dispatchables = [];
+		for (const msg of list) {
+			// Dispatch policy only applies to persisted messages (must have a stable ref).
+			const ref = typeof msg?.ref === 'string' ? msg.ref.trim() : '';
+			if (!ref) {
+				continue;
+			}
+
+			let suppressDispatch = false;
+			const patch = {};
+
+			// Snooze elapsed: due messages should become "open" again, regardless of quiet hours.
+			if (msg?.lifecycle?.state === snoozedState) {
+				patch.lifecycle = { state: openState, stateChangedBy: 'MsgStore' };
+			}
+
+			// Quiet hours: suppress repeats only (first due is still delivered).
+			const hasNotifyAt = Number.isFinite(msg?.timing?.notifyAt);
+			const lastDue = msg?.timing?.notifiedAt?.due;
+			const isRepeatDue = Number.isFinite(lastDue) && lastDue > 0;
+			if (hasNotifyAt && isRepeatDue && MsgNotificationPolicy.shouldSuppressDue({ msg, now, quietHours })) {
+				// Suppressed: keep the message due, but move notifyAt out of the quiet window.
+				const nextNotifyAt = MsgNotificationPolicy.computeQuietRescheduleTs({
+					now,
+					quietHours,
+					randomFn: this._quietHoursRandomFn,
+				});
+				if (Number.isFinite(nextNotifyAt)) {
+					patch.timing = { ...(patch.timing || {}), notifyAt: nextNotifyAt };
+				}
+				suppressDispatch = true;
+			} else {
+				// Not suppressed: after dispatch, reschedule the next repeat (or clear for one-shot).
+				const remindEvery = msg?.timing?.remindEvery;
+				const hasRemindEvery = Number.isFinite(remindEvery) && remindEvery > 0;
+				const hasNotifyAt = Number.isFinite(msg?.timing?.notifyAt);
+				if (hasNotifyAt || hasRemindEvery) {
+					const newNotifyAt = hasRemindEvery ? now + remindEvery : null;
+					patch.timing = { ...(patch.timing || {}), notifyAt: newNotifyAt };
+				}
+			}
+
+			// Apply the collected patch as a single stealth update (no updatedAt bump / no "updated" event).
+			const hasPatch = Object.keys(patch).length > 0;
+			if (hasPatch) {
+				this.updateMessage(ref, patch, true);
+			}
+
+			// Quiet hours suppression means "reschedule only" (nothing to dispatch right now).
+			if (suppressDispatch) {
+				continue;
+			}
+
+			// Dispatch should reflect the canonical, patched store view (snoozed->open, rescheduled notifyAt, ...).
+			// Only re-read from the store when we actually applied a patch.
+			if (hasPatch) {
+				dispatchables.push(this.fullList.find(item => item?.ref === ref) || msg);
+			} else {
+				dispatchables.push(msg);
+			}
+		}
+
+		// Preserve the caller's input shape (single in -> single out; list in -> list out).
+		return Array.isArray(payload) ? dispatchables : dispatchables[0];
+	}
+
+	/**
+	 * Dispatch notifications via MsgNotify using a rendered (view-only) message payload.
+	 *
+	 * Invariants:
+	 * - Notify always receives rendered message views.
+	 * - Archive/persistence always receive raw canonical messages.
+	 *
+	 * @param {string} event Notification event value (see MsgConstants.notfication.events).
+	 * @param {object|Array<object>} payload Message or list of messages.
+	 */
+	_dispatchNotify(event, payload) {
+		if (!this.msgNotify?.dispatch) {
+			return;
+		}
+
+		const toBeDispatched = this._applyMsgPolicy(event, payload);
+		const list = Array.isArray(toBeDispatched) ? toBeDispatched : toBeDispatched ? [toBeDispatched] : [];
+		if (list.length === 0) {
+			return;
+		}
+
+		const rendered = Array.isArray(toBeDispatched)
+			? toBeDispatched.map(msg => this._renderForOutput(msg))
+			: this._renderForOutput(toBeDispatched);
+
+		this.msgNotify.dispatch(event, rendered);
+
+		// Append a core-managed notification marker after dispatch.
+		// This is best-effort and uses a stealth patch (no updatedAt bump, no updated-event).
+		const eventKey = typeof event === 'string' ? event.trim() : '';
+		if (!eventKey) {
+			return;
+		}
+		const now = Date.now();
+		for (const msg of list) {
+			const ref = typeof msg?.ref === 'string' ? msg.ref.trim() : '';
+			if (!ref) {
+				continue;
+			}
+			this.updateMessage(ref, { timing: { notifiedAt: { [eventKey]: now } } }, true);
+		}
+	}
+
+	/**
+	 * Render a view-only output message and apply the MsgAction view policy.
+	 *
+	 * This is intentionally a small boundary helper:
+	 * - Store remains canonical (`this.fullList` is never mutated here).
+	 * - All "rendered outputs" apply the same action filtering contract:
+	 *   - `actions` only contains executable actions
+	 *   - `actionsInactive` (optional) contains the rest
+	 *
+	 * @param {object|undefined} msg Raw canonical message.
+	 * @returns {object|undefined} Rendered output view.
+	 */
+	_renderForOutput(msg) {
+		const rendered = this.msgRender?.renderMessage(msg) || msg;
+		const buildActions = this.msgActions?.buildActions;
+		return typeof buildActions === 'function' ? buildActions.call(this.msgActions, rendered) : rendered;
+	}
+
+	/**
+	 * Create a shallow, output-safe clone of a message.
+	 *
+	 * @param {object|undefined} msg Raw canonical message.
+	 * @returns {object|undefined} Cloned output message.
+	 */
+	_cloneForOutput(msg) {
+		if (!msg || typeof msg !== 'object') {
+			return msg;
+		}
+		// Keep this intentionally shallow: fast snapshot that avoids mutating canonical store objects.
+		// (Rendered outputs are also shallow clones; nested structures like `metrics` are shared there as well.)
+		const out = { ...msg };
+		if (msg.details && typeof msg.details === 'object' && !Array.isArray(msg.details)) {
+			const details = { ...msg.details };
+			if (Array.isArray(details.tools)) {
+				details.tools = details.tools.slice();
+			}
+			if (Array.isArray(details.consumables)) {
+				details.consumables = details.consumables.slice();
+			}
+			out.details = details;
+		}
+		return out;
 	}
 }
 

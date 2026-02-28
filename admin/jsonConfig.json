@@ -4,33 +4,13 @@
 	"items": {
 		"general": {
 			"type": "panel",
-			"label": "General",
+			"label": "msghub.i18n.core.admin.jsonConfig.general.panel.label",
 			"items": {
-				"option1": {
-					"type": "checkbox",
-					"label": "option1",
-					"newLine": true,
-					"xs": 12,
-					"sm": 12,
-					"md": 6,
-					"lg": 4,
-					"xl": 4
-				},
-				"option2": {
-					"type": "text",
-					"label": "option2",
-					"newLine": true,
-					"xs": 12,
-					"sm": 12,
-					"md": 6,
-					"lg": 4,
-					"xl": 4
-				},
 				"locale": {
 					"type": "text",
-					"label": "Locale",
-					"help": "Locale for number/date formatting (e.g. de-DE, en-US).",
-					"placeholder": "de-DE",
+					"label": "msghub.i18n.core.admin.jsonConfig.general.locale.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.general.locale.help",
+					"placeholder": "msghub.i18n.core.admin.jsonConfig.general.locale.placeholder",
 					"default": "de-DE",
 					"newLine": true,
 					"xs": 12,
@@ -38,6 +18,828 @@
 					"md": 6,
 					"lg": 4,
 					"xl": 4
+				}
+			}
+		},
+		"archive": {
+			"type": "panel",
+			"label": "msghub.i18n.core.admin.jsonConfig.archive.panel.label",
+			"items": {
+				"keepPreviousWeeks": {
+					"type": "number",
+					"label": "msghub.i18n.core.admin.jsonConfig.archive.keepPreviousWeeks.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.archive.keepPreviousWeeks.help",
+					"default": 3,
+					"newLine": true,
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 4,
+					"xl": 4
+				},
+				"archiveFlushIntervalSec": {
+					"type": "number",
+					"label": "msghub.i18n.core.admin.jsonConfig.archive.flushIntervalSec.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.archive.flushIntervalSec.help",
+					"default": 10,
+					"min": 0,
+					"max": 3600,
+					"step": 1,
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 4,
+					"xl": 4
+				},
+				"archiveMaxBatchSize": {
+					"type": "number",
+					"label": "msghub.i18n.core.admin.jsonConfig.archive.maxBatchSize.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.archive.maxBatchSize.help",
+					"default": 200,
+					"min": 1,
+					"max": 5000,
+					"step": 1,
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 4,
+					"xl": 4
+				},
+				"_archiveStrategyHeader": {
+					"type": "header",
+					"text": "msghub.i18n.core.admin.jsonConfig.archive.strategy.header.text",
+					"newLine": true,
+					"size": 2
+				},
+				"_archiveStrategyWhyText": {
+					"type": "staticText",
+					"text": "msghub.i18n.core.admin.jsonConfig.archive.strategy.why.text",
+					"newLine": true,
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12,
+					"style": { "whiteSpace": "pre-wrap" }
+				},
+				"archiveEffectiveStrategyLock": {
+					"type": "text",
+					"label": "msghub.i18n.core.admin.jsonConfig.archive.strategy.active.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.archive.strategy.active.help",
+					"default": "",
+					"disabled": true,
+					"newLine": true,
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 4,
+					"xl": 4
+				},
+				"archiveLockReason": {
+					"type": "text",
+					"label": "msghub.i18n.core.admin.jsonConfig.archive.strategy.reason.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.archive.strategy.reason.help",
+					"default": "",
+					"disabled": true,
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 8,
+					"xl": 8
+				},
+				"archiveRetryNative": {
+					"type": "sendTo",
+					"label": "msghub.i18n.core.admin.jsonConfig.archive.strategy.retryNative.label",
+					"command": "config.archive.retryNative",
+					"timeout": 10000,
+					"useNative": true,
+					"jsonData": "{}",
+					"newLine": true,
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 6,
+					"xl": 6
+				},
+				"archiveForceIobroker": {
+					"type": "sendTo",
+					"label": "msghub.i18n.core.admin.jsonConfig.archive.strategy.forceIobroker.label",
+					"command": "config.archive.forceIobroker",
+					"timeout": 10000,
+					"useNative": true,
+					"jsonData": "{}",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 6,
+					"xl": 6
+				},
+				"_archiveStrategyNoMigrationText": {
+					"type": "staticText",
+					"text": "msghub.i18n.core.admin.jsonConfig.archive.strategy.noMigration.text",
+					"newLine": true,
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12,
+					"style": { "whiteSpace": "pre-wrap" }
+				},
+				"_archiveRuntimeHeader": {
+					"type": "header",
+					"text": "msghub.i18n.core.admin.jsonConfig.archive.strategy.runtime.header.text",
+					"newLine": true,
+					"size": 2
+				},
+				"archiveRuntimeStrategy": {
+					"type": "text",
+					"label": "msghub.i18n.core.admin.jsonConfig.archive.strategy.runtime.active.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.archive.strategy.runtime.active.help",
+					"default": "",
+					"disabled": true,
+					"newLine": true,
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 4,
+					"xl": 4
+				},
+				"archiveRuntimeReason": {
+					"type": "text",
+					"label": "msghub.i18n.core.admin.jsonConfig.archive.strategy.runtime.reason.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.archive.strategy.runtime.reason.help",
+					"default": "",
+					"disabled": true,
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 8,
+					"xl": 8
+				},
+				"archiveRuntimeRoot": {
+					"type": "text",
+					"label": "msghub.i18n.core.admin.jsonConfig.archive.strategy.runtime.root.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.archive.strategy.runtime.root.help",
+					"default": "",
+					"disabled": true,
+					"newLine": true,
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12
+				}
+			}
+		},
+		"store": {
+			"type": "panel",
+			"label": "msghub.i18n.core.admin.jsonConfig.store.panel.label",
+			"items": {
+				"pruneIntervalSec": {
+					"type": "number",
+					"label": "msghub.i18n.core.admin.jsonConfig.store.pruneIntervalSec.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.store.pruneIntervalSec.help",
+					"default": 30,
+					"min": 0,
+					"max": 3600,
+					"step": 1,
+					"newLine": true,
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 4,
+					"xl": 4
+				},
+				"_quietHoursHeader": {
+					"type": "header",
+					"text": "msghub.i18n.core.admin.jsonConfig.store.quietHours.header.text",
+					"newLine": true,
+					"size": 2
+				},
+				"quietHoursEnabled": {
+					"type": "checkbox",
+					"label": "msghub.i18n.core.admin.jsonConfig.store.quietHours.enabled.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.store.quietHours.enabled.help",
+					"default": true,
+					"newLine": true,
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12
+				},
+				"quietHoursStart": {
+					"type": "text",
+					"label": "msghub.i18n.core.admin.jsonConfig.store.quietHours.start.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.store.quietHours.start.help",
+					"default": "22:00",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 4,
+					"xl": 4
+				},
+				"quietHoursEnd": {
+					"type": "text",
+					"label": "msghub.i18n.core.admin.jsonConfig.store.quietHours.end.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.store.quietHours.end.help",
+					"default": "06:00",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 4,
+					"xl": 4
+				},
+				"quietHoursMaxLevel": {
+					"type": "select",
+					"label": "msghub.i18n.core.admin.jsonConfig.store.quietHours.maxLevel.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.store.quietHours.maxLevel.help",
+					"options": [
+						{
+							"label": "msghub.i18n.core.admin.common.MsgConstants.level.noneLong.label",
+							"value": 0
+						},
+						{
+							"label": "msghub.i18n.core.admin.common.MsgConstants.level.infoLong.label",
+							"value": 10
+						},
+						{
+							"label": "msghub.i18n.core.admin.common.MsgConstants.level.noticeLong.label",
+							"value": 20
+						},
+						{
+							"label": "msghub.i18n.core.admin.common.MsgConstants.level.warningLong.label",
+							"value": 30
+						},
+						{
+							"label": "msghub.i18n.core.admin.common.MsgConstants.level.errorLong.label",
+							"value": 40
+						},
+						{
+							"label": "msghub.i18n.core.admin.common.MsgConstants.level.criticalLong.label",
+							"value": 50
+						}
+					],
+					"default": 40,
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 4,
+					"xl": 4
+				},
+				"quietHoursSpreadMin": {
+					"type": "number",
+					"label": "msghub.i18n.core.admin.jsonConfig.store.quietHours.spreadMin.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.store.quietHours.spreadMin.help",
+					"default": 60,
+					"min": 0,
+					"max": 720,
+					"step": 1,
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 4,
+					"xl": 4
+				},
+				"_hardDeleteHeader": {
+					"type": "header",
+					"text": "msghub.i18n.core.admin.jsonConfig.store.hardDelete.header.text",
+					"newLine": true,
+					"size": 2
+				},
+				"hardDeleteAfterHours": {
+					"type": "number",
+					"label": "msghub.i18n.core.admin.jsonConfig.store.hardDelete.afterHours.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.store.hardDelete.afterHours.help",
+					"default": 72,
+					"min": 0,
+					"max": 8760,
+					"step": 1,
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 4,
+					"xl": 4
+				},
+				"hardDeleteBatchSize": {
+					"type": "number",
+					"label": "msghub.i18n.core.admin.jsonConfig.store.hardDelete.batchSize.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.store.hardDelete.batchSize.help",
+					"default": 50,
+					"min": 1,
+					"max": 5000,
+					"step": 1,
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 4,
+					"xl": 4
+				},
+				"hardDeleteStartupDelaySec": {
+					"type": "number",
+					"label": "msghub.i18n.core.admin.jsonConfig.store.hardDelete.startupDelaySec.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.store.hardDelete.startupDelaySec.help",
+					"default": 60,
+					"min": 0,
+					"max": 3600,
+					"step": 1,
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 4,
+					"xl": 4
+				}
+			}
+		},
+		"storage": {
+			"type": "panel",
+			"label": "msghub.i18n.core.admin.jsonConfig.storage.panel.label",
+			"items": {
+				"writeIntervalMs": {
+					"type": "number",
+					"label": "msghub.i18n.core.admin.jsonConfig.storage.writeIntervalMs.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.storage.writeIntervalMs.help",
+					"default": 10000,
+					"min": 0,
+					"max": 600000,
+					"step": 100,
+					"newLine": true,
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 4,
+					"xl": 4
+				}
+			}
+		},
+		"stats": {
+			"type": "panel",
+			"label": "msghub.i18n.core.admin.jsonConfig.stats.panel.label",
+			"items": {
+				"rollupKeepDays": {
+					"type": "number",
+					"label": "msghub.i18n.core.admin.jsonConfig.stats.rollupKeepDays.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.stats.rollupKeepDays.help",
+					"default": 400,
+					"min": 1,
+					"max": 5000,
+					"step": 1,
+					"newLine": true,
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 4,
+					"xl": 4
+				}
+			}
+		},
+		"render": {
+			"type": "panel",
+			"label": "msghub.i18n.core.admin.jsonConfig.render.panel.label",
+			"items": {
+				"_renderTemplatesHeader": {
+					"type": "header",
+					"text": "msghub.i18n.core.admin.jsonConfig.render.templates.header.text",
+					"newLine": true,
+					"size": 2
+				},
+				"renderTitleTemplate": {
+					"type": "text",
+					"label": "msghub.i18n.core.admin.jsonConfig.render.renderTitleTemplate.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.render.renderTitleTemplate.help",
+					"default": "{{icon}} {{title}}",
+					"newLine": true,
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 6,
+					"xl": 4
+				},
+				"renderTextTemplate": {
+					"type": "text",
+					"label": "msghub.i18n.core.admin.jsonConfig.render.renderTextTemplate.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.render.renderTextTemplate.help",
+					"default": "{{levelPrefix}} {{text}}",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 6,
+					"xl": 4
+				},
+				"renderIconTemplate": {
+					"type": "text",
+					"label": "msghub.i18n.core.admin.jsonConfig.render.renderIconTemplate.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.render.renderIconTemplate.help",
+					"default": "{{icon}}",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 6,
+					"xl": 4
+				},
+				"_renderTemplateHelpText": {
+					"type": "staticText",
+					"text": "msghub.i18n.core.admin.jsonConfig.render.templates.help.text",
+					"newLine": true,
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12,
+					"style": { "whiteSpace": "pre-wrap" }
+				},
+				"_renderLevelPrefixHeader": {
+					"type": "header",
+					"text": "msghub.i18n.core.admin.jsonConfig.render.levelPrefixes.header.text",
+					"newLine": true,
+					"size": 2
+				},
+				"prefixLevelNone": {
+					"type": "text",
+					"label": "msghub.i18n.core.admin.jsonConfig.render.prefixLevelNone.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.render.prefixLevelNone.help",
+					"default": "",
+					"newLine": true,
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 4,
+					"xl": 2
+				},
+				"prefixLevelInfo": {
+					"type": "text",
+					"label": "msghub.i18n.core.admin.jsonConfig.render.prefixLevelInfo.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.render.prefixLevelInfo.help",
+					"default": "",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 4,
+					"xl": 2
+				},
+				"prefixLevelNotice": {
+					"type": "text",
+					"label": "msghub.i18n.core.admin.jsonConfig.render.prefixLevelNotice.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.render.prefixLevelNotice.help",
+					"default": "",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 4,
+					"xl": 2
+				},
+				"prefixLevelWarning": {
+					"type": "text",
+					"label": "msghub.i18n.core.admin.jsonConfig.render.prefixLevelWarning.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.render.prefixLevelWarning.help",
+					"default": "⚠️",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 4,
+					"xl": 2
+				},
+				"prefixLevelError": {
+					"type": "text",
+					"label": "msghub.i18n.core.admin.jsonConfig.render.prefixLevelError.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.render.prefixLevelError.help",
+					"default": "❌",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 4,
+					"xl": 2
+				},
+				"prefixLevelCritical": {
+					"type": "text",
+					"label": "msghub.i18n.core.admin.jsonConfig.render.prefixLevelCritical.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.render.prefixLevelCritical.help",
+					"default": "🛑",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 4,
+					"xl": 2
+				},
+				"_renderKindPrefixHeader": {
+					"type": "header",
+					"text": "msghub.i18n.core.admin.jsonConfig.render.kindPrefixes.header.text",
+					"newLine": true,
+					"size": 2
+				},
+				"prefixKindTask": {
+					"type": "text",
+					"label": "msghub.i18n.core.admin.jsonConfig.render.prefixKindTask.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.render.prefixKindTask.help",
+					"default": "✅",
+					"newLine": true,
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 4,
+					"xl": 2
+				},
+				"prefixKindStatus": {
+					"type": "text",
+					"label": "msghub.i18n.core.admin.jsonConfig.render.prefixKindStatus.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.render.prefixKindStatus.help",
+					"default": "📡",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 4,
+					"xl": 2
+				},
+				"prefixKindAppointment": {
+					"type": "text",
+					"label": "msghub.i18n.core.admin.jsonConfig.render.prefixKindAppointment.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.render.prefixKindAppointment.help",
+					"default": "📅",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 4,
+					"xl": 2
+				},
+				"prefixKindShoppinglist": {
+					"type": "text",
+					"label": "msghub.i18n.core.admin.jsonConfig.render.prefixKindShoppinglist.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.render.prefixKindShoppinglist.help",
+					"default": "🛒",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 4,
+					"xl": 2
+				},
+				"prefixKindInventorylist": {
+					"type": "text",
+					"label": "msghub.i18n.core.admin.jsonConfig.render.prefixKindInventorylist.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.render.prefixKindInventorylist.help",
+					"default": "📦",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 4,
+					"xl": 2
+				}
+			}
+		},
+		"ai": {
+			"type": "panel",
+			"label": "msghub.i18n.core.admin.jsonConfig.ai.panel.label",
+			"items": {
+				"aiEnabled": {
+					"type": "checkbox",
+					"label": "msghub.i18n.core.admin.jsonConfig.ai.enabled.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.ai.enabled.help",
+					"default": false,
+					"newLine": true,
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12
+				},
+				"_aiProviderHeader": {
+					"type": "header",
+					"text": "msghub.i18n.core.admin.jsonConfig.ai.provider.header.text",
+					"newLine": true,
+					"size": 2
+				},
+				"aiProvider": {
+					"type": "select",
+					"label": "msghub.i18n.core.admin.jsonConfig.ai.provider.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.ai.provider.help",
+					"options": [
+						{
+							"label": "msghub.i18n.core.admin.jsonConfig.ai.provider.option.openai.label",
+							"value": "openai"
+						}
+					],
+					"default": "openai",
+					"newLine": true,
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 6,
+					"xl": 6
+				},
+				"aiOpenAiApiKey": {
+					"type": "password",
+					"label": "msghub.i18n.core.admin.jsonConfig.ai.openai.apiKey.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.ai.openai.apiKey.help",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 6,
+					"xl": 6
+				},
+				"_aiOpenAiHeader": {
+					"type": "header",
+					"text": "msghub.i18n.core.admin.jsonConfig.ai.openai.models.header.text",
+					"newLine": true,
+					"size": 2
+				},
+				"aiOpenAiModel": {
+					"type": "text",
+					"label": "msghub.i18n.core.admin.jsonConfig.ai.openai.modelFallback.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.ai.openai.modelFallback.help",
+					"default": "gpt-5-mini",
+					"newLine": true,
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 3,
+					"xl": 3
+				},
+				"aiOpenAiModelFast": {
+					"type": "text",
+					"label": "msghub.i18n.core.admin.jsonConfig.ai.openai.modelFast.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.ai.openai.modelFast.help",
+					"default": "gpt-4o-mini",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 3,
+					"xl": 3
+				},
+				"aiOpenAiModelBalanced": {
+					"type": "text",
+					"label": "msghub.i18n.core.admin.jsonConfig.ai.openai.modelBalanced.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.ai.openai.modelBalanced.help",
+					"default": "gpt-5-mini",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 3,
+					"xl": 3
+				},
+				"aiOpenAiModelBest": {
+					"type": "text",
+					"label": "msghub.i18n.core.admin.jsonConfig.ai.openai.modelBest.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.ai.openai.modelBest.help",
+					"default": "gpt-5.2",
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 3,
+					"xl": 3
+				},
+				"aiPurposeModelOverrides": {
+					"type": "text",
+					"label": "msghub.i18n.core.admin.jsonConfig.ai.openai.purposeModelOverrides.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.ai.openai.purposeModelOverrides.help",
+					"default": "[]",
+					"minRows": 5,
+					"maxRows": 20,
+					"newLine": true,
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12
+				},
+				"aiOpenAiBaseUrl": {
+					"type": "text",
+					"label": "msghub.i18n.core.admin.jsonConfig.ai.openai.baseUrl.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.ai.openai.baseUrl.help",
+					"default": "https://api.openai.com/v1",
+					"newLine": true,
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 4,
+					"xl": 4
+				},
+				"aiTimeoutMs": {
+					"type": "number",
+					"label": "msghub.i18n.core.admin.jsonConfig.ai.timeoutMs.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.ai.timeoutMs.help",
+					"default": 30000,
+					"xs": 12,
+					"sm": 6,
+					"md": 4,
+					"lg": 2,
+					"xl": 2
+				},
+				"aiMaxConcurrency": {
+					"type": "number",
+					"label": "msghub.i18n.core.admin.jsonConfig.ai.maxConcurrency.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.ai.maxConcurrency.help",
+					"default": 2,
+					"xs": 12,
+					"sm": 6,
+					"md": 4,
+					"lg": 2,
+					"xl": 2
+				},
+				"aiRpm": {
+					"type": "number",
+					"label": "msghub.i18n.core.admin.jsonConfig.ai.rpm.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.ai.rpm.help",
+					"default": 0,
+					"xs": 12,
+					"sm": 6,
+					"md": 4,
+					"lg": 2,
+					"xl": 2
+				},
+				"aiCacheTtlMs": {
+					"type": "number",
+					"label": "msghub.i18n.core.admin.jsonConfig.ai.cacheTtlMs.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.ai.cacheTtlMs.help",
+					"default": 0,
+					"xs": 12,
+					"sm": 6,
+					"md": 4,
+					"lg": 2,
+					"xl": 2
+				},
+				"_aiTestHeader": {
+					"type": "header",
+					"text": "msghub.i18n.core.admin.jsonConfig.ai.test.header.text",
+					"size": 2
+				},
+				"aiTestPurpose": {
+					"type": "text",
+					"label": "msghub.i18n.core.admin.jsonConfig.ai.test.purpose.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.ai.test.purpose.help",
+					"default": "ai-test",
+					"doNotSave": true,
+					"newLine": true,
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 3,
+					"xl": 3
+				},
+				"aiTestQuality": {
+					"type": "select",
+					"label": "msghub.i18n.core.admin.jsonConfig.ai.test.quality.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.ai.test.quality.help",
+					"options": [
+						{
+							"label": "msghub.i18n.core.admin.jsonConfig.ai.test.quality.option.fast.label",
+							"value": "fast"
+						},
+						{
+							"label": "msghub.i18n.core.admin.jsonConfig.ai.test.quality.option.balanced.label",
+							"value": "balanced"
+						},
+						{
+							"label": "msghub.i18n.core.admin.jsonConfig.ai.test.quality.option.best.label",
+							"value": "best"
+						}
+					],
+					"default": "balanced",
+					"doNotSave": true,
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 3,
+					"xl": 3
+				},
+				"aiTestPrompt": {
+					"type": "text",
+					"label": "msghub.i18n.core.admin.jsonConfig.ai.test.prompt.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.ai.test.prompt.help",
+					"default": "Respond with a short sentence: Hi, i am Message Hub! who are you?",
+					"doNotSave": true,
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 6,
+					"xl": 6
+				},
+				"aiTestRun": {
+					"type": "sendTo",
+					"label": "msghub.i18n.core.admin.jsonConfig.ai.test.run.label",
+					"command": "config.ai.test",
+					"timeout": 15000,
+					"useNative": true,
+					"jsonData": "{\n  \"purpose\": ${JSON.stringify(data.aiTestPurpose || 'ai-test')},\n  \"quality\": ${JSON.stringify(data.aiTestQuality || 'balanced')},\n  \"prompt\": ${JSON.stringify(data.aiTestPrompt || '')},\n  \"provider\": ${JSON.stringify(data.aiProvider || 'openai')},\n  \"openai\": {\n    \"apiKey\": ${JSON.stringify(data.aiOpenAiApiKey || '')},\n    \"baseUrl\": ${JSON.stringify(data.aiOpenAiBaseUrl || '')},\n    \"modelsByQuality\": {\n      \"fast\": ${JSON.stringify(data.aiOpenAiModelFast || '')},\n      \"balanced\": ${JSON.stringify(data.aiOpenAiModelBalanced || data.aiOpenAiModel || '')},\n      \"best\": ${JSON.stringify(data.aiOpenAiModelBest || '')}\n    },\n    \"purposeModelOverrides\": ${data.aiPurposeModelOverrides || '[]'}\n  }\n}",
+					"newLine": true,
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12
+				},
+				"aiTestLastResult": {
+					"type": "text",
+					"label": "msghub.i18n.core.admin.jsonConfig.ai.test.lastResult.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.ai.test.lastResult.help",
+					"minRows": 5,
+					"maxRows": 5,
+					"doNotSave": true,
+					"disabled": true,
+					"newLine": true,
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12
 				}
 			}
 		}

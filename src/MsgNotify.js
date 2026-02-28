@@ -24,7 +24,15 @@
  * - Plugin modules follow `Notify*` (e.g. `lib/NotifyStates/index.js`).
  */
 
-const { buildIoBrokerApi, buildI18nApi, buildLogApi, buildStoreApi } = require('./MsgHostApi');
+const {
+	buildIoBrokerApi,
+	buildI18nApi,
+	buildLogApi,
+	buildConfigApi,
+	buildStoreApi,
+	buildStatsApi,
+	buildAiApi,
+} = require('./MsgHostApi');
 
 /**
  * MsgNotify
@@ -37,8 +45,9 @@ class MsgNotify {
 	 * @param {import('./MsgConstants').MsgConstants} msgConstants Centralized enum-like constants (source of truth for events).
 	 * @param {object} [options] Optional extensions (advanced).
 	 * @param {object} [options.store] Optional MsgStore instance (plugins get a facade via `ctx.api.store`).
+	 * @param {import('./MsgAi').MsgAi|null} [options.ai] Optional MsgAi instance (plugins get a facade via `ctx.api.ai`).
 	 */
-	constructor(adapter, msgConstants, { store: msgStore } = {}) {
+	constructor(adapter, msgConstants, { store: msgStore, ai: msgAi } = {}) {
 		if (!adapter) {
 			throw new Error('MsgNotify: adapter is required');
 		}
@@ -58,7 +67,10 @@ class MsgNotify {
 
 		const hostName = this?.constructor?.name || 'MsgNotify';
 		const store = buildStoreApi(msgStore, { hostName });
+		const stats = buildStatsApi(msgStore);
+		const ai = buildAiApi(msgAi || null);
 
+		const config = buildConfigApi(this.adapter);
 		const i18n = buildI18nApi(this.adapter);
 		const iobroker = buildIoBrokerApi(this.adapter, { hostName });
 		const log = buildLogApi(this.adapter, { hostName });
@@ -66,11 +78,35 @@ class MsgNotify {
 		// Stable plugin surface: separate API (capabilities) from meta (dispatch metadata).
 		this.api = Object.freeze({
 			constants: this.msgConstants,
+			config,
 			i18n,
 			iobroker,
 			log,
 			store,
+			stats,
+			ai,
 		});
+	}
+
+	/**
+	 * Stops all registered plugins (best-effort) and prevents further dispatches.
+	 *
+	 * @param {object} [meta] Stop metadata (exposed to plugins via `ctx.meta`).
+	 * @returns {void}
+	 */
+	stop(meta = {}) {
+		const ctx = this._buildCtx(meta);
+		for (const [id, plugin] of this._plugins.entries()) {
+			if (!plugin?.stopFn) {
+				continue;
+			}
+			try {
+				plugin.stopFn(ctx);
+			} catch (e) {
+				this.adapter?.log?.warn?.(`MsgNotify: plugin '${id}' failed to stop: ${e?.message || e}`);
+			}
+		}
+		this._running = false;
 	}
 
 	/**
@@ -134,7 +170,7 @@ class MsgNotify {
 		this._plugins.delete(id);
 
 		// Best-effort stop to release intervals/connections.
-		if (plugin?.stopFn) {
+		if (this._running && plugin?.stopFn) {
 			try {
 				plugin.stopFn(this._buildCtx({ reason: 'unregisterPlugin', pluginId: id }));
 			} catch (e) {

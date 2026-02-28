@@ -8,6 +8,9 @@ It is intentionally **core-only**:
 - It does **not** talk to ioBroker directly (`sendTo`, states, objects, …).
 - Wiring of control-plane commands belongs to the adapter (`main.js`) or dedicated IO plugins.
 
+In addition to inbound execution, `MsgAction` also provides a small **view helper** that filters actions on output
+based on the current lifecycle state. This keeps the inbound and outbound policy consistent.
+
 ---
 
 ## Why this exists
@@ -32,7 +35,13 @@ Dependencies:
 - `msgConstants` provides the canonical action/state identifiers.
 - `msgStore` is used to patch messages (`updateMessage`).
 
-### `execute({ ref, actionId, actor?, payload? }): boolean`
+Important wiring note:
+
+- `MsgStore` owns the instance (`store.msgActions`) and uses it for both:
+  - action execution via `ctx.api.action.execute(...)` (Engage integrations)
+  - action filtering on output (read APIs + notify dispatch)
+
+### `execute({ ref, actionId, actor?, payload?, snoozeForMs? }): boolean`
 
 Execute exactly **one** action by `actionId` for the given message `ref`.
 
@@ -45,6 +54,30 @@ Parameters:
 - `actionId` (string, required): action identifier (must exist in `message.actions[]`)
 - `actor` (string|null, optional): stored as `lifecycle.stateChangedBy` (best-effort attribution)
 - `payload` (object|null, optional): payload override (only used for `snooze`)
+- `snoozeForMs` (number, optional): overrides the snooze duration (ms, `> 0`)
+
+### `buildActions(msg): object`
+
+Build a view-only action list for output consumers (UIs and notify plugins).
+
+Behavior:
+
+- Returns a copy of the message where:
+  - `actions[]` contains only actions that are currently allowed by policy.
+  - `actionsInactive[]` is optionally added and contains the remaining, currently disallowed actions.
+- Invalid/broken actions are dropped (they do not appear in `actions` nor `actionsInactive`).
+
+This is designed so that:
+
+- `actions[] + actionsInactive[]` equals the original action set (minus invalid ones).
+- Consumers do not need to re-implement lifecycle rules.
+
+### `isActionAllowed(msg, action): boolean`
+
+The central policy check (pure decision):
+
+- Used by `execute()` as the inbound gate.
+- Used by `buildActions()` as the outbound filter.
 
 ---
 
@@ -59,17 +92,39 @@ Parameters:
   - `lifecycle.state = "closed"`
   - `timing.notifyAt` is cleared
 - `delete` (soft delete):
-  - `lifecycle.state = "deleted"`
-  - `timing.notifyAt` is cleared
+  - soft delete via `MsgStore.removeMessage(ref, { actor })`
+  - results in `lifecycle.state = "deleted"` and `timing.notifyAt` cleared
 - `snooze`:
   - `lifecycle.state = "snoozed"`
   - `timing.notifyAt = now + forMs`
-  - payload schema: `{ forMs: number }` (duration in ms, `> 0`)
+  - duration resolution (highest priority wins):
+    - `snoozeForMs` (number, `> 0`)
+    - `payload.forMs` (number, `> 0`)
+    - `action.payload.forMs` (number, `> 0`)
 
 Notes:
 
 - Hard delete is **not** done here (see `MsgStore.removeMessage()`).
-- Non-core action types (`open/link/custom`) are currently **not executed** by `MsgAction`.
+- Non-core action types (`open/link/custom`) are accepted by `MsgAction` as **no-ops** (no store mutation) so that
+  integrations and producer plugins can still observe and interpret them.
+
+---
+
+## Policy: lifecycle-sensitive action availability
+
+Some actions are only meaningful in certain lifecycle states.
+
+Examples:
+
+- When a message is already `acked`, `ack` is not offered (and will be rejected).
+- When a message is already `snoozed`, another `snooze` is not offered (and will be rejected).
+- When a message is `acked`, `snooze` is not offered (and will be rejected) because `ack` means “don’t remind me”.
+- When a message is quasi-deleted (`deleted/closed/expired`), all actions are rejected.
+
+These rules are enforced consistently:
+
+- inbound (execution) via `isActionAllowed(...)`
+- outbound (rendering) via `buildActions(...)`
 
 ---
 
@@ -81,6 +136,19 @@ Notes:
 - `"due"` dispatch on update is gated by `lifecycle.state === "open"` in `MsgStore`
 
 This prevents “re-notify spam” when a user acknowledges/closes/deletes a message.
+
+---
+
+## Action events to producer plugins
+
+Successful action executions are also dispatched as events to producer plugins:
+
+- `MsgAction` calls `msgStore.msgIngest.dispatchAction(actionInfo, meta)`.
+- Producer plugins can implement `onAction(actionInfo, ctx)` to react to those events.
+- `ctx.meta.event` contains the event token (see `MsgConstants.action.events.*`).
+
+This keeps the core action semantics centralized while allowing ingest plugins to react to user intents without
+introducing ioBroker side effects into the core action layer.
 
 ---
 

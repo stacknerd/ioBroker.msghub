@@ -1,8 +1,21 @@
 {
 	"common": {
 		"name": "msghub",
-		"version": "0.0.1",
+		"version": "0.0.2",
 		"news": {
+			"0.0.2": {
+				"en": "0.0.2 \"getting better at IO\": Major runtime update with config normalization via MsgConfig, expanded plugin runtime (autodiscovery + multi-instance), completed IngestStates custom-rule engine, archive IO refactor with native/ioBroker backends plus strategy resolver, new Admin Tab panels and controls, new integrations (Alexa Shopping/Tasks, Telegram, DWD, Pushover, Shopping PDF), and extended docs/i18n tooling.",
+				"de": "0.0.2 \"getting better at IO\": Großes Runtime-Update mit Konfigurations-Normalisierung über MsgConfig, erweiterter Plugin-Runtime (Autodiscovery + Multi-Instance), vervollständigter IngestStates-Custom-Rule-Engine, Archive-IO-Refactor mit Native-/ioBroker-Backends inkl. Strategieresolver, neuen Admin-Tab-Panels und Controls, neuen Integrationen (Alexa Shopping/Tasks, Telegram, DWD, Pushover, Shopping PDF) sowie erweiterten Doku-/i18n-Tools.",
+				"ru": "0.0.2 \"getting better at IO\": Крупное обновление runtime: нормализация конфигурации через MsgConfig, расширенная runtime плагинов (автодискавери + несколько экземпляров), завершённый движок IngestStates custom-rules, рефактор Archive IO с native/ioBroker backend и strategy resolver, новые панели/контролы Admin Tab, новые интеграции (Alexa Shopping/Tasks, Telegram, DWD, Pushover, Shopping PDF) и расширенные инструменты docs/i18n.",
+				"pt": "0.0.2 \"getting better at IO\": Grande atualização de runtime com normalização de configuração via MsgConfig, runtime de plugins expandido (autodiscovery + multi-instância), mecanismo IngestStates custom-rule concluído, refatoração de Archive IO com backends native/ioBroker e strategy resolver, novos painéis/controles na Admin Tab, novas integrações (Alexa Shopping/Tasks, Telegram, DWD, Pushover, Shopping PDF) e ferramentas de docs/i18n ampliadas.",
+				"nl": "0.0.2 \"getting better at IO\": Grote runtime-update met configuratienormalisatie via MsgConfig, uitgebreide plugin-runtime (autodiscovery + meerdere instanties), voltooide IngestStates custom-rule engine, Archive IO-refactor met native/ioBroker-backends plus strategy resolver, nieuwe Admin Tab-panelen en -besturingen, nieuwe integraties (Alexa Shopping/Tasks, Telegram, DWD, Pushover, Shopping PDF) en uitgebreide docs/i18n-tooling.",
+				"fr": "0.0.2 \"getting better at IO\": Mise à jour majeure du runtime avec normalisation de la configuration via MsgConfig, runtime plugins étendu (autodiscovery + multi-instance), moteur IngestStates custom-rule finalisé, refactor Archive IO avec backends natif/ioBroker + strategy resolver, nouveaux panneaux/contrôles Admin Tab, nouvelles intégrations (Alexa Shopping/Tasks, Telegram, DWD, Pushover, Shopping PDF) et outillage docs/i18n étendu.",
+				"it": "0.0.2 \"getting better at IO\": Importante aggiornamento runtime con normalizzazione configurazione tramite MsgConfig, runtime plugin esteso (autodiscovery + multi-istanza), motore IngestStates custom-rule completato, refactor Archive IO con backend native/ioBroker e strategy resolver, nuovi pannelli/controlli Admin Tab, nuove integrazioni (Alexa Shopping/Tasks, Telegram, DWD, Pushover, Shopping PDF) e tooling docs/i18n esteso.",
+				"es": "0.0.2 \"getting better at IO\": Gran actualización de runtime con normalización de configuración mediante MsgConfig, runtime de plugins ampliado (autodiscovery + multiinstancia), motor IngestStates custom-rule completado, refactor de Archive IO con backends native/ioBroker y strategy resolver, nuevos paneles/controles en Admin Tab, nuevas integraciones (Alexa Shopping/Tasks, Telegram, DWD, Pushover, Shopping PDF) y herramientas docs/i18n ampliadas.",
+				"pl": "0.0.2 \"getting better at IO\": Duża aktualizacja runtime z normalizacją konfiguracji przez MsgConfig, rozszerzone runtime pluginów (autodiscovery + wiele instancji), ukończony silnik IngestStates custom-rule, refaktoryzacja Archive IO z backendami native/ioBroker oraz strategy resolver, nowe panele/kontrolki Admin Tab, nowe integracje (Alexa Shopping/Tasks, Telegram, DWD, Pushover, Shopping PDF) i rozszerzone narzędzia docs/i18n.",
+				"uk": "0.0.2 \"getting better at IO\": Велике оновлення runtime: нормалізація конфігурації через MsgConfig, розширений runtime плагінів (autodiscovery + кілька інстансів), завершений рушій IngestStates custom-rules, рефактор Archive IO з native/ioBroker backend і strategy resolver, нові панелі/контроли Admin Tab, нові інтеграції (Alexa Shopping/Tasks, Telegram, DWD, Pushover, Shopping PDF) та розширені інструменти docs/i18n.",
+				"zh-cn": "0.0.2 \"getting better at IO\"：重大运行时更新：通过 MsgConfig 进行配置归一化，扩展插件运行时（自动发现 + 多实例支持），完成 IngestStates 自定义规则引擎，重构 Archive IO（native/ioBroker 后端 + 策略解析器），新增 Admin Tab 面板与控制项，新增集成（Alexa Shopping/Tasks、Telegram、DWD、Pushover、Shopping PDF），并扩展文档/i18n 工具链。"
+			},
 			"0.0.1": {
 				"en": "initial release",
 				"de": "Erstveröffentlichung",
@@ -43,15 +56,8 @@
 			"uk": "центр для всіх ваших повідомлень, завдань і сповіщень",
 			"zh-cn": "所有消息、任务和通知的中心"
 		},
-		"authors": [
-			"Ben <iobroker@hiddenplaces.eu>"
-		],
-		"keywords": [
-			"template",
-			"automation",
-			"IoT",
-			"integration"
-		],
+		"authors": ["Ben <iobroker@hiddenplaces.eu>"],
+		"keywords": ["template", "automation", "IoT", "integration"],
 		"licenseInformation": {
 			"type": "free",
 			"license": "MIT"
@@ -69,10 +75,30 @@
 		"connectionType": "local",
 		"dataSource": "push",
 		"messagebox": true,
+		"dataFolder": "files/msghub.%INSTANCE%",
 		"supportCustoms": true,
+		"encryptedNative": ["aiOpenAiApiKey"],
 		"adminUI": {
 			"custom": "json",
-			"config": "json"
+			"config": "json",
+			"tab": "html"
+		},
+		"adminTab": {
+			"name": {
+				"en": "Message Hub",
+				"de": "Message Hub",
+				"ru": "Message Hub",
+				"pt": "Message Hub",
+				"nl": "Message Hub",
+				"fr": "Message Hub",
+				"it": "Message Hub",
+				"es": "Message Hub",
+				"pl": "Message Hub",
+				"uk": "Message Hub",
+				"zh-cn": "Message Hub"
+			},
+			"link": "/adapter/msghub/tab.html",
+			"ignoreConfigUpdate": true
 		},
 		"dependencies": [
 			{
@@ -86,9 +112,57 @@
 		]
 	},
 	"native": {
-		"option1": true,
-		"option2": "42",
-		"locale": "de-DE"
+		"aiEnabled": false,
+		"aiProvider": "openai",
+		"aiOpenAiApiKey": "",
+		"aiOpenAiBaseUrl": "https://api.openai.com/v1",
+		"aiOpenAiModel": "gpt-4o-mini",
+		"aiOpenAiModelFast": "gpt-4o-mini",
+		"aiOpenAiModelBalanced": "gpt-4o-mini",
+		"aiOpenAiModelBest": "gpt-4o-mini",
+		"aiPurposeModelOverrides": "[]",
+		"aiTimeoutMs": 30000,
+			"aiMaxConcurrency": 2,
+			"aiRpm": 0,
+			"aiCacheTtlMs": 0,
+			"keepPreviousWeeks": 3,
+		"archiveMaxBatchSize": 200,
+		"archiveFlushIntervalSec": 10,
+		"archiveEffectiveStrategyLock": "native",
+		"archiveLockReason": "auto-initial",
+		"archiveLockedAt": 0,
+		"archiveRuntimeStrategy": "",
+		"archiveRuntimeReason": "",
+		"archiveRuntimeRoot": "",
+		"pruneIntervalSec": 30,
+		"hardDeleteAfterHours": 72,
+		"hardDeleteBatchSize": 50,
+		"hardDeleteStartupDelaySec": 60,
+		"rollupKeepDays": 400,
+		"writeIntervalMs": 10000,
+		"locale": "de-DE",
+		"quietHoursEnabled": true,
+		"quietHoursStart": "22:00",
+		"quietHoursEnd": "06:00",
+		"quietHoursMaxLevel": 40,
+		"quietHoursSpreadMin": 60,
+		"prefixLevelNone": "",
+		"prefixLevelInfo": "",
+		"prefixLevelNotice": "",
+		"prefixLevelWarning": "⚠️",
+		"prefixLevelError": "❌",
+		"prefixLevelCritical": "🛑",
+		"prefixKindTask": "✅",
+		"prefixKindStatus": "📡",
+		"prefixKindAppointment": "📅",
+		"prefixKindShoppinglist": "🛒",
+		"prefixKindInventorylist": "📦",
+		"renderTitleTemplate": "{{icon}} {{title}}",
+		"renderTextTemplate": "{{levelPrefix}} {{text}}",
+		"renderIconTemplate": "{{icon}}",
+		"aiTestPurpose": "ai-test",
+		"aiTestQuality": "balanced",
+		"aiTestPrompt": "Respond with a short sentence: Hi, i am Message Hub! who are you?"
 	},
 	"objects": [],
 	"instanceObjects": []

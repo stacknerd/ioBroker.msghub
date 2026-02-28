@@ -1,6 +1,6 @@
 {
   "name": "iobroker.msghub",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "a hub for all your messages, tasks and notifications",
   "author": {
     "name": "Ben",
@@ -40,17 +40,17 @@
     "typescript": "~5.9.3"
   },
   "main": "main.js",
-  "files": [
-    "admin{,/!(lib)/**}/!(tsconfig|tsconfig.*|.eslintrc).{json,json5}",
-    "admin{,/!(lib)/**}/*.{html,css,png,svg,jpg,js}",
-    "i18n/",
-    "lib/",
-    "src/",
-    "www/",
-    "io-package.json",
-    "LICENSE",
-    "main.js"
-  ],
+	"files": [
+		"admin{,/!(lib)/**}/!(tsconfig|tsconfig.*|.eslintrc).{json,json5}",
+		"admin{,/!(lib)/**}/*.{html,css,png,svg,jpg,js}",
+		"i18n/",
+		"lib/",
+		"src/",
+		"www/",
+		"io-package.json",
+		"LICENSE",
+		"main.js"
+	],
   "scripts": {
     "docs:generate": "node generate-doc-index.mjs",
     "docs:check": "node generate-doc-index.mjs --check",
@@ -63,7 +63,12 @@
     "translate": "translate-adapter",
     "release": "release-script",
     "dev-server": "dev-server",
-    "i18n:push": "node i18n-push.mjs"
+    "i18n:generate": "node i18n-generate.mjs --scope all",
+    "i18n:generate:remove": "node i18n-generate.mjs --scope all --remove",
+    "i18n:mirror:admin-to-runtime": "node i18n-mirror-admin-to-runtime.mjs",
+    "i18n:mirror:admin-to-runtime:check": "node i18n-mirror-admin-to-runtime.mjs --check",
+    "i18n:check": "node i18n-check.mjs --scope all",
+    "i18n:sort": "node i18n-sort.mjs --scope all"
   },
   "bugs": {
     "url": "https://github.com/stacknerd/ioBroker.msghub/issues"

@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>MsgHub</title>
+
+		<link rel="stylesheet" href="../../lib/css/materialize.css" />
+		<link rel="stylesheet" href="tab.css" />
+
+		<script src="../../lib/js/jquery-3.2.1.min.js"></script>
+		<script src="../../lib/js/materialize.js"></script>
+		<script src="../../lib/js/socket.io.js"></script>
+	</head>
+
+	<body>
+		<div class="msghub-root">
+			<div class="msghub-header">
+				<h5>MsgHub</h5>
+				<div class="msghub-muted offline" id="msghub-connection">disconnected</div>
+			</div>
+
+			<div class="row">
+				<div class="col s12">
+					<ul class="tabs">
+						<li class="tab col s3"><a href="#tab-stats">Stats</a></li>
+						<li class="tab col s3"><a href="#tab-messages">Messages</a></li>
+						<li class="tab col s3"><a class="active" href="#tab-plugins">Plugin Config</a></li>						
+					</ul>
+				</div>
+
+				<div id="tab-stats" class="col s12">
+					<div id="stats-root"></div>
+				</div>
+
+				<div id="tab-messages" class="col s12">
+					<div id="messages-root"></div>
+				</div>
+
+				<div id="tab-plugins" class="col s12">
+					<div id="plugins-root"></div>
+				</div>
+			</div>
+		</div>
+
+		<script src="tab.js"></script>
+		<script src="tab.plugins.js"></script>
+		<script src="tab.stats.js"></script>
+		<script src="tab.messages.js"></script>
+	</body>
+</html>

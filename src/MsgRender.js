@@ -1,21 +1,25 @@
 'use strict';
 
+const { MsgConstants } = require(`${__dirname}/MsgConstants`);
+
 /**
  * MsgRender
  * =========
- * Lightweight template renderer that resolves metric- and timing-related placeholders in message fields.
+ * Lightweight template renderer that resolves metric-, timing- and details-related placeholders in message fields.
  *
  * Docs: ../docs/modules/MsgRender.md
  *
  * Core responsibilities
- * - Provide a view-only transformation for messages (`renderMessage`) that adds a computed `display` block.
+ * - Provide a view-only transformation for messages (`renderMessage`) that returns a rendered view
+ *   of `title`, `text` and selected `details` fields.
  * - Resolve `{{ ... }}` placeholders in `title`, `text`, and selected `details` fields against:
  *   - `msg.metrics` (a `Map<string, { val, unit?, ts? }>`), and
- *   - `msg.timing` (a plain object containing timestamps like `createdAt`, `updatedAt`, `notifyAt`, ...).
+ *   - `msg.timing` (a plain object containing timestamps like `createdAt`, `updatedAt`, `notifyAt`, ...), and
+ *   - `msg.details` (a plain object; arrays are rendered as ", "-joined strings).
  * - Apply a small, deterministic filter pipeline for formatting numbers, dates, booleans, and defaults.
  *
  * Design guidelines / invariants
- * - Canonical vs. view: this renderer never mutates the input message; it returns a shallow clone with a `display` section.
+ * - Canonical vs. view: this renderer never mutates the input message; it returns a shallow clone with rendered fields.
  * - No magic state: templates are evaluated on-demand; there is no caching or compilation step.
  * - Graceful degradation: missing metrics/timing paths resolve to an empty string in templates (or can be handled via `default`).
  * - Minimal template language: this is intentionally *not* a full templating engine (no loops/conditions/functions).
@@ -23,6 +27,7 @@
  * Template model
  * - Metrics are referenced via `m.<key>` where `<key>` is the Map key.
  * - Timing fields are referenced via `t.<field>` (or `timing.<field>`).
+ * - Details fields are referenced via `d.<field>` (or `details.<field>`); arrays resolve to a ", "-joined string.
  * - Paths may use a property suffix for metrics: `.val`, `.unit`, `.ts`.
  *
  * Supported template syntax:
@@ -31,10 +36,14 @@
  * - {{m.temperature.unit}}    -> "C"
  * - {{m.temperature.ts}}      -> unix ms timestamp
  * - {{t.createdAt}}           -> raw timing value (e.g., unix ms timestamp)
+ * - {{d.location}}            -> raw details value (e.g., "Kitchen")
+ * - {{d.tools}}               -> array joined by ", " (e.g., "Brush, Soap")
  *
  * Supported filters:
  * - {{m.temperature|num:1}}   -> number formatting with max fraction digits
- * - {{m.lastSeen|datetime}}   -> localized date/time output
+ * - {{m.lastSeen.val|datetime}}   -> localized date/time output (use `.val`/`.ts`; `m.<key>` formats "val unit")
+ * - {{m.lastSeenAt|durationSince}} -> duration since a timestamp (relative to server time)
+ * - {{m.nextRunAt|durationUntil}}  -> duration until a timestamp (relative to server time)
  * - {{m.temperature|raw}}     -> raw value without unit/locale formatting
  * - {{m.flag|bool:yes/no}}    -> boolean to string mapping
  * - {{m.foo|default:--}}      -> fallback when empty
@@ -46,27 +55,212 @@ class MsgRender {
 	 * @param {import('@iobroker/adapter-core').AdapterInstance} adapter Adapter instance (used for logging only).
 	 * @param {object} [options] Configuration options.
 	 * @param {string} [options.locale] Default locale for number/date formatting.
+	 * @param {object|null} [options.render] Optional render-related settings (prefixes, styles, ...).
 	 */
-	constructor(adapter, { locale = 'en-US' } = {}) {
+	constructor(adapter, { locale = 'en-US', render = null } = {}) {
 		if (!adapter) {
 			throw new Error('MsgRender: adapter is required');
 		}
 		this.adapter = adapter;
 		this.locale = locale;
+		this.render = render && typeof render === 'object' ? render : null;
+		this._levelKeyByValue = new Map();
+		try {
+			const levels = MsgConstants?.level && typeof MsgConstants.level === 'object' ? MsgConstants.level : null;
+			if (levels) {
+				for (const [k, v] of Object.entries(levels)) {
+					if (typeof v === 'number' && Number.isFinite(v)) {
+						this._levelKeyByValue.set(v, k);
+					}
+				}
+			}
+		} catch {
+			// ignore
+		}
 
 		this.adapter?.log?.info?.(`MsgRender initialized: locale='${this.locale}'`);
 	}
 
 	/**
-	 * Render a message and attach a `display` view without mutating the input.
+	 * Normalize a value for single-line display usage.
 	 *
-	 * The output contains the original fields plus `display.title`, `display.text` and `display.details`,
-	 * which are the rendered (template-resolved) versions of the corresponding fields.
+	 * @param {any} value Input value.
+	 * @returns {string} Normalized string.
+	 */
+	_normalizeInline(value) {
+		return String(value || '')
+			.replace(/\s+/g, ' ')
+			.trim();
+	}
+
+	/**
+	 * Normalize a value for multi-line display usage.
+	 *
+	 * @param {any} value Input value.
+	 * @returns {string} Normalized string.
+	 */
+	_normalizeMultiline(value) {
+		const raw = String(value || '').replace(/\r\n/g, '\n');
+		return raw
+			.replace(/[ \t]+/g, ' ')
+			.replace(/ *\n */g, '\n')
+			.trim();
+	}
+
+	/**
+	 * Resolve a configured kind prefix token for this message.
+	 *
+	 * @param {object} msg Message.
+	 * @returns {string} Prefix token (trimmed) or empty string.
+	 */
+	_getKindPrefix(msg) {
+		const kindKey = typeof msg?.kind === 'string' ? msg.kind.trim() : '';
+		const kindPrefixes =
+			this.render?.prefixes?.kind && typeof this.render.prefixes.kind === 'object'
+				? this.render.prefixes.kind
+				: null;
+		if (!kindKey || !kindPrefixes) {
+			return '';
+		}
+		const v = kindPrefixes[kindKey];
+		return typeof v === 'string' ? v.trim() : v == null ? '' : String(v).trim();
+	}
+
+	/**
+	 * Resolve a configured level prefix token for this message.
+	 *
+	 * @param {object} msg Message.
+	 * @returns {string} Prefix token (trimmed) or empty string.
+	 */
+	_getLevelPrefix(msg) {
+		const levelPrefixes =
+			this.render?.prefixes?.level && typeof this.render.prefixes.level === 'object'
+				? this.render.prefixes.level
+				: null;
+		if (!levelPrefixes) {
+			return '';
+		}
+		const levelValue = typeof msg?.level === 'number' ? msg.level : Number(msg?.level);
+		const levelKey = Number.isFinite(levelValue) ? this._levelKeyByValue.get(levelValue) || '' : '';
+		if (!levelKey) {
+			return '';
+		}
+		const v = levelPrefixes[levelKey];
+		return typeof v === 'string' ? v.trim() : v == null ? '' : String(v).trim();
+	}
+
+	/**
+	 * Stage-2: render a display template against a restricted context.
+	 *
+	 * Allowed:
+	 * - Base tokens: title/text/icon/kindPrefix/levelPrefix
+	 * - Timing: t.* / timing.*
+	 * - Details: d.* / details.*
+	 *
+	 * @param {string} input Template string.
+	 * @param {object} ctx Context.
+	 * @returns {string} Rendered string.
+	 */
+	_renderDisplayTemplate(input, ctx) {
+		if (typeof input !== 'string' || input.indexOf('{{') === -1) {
+			return input;
+		}
+		return input.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_, expr) => {
+			const val = this._evalExprDisplay(expr, ctx);
+			return val == null ? '' : String(val);
+		});
+	}
+
+	/**
+	 * Evaluate a Stage-2 display expression with optional pipe filters.
+	 *
+	 * @param {string} expr Expression like "title|default:--".
+	 * @param {object} ctx Render context (timing/details + tokens + locale).
+	 * @returns {any} The evaluated value after all filters are applied.
+	 */
+	_evalExprDisplay(expr, ctx) {
+		const parts = String(expr || '')
+			.split('|')
+			.map(s => s.trim())
+			.filter(Boolean);
+		if (parts.length === 0) {
+			return '';
+		}
+
+		const base = parts.shift();
+		if (!base) {
+			return '';
+		}
+
+		const rawIndex = parts.findIndex(part => part.split(':')[0].trim() === 'raw');
+		const wantsRaw = rawIndex !== -1;
+		const wantsDuration = parts.some(part => {
+			const n = part.split(':')[0].trim();
+			return n === 'durationSince' || n === 'durationUntil';
+		});
+		const filters = wantsRaw ? parts.filter(part => part.split(':')[0].trim() !== 'raw') : parts;
+		let val = this._resolvePathDisplay(base, ctx, { raw: wantsRaw || wantsDuration });
+
+		for (const raw of filters) {
+			const idx = raw.indexOf(':');
+			const name = idx === -1 ? raw : raw.slice(0, idx).trim();
+			const arg = idx === -1 ? undefined : raw.slice(idx + 1).trim();
+			val = this._applyFilter(name, arg, val, ctx);
+		}
+
+		return val;
+	}
+
+	/**
+	 * Resolve a Stage-2 display template path.
+	 *
+	 * @param {string} path Template path.
+	 * @param {object} ctx Render context (timing/details + tokens + locale).
+	 * @param {object} [_options] Resolution options (kept for symmetry with stage-1; currently unused).
+	 * @returns {any} Resolved value or undefined.
+	 */
+	_resolvePathDisplay(path, ctx, _options = {}) {
+		const bits = String(path || '').split('.');
+		const head = bits[0];
+		if (head === 'm' || head === 'metrics') {
+			// Stage-2 does not resolve metrics.
+			return undefined;
+		}
+		if (head === 't' || head === 'timing') {
+			return this._resolveTiming(bits.slice(1), ctx);
+		}
+		if (head === 'd' || head === 'details') {
+			return this._resolveDetails(bits.slice(1), ctx);
+		}
+		if (head === 'title') {
+			return ctx.tokens?.title;
+		}
+		if (head === 'text') {
+			return ctx.tokens?.text;
+		}
+		if (head === 'icon') {
+			return ctx.tokens?.icon;
+		}
+		if (head === 'kindPrefix') {
+			return ctx.tokens?.kindPrefix;
+		}
+		if (head === 'levelPrefix') {
+			return ctx.tokens?.levelPrefix;
+		}
+		// No other roots in stage-2.
+		return undefined;
+	}
+
+	/**
+	 * Render a message without mutating the input.
+	 *
+	 * The output contains all original fields, but `title`, `text` and selected `details` fields are returned
+	 * in their rendered (template-resolved) form.
 	 *
 	 * @param {object} msg Message object that may contain "metrics" and displayable fields.
 	 * @param {object} [options] Render options.
 	 * @param {string} [options.locale] Optional locale override for this render call.
-	 * @returns {object} New message object with a "display" section added.
+	 * @returns {object} New message object with rendered fields.
 	 */
 	renderMessage(msg, { locale } = {}) {
 		const lc = locale || this.locale;
@@ -74,15 +268,98 @@ class MsgRender {
 			return msg;
 		}
 
-		// Create a view-only "display" section while keeping the original fields intact.
-		return {
-			...msg,
-			display: {
-				title: this.renderTemplate(msg.title, { msg, locale: lc }),
-				text: this.renderTemplate(msg.text, { msg, locale: lc }),
-				details: this.renderDetails(msg.details, { msg, locale: lc }),
-			},
+		// When templates pull data from metrics, we track the maximum metric timestamp (`ts`) that was actually
+		// consumed during rendering. This allows downstream UIs to display a stable "data freshness" timestamp
+		// that is tied to the rendered output (not to "now").
+		let renderedDataTs;
+		const captureMetricTs = ts => {
+			const n = Number(ts);
+			if (!Number.isFinite(n)) {
+				return;
+			}
+			renderedDataTs = renderedDataTs == null ? n : Math.max(renderedDataTs, n);
 		};
+
+		// Return a view-only message clone with rendered presentation fields.
+		const out = { ...msg };
+
+		// Only render/override fields that exist on the input message to avoid adding new keys.
+		if (Object.prototype.hasOwnProperty.call(msg, 'title')) {
+			out.title = this.renderTemplate(msg.title, { msg, locale: lc, captureMetricTs });
+		}
+		if (Object.prototype.hasOwnProperty.call(msg, 'text')) {
+			out.text = this.renderTemplate(msg.text, { msg, locale: lc, captureMetricTs });
+		}
+		if (Object.prototype.hasOwnProperty.call(msg, 'details')) {
+			out.details = this.renderDetails(msg.details, { msg, locale: lc, captureMetricTs });
+		}
+
+		// Stage-2: build display fields based on admin templates (render config).
+		const templates =
+			this.render?.templates && typeof this.render.templates === 'object' ? this.render.templates : null;
+		const titleTemplateRaw = templates?.titleTemplate;
+		const textTemplateRaw = templates?.textTemplate;
+		const iconTemplateRaw = templates?.iconTemplate;
+		const titleTemplate =
+			typeof titleTemplateRaw === 'string' && titleTemplateRaw.trim()
+				? titleTemplateRaw.trim()
+				: '{{icon}} {{title}}';
+		const textTemplate =
+			typeof textTemplateRaw === 'string' && textTemplateRaw.trim()
+				? textTemplateRaw.trim()
+				: '{{levelPrefix}} {{text}}';
+		const iconTemplate =
+			typeof iconTemplateRaw === 'string' && iconTemplateRaw.trim() ? iconTemplateRaw.trim() : '{{icon}}';
+
+		const kindPrefix = this._getKindPrefix(msg);
+		const levelPrefix = this._getLevelPrefix(msg);
+		const baseIcon = typeof out.icon === 'string' ? out.icon : '';
+		const baseTitle = typeof out.title === 'string' ? out.title : '';
+		const baseText = typeof out.text === 'string' ? out.text : '';
+
+		const ctx2 = {
+			tokens: {
+				title: baseTitle,
+				text: baseText,
+				icon: baseIcon,
+				kindPrefix,
+				levelPrefix,
+			},
+			timing: msg && msg.timing && typeof msg.timing === 'object' ? msg.timing : null,
+			details: out && out.details && typeof out.details === 'object' ? out.details : null,
+			locale: lc,
+			// Stage-2 is layout only: do not capture metric timestamps here.
+			captureMetricTs: null,
+		};
+
+		const displayIconRaw = this._renderDisplayTemplate(iconTemplate, ctx2);
+		const displayTitleRaw = this._renderDisplayTemplate(titleTemplate, ctx2);
+		const displayTextRaw = this._renderDisplayTemplate(textTemplate, ctx2);
+
+		const display = Object.freeze({
+			icon: this._normalizeInline(displayIconRaw),
+			title: this._normalizeInline(displayTitleRaw),
+			text: this._normalizeMultiline(displayTextRaw),
+			...(renderedDataTs == null ? {} : { renderedDataTs }),
+		});
+		out.display = display;
+
+		return out;
+	}
+
+	/**
+	 * Render a list of messages without mutating inputs.
+	 *
+	 * @param {Array<object>} messages Message list.
+	 * @param {object} [options] Render options.
+	 * @param {string} [options.locale] Optional locale override for this render call.
+	 * @returns {Array<object>} Rendered message list.
+	 */
+	renderMessages(messages, options = {}) {
+		if (!Array.isArray(messages)) {
+			return messages;
+		}
+		return messages.map(msg => this.renderMessage(msg, options));
 	}
 
 	/**
@@ -95,6 +372,8 @@ class MsgRender {
 	 * @param {object} ctx Context containing the message and locale.
 	 * @param {object} ctx.msg Message object used as the template source.
 	 * @param {string} ctx.locale Locale used for formatting.
+	 * @param {Function} [ctx.captureMetricTs] Optional callback that receives metric timestamps (unix ms) when a metric
+	 * is successfully resolved during rendering.
 	 * @returns {object} Rendered details object (shallow clone).
 	 */
 	renderDetails(details, ctx) {
@@ -134,16 +413,20 @@ class MsgRender {
 	 * @param {object} [options] Rendering context options.
 	 * @param {object} [options.msg] Message containing the "metrics" Map and timing block.
 	 * @param {string} [options.locale] Locale override for this render call.
+	 * @param {Function} [options.captureMetricTs] Optional callback that receives metric timestamps (unix ms)
+	 * when a metric is successfully resolved during rendering.
 	 * @returns {string} Rendered string with placeholders replaced.
 	 */
-	renderTemplate(input, { msg, locale } = {}) {
+	renderTemplate(input, { msg, locale, captureMetricTs } = {}) {
 		if (typeof input !== 'string' || input.indexOf('{{') === -1) {
 			return input;
 		}
 		const ctx = {
 			metrics: msg && msg.metrics instanceof Map ? msg.metrics : new Map(),
 			timing: msg && msg.timing && typeof msg.timing === 'object' ? msg.timing : null,
+			details: msg && msg.details && typeof msg.details === 'object' ? msg.details : null,
 			locale: locale || this.locale,
+			captureMetricTs: typeof captureMetricTs === 'function' ? captureMetricTs : null,
 		};
 
 		// Replace all {{expr}} blocks; unknown values become an empty string.
@@ -178,8 +461,12 @@ class MsgRender {
 		// "raw" is special: it affects base resolution (e.g. m.temp returns raw val instead of "val unit").
 		const rawIndex = parts.findIndex(part => part.split(':')[0].trim() === 'raw');
 		const wantsRaw = rawIndex !== -1;
+		const wantsDuration = parts.some(part => {
+			const n = part.split(':')[0].trim();
+			return n === 'durationSince' || n === 'durationUntil';
+		});
 		const filters = wantsRaw ? parts.filter(part => part.split(':')[0].trim() !== 'raw') : parts;
-		let val = this._resolvePath(base, ctx, { raw: wantsRaw });
+		let val = this._resolvePath(base, ctx, { raw: wantsRaw || wantsDuration });
 
 		// Apply remaining filters left-to-right.
 		for (const raw of filters) {
@@ -209,6 +496,9 @@ class MsgRender {
 		if (bits[0] === 't' || bits[0] === 'timing') {
 			return this._resolveTiming(bits.slice(1), ctx);
 		}
+		if (bits[0] === 'd' || bits[0] === 'details') {
+			return this._resolveDetails(bits.slice(1), ctx);
+		}
 		return undefined;
 	}
 
@@ -237,6 +527,56 @@ class MsgRender {
 	}
 
 	/**
+	 * Resolves a details path such as "d.location" or "d.tools".
+	 *
+	 * - Scalars are returned as-is.
+	 * - Arrays are joined with ", " (e.g. tools/consumables).
+	 *
+	 * @param {string[]} parts Path parts after the "d" prefix.
+	 * @param {object} ctx Render context (metrics + locale).
+	 * @returns {any} Details value or undefined.
+	 */
+	_resolveDetails(parts, ctx) {
+		const details = ctx.details;
+		if (!details || typeof details !== 'object') {
+			return undefined;
+		}
+		if (!Array.isArray(parts) || parts.length === 0) {
+			return undefined;
+		}
+
+		let cur = details;
+		for (const part of parts) {
+			if (!part) {
+				return undefined;
+			}
+			if (cur == null) {
+				return undefined;
+			}
+			if (Array.isArray(cur)) {
+				const idx = Number(part);
+				if (!Number.isInteger(idx)) {
+					return undefined;
+				}
+				cur = cur[idx];
+				continue;
+			}
+			if (typeof cur !== 'object') {
+				return undefined;
+			}
+			cur = cur[part];
+		}
+
+		if (Array.isArray(cur)) {
+			return cur
+				.filter(v => v != null)
+				.map(v => String(v))
+				.join(', ');
+		}
+		return cur;
+	}
+
+	/**
 	 * Resolves a metric entry by key and optional property.
 	 *
 	 * @param {string[]} parts Array of [key, prop] (prop is optional).
@@ -253,6 +593,14 @@ class MsgRender {
 		const entry = metrics.get(key);
 		if (!entry || typeof entry !== 'object') {
 			return undefined;
+		}
+
+		// Track the highest timestamp of metrics that were actually resolved during template rendering.
+		// Note: this is view-only metadata and does not mutate the message itself.
+		try {
+			ctx.captureMetricTs?.(entry.ts);
+		} catch {
+			// ignore capture failures
 		}
 
 		// Default metric rendering: formatted "val unit" (unless raw requested).
@@ -334,6 +682,19 @@ class MsgRender {
 			const df = new Intl.DateTimeFormat(ctx.locale, { dateStyle: 'medium', timeStyle: 'short' });
 			return df.format(new Date(ts));
 		}
+		// durationSince/durationUntil: relative durations based on server time (Date.now()).
+		if (name === 'durationSince' || name === 'durationUntil') {
+			const ts = this._toTimestamp(val);
+			if (!Number.isFinite(ts)) {
+				return '';
+			}
+			const now = Date.now();
+			const diffMs = name === 'durationSince' ? now - ts : ts - now;
+			if (!Number.isFinite(diffMs) || diffMs < 0) {
+				return '';
+			}
+			return this._formatDuration(diffMs);
+		}
 		// bool:trueLabel/falseLabel: coerce input to boolean and map to strings.
 		if (name === 'bool') {
 			const [t = 'true', f = 'false'] = String(arg || '').split('/');
@@ -344,6 +705,46 @@ class MsgRender {
 			return b ? t : f;
 		}
 		return val;
+	}
+
+	/**
+	 * Format a duration in ms with compact, human-friendly units.
+	 *
+	 * - < 1 min: "56s"
+	 * - < 1 h: "34m" (rounded)
+	 * - < 1 day: "3:45h" (rounded)
+	 * - >= 1 day: "1d 4h" (rounded)
+	 *
+	 * @param {number} ms Duration in ms (must be >= 0).
+	 * @returns {string} Formatted duration.
+	 */
+	_formatDuration(ms) {
+		const dur = typeof ms === 'number' && Number.isFinite(ms) ? ms : NaN;
+		if (!Number.isFinite(dur) || dur < 0) {
+			return '';
+		}
+
+		if (dur < 60_000) {
+			const s = Math.round(dur / 1000);
+			return `${s}s`;
+		}
+
+		if (dur < 60 * 60_000) {
+			const m = Math.round(dur / 60_000);
+			return `${m}m`;
+		}
+
+		if (dur < 24 * 60 * 60_000) {
+			const totalMinutes = Math.round(dur / 60_000);
+			const h = Math.floor(totalMinutes / 60);
+			const m = totalMinutes % 60;
+			return `${h}:${String(m).padStart(2, '0')}h`;
+		}
+
+		const totalHours = Math.round(dur / (60 * 60_000));
+		const d = Math.floor(totalHours / 24);
+		const h = totalHours % 24;
+		return `${d}d ${h}h`;
 	}
 
 	/**

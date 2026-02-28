@@ -29,7 +29,7 @@ Inputs (high level):
   - inbound (at least one required): `handler.start(ctx)` and/or `handler.onStateChange(id, state, ctx)` and/or `handler.onObjectChange(id, obj, ctx)`
   - optional: `handler.stop(ctx)`
 - `deps.msgIngest` / `deps.msgNotify`: plugin hosts (same contract as `MsgBridge`)
-- `deps.adapter` / `deps.msgConstants` / `deps.store`: required to build `ctx.api.action`
+- `deps.adapter` / `deps.msgConstants` / `deps.store`: required to build `ctx.api.action` (forwarding into `store.msgActions`)
 - optional: `deps.log` logger for rollback/unregister warnings
 
 Derived host ids:
@@ -61,4 +61,3 @@ This keeps side-effects and security/ACL decisions clear and makes “Notify mus
 - Action layer: `src/MsgAction.js` / [`docs/modules/MsgAction.md`](./MsgAction.md)
 - Notify host: `src/MsgNotify.js`
 - Ingest host: `src/MsgIngest.js`
-

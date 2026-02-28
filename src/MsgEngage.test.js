@@ -2,6 +2,7 @@
 
 const { expect } = require('chai');
 const { MsgEngage } = require('./MsgEngage');
+const { MsgAction } = require('./MsgAction');
 const { MsgConstants } = require('./MsgConstants');
 
 function makeAdapter() {
@@ -62,6 +63,7 @@ describe('MsgEngage', () => {
 				return true;
 			},
 		};
+		store.msgActions = new MsgAction(adapter, MsgConstants, store);
 
 		const handler = {
 			start(ctx) {
@@ -99,4 +101,3 @@ describe('MsgEngage', () => {
 		expect(storeCalls.updateMessage[0][1]).to.have.nested.property('lifecycle.state', MsgConstants.lifecycle.state.acked);
 	});
 });
-

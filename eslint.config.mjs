@@ -21,8 +21,12 @@ export default [
 			'**/adapter-config.d.ts',
 			'widgets/**/*.js',
 			'generate-doc-index.mjs',
-			'i18n-push.mjs',
-			'i18n-input.js'
+			'i18n-check.mjs',
+			'i18n-sort.mjs',
+			'i18n-generate.mjs',
+			'admin/tab.js',
+			'admin/tab.*.js',
+			'i18n-mirror-admin-to-runtime.mjs',
 		],
 	},
 	{

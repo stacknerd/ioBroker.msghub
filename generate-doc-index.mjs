@@ -1,10 +1,18 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
+import { createRequire } from 'node:module';
 
 const CHECK_MODE = process.argv.includes('--check');
 
 const SECTION_START = '<!-- AUTO-GENERATED:MODULE-INDEX:START -->';
 const SECTION_END = '<!-- AUTO-GENERATED:MODULE-INDEX:END -->';
+
+const PLUGIN_INDEX_SECTION_START = '<!-- AUTO-GENERATED:PLUGIN-INDEX:START -->';
+const PLUGIN_INDEX_SECTION_END = '<!-- AUTO-GENERATED:PLUGIN-INDEX:END -->';
+
+const ADMIN_PLUGIN_READMES_PATH = 'admin/plugin-readmes.json';
+
+const require = createRequire(import.meta.url);
 
 async function exists(filePath) {
   try {
@@ -84,42 +92,75 @@ function makePluginStubDoc({ title, implementationPath }) {
 
 TODO: Add 2–4 sentence summary: what it does, where it hooks in (Ingest/Notify), and why it exists.
 
----
+This document has two parts:
 
-## Basics
-
-TODO:
-- Type: <Ingest || Notify || Bridge>
-- Registration ID: \`< id >\`
+1) A user-facing guide (setup, configuration, best practices).
+2) A technical description (how it works internally).
 
 ---
 
-## Config
+## 1) User Guide
 
-TODO:
-- Where configured (instance config / ioBroker custom / states)
-- Required fields + defaults
+### What it does
+
+- TODO: a
+- TODO: b
+
+What it intentionally does not do:
+
+- TODO: a
+- TODO: b
+
+### Prerequisites
+
+- TODO: a
+- TODO: b
+
+### Quick start (recommended setup)
+
+1. TODO
+2. TODO
+
+### How to configure
+
+Configuration is done in the Message Hub Admin Tab (Plugins) and uses the schema from \`lib/<TODO>/manifest.js\`.
+
+TODO: describe Options/parameters here
+  
+### Troubleshooting
 
 ---
 
-## Behavior
+## 2) Software Documentation
 
-TODO:
-- Input → decision → output (bullets)
-- Dedupe/update strategy (\`ref\` or equivalent)
+### Overview
 
----
+- TODO
+  
+Implementation:
 
-## Examples
+- TODO
+  
 
-TODO: Add a minimal example (registration + a realistic payload/event).
+### Runtime wiring (IoPlugins)
+
+TODO
+
+### Event handling
+
+- TODO
+
+### TODO add other relevant Topics
 
 ---
 
 ## Related files
 
-- Implementation: \`${implementationPath}\`
+- Implementation: TODO
+- Manifest: TODO
+- Dispatcher: TODO
 - Plugin overview: \`docs/plugins/README.md\`
+
 `;
 }
 
@@ -186,6 +227,180 @@ function replaceOrAppendModuleSection(readmeText, indexLines) {
     ...lines.slice(nextHeadingIndex),
   ];
   return `${updated.join('\n').replace(/\n{3,}/g, '\n\n').replace(/\s+$/, '')}\n`;
+}
+
+function replaceSection({ text, startMarker, endMarker, newContent }) {
+  const normalized = normalizeNewlines(text);
+  if (!normalized.includes(startMarker) || !normalized.includes(endMarker)) {
+    throw new Error(`Missing required markers: ${startMarker} / ${endMarker}`);
+  }
+
+  const startIndex = normalized.indexOf(startMarker);
+  const endIndex = normalized.indexOf(endMarker);
+  const before = normalized.slice(0, startIndex);
+  const after = normalized.slice(endIndex + endMarker.length);
+  const middle = `${startMarker}\n${newContent}\n${endMarker}`;
+  return `${before}${middle}${after}`.replace(/\n{3,}/g, '\n\n').replace(/\s+$/, '') + '\n';
+}
+
+function inferPluginFamily(type) {
+  const t = String(type || '').trim();
+  if (t.startsWith('Ingest')) return 'Ingest';
+  if (t.startsWith('Notify')) return 'Notify';
+  if (t.startsWith('Bridge')) return 'Bridge';
+  if (t.startsWith('Engage')) return 'Engage';
+  return 'Other';
+}
+
+function toSingleLine(value) {
+  return String(value || '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function escapeMarkdownTableCell(value) {
+  return String(value || '')
+    .replace(/\|/g, '\\|')
+    .trim();
+}
+
+async function loadPluginManifests({ pluginsDir }) {
+  const pluginDirs = (await listDirNames(pluginsDir))
+    .filter((d) => !d.startsWith('.') && !d.startsWith('_'))
+    .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+
+  const entries = [];
+  for (const dir of pluginDirs) {
+    const manifestPath = path.join(pluginsDir, dir, 'manifest.js');
+    if (!(await exists(manifestPath))) continue;
+
+    let loaded;
+    try {
+      loaded = require(path.resolve(manifestPath));
+    } catch (e) {
+      throw new Error(`Failed to load plugin manifest: ${manifestPath} (${e?.message || e})`);
+    }
+
+    const manifest = loaded?.manifest;
+    if (!manifest || typeof manifest !== 'object') {
+      throw new Error(`Invalid plugin manifest export: ${manifestPath} (expected module.exports.manifest)`);
+    }
+
+    if (manifest.hidden === true || manifest.discoverable === false) {
+      continue;
+    }
+
+    const type = manifest.type;
+    if (typeof type !== 'string' || !type.trim()) {
+      throw new Error(`Invalid plugin manifest type: ${manifestPath} (expected manifest.type string)`);
+    }
+
+    entries.push({
+      dir,
+      type: type.trim(),
+      family: inferPluginFamily(type),
+      defaultEnabled: !!manifest.defaultEnabled,
+      supportsMultiple: !!manifest.supportsMultiple,
+      purpose: toSingleLine(manifest?.description?.en || manifest?.description?.de || ''),
+      title: manifest?.title || null,
+    });
+  }
+
+  return entries.sort((a, b) => (a.type < b.type ? -1 : a.type > b.type ? 1 : 0));
+}
+
+function buildPluginIndexTable(pluginEntries) {
+  const header = [
+    '| Type | Family | Purpose (short) | defaultEnabled | supportsMultiple | Docs |',
+    '| --- | --- | --- | --- | --- | --- |',
+  ];
+
+  const rows = pluginEntries.map((p) => {
+    const docs = `[\`./${p.type}.md\`](./${p.type}.md)`;
+    const purpose = escapeMarkdownTableCell(p.purpose || '');
+    return `| \`${p.type}\` | ${p.family} | ${purpose} | ${ p.defaultEnabled ? '✓' : '' } | ${p.supportsMultiple ? '✓' : ''} | ${docs} |`;
+  });
+
+  return [...header, ...rows].join('\n');
+}
+
+async function updatePluginIndex({ pluginsDir, pluginIndexPath }) {
+  const pluginEntries = await loadPluginManifests({ pluginsDir });
+  const table = buildPluginIndexTable(pluginEntries);
+
+  const current = normalizeNewlines(await fs.readFile(pluginIndexPath, 'utf8'));
+  const next = replaceSection({
+    text: current,
+    startMarker: PLUGIN_INDEX_SECTION_START,
+    endMarker: PLUGIN_INDEX_SECTION_END,
+    newContent: table,
+  });
+
+  if (current !== next) {
+    if (CHECK_MODE) return { changed: true };
+    await fs.writeFile(pluginIndexPath, next, 'utf8');
+  }
+
+  return { changed: false };
+}
+
+function extractUserGuideMarkdown(md) {
+  const text = normalizeNewlines(String(md || ''));
+  const lines = text.split('\n');
+
+  let start = -1;
+  for (let i = 0; i < lines.length; i += 1) {
+    if (/^##\s*1\)\s*User\s+Guide\b/i.test(lines[i])) {
+      start = i + 1;
+      break;
+    }
+  }
+  if (start < 0) return '';
+
+  while (start < lines.length && !lines[start].trim()) start += 1;
+
+  let end = lines.length;
+  for (let i = start; i < lines.length; i += 1) {
+    if (/^##\s*2\)\s*/i.test(lines[i])) {
+      end = i;
+      break;
+    }
+  }
+
+  const out = lines.slice(start, end).join('\n').trim();
+  return out;
+}
+
+async function updateAdminPluginReadmes({ pluginsDir, docsDir, outPath }) {
+  const pluginEntries = await loadPluginManifests({ pluginsDir });
+
+  /** @type {Record<string, { md: string, source: string }>} */
+  const byType = {};
+
+  for (const p of pluginEntries) {
+    const docPath = path.join(docsDir, `${p.dir}.md`);
+    if (!(await exists(docPath))) {
+      continue;
+    }
+    const md = normalizeNewlines(await fs.readFile(docPath, 'utf8'));
+    const userGuide = extractUserGuideMarkdown(md);
+    if (!userGuide) {
+      continue;
+    }
+    byType[p.type] = { md: userGuide, source: docPath.replace(/\\/g, '/') };
+  }
+
+  const sorted = Object.fromEntries(
+    Object.entries(byType).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)),
+  );
+  const next = `${JSON.stringify(sorted, null, 2)}\n`;
+
+  const current = (await exists(outPath)) ? normalizeNewlines(await fs.readFile(outPath, 'utf8')) : '';
+  if (current !== next) {
+    if (CHECK_MODE) return { changed: true };
+    await fs.writeFile(outPath, next, 'utf8');
+  }
+  return { changed: false };
 }
 
 async function ensureDocsForJsFiles({ jsDir, docsDir }) {
@@ -305,8 +520,25 @@ async function main() {
   });
   results.push({ kind: 'plugins', ...plugins });
 
+  const pluginIndex = await updatePluginIndex({
+    pluginsDir: 'lib',
+    pluginIndexPath: 'docs/plugins/PLUGIN-INDEX.md',
+  });
+
+  const adminPluginReadmes = await updateAdminPluginReadmes({
+    pluginsDir: 'lib',
+    docsDir: 'docs/plugins',
+    outPath: ADMIN_PLUGIN_READMES_PATH,
+  });
+
   const readmes = [
     { kind: 'modules', docsDir: 'docs/modules', readmePath: 'docs/modules/README.md' },
+    { kind: 'io', docsDir: 'docs/io', readmePath: 'docs/io/README.md' },
+    {
+      kind: 'ui',
+      docsDir: 'docs/ui',
+      readmePath: 'docs/ui/README.md',
+    },
     {
       kind: 'plugins',
       docsDir: 'docs/plugins',
@@ -326,6 +558,8 @@ async function main() {
   if (CHECK_MODE) {
     const todoWarnings = [
       ...(await scanTodoPlaceholders({ docsDir: 'docs/modules' })),
+      ...(await scanTodoPlaceholders({ docsDir: 'docs/io' })),
+      ...(await scanTodoPlaceholders({ docsDir: 'docs/ui' })),
       ...(await scanTodoPlaceholders({ docsDir: 'docs/plugins' })),
     ];
 
@@ -351,8 +585,14 @@ async function main() {
     }
     if (changedReadmes.length) {
       problems.push(
-        `Outdated module indexes:\n${changedReadmes.map((p) => `- ${p}`).join('\n')}`,
+        `Outdated README indexes:\n${changedReadmes.map((p) => `- ${p}`).join('\n')}`,
       );
+    }
+    if (pluginIndex.changed) {
+      problems.push(`Outdated plugin index:\n- docs/plugins/PLUGIN-INDEX.md`);
+    }
+    if (adminPluginReadmes.changed) {
+      problems.push(`Outdated admin plugin readmes:\n- ${ADMIN_PLUGIN_READMES_PATH}`);
     }
 
     if (problems.length) {

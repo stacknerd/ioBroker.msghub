@@ -88,7 +88,7 @@ describe('MsgIngest', () => {
 			expect(() => ingest.registerPlugin(5, () => {})).to.throw('MsgIngest.registerPlugin: id is required');
 			expect(() => ingest.registerPlugin('x')).to.throw('MsgIngest.registerPlugin: handler is required');
 			expect(() => ingest.registerPlugin('x', { nope: true })).to.throw(
-				'MsgIngest.registerPlugin: handler must be a function or an object with start/stop/onStateChange/onObjectChange',
+				'MsgIngest.registerPlugin: handler must be a function or an object with start/stop/onStateChange/onObjectChange/onAction',
 			);
 		});
 
@@ -148,6 +148,30 @@ describe('MsgIngest', () => {
 			expect(plugin.stateArgs[2].meta).to.deep.equal({ a: 1, running: false });
 			expect(plugin.objectArgs[0]).to.equal('o1');
 			expect(plugin.objectArgs[2].meta).to.deep.equal({ b: 2, running: false });
+		});
+
+		it('binds object handlers and supports onAction', () => {
+			const { adapter } = makeAdapter();
+			const { msgFactory, msgStore } = makeDeps();
+			const ingest = new MsgIngest(adapter, MsgConstants, msgFactory, msgStore);
+
+			const plugin = {
+				thisValue: null,
+				actionArgs: null,
+				onAction(actionInfo, ctx) {
+					this.thisValue = this;
+					this.actionArgs = [actionInfo, ctx];
+				},
+			};
+
+			ingest.registerPlugin('obj', plugin);
+			const actionInfo = { ref: 'm1', actionId: 'a1', type: 'close', ts: 1, message: { ref: 'm1' } };
+			const count = ingest.dispatchAction(actionInfo, { event: 'executed' });
+
+			expect(count).to.equal(1);
+			expect(plugin.thisValue).to.equal(plugin);
+			expect(plugin.actionArgs[0]).to.equal(actionInfo);
+			expect(plugin.actionArgs[1].meta).to.deep.equal({ event: 'executed', running: false });
 		});
 	});
 
@@ -241,5 +265,45 @@ describe('MsgIngest', () => {
 			expect(logs.warn[0]).to.include("plugin 'boom' failed on stateChange");
 		});
 	});
-});
 
+	describe('dispatchAction', () => {
+		it('returns 0 for invalid actionInfo', () => {
+			const { adapter } = makeAdapter();
+			const { msgFactory, msgStore } = makeDeps();
+			const ingest = new MsgIngest(adapter, MsgConstants, msgFactory, msgStore);
+			ingest.registerPlugin('p', { onAction: () => {} });
+
+			expect(ingest.dispatchAction(null)).to.equal(0);
+			expect(ingest.dispatchAction(undefined)).to.equal(0);
+			expect(ingest.dispatchAction('nope')).to.equal(0);
+		});
+
+		it('calls only plugins that implement onAction', () => {
+			const { adapter } = makeAdapter();
+			const { msgFactory, msgStore } = makeDeps();
+			const ingest = new MsgIngest(adapter, MsgConstants, msgFactory, msgStore);
+
+			let calledA = 0;
+			let calledB = 0;
+			let lastCtx = null;
+
+			ingest.registerPlugin('a', {
+				onAction(_info, ctx) {
+					calledA += 1;
+					lastCtx = ctx;
+				},
+			});
+			ingest.registerPlugin('b', {
+				onStateChange() {
+					calledB += 1;
+				},
+			});
+
+			const count = ingest.dispatchAction({ ref: 'm1', actionId: 'a1', type: 'close', ts: 1, message: null }, { x: 1 });
+			expect(count).to.equal(1);
+			expect(calledA).to.equal(1);
+			expect(calledB).to.equal(0);
+			expect(lastCtx.meta).to.deep.equal({ x: 1, running: false });
+		});
+	});
+});

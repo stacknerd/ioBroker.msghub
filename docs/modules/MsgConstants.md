@@ -8,6 +8,7 @@ It defines the allowed values for things like:
 - **Where a message comes from** (`origin.type`)
 - **Supported attachments and actions** (`attachments.type`, `actions.type`)
 - **Notification event names** (`notfication.events.*`)
+- **Action event names** (`action.events.*`)
 
 In short: **If code needs a fixed identifier that becomes part of a message, it should come from `MsgConstants`.**
 
@@ -43,10 +44,12 @@ That means: **changing `MsgConstants` can affect everything** (create, update, s
 
 `level` is numeric so code can easily compare/sort it:
 
-- `MsgConstants.level.none` → `0` (no severity / informational)
-- `MsgConstants.level.notice` → `10` (normal information)
-- `MsgConstants.level.warning` → `20` (important / might need attention)
-- `MsgConstants.level.error` → `30` (problem / action required)
+- `MsgConstants.level.none` → `0` (fully silent; do not actively surface)
+- `MsgConstants.level.info` → `10` (delivered/visible, but no urgency)
+- `MsgConstants.level.notice` → `20` (should draw attention; often qualifies for a notification)
+- `MsgConstants.level.warning` → `30` (urgent; action required soon)
+- `MsgConstants.level.error` → `40` (failure/incident; action required)
+- `MsgConstants.level.critical` → `50` (immediate escalation; “wake me up” class when supported)
 
 Typical rule of thumb: higher number = more urgent.
 
@@ -102,13 +105,20 @@ These values represent the current UI/workflow state of a message:
 
 These event names are used when dispatching notifications via `MsgNotify`:
 
-- `due` → the message is “due now” (e.g. `notifyAt` reached or missing)
+- `added` → a new message was added to the store
+- `due` → a **notification is due now** (driven by `timing.notifyAt`, not by `timing.dueAt`/`timing.startAt`)
 - `updated` → the message changed in a user-visible way
 - `deleted` → the message was removed explicitly
 - `expired` → the message was removed because it expired (`expiresAt`)
 
 Naming note: the property is spelled `notfication` (missing the second “i”) because it is part of the current
 public API inside this repo and is referenced from multiple files.
+
+### `action.events` (action event names)
+
+These event names are used for action execution events dispatched to producer plugins via `MsgIngest`:
+
+- `executed` → an action was executed successfully (`MsgAction.execute(...)` returned `true`)
 
 ---
 

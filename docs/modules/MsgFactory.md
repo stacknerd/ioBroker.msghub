@@ -37,7 +37,7 @@ Very roughly, the required core looks like:
   ref, title, text, level, kind,
   origin: { type, system?, id? },
   lifecycle: { state, stateChangedAt?, stateChangedBy? },
-  timing: { createdAt, updatedAt?, notifyAt?, remindEvery?, ... },
+  timing: { createdAt, updatedAt?, notifyAt?, remindEvery?, timeBudget?, ... },
   progress: { percentage, startedAt?, finishedAt? }
 }
 ```
@@ -47,6 +47,7 @@ Allowed enum values (like `kind`, `level`, `origin.type`, `lifecycle.state`, att
 Notes:
 - `lifecycle.state` is the canonical current state for UI/sorting.
 - `timing.remindEvery` is a reminder interval (ms) used by the store/scheduler (logic implemented later).
+- `timing.timeBudget` is an optional planning duration (ms) for scheduling/UX (no core side effects).
 
 ---
 
@@ -102,11 +103,10 @@ Practical rule for producers: **If something can repeat, provide `origin.id`.**
 ### 3) Kind-driven rules
 Some fields only make sense for certain message kinds:
 
-- `timing.dueAt` is only meaningful for `kind: "task"`
-- `timing.startAt` / `timing.endAt` are only meaningful for `kind: "appointment"`
+- `timing.dueAt` / `timing.startAt` / `timing.endAt` are optional domain timestamps and are **not restricted by `kind`**
 - `listItems` is only allowed for `kind: "shoppinglist"` and `kind: "inventorylist"`
 
-If a producer sends kind-specific fields on the wrong kind, the factory logs a warning and ignores them.
+If a producer sends `listItems` on the wrong kind, the factory logs a warning and ignores it.
 
 ### 4) `undefined` vs. `null` (especially for patches)
 
@@ -116,6 +116,8 @@ If a producer sends kind-specific fields on the wrong kind, the factory logs a w
 Example ideas:
 
 - Patch: `timing: { notifyAt: null }` removes `timing.notifyAt`
+- Patch: `timing: { timeBudget: 900000 }` sets `timing.timeBudget` (planning duration in ms)
+- Patch: `timing: { timeBudget: null }` removes `timing.timeBudget`
 - Patch: `audience: null` removes the entire `audience` block
 
 ### 5) No guessing for enums
@@ -175,8 +177,16 @@ only provided keys are applied; `null` clears keys (or the whole object, dependi
 
 `lifecycle` is also patchable (state + attribution):
 
-- partial update: `lifecycle: { state: "acked", stateChangedAt: 123, stateChangedBy: "UI" }`
+- partial update: `lifecycle: { state: "acked", stateChangedBy: "UI" }`
 - reset: `lifecycle: null` (resets to `state: "open"` and clears attribution)
+
+Notes:
+
+- `lifecycle.stateChangedAt` is a core-owned timestamp. Patch attempts are ignored; it is updated by the core when `lifecycle.state` changes.
+- `lifecycle.state="deleted"` and `"expired"` are core-managed. Patch attempts are rejected; use `MsgStore.removeMessage(ref, { actor? })` and time-based expiration (`timing.expiresAt`) instead.
+- `progress.startedAt` / `progress.finishedAt` are core-owned timestamps. Patch attempts are ignored.
+  - `startedAt` is set when `progress.percentage > 0` for the first time and then never changes.
+  - `finishedAt` is set when `progress.percentage == 100` and removed when `progress.percentage < 100`.
 
 ### `metrics` (Map)
 Metrics are stored as a `Map` in memory and support:

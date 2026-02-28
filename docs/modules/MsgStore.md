@@ -29,6 +29,9 @@ Internally, the store keeps a list: `this.fullList`.
 - This is the **raw message**, exactly as it is stored/persisted.
 - For output (e.g. UI), reads return a **rendered view** so placeholders like `{{m.temperature}}` can be resolved.
   That rendering happens via `MsgRender` and is **not written back** into `fullList`.
+- After rendering, the store also builds an **actions view** via `MsgAction.buildActions(...)`:
+  - `actions[]` may be filtered based on lifecycle policy.
+  - `actionsInactive[]` may be added for view-only diagnostics.
 
 Practical result: the canonical list stays stable and “clean”, and rendering is a pure output step.
 
@@ -49,7 +52,13 @@ Practical result: the canonical list stays stable and “clean”, and rendering
 
 4. **Lifecycle maintenance**
    - removing expired messages (`expiresAt`)
+   - cleaning up completed messages (`closed` → `deleted` → hard-delete)
    - dispatching due notifications (`notifyAt`, optionally via a timer)
+
+5. **Owning the action layer instance**
+   - `MsgStore` owns a single `MsgAction` instance (`store.msgActions`) so the same policy can be used for:
+     - inbound action execution (`ctx.api.action.execute(...)` for Engage integrations)
+     - outbound action filtering (read APIs + notify dispatch)
 
 ---
 
@@ -75,10 +84,16 @@ All schema validation, normalization, and patch semantics live in `MsgFactory`.
 
 ### 4) Notification scheduling is intentionally simple
 `MsgStore` does not “schedule” notifications like a job runner. It only checks: **is `notifyAt` reached?**
-If a message is due (`notifyAt <= now`), `_initiateNotifications()` dispatches `"due"` and then **reschedules**:
+If a message is due (`notifyAt <= now`), `_initiateNotifications()` dispatches `"due"` (via `_dispatchNotify()`), and the dispatch path applies store-owned policies (via `_applyMsgPolicy()`), including **rescheduling**:
 
 - if `timing.remindEvery` is set: `notifyAt = now + remindEvery`
 - otherwise: `notifyAt` is cleared (one-shot)
+
+Quiet hours (optional):
+- The store can suppress **repeat** `"due"` notifications during a configured quiet-hours window.
+- Repeat detection is based on the core-managed marker `timing.notifiedAt.due` (first due always dispatches).
+- When suppressed, the store reschedules `notifyAt` to the quiet-hours end plus an optional random spread window.
+- When a snooze has elapsed and a message becomes due, the store patches `lifecycle.state` back from `snoozed` to `open` before dispatch.
 
 Note: rescheduling uses a silent store patch (`stealthMode`), so it does not produce `"updated"` events (but the change is still persisted and archived).
 
@@ -100,12 +115,16 @@ so downstream consumers observe the post-mutation state.
 
 ## Archive: `MsgArchive` (JSONL per message)
 
-In addition to the current list, there is an append-only archive log (default: `data/archive/<encodedRef>.jsonl`).
+In addition to the current list, there is an append-only archive log (default: `data/archive/<refPath>.<YYYYMMDD>.jsonl`).
 
-- One file per `ref`, so files stay small and are easy to inspect.
-- `ref` is URL-encoded for filenames (`encodeURIComponent`) to avoid problematic characters.
+- One file per `ref` **and week segment**, so files stay small and are easy to inspect.
+- `ref` is URL-encoded (`encodeURIComponent`) to avoid problematic characters.
+- Dots in the (encoded) ref create folder levels, except the first `.<digits>` segment (plugin instance) which stays together (e.g. `IngestHue.0/...`).
+- `YYYYMMDD` is the **local-week segment start** (Monday 00:00, local time).
+- Retention is controlled via `keepPreviousWeeks` (keep current + N previous week segments).
 - Typical archive events: `"create"`, `"patch"`, `"delete"`
-- When pruning, deletes are archived with `{ event: "expired" }` (“deleted because expired”).
+- Expiration is recorded as a `"patch"` (setting `lifecycle.state="expired"`), and later hard-delete is recorded as a `"delete"` event with `{ event: "purge" }`.
+- When recreating a message with an already-used `ref` (see `addMessage` below), the replaced message is hard-removed and archived with `{ event: "purgeOnRecreate" }`.
 
 Naming note: notification events (e.g. `"deleted"`, `"expired"`) come from `MsgConstants.notfication.events.*`
 and are not identical to the archive event names.
@@ -119,14 +138,19 @@ and `MsgNotify` fans those out to registered notifier plugins.
 
 Important semantics:
 
-- There is **no** “already notified” flag in the store.
-- “Due” means: `timing.notifyAt <= now` (and not expired).
-- Due messages are re-sent as `"due"` on every polling tick as long as they remain due.
+- The store tracks dispatched notifications via `timing.notifiedAt` (core-managed timestamps keyed by `MsgConstants.notfication.events` values).
+- Naming note: the notification event `"due"` refers to `timing.notifyAt` only and is intentionally independent from domain timing (`timing.dueAt` / `timing.startAt`).
+- “Due” (notification) means: `timing.notifyAt <= now` (and not expired).
+- `timing.notifiedAt.due` records “dispatched by core”, not “confirmed delivered by plugin”.
 
 When does the store dispatch?
 
 - `addMessage(msg)`
-  - If `timing.notifyAt` is missing/not finite **and** `lifecycle.state === "open"`: dispatch `"due"` immediately (message is “due now”).
+  - Dispatch a creation event:
+    - `"added"` when the `ref` is truly new
+    - `"recreated"` when the `ref` existed only in quasi-deleted states (`deleted`/`closed`/`expired`) and is replaced
+    - `"recovered"` when recreated within `timing.cooldown` (no immediate `"due"`)
+  - If `timing.notifyAt` is missing/not finite **and** `lifecycle.state === "open"`: dispatch `"due"` immediately (message is “due now”), except during recreate cooldown.
 - `updateMessage(...)`
   - Dispatch `"updated"` only when the update is non-silent (detected by a change in `timing.updatedAt`).
   - Additionally dispatch `"due"` when:
@@ -135,8 +159,8 @@ When does the store dispatch?
     - `lifecycle.state === "open"`,
     - and the message is not expired.
 - `_initiateNotifications()` (optional timer)
-  - Dispatches `"due"` as a batch for all messages whose `notifyAt` has been reached.
-  - Then reschedules/clears `notifyAt` based on `timing.remindEvery` (one-shot vs repeat).
+  - Dispatches `"due"` as a batch for all messages whose `notifyAt` has been reached (eligible states: `open|snoozed`, and not expired).
+  - The dispatch path (`_dispatchNotify()` + `_applyMsgPolicy()`) applies quiet-hours suppression (repeat-only) and reschedules/clears `notifyAt` based on `timing.remindEvery`.
 
 ---
 
@@ -165,6 +189,15 @@ Messages can have an expiry timestamp: `timing.expiresAt` (Unix ms).
   - dispatch `"expired"` via `MsgNotify` (as an array of expired messages)
   - keep the message in the list for a retention window, then hard-delete later (`purge`)
 
+### Closed messages (completed)
+
+Messages in `lifecycle.state === "closed"` are treated as completed.
+To keep the store bounded over time:
+
+- `_deleteClosedMessages()` periodically soft-deletes them via `removeMessage(ref)` (so they become `lifecycle.state="deleted"`).
+- After `hardDeleteAfterMs` the regular hard-delete pass removes them from the list and archives a `{ event: "purge" }` delete.
+  - To reduce restart spikes, hard-deletes can be delayed during startup and processed in batches (see options below).
+
 ---
 
 ## Public API (what you typically use)
@@ -174,7 +207,19 @@ Adds a new message if its `ref` does not exist yet.
 
 - Expectation: `msg` is already normalized (typically via `MsgFactory.createMessage()`).
 - Guard: `level` must be a real integer number (numeric strings like `"10"` are rejected).
-- Triggers: persist + archive + maybe an immediate `"due"`.
+- `ref` handling:
+  - If `ref` is unused: message is added.
+  - If a message with the same `ref` exists and is `deleted` / `expired` / `closed`: the existing entry is replaced (hard-removed) and the new message is added (recreate).
+  - Otherwise: the call is rejected (`false`).
+- Triggers: persist + archive + (`"added"` | `"recreated"` | `"recovered"`) + maybe an immediate `"due"`.
+
+### `getMessageByRef(ref, filter?): object|undefined`
+Reads one message by `ref` (rendered view).
+
+- `filter` defaults to `'all'` (no lifecycle filtering).
+- `filter='quasiOpen'` returns only `open|snoozed|acked`.
+- `filter='quasiDeleted'` returns only `deleted|closed|expired`.
+- `filter=string[]` is an explicit allowlist of lifecycle state values (1:1 match).
 
 ### `updateMessage(ref, patch)` / `updateMessage({ ref, ...patch }): boolean`
 Updates an existing message by delegating to `MsgFactory.applyPatch()`.
@@ -187,10 +232,10 @@ Updates an existing message by delegating to `MsgFactory.applyPatch()`.
 ### `addOrUpdateMessage(msg): boolean`
 Convenience upsert: updates when `ref` exists, otherwise `addMessage`.
 
-### `removeMessage(ref): void`
+### `removeMessage(ref, { actor? }): boolean`
 Removes a message when it exists.
 
-- Semantics: soft-delete (`lifecycle.state = "deleted"`, clears `timing.notifyAt`) and dispatches `"deleted"`.
+- Semantics: soft-delete (`lifecycle.state = "deleted"`, clears `timing.notifyAt`), stores `actor` as `lifecycle.stateChangedBy`, and dispatches `"deleted"`.
 - Hard-delete (purge) happens later after a retention window and appends an archive delete snapshot.
 
 ### Read APIs
@@ -200,7 +245,38 @@ Removes a message when it exists.
 
 All read methods:
 - run throttled pruning
-- return rendered views when `MsgRender` is available
+
+Rendered read methods:
+- `getMessageByRef(ref)` and `queryMessages(...)` return rendered views when `MsgRender` is available.
+
+Raw snapshot:
+- `getMessages()` returns an unrendered snapshot view of the full store (no `MsgRender`, no `display`).
+  Prefer `queryMessages({ page, where, sort })` for UI use so paging bounds render cost.
+
+#### `queryMessages` sort (selected)
+
+- `sort` is optional and must be an array of `{ field, dir? }` (dir: `"asc"` / `"desc"`).
+- Sorting is only supported on a small allowlist of fields (others are ignored), including: `ref`, `icon`, `title`, `text`, `level`, `kind`,
+  `origin.type`, `origin.system`, `lifecycle.state`, `details.location`, and `timing.*` fields like `timing.createdAt`.
+
+#### `queryMessages` filters (selected)
+
+`where` is a partial message-like object that supports a small set of filter operators.
+
+Frequently used filters:
+
+- `where.audience.tags`: includes filter (`string | string[] | { any } | { all }`)
+- `where.audience.tags` also supports `orMissing` on the object form:
+  - Example: `{ any: ['Tom'], orMissing: true }` matches messages tagged for Tom **or** messages with missing/empty `audience.tags`.
+- `where.audience.channels`: routing filter (same semantics as channel dispatch in `IoPlugins`)
+  - `{ routeTo: string }` (or shorthand `string`): “would this message be dispatched to this plugin channel?”
+  - `string[]`: matches when it would dispatch to **any** of the given channels
+  - `routeTo: ""`: matches only “unscoped” messages (where `audience.channels.include` is empty)
+  - `routeTo: "all"` (or `routeTo: "*"`): matches all messages (match-all)
+  - Best practice: use this in pull-based plugins/bridges so selection matches the notification routing done by `IoPlugins`.
+- `where.timing.*`: range filter (`number` or `{ min/max }`)
+  - Range objects also support `orMissing`:
+    - Example: `{ max: now, orMissing: true }` matches messages where the timing field is missing (`undefined|null`) **or** `<= now`.
 
 ---
 
@@ -211,8 +287,14 @@ When creating `MsgStore`, you can pass options:
 - `initialMessages` (default `[]`): initial in-memory list (primarily for tests/imports)
 - `pruneIntervalMs` (default `30000`): maximum frequency for expiration scans
 - `notifierIntervalMs` (default `10000`, `0` disables): polling interval for due notifications (`notifyAt`)
+- `quietHours` (optional): fully normalized quiet-hours policy options passed from `main.js` (`{ enabled, startMin, endMin, maxLevel, spreadMs }`)
+- `quietHoursRandomFn` (optional): random injection for quiet-hours spread (tests)
 - `hardDeleteAfterMs` (default `259200000` / 3 days): retention window before hard-delete for `deleted`/`expired` messages
 - `hardDeleteIntervalMs` (default `14400000` / 4 hours): how often the store checks for hard-deletes
+- `hardDeleteBatchSize` (default `50`): max number of messages hard-deleted per run (backlogs are processed over multiple runs)
+- `hardDeleteBacklogIntervalMs` (default `5000`): delay between hard-delete runs while a backlog exists
+- `hardDeleteStartupDelayMs` (default `60000`): delay after startup before the first hard-delete run (reduces I/O spikes)
+- `deleteClosedIntervalMs` (default `10000`): how often the store soft-deletes `closed` messages
 - `storage`: options forwarded to `MsgStorage` (e.g. `baseDir`, `fileName`, `writeIntervalMs`)
 - `archive`: options forwarded to `MsgArchive` (e.g. `baseDir`, `fileExtension`, `flushIntervalMs`)
 

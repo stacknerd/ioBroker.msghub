@@ -2,6 +2,7 @@
 
 const { expect } = require('chai');
 const { MsgRender } = require('./MsgRender');
+const { MsgConstants } = require('./MsgConstants');
 
 describe('MsgRender', () => {
 	const locale = 'en-GB';
@@ -26,7 +27,106 @@ describe('MsgRender', () => {
 		const out = renderer.renderMessage(msg);
 		const nf = new Intl.NumberFormat(locale, { maximumFractionDigits: 2 });
 
-		expect(out.display.title).to.equal(`Temp ${nf.format(21.75)} C`);
+		expect(out.title).to.equal(`Temp ${nf.format(21.75)} C`);
+		expect(out).to.have.property('display');
+		expect(out.display).to.include({
+			icon: '',
+			title: `Temp ${nf.format(21.75)} C`,
+			text: '',
+		});
+	});
+
+		it('tracks display.renderedDataTs for metrics that were actually rendered', () => {
+			const renderer = createRenderer({ locale });
+			const tsA = Date.UTC(2025, 0, 1, 1, 0, 0);
+			const tsB = Date.UTC(2025, 0, 1, 2, 0, 0);
+			const metrics = buildMetrics([
+				['a', { val: 1, unit: 'u', ts: tsA }],
+				['b', { val: 2, unit: 'u', ts: tsB }],
+			]);
+			const msg = createMessage({ title: 'A{{m.a.val}}', metrics });
+
+			const out = renderer.renderMessage(msg);
+			expect(out.display).to.have.property('renderedDataTs', tsA);
+		});
+
+		it('uses the maximum timestamp across all rendered metric placeholders', () => {
+			const renderer = createRenderer({ locale });
+			const tsA = Date.UTC(2025, 0, 1, 1, 0, 0);
+			const tsB = Date.UTC(2025, 0, 1, 2, 0, 0);
+			const metrics = buildMetrics([
+				['a', { val: 1, unit: 'u', ts: tsA }],
+				['b', { val: 2, unit: 'u', ts: tsB }],
+			]);
+			const msg = createMessage({
+				title: 'A{{m.a.val}}',
+				details: { location: 'B{{m.b.val}}' },
+				metrics,
+			});
+
+			const out = renderer.renderMessage(msg);
+			expect(out.display).to.have.property('renderedDataTs', tsB);
+		});
+
+		it('does not add display.renderedDataTs when no metric values are rendered', () => {
+			const renderer = createRenderer({ locale });
+			const msg = createMessage({ title: '{{t.createdAt|datetime}}', timing: { createdAt: Date.UTC(2025, 0, 1) } });
+
+			const out = renderer.renderMessage(msg);
+			expect(out.display).to.not.have.property('renderedDataTs');
+		});
+
+	it('renders display.title/text/icon from render templates', () => {
+		const renderer = createRenderer({
+			locale,
+			render: {
+				prefixes: {
+					level: { warning: 'WARNUNG' },
+					kind: { task: 'TASK' },
+				},
+				templates: {
+					titleTemplate: '{{levelPrefix}} {{kindPrefix}} {{icon}} {{title}}',
+					textTemplate: '{{text}}',
+					iconTemplate: '{{icon}}',
+				},
+			},
+		});
+		const msg = createMessage({ title: 'Hello', text: 'World' });
+		msg.kind = 'task';
+		msg.level = MsgConstants.level.warning;
+		msg.icon = 'X';
+
+		const out = renderer.renderMessage(msg);
+		expect(out.display).to.deep.equal({
+			icon: 'X',
+			title: 'WARNUNG TASK X Hello',
+			text: 'World',
+		});
+		expect(out.display).to.not.have.property('titleFullPrefix');
+	});
+
+	it('allows d.* and t.* in display templates', () => {
+		const renderer = createRenderer({
+			locale,
+			render: {
+				templates: {
+					titleTemplate: '{{d.location}} - {{title}} @{{t.createdAt|datetime}}',
+					textTemplate: '{{text}}',
+					iconTemplate: '{{icon}}',
+				},
+			},
+		});
+		const createdAt = Date.UTC(2025, 0, 1, 10, 30, 0);
+		const msg = createMessage({
+			title: 'Hello',
+			text: 'World',
+			details: { location: 'Kitchen' },
+			timing: { createdAt },
+		});
+
+		const out = renderer.renderMessage(msg);
+		const df = new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' });
+		expect(out.display.title).to.equal(`Kitchen - Hello @${df.format(new Date(createdAt))}`);
 	});
 
 	it('renders explicit val, unit, and ts fields', () => {
@@ -37,7 +137,7 @@ describe('MsgRender', () => {
 
 		const out = renderer.renderMessage(msg);
 
-		expect(out.display.title).to.equal(`V21.75 U C T${ts}`);
+		expect(out.title).to.equal(`V21.75 U C T${ts}`);
 	});
 
 	it('applies num filter to numbers', () => {
@@ -48,7 +148,7 @@ describe('MsgRender', () => {
 		const out = renderer.renderMessage(msg);
 		const nf = new Intl.NumberFormat(locale, { maximumFractionDigits: 1 });
 
-		expect(out.display.title).to.equal(nf.format(46.234));
+		expect(out.title).to.equal(nf.format(46.234));
 	});
 
 	it('applies num filter to numeric strings', () => {
@@ -59,7 +159,7 @@ describe('MsgRender', () => {
 		const out = renderer.renderMessage(msg);
 		const nf = new Intl.NumberFormat(locale, { maximumFractionDigits: 0 });
 
-		expect(out.display.title).to.equal(nf.format(12.9));
+		expect(out.title).to.equal(nf.format(12.9));
 	});
 
 	it('applies datetime filter to timestamps', () => {
@@ -71,7 +171,59 @@ describe('MsgRender', () => {
 		const out = renderer.renderMessage(msg);
 		const df = new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' });
 
-		expect(out.display.title).to.equal(df.format(new Date(ts)));
+		expect(out.title).to.equal(df.format(new Date(ts)));
+	});
+
+	it('applies durationSince filter with the expected formatting buckets', () => {
+		const renderer = createRenderer({ locale });
+
+		const originalNow = Date.now;
+		const now = Date.UTC(2025, 0, 10, 12, 0, 0);
+		Date.now = () => now;
+		try {
+			const metrics = buildMetrics([
+				['a', { val: now - 56_000, unit: 'ms', ts: now }],
+				['b', { val: now - 34 * 60_000, unit: 'ms', ts: now }],
+				['c', { val: now - (3 * 60 + 45) * 60_000, unit: 'ms', ts: now }],
+				['d', { val: now - (24 * 60 + 4 * 60) * 60_000, unit: 'ms', ts: now }],
+				['future', { val: now + 10_000, unit: 'ms', ts: now }],
+			]);
+			const msg = createMessage({
+				title: '{{m.a|durationSince}}/{{m.b|durationSince}}/{{m.c|durationSince}}/{{m.d|durationSince}}/{{m.future|durationSince}}',
+				metrics,
+			});
+
+			const out = renderer.renderMessage(msg);
+			expect(out.title).to.equal('56s/34m/3:45h/1d 4h/');
+		} finally {
+			Date.now = originalNow;
+		}
+	});
+
+	it('applies durationUntil filter and hides past timestamps', () => {
+		const renderer = createRenderer({ locale });
+
+		const originalNow = Date.now;
+		const now = Date.UTC(2025, 0, 10, 12, 0, 0);
+		Date.now = () => now;
+		try {
+			const metrics = buildMetrics([
+				['a', { val: now + 56_000, unit: 'ms', ts: now }],
+				['b', { val: now + 34 * 60_000, unit: 'ms', ts: now }],
+				['c', { val: now + (3 * 60 + 45) * 60_000, unit: 'ms', ts: now }],
+				['d', { val: now + (24 * 60 + 4 * 60) * 60_000, unit: 'ms', ts: now }],
+				['past', { val: now - 10_000, unit: 'ms', ts: now }],
+			]);
+			const msg = createMessage({
+				title: '{{m.a|durationUntil}}/{{m.b|durationUntil}}/{{m.c|durationUntil}}/{{m.d|durationUntil}}/{{m.past|durationUntil}}',
+				metrics,
+			});
+
+			const out = renderer.renderMessage(msg);
+			expect(out.title).to.equal('56s/34m/3:45h/1d 4h/');
+		} finally {
+			Date.now = originalNow;
+		}
 	});
 
 	it('renders raw metric values without units', () => {
@@ -81,7 +233,7 @@ describe('MsgRender', () => {
 
 		const out = renderer.renderMessage(msg);
 
-		expect(out.display.title).to.equal('21.75');
+		expect(out.title).to.equal('21.75');
 	});
 
 	it('renders timing fields with the t prefix', () => {
@@ -92,7 +244,7 @@ describe('MsgRender', () => {
 		const out = renderer.renderMessage(msg);
 		const df = new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' });
 
-		expect(out.display.title).to.equal(df.format(new Date(ts)));
+		expect(out.title).to.equal(df.format(new Date(ts)));
 	});
 
 	it('renders raw timing fields without formatting', () => {
@@ -102,7 +254,7 @@ describe('MsgRender', () => {
 
 		const out = renderer.renderMessage(msg);
 
-		expect(out.display.title).to.equal(String(ts));
+		expect(out.title).to.equal(String(ts));
 	});
 
 	it('applies bool filter with custom labels', () => {
@@ -115,7 +267,7 @@ describe('MsgRender', () => {
 
 		const out = renderer.renderMessage(msg);
 
-		expect(out.display.title).to.equal('yes/off');
+		expect(out.title).to.equal('yes/off');
 	});
 
 	it('applies default filter to missing or empty values', () => {
@@ -125,7 +277,7 @@ describe('MsgRender', () => {
 
 		const out = renderer.renderMessage(msg);
 
-		expect(out.display.title).to.equal('--/--/--');
+		expect(out.title).to.equal('--/--/--');
 	});
 
 	it('keeps values unchanged for unknown filters', () => {
@@ -136,7 +288,7 @@ describe('MsgRender', () => {
 		const out = renderer.renderMessage(msg);
 		const nf = new Intl.NumberFormat(locale, { maximumFractionDigits: 2 });
 
-		expect(out.display.title).to.equal(`${nf.format(21.75)} C`);
+		expect(out.title).to.equal(`${nf.format(21.75)} C`);
 	});
 
 	it('returns non-template inputs unchanged', () => {
@@ -165,14 +317,31 @@ describe('MsgRender', () => {
 
 		const out = renderer.renderMessage(msg);
 
-		expect(out.display.details.location).to.equal('Room Kitchen');
-		expect(out.display.details.task).to.equal('Do Filter');
-		expect(out.display.details.reason).to.equal('Because Filter');
-		expect(out.display.details.tools).to.deep.equal(['Use Brush', 123]);
-		expect(out.display.details.consumables).to.deep.equal(['Add Soap']);
+		expect(out.details.location).to.equal('Room Kitchen');
+		expect(out.details.task).to.equal('Do Filter');
+		expect(out.details.reason).to.equal('Because Filter');
+		expect(out.details.tools).to.deep.equal(['Use Brush', 123]);
+		expect(out.details.consumables).to.deep.equal(['Add Soap']);
 
 		expect(msg.details.location).to.equal('Room {{m.room.val}}');
 		expect(msg.details.tools).to.deep.equal(['Use {{m.tool.val}}', 123]);
+	});
+
+	it('renders details placeholders with the d prefix', () => {
+		const renderer = createRenderer({ locale });
+		const msg = createMessage({
+			title: 'At {{d.location}}: {{d.task}} ({{d.tools}} / {{d.consumables}})',
+			details: {
+				location: 'Kitchen',
+				task: 'Clean',
+				tools: ['Brush', 'Soap', 123, null],
+				consumables: ['Filter'],
+			},
+		});
+
+		const out = renderer.renderMessage(msg);
+
+		expect(out.title).to.equal('At Kitchen: Clean (Brush, Soap, 123 / Filter)');
 	});
 
 	it('renders multiple placeholders in one string', () => {
@@ -185,6 +354,27 @@ describe('MsgRender', () => {
 
 		const out = renderer.renderMessage(msg);
 
-		expect(out.display.title).to.equal('A1-B2');
+		expect(out.title).to.equal('A1-B2');
 	});
-});
+
+	it('renders a list of messages via renderMessages', () => {
+		const renderer = createRenderer({ locale });
+		const metrics = buildMetrics([
+			['temperature', { val: 21.75, unit: 'C', ts: Date.UTC(2025, 0, 1) }],
+			['humidity', { val: 46.234, unit: '%', ts: Date.UTC(2025, 0, 3) }],
+		]);
+
+		const list = renderer.renderMessages(
+			[
+				createMessage({ title: 'Temp {{m.temperature}}', metrics }),
+				createMessage({ title: '{{m.humidity.val|num:1}}', metrics }),
+			],
+			{ locale },
+		);
+
+			expect(list).to.have.length(2);
+			expect(list[0].title).to.include('Temp');
+			expect(list[0]).to.have.property('display');
+			expect(list[1]).to.have.property('display');
+		});
+	});

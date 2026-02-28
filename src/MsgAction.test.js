@@ -26,6 +26,94 @@ function withFixedNow(now, fn) {
 }
 
 describe('MsgAction', () => {
+	it('policy: action matrix (open/acked/snoozed/quasiDeleted)', () => {
+		const { adapter } = createAdapter();
+		const store = { getMessageByRef: () => null, updateMessage: () => true };
+		const msgAction = new MsgAction(adapter, MsgConstants, store);
+
+		const action = type => ({ id: `id_${type}`, type });
+		const msg = state => ({ ref: 'r1', lifecycle: { state }, timing: {} });
+
+		// open: everything allowed (core workflow actions)
+		expect(msgAction.isActionAllowed(msg(MsgConstants.lifecycle.state.open), action(MsgConstants.actions.type.ack))).to.equal(true);
+		expect(msgAction.isActionAllowed(msg(MsgConstants.lifecycle.state.open), action(MsgConstants.actions.type.close))).to.equal(true);
+		expect(msgAction.isActionAllowed(msg(MsgConstants.lifecycle.state.open), action(MsgConstants.actions.type.delete))).to.equal(true);
+		expect(msgAction.isActionAllowed(msg(MsgConstants.lifecycle.state.open), action(MsgConstants.actions.type.snooze))).to.equal(true);
+
+		// acked: close/delete only
+		expect(msgAction.isActionAllowed(msg(MsgConstants.lifecycle.state.acked), action(MsgConstants.actions.type.ack))).to.equal(false);
+		expect(msgAction.isActionAllowed(msg(MsgConstants.lifecycle.state.acked), action(MsgConstants.actions.type.close))).to.equal(true);
+		expect(msgAction.isActionAllowed(msg(MsgConstants.lifecycle.state.acked), action(MsgConstants.actions.type.delete))).to.equal(true);
+		expect(msgAction.isActionAllowed(msg(MsgConstants.lifecycle.state.acked), action(MsgConstants.actions.type.snooze))).to.equal(false);
+
+		// snoozed: ack/close/delete only
+		expect(msgAction.isActionAllowed(msg(MsgConstants.lifecycle.state.snoozed), action(MsgConstants.actions.type.ack))).to.equal(true);
+		expect(msgAction.isActionAllowed(msg(MsgConstants.lifecycle.state.snoozed), action(MsgConstants.actions.type.close))).to.equal(true);
+		expect(msgAction.isActionAllowed(msg(MsgConstants.lifecycle.state.snoozed), action(MsgConstants.actions.type.delete))).to.equal(true);
+		expect(msgAction.isActionAllowed(msg(MsgConstants.lifecycle.state.snoozed), action(MsgConstants.actions.type.snooze))).to.equal(false);
+
+		// quasi-deleted: nothing allowed
+		for (const state of [
+			MsgConstants.lifecycle.state.closed,
+			MsgConstants.lifecycle.state.deleted,
+			MsgConstants.lifecycle.state.expired,
+		]) {
+			expect(msgAction.isActionAllowed(msg(state), action(MsgConstants.actions.type.ack))).to.equal(false);
+			expect(msgAction.isActionAllowed(msg(state), action(MsgConstants.actions.type.close))).to.equal(false);
+			expect(msgAction.isActionAllowed(msg(state), action(MsgConstants.actions.type.delete))).to.equal(false);
+			expect(msgAction.isActionAllowed(msg(state), action(MsgConstants.actions.type.snooze))).to.equal(false);
+		}
+	});
+
+	it('buildActions: splits into actions + actionsInactive', () => {
+		const { adapter } = createAdapter();
+		const store = { getMessageByRef: () => null, updateMessage: () => true };
+		const msgAction = new MsgAction(adapter, MsgConstants, store);
+
+		const message = {
+			ref: 'r1',
+			lifecycle: { state: MsgConstants.lifecycle.state.acked },
+			timing: {},
+			actions: [
+				{ id: 'ack1', type: MsgConstants.actions.type.ack },
+				{ id: 'close1', type: MsgConstants.actions.type.close },
+				{ id: 'delete1', type: MsgConstants.actions.type.delete },
+				{ id: 'snooze1', type: MsgConstants.actions.type.snooze, payload: { forMs: 1000 } },
+			],
+		};
+
+		const out = msgAction.buildActions(message);
+		expect(out).to.be.an('object');
+		expect(out.actions.map(a => a.id)).to.deep.equal(['close1', 'delete1']);
+		expect(out.actionsInactive.map(a => a.id)).to.deep.equal(['ack1', 'snooze1']);
+	});
+
+	it('policy: blocks snooze when message is acked', () => {
+		const { adapter } = createAdapter();
+		const store = { getMessageByRef: () => null, updateMessage: () => true };
+		const msgAction = new MsgAction(adapter, MsgConstants, store);
+		const msg = {
+			ref: 'r1',
+			lifecycle: { state: MsgConstants.lifecycle.state.acked },
+			timing: {},
+		};
+		const action = { id: 's1', type: MsgConstants.actions.type.snooze };
+		expect(msgAction.isActionAllowed(msg, action)).to.equal(false);
+	});
+
+	it('policy: blocks snooze when message is snoozed', () => {
+		const { adapter } = createAdapter();
+		const store = { getMessageByRef: () => null, updateMessage: () => true };
+		const msgAction = new MsgAction(adapter, MsgConstants, store);
+		const msg = {
+			ref: 'r1',
+			lifecycle: { state: MsgConstants.lifecycle.state.snoozed },
+			timing: { notifyAt: Date.now() + 1000 },
+		};
+		const action = { id: 's1', type: MsgConstants.actions.type.snooze };
+		expect(msgAction.isActionAllowed(msg, action)).to.equal(false);
+	});
+
 	it('rejects missing ref', () => {
 		const { adapter } = createAdapter();
 		const store = { getMessageByRef: () => null, updateMessage: () => true };
@@ -97,10 +185,10 @@ describe('MsgAction', () => {
 			expect(msgAction.execute({ ref: 'r1', actionId: 'ack1', actor: 'UI' })).to.equal(true);
 		});
 
-		expect(patched).to.deep.equal({
-			lifecycle: { state: 'acked', stateChangedAt: 1000, stateChangedBy: 'UI' },
-			timing: { notifyAt: null },
-		});
+			expect(patched).to.deep.equal({
+				lifecycle: { state: 'acked', stateChangedBy: 'UI' },
+				timing: { notifyAt: null },
+			});
 		expect(recorded).to.have.length(1);
 		expect(recorded[0].ref).to.equal('r1');
 			expect(recorded[0].payload.actionId).to.equal('ack1');
@@ -110,7 +198,65 @@ describe('MsgAction', () => {
 			expect(recorded[0].payload.payload).to.equal(null);
 		});
 
-	it('acks: idempotent if already acked and notifyAt already cleared', () => {
+	it('dispatches executed actions to msgIngest when available', () => {
+		const { adapter } = createAdapter();
+		let dispatched = null;
+		let dispatchedMeta = null;
+		const store = {
+			getMessageByRef: () => ({
+				ref: 'r1',
+				actions: [{ id: 'ack1', type: MsgConstants.actions.type.ack }],
+				lifecycle: { state: MsgConstants.lifecycle.state.open },
+				timing: { notifyAt: 123 },
+			}),
+			updateMessage: () => true,
+			msgIngest: {
+				dispatchAction: (actionInfo, meta) => {
+					dispatched = actionInfo;
+					dispatchedMeta = meta;
+				},
+			},
+		};
+		const msgAction = new MsgAction(adapter, MsgConstants, store);
+
+		withFixedNow(1000, () => {
+			expect(msgAction.execute({ ref: 'r1', actionId: 'ack1' })).to.equal(true);
+		});
+
+		expect(dispatchedMeta).to.deep.equal({ event: MsgConstants.action.events.executed });
+		expect(dispatched).to.include({ ref: 'r1', actionId: 'ack1', type: 'ack', ts: 1000 });
+		expect(dispatched).to.have.property('payload', null);
+		expect(dispatched).to.have.property('message');
+		expect(dispatched.message.ref).to.equal('r1');
+	});
+
+	it('does not dispatch to msgIngest when action execution fails', () => {
+		const { adapter } = createAdapter();
+		let dispatched = 0;
+		const store = {
+			getMessageByRef: () => ({
+				ref: 'r1',
+				actions: [{ id: 'ack1', type: MsgConstants.actions.type.ack }],
+				lifecycle: { state: MsgConstants.lifecycle.state.open },
+				timing: { notifyAt: 123 },
+			}),
+			updateMessage: () => false,
+			msgIngest: {
+				dispatchAction: () => {
+					dispatched += 1;
+				},
+			},
+		};
+		const msgAction = new MsgAction(adapter, MsgConstants, store);
+
+		withFixedNow(1000, () => {
+			expect(msgAction.execute({ ref: 'r1', actionId: 'ack1' })).to.equal(false);
+		});
+
+		expect(dispatched).to.equal(0);
+	});
+
+	it('acks: blocked by policy when message is already acked', () => {
 		const { adapter } = createAdapter();
 		let updates = 0;
 		const recorded = [];
@@ -133,11 +279,11 @@ describe('MsgAction', () => {
 			},
 		};
 		const msgAction = new MsgAction(adapter, MsgConstants, store);
-		expect(msgAction.execute({ ref: 'r1', actionId: 'ack1' })).to.equal(true);
+		expect(msgAction.execute({ ref: 'r1', actionId: 'ack1' })).to.equal(false);
 		expect(updates).to.equal(0);
 			expect(recorded).to.have.length(1);
-			expect(recorded[0].payload.ok).to.equal(true);
-			expect(recorded[0].payload.noop).to.equal(true);
+			expect(recorded[0].payload.ok).to.equal(false);
+			expect(recorded[0].payload.reason).to.equal('blocked_by_policy');
 			expect(recorded[0].payload.actor).to.equal(null);
 			expect(recorded[0].payload.payload).to.equal(null);
 		});
@@ -163,10 +309,80 @@ describe('MsgAction', () => {
 			expect(msgAction.execute({ ref: 'r1', actionId: 's1', actor: null })).to.equal(true);
 		});
 
-		expect(patched).to.deep.equal({
-			lifecycle: { state: 'snoozed', stateChangedAt: 1000, stateChangedBy: null },
-			timing: { notifyAt: 6000 },
+			expect(patched).to.deep.equal({
+				lifecycle: { state: 'snoozed', stateChangedBy: null },
+				timing: { notifyAt: 6000 },
+	});
+
+	it('snooze: rejects when message is already acked', () => {
+		const { adapter } = createAdapter();
+		let patched = null;
+		const store = {
+			getMessageByRef: () => ({
+				ref: 'r1',
+				actions: [{ id: 's1', type: MsgConstants.actions.type.snooze, payload: { forMs: 5000 } }],
+				lifecycle: { state: MsgConstants.lifecycle.state.acked },
+				timing: {},
+			}),
+			updateMessage: (_ref, patch) => {
+				patched = patch;
+				return true;
+			},
+		};
+		const msgAction = new MsgAction(adapter, MsgConstants, store);
+		expect(msgAction.execute({ ref: 'r1', actionId: 's1' })).to.equal(false);
+		expect(patched).to.equal(null);
+	});
+});
+
+	it('snooze: allows overriding forMs via snoozeForMs', () => {
+		const { adapter } = createAdapter();
+		let patched = null;
+		const store = {
+			getMessageByRef: () => ({
+				ref: 'r1',
+				actions: [{ id: 's1', type: MsgConstants.actions.type.snooze, payload: { forMs: 5000 } }],
+				lifecycle: { state: MsgConstants.lifecycle.state.open },
+				timing: { notifyAt: 123 },
+			}),
+			updateMessage: (_ref, patch) => {
+				patched = patch;
+				return true;
+			},
+		};
+		const msgAction = new MsgAction(adapter, MsgConstants, store);
+
+		withFixedNow(1000, () => {
+			expect(msgAction.execute({ ref: 'r1', actionId: 's1', actor: 'UI', snoozeForMs: 10000 })).to.equal(true);
 		});
+
+		expect(patched).to.deep.equal({
+			lifecycle: { state: 'snoozed', stateChangedBy: 'UI' },
+			timing: { notifyAt: 11000 },
+		});
+	});
+
+	it('snooze: rejects invalid snoozeForMs even when action.payload.forMs is valid', () => {
+		const { adapter } = createAdapter();
+		let patched = null;
+		const store = {
+			getMessageByRef: () => ({
+				ref: 'r1',
+				actions: [{ id: 's1', type: MsgConstants.actions.type.snooze, payload: { forMs: 5000 } }],
+				lifecycle: { state: MsgConstants.lifecycle.state.open },
+				timing: { notifyAt: 123 },
+			}),
+			updateMessage: (_ref, patch) => {
+				patched = patch;
+				return true;
+			},
+		};
+		const msgAction = new MsgAction(adapter, MsgConstants, store);
+
+		withFixedNow(1000, () => {
+			expect(msgAction.execute({ ref: 'r1', actionId: 's1', snoozeForMs: 0 })).to.equal(false);
+		});
+		expect(patched).to.equal(null);
 	});
 
 	it('snooze: rejects missing/invalid forMs', () => {

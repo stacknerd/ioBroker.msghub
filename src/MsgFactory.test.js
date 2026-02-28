@@ -15,6 +15,16 @@ function makeFactory() {
 	return { factory: new MsgFactory(adapter, MsgConstants), logs };
 }
 
+function withFixedNow(now, fn) {
+	const original = Date.now;
+	Date.now = () => now;
+	try {
+		return fn();
+	} finally {
+		Date.now = original;
+	}
+}
+
 function buildBase(overrides = {}) {
 	return {
 		ref: 'ref-1',
@@ -28,9 +38,9 @@ function buildBase(overrides = {}) {
 }
 
 	describe('MsgFactory.createMessage', () => {
-		it('creates a minimal valid message', () => {
-			const { factory } = makeFactory();
-			const msg = factory.createMessage(buildBase());
+			it('creates a minimal valid message', () => {
+				const { factory } = makeFactory();
+				const msg = factory.createMessage(buildBase());
 
 			expect(msg).to.be.an('object');
 			expect(msg.ref).to.equal('ref-1');
@@ -38,14 +48,28 @@ function buildBase(overrides = {}) {
 			expect(msg.kind).to.equal(MsgConstants.kind.task);
 			expect(msg.origin).to.deep.equal({ type: MsgConstants.origin.type.manual, system: 'unit', id: '1' });
 			expect(msg.lifecycle).to.deep.equal({ state: MsgConstants.lifecycle.state.open });
-			expect(msg.timing).to.be.an('object');
-			expect(msg.timing.createdAt).to.be.a('number');
+				expect(msg.timing).to.be.an('object');
+				expect(msg.timing.createdAt).to.be.a('number');
+			});
+
+			it('ignores core-managed lifecycle states on create', () => {
+				const { factory } = makeFactory();
+				const deleted = factory.createMessage(buildBase({ lifecycle: { state: MsgConstants.lifecycle.state.deleted } }));
+				expect(deleted.lifecycle.state).to.equal(MsgConstants.lifecycle.state.open);
+				const expired = factory.createMessage(buildBase({ lifecycle: { state: MsgConstants.lifecycle.state.expired } }));
+				expect(expired.lifecycle.state).to.equal(MsgConstants.lifecycle.state.open);
+			});
+
+		describe('required fields', () => {
+			it('normalizes ref by URL-encoding unsafe characters', () => {
+				const { factory } = makeFactory();
+				const msg = factory.createMessage(buildBase({ ref: 'ref-\n-1' }));
+			expect(msg.ref).to.equal('ref-%0A-1');
 		});
 
-	describe('required fields', () => {
-		it('normalizes ref by URL-encoding unsafe characters', () => {
+		it('does not double-encode already URL-encoded refs', () => {
 			const { factory } = makeFactory();
-			const msg = factory.createMessage(buildBase({ ref: 'ref-\n-1' }));
+			const msg = factory.createMessage(buildBase({ ref: 'ref-%0A-1' }));
 			expect(msg.ref).to.equal('ref-%0A-1');
 		});
 
@@ -151,6 +175,29 @@ function buildBase(overrides = {}) {
 		});
 		});
 
+		describe('icon', () => {
+			it('normalizes icon (trim, remove control chars, max length 10)', () => {
+				const { factory, logs } = makeFactory();
+				const msg = factory.createMessage(buildBase({ icon: '  A\tB\nC\u0007D  ' }));
+				expect(msg.icon).to.equal('A B C D');
+				expect(logs.warn).to.have.length(0);
+			});
+
+			it('truncates icon to max length 10 and logs a warning', () => {
+				const { factory, logs } = makeFactory();
+				const msg = factory.createMessage(buildBase({ icon: 'ABCDEFGHIJKL' }));
+				expect(msg.icon).to.equal('ABCDEFGHIJ');
+				expect(logs.warn.some(l => String(l).includes(`'icon' truncated`))).to.equal(true);
+			});
+
+			it('omits icon when invalid', () => {
+				const { factory } = makeFactory();
+				const msg = factory.createMessage(buildBase({ icon: 123 }));
+				expect(msg).to.be.an('object');
+				expect(msg).to.not.have.property('icon');
+			});
+		});
+
 		describe('lifecycle', () => {
 			it('defaults lifecycle.state to open', () => {
 				const { factory } = makeFactory();
@@ -170,29 +217,29 @@ function buildBase(overrides = {}) {
 			it('allows dueAt for task kind', () => {
 				const { factory } = makeFactory();
 				const dueAt = Date.UTC(2025, 0, 1);
-			const msg = factory.createMessage(buildBase({ timing: { dueAt } }));
-			expect(msg.timing.dueAt).to.equal(dueAt);
-		});
+				const msg = factory.createMessage(buildBase({ timing: { dueAt } }));
+				expect(msg.timing.dueAt).to.equal(dueAt);
+			});
 
-		it('allows startAt/endAt for appointment kind', () => {
-			const { factory } = makeFactory();
-			const startAt = Date.UTC(2025, 0, 1, 9);
-			const endAt = Date.UTC(2025, 0, 1, 10);
-			const msg = factory.createMessage(
-				buildBase({ kind: MsgConstants.kind.appointment, timing: { startAt, endAt } }),
-			);
-			expect(msg.timing.startAt).to.equal(startAt);
-			expect(msg.timing.endAt).to.equal(endAt);
-		});
+			it('allows startAt/endAt for appointment kind', () => {
+				const { factory } = makeFactory();
+				const startAt = Date.UTC(2025, 0, 1, 9);
+				const endAt = Date.UTC(2025, 0, 1, 10);
+				const msg = factory.createMessage(
+					buildBase({ kind: MsgConstants.kind.appointment, timing: { startAt, endAt } }),
+				);
+				expect(msg.timing.startAt).to.equal(startAt);
+				expect(msg.timing.endAt).to.equal(endAt);
+			});
 
-		it('omits dueAt for non-task kinds', () => {
-			const { factory } = makeFactory();
-			const dueAt = Date.UTC(2025, 0, 1);
-			const msg = factory.createMessage(
-				buildBase({ kind: MsgConstants.kind.appointment, timing: { dueAt } }),
-			);
-			expect(msg.timing).to.not.have.property('dueAt');
-		});
+			it('allows dueAt for non-task kinds', () => {
+				const { factory } = makeFactory();
+				const dueAt = Date.UTC(2025, 0, 1);
+				const msg = factory.createMessage(
+					buildBase({ kind: MsgConstants.kind.appointment, timing: { dueAt } }),
+				);
+				expect(msg.timing.dueAt).to.equal(dueAt);
+			});
 
 		it('rejects implausible timing timestamp', () => {
 			const { factory, logs } = makeFactory();
@@ -212,6 +259,12 @@ function buildBase(overrides = {}) {
 				const { factory } = makeFactory();
 				const msg = factory.createMessage(buildBase({ timing: { remindEvery: 60000.9 } }));
 				expect(msg.timing.remindEvery).to.equal(60000);
+			});
+
+			it('normalizes timeBudget', () => {
+				const { factory } = makeFactory();
+				const msg = factory.createMessage(buildBase({ timing: { timeBudget: 900000.9 } }));
+				expect(msg.timing.timeBudget).to.equal(900000);
 			});
 		});
 
@@ -266,13 +319,16 @@ function buildBase(overrides = {}) {
 		});
 	});
 
-	describe('progress', () => {
-		it('normalizes progress percentage and startedAt', () => {
-			const { factory } = makeFactory();
-			const startedAt = Date.UTC(2025, 0, 1);
-			const msg = factory.createMessage(buildBase({ progress: { percentage: 5.9, startedAt } }));
-			expect(msg.progress).to.deep.equal({ percentage: 5, startedAt });
-		});
+		describe('progress', () => {
+			it('normalizes progress percentage and sets startedAt on first start', () => {
+				const { factory } = makeFactory();
+				const now = Date.UTC(2025, 0, 1);
+				const providedStartedAt = Date.UTC(2024, 0, 1);
+				const msg = withFixedNow(now, () =>
+					factory.createMessage(buildBase({ progress: { percentage: 5.9, startedAt: providedStartedAt } })),
+				);
+				expect(msg.progress).to.deep.equal({ percentage: 5, startedAt: now });
+			});
 
 		it('rejects non-object progress', () => {
 			const { factory, logs } = makeFactory();
@@ -290,24 +346,37 @@ function buildBase(overrides = {}) {
 		});
 	});
 
-	describe('metrics', () => {
-		it('normalizes valid metrics map entries', () => {
-			const { factory } = makeFactory();
-			const metrics = new Map([
+		describe('metrics', () => {
+			it('normalizes valid metrics map entries', () => {
+				const { factory } = makeFactory();
+				const metrics = new Map([
 				['temperature', { val: 21.5, unit: 'C', ts: Date.UTC(2025, 0, 1) }],
 				['mode', { val: 'auto', unit: 'state', ts: Date.UTC(2025, 0, 2) }],
 			]);
 
 			const msg = factory.createMessage(buildBase({ metrics }));
 			expect(msg.metrics).to.be.instanceOf(Map);
-			expect(msg.metrics.get('temperature')).to.deep.equal({ val: 21.5, unit: 'C', ts: Date.UTC(2025, 0, 1) });
-			expect(msg.metrics.get('mode')).to.deep.equal({ val: 'auto', unit: 'state', ts: Date.UTC(2025, 0, 2) });
-		});
+				expect(msg.metrics.get('temperature')).to.deep.equal({ val: 21.5, unit: 'C', ts: Date.UTC(2025, 0, 1) });
+				expect(msg.metrics.get('mode')).to.deep.equal({ val: 'auto', unit: 'state', ts: Date.UTC(2025, 0, 2) });
+			});
 
-		it('drops invalid metrics entries', () => {
-			const { factory } = makeFactory();
-			const metrics = new Map([
-				['ok', { val: 1, unit: 'C', ts: Date.UTC(2025, 0, 1) }],
+			it('accepts empty metrics unit strings', () => {
+				const { factory } = makeFactory();
+				const metrics = new Map([
+					['a', { val: 1, unit: '', ts: Date.UTC(2025, 0, 1) }],
+					['b', { val: 2, unit: '  ', ts: Date.UTC(2025, 0, 1) }],
+				]);
+
+				const msg = factory.createMessage(buildBase({ metrics }));
+				expect(msg.metrics).to.be.instanceOf(Map);
+				expect(msg.metrics.get('a')).to.deep.equal({ val: 1, unit: '', ts: Date.UTC(2025, 0, 1) });
+				expect(msg.metrics.get('b')).to.deep.equal({ val: 2, unit: '', ts: Date.UTC(2025, 0, 1) });
+			});
+
+			it('drops invalid metrics entries', () => {
+				const { factory } = makeFactory();
+				const metrics = new Map([
+					['ok', { val: 1, unit: 'C', ts: Date.UTC(2025, 0, 1) }],
 				['bad', { val: { nested: true }, unit: 'x' }],
 			]);
 
@@ -444,6 +513,31 @@ describe('MsgFactory.applyPatch', () => {
 		expect(updated.timing.updatedAt).to.equal(2222);
 	});
 
+	it('does not set updatedAt for noop title patch', () => {
+		const { factory } = makeFactory();
+		const originalNow = Date.now;
+		Date.now = () => 1111;
+		const msg = factory.createMessage(buildBase());
+
+		Date.now = () => 2222;
+		const updated = factory.applyPatch(msg, { title: '  Test title  ' });
+		Date.now = originalNow;
+
+		expect(updated.title).to.equal('Test title');
+		expect(updated.timing.updatedAt).to.equal(undefined);
+	});
+
+	it('patches icon and clears it with null', () => {
+		const { factory } = makeFactory();
+		const msg = factory.createMessage(buildBase({ icon: '🌡️' }));
+
+		const updated = factory.applyPatch(msg, { icon: ' 12345678901 ' });
+		expect(updated.icon).to.equal('1234567890');
+
+		const cleared = factory.applyPatch(updated, { icon: null });
+		expect(cleared).to.not.have.property('icon');
+	});
+
 	it('sets updatedAt when timing.endAt changes', () => {
 		const { factory } = makeFactory();
 		const originalNow = Date.now;
@@ -459,6 +553,36 @@ describe('MsgFactory.applyPatch', () => {
 		expect(updated.timing.updatedAt).to.equal(4000);
 	});
 
+	it('sets updatedAt when timing.timeBudget changes', () => {
+		const { factory } = makeFactory();
+		const originalNow = Date.now;
+		Date.now = () => 3000;
+		const msg = factory.createMessage(buildBase());
+
+		Date.now = () => 4000;
+		const updated = factory.applyPatch(msg, { timing: { timeBudget: 900000 } });
+		Date.now = originalNow;
+
+		expect(updated.timing.timeBudget).to.equal(900000);
+		expect(updated.timing.updatedAt).to.equal(4000);
+	});
+
+	it('does not set updatedAt for noop timing patch', () => {
+		const { factory } = makeFactory();
+		const originalNow = Date.now;
+		const dueAt = Date.UTC(2025, 0, 1, 10);
+
+		Date.now = () => 3000;
+		const msg = factory.createMessage(buildBase({ timing: { dueAt } }));
+
+		Date.now = () => 4000;
+		const updated = factory.applyPatch(msg, { timing: { dueAt } });
+		Date.now = originalNow;
+
+		expect(updated.timing.dueAt).to.equal(dueAt);
+		expect(updated.timing.updatedAt).to.equal(undefined);
+	});
+
 	it('rejects ref changes but allows same ref', () => {
 		const { factory, logs } = makeFactory();
 		const msg = factory.createMessage(buildBase());
@@ -471,6 +595,92 @@ describe('MsgFactory.applyPatch', () => {
 		expect(updated).to.be.an('object');
 		expect(updated.ref).to.equal(msg.ref);
 		expect(updated.title).to.equal('Same ref ok');
+	});
+
+	it('supports listItems id-based partial updates without name', () => {
+		const { factory, logs } = makeFactory();
+		const msg = factory.createMessage(
+			buildBase({
+				kind: MsgConstants.kind.shoppinglist,
+				listItems: [
+					{ id: 'a:1', name: 'Milk', checked: false },
+					{ id: 'a:2', name: 'Eggs', checked: false },
+				],
+			}),
+		);
+
+		const updated = factory.applyPatch(msg, {
+			listItems: { set: { 'a:1': { checked: true } } },
+		});
+
+		expect(logs.warn).to.have.length(0);
+		expect(updated.listItems.find(it => it.id === 'a:1')).to.deep.equal({ id: 'a:1', name: 'Milk', checked: true });
+		expect(updated.listItems.find(it => it.id === 'a:2')).to.deep.equal({ id: 'a:2', name: 'Eggs', checked: false });
+	});
+
+	it('normalizes listItems perUnit and supports clearing it', () => {
+		const { factory, logs } = makeFactory();
+		const msg = factory.createMessage(
+			buildBase({
+				kind: MsgConstants.kind.shoppinglist,
+				listItems: [
+					{
+						id: 'a:1',
+						name: 'Water',
+						checked: false,
+						quantity: { val: 6, unit: 'pcs' },
+						perUnit: { val: 0.33, unit: 'l' },
+					},
+				],
+			}),
+		);
+
+		expect(logs.warn).to.have.length(0);
+		expect(msg.listItems).to.deep.equal([
+			{
+				id: 'a:1',
+				name: 'Water',
+				checked: false,
+				quantity: { val: 6, unit: 'pcs' },
+				perUnit: { val: 0.33, unit: 'l' },
+			},
+		]);
+
+		const updated = factory.applyPatch(msg, {
+			listItems: { set: { 'a:1': { perUnit: { val: 500, unit: 'ml' } } } },
+		});
+		expect(updated.listItems).to.deep.equal([
+			{
+				id: 'a:1',
+				name: 'Water',
+				checked: false,
+				quantity: { val: 6, unit: 'pcs' },
+				perUnit: { val: 500, unit: 'ml' },
+			},
+		]);
+
+		const cleared = factory.applyPatch(updated, {
+			listItems: { set: { 'a:1': { perUnit: null } } },
+		});
+		expect(cleared.listItems).to.deep.equal([
+			{
+				id: 'a:1',
+				name: 'Water',
+				checked: false,
+				quantity: { val: 6, unit: 'pcs' },
+			},
+		]);
+	});
+
+	it('accepts patches that include an already normalized ref', () => {
+		const { factory, logs } = makeFactory();
+		const msg = factory.createMessage(buildBase({ ref: 'ref-\n-1' }));
+
+		const updated = factory.applyPatch(msg, { ref: msg.ref, title: 'Same ref ok' });
+		expect(updated).to.be.an('object');
+		expect(updated.ref).to.equal(msg.ref);
+		expect(updated.title).to.equal('Same ref ok');
+		expect(logs.error).to.deep.equal([]);
 	});
 
 	it('rejects kind changes', () => {
@@ -573,6 +783,14 @@ describe('MsgFactory.applyPatch', () => {
 		expect(updated.timing).to.not.have.property('notifyAt');
 	});
 
+	it('removes timing.timeBudget when set to null', () => {
+		const { factory } = makeFactory();
+		const msg = factory.createMessage(buildBase({ timing: { timeBudget: 900000 } }));
+
+		const updated = factory.applyPatch(msg, { timing: { timeBudget: null } });
+		expect(updated.timing).to.not.have.property('timeBudget');
+	});
+
 	it('clears attachments when set to null', () => {
 		const { factory } = makeFactory();
 		const attachments = [{ type: MsgConstants.attachments.type.image, value: 'https://x' }];
@@ -653,14 +871,78 @@ describe('MsgFactory.applyPatch', () => {
 		expect(updated.dependencies).to.deep.equal(['a', 'c']);
 	});
 
-	it('patches progress with set/delete', () => {
-		const { factory } = makeFactory();
-		const msg = factory.createMessage(buildBase({ progress: { percentage: 10, finishedAt: Date.UTC(2025, 0, 1) } }));
+			it('patches progress with set/delete', () => {
+				const { factory } = makeFactory();
+				const t0 = Date.UTC(2025, 0, 1, 0, 0, 0);
+				const msg = withFixedNow(t0, () => factory.createMessage(buildBase({ progress: { percentage: 0 } })));
 
-		const updated = factory.applyPatch(msg, { progress: { set: { percentage: 50 }, delete: ['finishedAt'] } });
-		expect(updated.progress.percentage).to.equal(50);
-		expect(updated.progress).to.not.have.property('finishedAt');
-	});
+				const started = withFixedNow(t0 + 1000, () =>
+					factory.applyPatch(msg, {
+						progress: { set: { percentage: 50, startedAt: 123 }, delete: ['finishedAt', 'startedAt'] },
+					}),
+				);
+				expect(started.progress).to.deep.equal({ percentage: 50, startedAt: t0 + 1000 });
+
+				const finished = withFixedNow(t0 + 2000, () =>
+					factory.applyPatch(started, { progress: { percentage: 100, finishedAt: 1 } }),
+				);
+				expect(finished.progress).to.deep.equal({
+					percentage: 100,
+					startedAt: t0 + 1000,
+					finishedAt: t0 + 2000,
+				});
+
+				const reopened = withFixedNow(t0 + 3000, () => factory.applyPatch(finished, { progress: { percentage: 80 } }));
+				expect(reopened.progress).to.deep.equal({ percentage: 80, startedAt: t0 + 1000 });
+			});
+
+				it('core-owns lifecycle.stateChangedAt and bumps it on state changes', () => {
+					const { factory } = makeFactory();
+					const t0 = Date.UTC(2025, 0, 1, 0, 0, 0);
+					const msg = withFixedNow(t0, () => factory.createMessage(buildBase()));
+
+				const updated = withFixedNow(t0 + 1000, () =>
+					factory.applyPatch(msg, {
+						lifecycle: { state: MsgConstants.lifecycle.state.acked, stateChangedAt: 123, stateChangedBy: 'UI' },
+					}),
+				);
+				expect(updated.lifecycle.state).to.equal(MsgConstants.lifecycle.state.acked);
+				expect(updated.lifecycle.stateChangedAt).to.equal(t0 + 1000);
+				expect(updated.lifecycle.stateChangedBy).to.equal('UI');
+				expect(updated.timing.updatedAt).to.equal(t0 + 1000);
+
+				const noop = withFixedNow(t0 + 2000, () =>
+					factory.applyPatch(updated, { lifecycle: { stateChangedAt: 9999 } }),
+				);
+					expect(noop.lifecycle.stateChangedAt).to.equal(t0 + 1000);
+					expect(noop.timing.updatedAt).to.equal(t0 + 1000);
+				});
+
+				it('rejects patching core-managed lifecycle states (deleted/expired)', () => {
+					const { factory, logs } = makeFactory();
+					const msg = factory.createMessage(buildBase());
+					const updated = factory.applyPatch(msg, { lifecycle: { state: MsgConstants.lifecycle.state.deleted } });
+					expect(updated).to.equal(null);
+					expect(logs.error.length).to.be.greaterThan(0);
+				});
+
+				it('allows core to patch lifecycle.state to deleted/expired', () => {
+					const { factory } = makeFactory();
+					const t0 = Date.UTC(2025, 0, 1, 0, 0, 0);
+					const msg = withFixedNow(t0, () => factory.createMessage(buildBase()));
+
+					const deleted = withFixedNow(t0 + 1000, () =>
+						factory.applyPatch(
+							msg,
+							{ lifecycle: { state: MsgConstants.lifecycle.state.deleted, stateChangedBy: 'core' } },
+							false,
+							{ allowCoreLifecycleStates: true },
+						),
+					);
+					expect(deleted.lifecycle.state).to.equal(MsgConstants.lifecycle.state.deleted);
+					expect(deleted.lifecycle.stateChangedAt).to.equal(t0 + 1000);
+					expect(deleted.lifecycle.stateChangedBy).to.equal('core');
+				});
 
 	it('rejects non-object patch input', () => {
 		const { factory, logs } = makeFactory();

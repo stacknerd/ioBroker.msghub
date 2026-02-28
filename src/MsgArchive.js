@@ -7,7 +7,7 @@
  *
  * Core responsibilities
  * - Persist immutable lifecycle events for messages as newline-delimited JSON (JSONL).
- * - Store one archive file per message ref to keep files small and make per-message inspection easy.
+ * - Store one archive file per message ref and week segment to keep files small and make per-message inspection easy.
  * - Batch and serialize writes to reduce storage churn while preserving per-ref event ordering.
  *
  * Design guidelines / invariants
@@ -18,18 +18,23 @@
  * - JSONL format: each line is a single JSON object. This is friendly for streaming, grepping, and replay tools.
  * - Backend constraints: ioBroker file storage does not provide an "append" API, so appends are implemented as
  *   read-the-whole-file + rewrite-with-added-lines. For large archive files this is O(fileSize) per flush.
+ * - Retention: optional best-effort cleanup of old weekly segments (`keepPreviousWeeks`).
  *
  * File naming and refs
- * - Refs are URL-encoded (`encodeURIComponent`) to generate filesystem-friendly file names.
- * - The on-disk file name is `<encodedRef>.<fileExtension>` under `baseDir`.
+ * - Refs are URL-encoded (`encodeURIComponent`) to generate filesystem-friendly path segments.
+ * - Dots in the (encoded) ref split the archive path into subdirectories to keep folder listings small,
+ *   with one exception: the first `.<digits>` segment is kept as part of the first path segment
+ *   (e.g. `IngestHue.0.*` becomes `IngestHue.0/...`, not `IngestHue/0/...`).
+ * - Archive files are segmented by local-week (Monday 00:00) and named as:
+ *   `<encodedRefWithDotsAsSlashes>.<YYYYMMDD>.<fileExtension>` under `baseDir`,
+ *   where `YYYYMMDD` is the Monday start date of the segment in local time.
  *
  * Map-safe JSON
  * - Entries are serialized via `serializeWithMaps()` so `Map` values (e.g. metrics) remain intact.
  */
 
-const { DEFAULT_MAP_TYPE_MARKER, serializeWithMaps, ensureMetaObject, ensureBaseDir, createOpQueue } = require(
-	`${__dirname}/MsgUtils`,
-);
+const { DEFAULT_MAP_TYPE_MARKER, serializeWithMaps, createOpQueue } = require(`${__dirname}/MsgUtils`);
+const crypto = require('crypto');
 
 /**
  * MsgArchive
@@ -45,27 +50,74 @@ class MsgArchive {
 	 * @param {string} [options.fileExtension] File extension without leading dot (default: "jsonl").
 	 * @param {number} [options.flushIntervalMs] Flush interval in ms (0 = immediate; default 10000).
 	 * @param {number} [options.maxBatchSize] Max queued events per ref before forced flush (default 200).
+	 * @param {number} [options.keepPreviousWeeks] How many previous week segments to keep, in addition to the current one (default 3).
+	 * @param {number} [options.maxPathSegmentLength] Max length (bytes) per path component derived from refs (default 120).
+	 * @param {(onMutated?: () => void) => any} options.createStorageBackend
+	 *   Platform-resolved backend factory injection.
+	 * @param {{ configuredStrategyLock?: string, effectiveStrategy?: string, effectiveStrategyReason?: string, nativeRootDir?: string, nativeProbeError?: string, writeDisabled?: boolean }} [options.archiveRuntime]
+	 *   Platform-resolved runtime strategy diagnostics.
 	 */
-	constructor(adapter, options = {}) {
+	constructor(adapter, options) {
 		if (!adapter) {
 			throw new Error('MsgArchive: adapter is required');
 		}
+		const opt = options && typeof options === 'object' && !Array.isArray(options) ? options : {};
 
 		this.adapter = adapter;
-		this.metaId = options.metaId || adapter.namespace;
-		this.baseDir = typeof options.baseDir === 'string' ? options.baseDir.replace(/^\/+|\/+$/g, '') : '';
+		this.metaId = opt.metaId || adapter.namespace;
+		this.baseDir = typeof opt.baseDir === 'string' ? opt.baseDir.replace(/^\/+|\/+$/g, '') : '';
 		this.fileExtension =
-			typeof options.fileExtension === 'string' && options.fileExtension.trim()
-				? options.fileExtension.trim().replace(/^\./, '')
+			typeof opt.fileExtension === 'string' && opt.fileExtension.trim()
+				? opt.fileExtension.trim().replace(/^\./, '')
 				: 'jsonl';
 		this.flushIntervalMs =
-			typeof options.flushIntervalMs === 'number' && Number.isFinite(options.flushIntervalMs)
-				? Math.max(0, options.flushIntervalMs)
+			typeof opt.flushIntervalMs === 'number' && Number.isFinite(opt.flushIntervalMs)
+				? Math.max(0, opt.flushIntervalMs)
 				: 10000;
 		this.maxBatchSize =
-			typeof options.maxBatchSize === 'number' && Number.isFinite(options.maxBatchSize)
-				? Math.max(1, options.maxBatchSize)
+			typeof opt.maxBatchSize === 'number' && Number.isFinite(opt.maxBatchSize)
+				? Math.max(1, opt.maxBatchSize)
 				: 200;
+		this.keepPreviousWeeks =
+			typeof opt.keepPreviousWeeks === 'number' && Number.isFinite(opt.keepPreviousWeeks)
+				? Math.max(0, Math.trunc(opt.keepPreviousWeeks))
+				: 3;
+
+		// Bound file/path segment size to avoid ENAMETOOLONG crashes when refs are huge.
+		// (Most Linux filesystems limit a single path component to 255 bytes; encoded refs can exceed this easily.)
+		this.maxPathSegmentLength =
+			typeof opt.maxPathSegmentLength === 'number' && Number.isFinite(opt.maxPathSegmentLength)
+				? Math.max(32, Math.trunc(opt.maxPathSegmentLength))
+				: 120;
+
+		const runtimeRaw =
+			opt.archiveRuntime && typeof opt.archiveRuntime === 'object' && !Array.isArray(opt.archiveRuntime)
+				? opt.archiveRuntime
+				: {};
+		const configuredRaw =
+			typeof runtimeRaw.configuredStrategyLock === 'string'
+				? runtimeRaw.configuredStrategyLock.trim().toLowerCase()
+				: '';
+		this.configuredStrategyLock = configuredRaw === 'native' || configuredRaw === 'iobroker' ? configuredRaw : '';
+		const effectiveRaw =
+			typeof runtimeRaw.effectiveStrategy === 'string' ? runtimeRaw.effectiveStrategy.trim().toLowerCase() : '';
+		this.effectiveStrategy = effectiveRaw === 'native' || effectiveRaw === 'iobroker' ? effectiveRaw : 'iobroker';
+		this.effectiveStrategyReason =
+			typeof runtimeRaw.effectiveStrategyReason === 'string' && runtimeRaw.effectiveStrategyReason.trim()
+				? runtimeRaw.effectiveStrategyReason.trim()
+				: 'platform-unset';
+		this.nativeRootDir = typeof runtimeRaw.nativeRootDir === 'string' ? runtimeRaw.nativeRootDir.trim() : '';
+		this._nativeProbeError =
+			typeof runtimeRaw.nativeProbeError === 'string' ? runtimeRaw.nativeProbeError.trim() : '';
+		this._writeDisabled = runtimeRaw.writeDisabled === true;
+
+		this._mapTypeMarker = DEFAULT_MAP_TYPE_MARKER;
+		const createStorageBackend = typeof opt.createStorageBackend === 'function' ? opt.createStorageBackend : null;
+		if (!createStorageBackend) {
+			throw new Error('MsgArchive: options.createStorageBackend is required');
+		}
+		this._storageBackend = createStorageBackend(() => this._markArchiveMutated());
+		this._assertBackendContract(this._storageBackend, this.effectiveStrategy || 'resolved');
 
 		this.schemaVersion = 1;
 
@@ -75,7 +127,235 @@ class MsgArchive {
 		// Pending events per ref file key, along with timers and waiters.
 		this._pending = new Map();
 
-		this._mapTypeMarker = DEFAULT_MAP_TYPE_MARKER;
+		// Best-effort runtime status for diagnostics / stats UIs.
+		this._lastFlushedAt = 0;
+		this._sizeEstimateAt = 0;
+		this._sizeEstimateBytes = null;
+		this._sizeEstimateIsComplete = false;
+	}
+
+	/**
+	 * Assert minimal backend contract shape.
+	 *
+	 * @param {any} backend Backend instance.
+	 * @param {string} label Backend label for diagnostics.
+	 * @returns {void}
+	 */
+	_assertBackendContract(backend, label) {
+		const required = ['init', 'appendEntries', 'readDir', 'deleteFile', 'estimateSizeBytes', 'runtimeRoot'];
+		for (const method of required) {
+			if (typeof backend?.[method] !== 'function') {
+				throw new Error(`MsgArchive: ${label} backend missing method '${method}'`);
+			}
+		}
+	}
+
+	/**
+	 * Create a stable short hash for a segment shortening suffix.
+	 *
+	 * @param {any} value Input value to hash.
+	 * @returns {string} Short hex hash string.
+	 */
+	_hashSegment(value) {
+		return crypto
+			.createHash('sha1')
+			.update(String(value || ''))
+			.digest('hex')
+			.slice(0, 12);
+	}
+
+	/**
+	 * Bound a single path component derived from an encoded ref.
+	 *
+	 * When a segment exceeds `maxPathSegmentLength` (bytes), the segment is truncated and a stable hash suffix is added:
+	 * `<prefix>~<hash>`.
+	 *
+	 * @param {string} segment Path segment candidate.
+	 * @param {string} refKey Full encoded ref key (used for stable hashing).
+	 * @param {number} index Segment index within the ref path.
+	 * @returns {string} Safe path segment.
+	 */
+	_limitPathSegment(segment, refKey, index) {
+		const maxLen =
+			typeof this.maxPathSegmentLength === 'number' && Number.isFinite(this.maxPathSegmentLength)
+				? this.maxPathSegmentLength
+				: 120;
+		const s = String(segment || '');
+		if (!s) {
+			return s;
+		}
+
+		// Use byte length to avoid surprises with non-ascii content (even though encoded refs are typically ascii).
+		if (Buffer.byteLength(s, 'utf8') <= maxLen) {
+			return s;
+		}
+
+		const hash = this._hashSegment(`${refKey || ''}:${index}:${s}`);
+		const suffix = `~${hash}`;
+		const keep = Math.max(1, maxLen - suffix.length);
+		return `${s.slice(0, keep)}${suffix}`;
+	}
+
+	/**
+	 * Determine the local-week segment start (Monday 00:00) for a timestamp.
+	 *
+	 * @param {number} ts Epoch milliseconds.
+	 * @returns {Date} Date set to local Monday 00:00.
+	 */
+	_weekStartLocal(ts) {
+		const t = typeof ts === 'number' && Number.isFinite(ts) ? ts : Date.now();
+		const d = new Date(t);
+		const day = d.getDay(); // 0 (Sun) .. 6 (Sat)
+		const daysSinceMonday = (day + 6) % 7; // Mon -> 0, Sun -> 6
+		d.setHours(0, 0, 0, 0);
+		d.setDate(d.getDate() - daysSinceMonday);
+		return d;
+	}
+
+	/**
+	 * Format a date as YYYYMMDD in local time.
+	 *
+	 * @param {Date} d Date instance (local time).
+	 * @returns {string} YYYYMMDD.
+	 */
+	_formatLocalYyyyMmDd(d) {
+		const year = d.getFullYear();
+		const month = String(d.getMonth() + 1).padStart(2, '0');
+		const day = String(d.getDate()).padStart(2, '0');
+		return `${year}${month}${day}`;
+	}
+
+	/**
+	 * Compute the segment key for a timestamp (local-week start, Monday 00:00).
+	 *
+	 * @param {number} ts Epoch milliseconds.
+	 * @returns {string} Segment key as YYYYMMDD.
+	 */
+	_segmentKeyForTs(ts) {
+		return this._formatLocalYyyyMmDd(this._weekStartLocal(ts));
+	}
+
+	/**
+	 * Returns the set of segment keys that should be kept, based on `keepPreviousWeeks`.
+	 *
+	 * Semantics:
+	 * - keepPreviousWeeks = 0 -> keep only the current segment
+	 * - keepPreviousWeeks = 3 -> keep current + 3 previous segments (4 segments total)
+	 *
+	 * @param {number} nowTs Timestamp used to determine the "current week".
+	 * @returns {Set<string>} Set of segment keys (YYYYMMDD) to keep.
+	 */
+	_segmentKeysToKeep(nowTs) {
+		const keep =
+			typeof this.keepPreviousWeeks === 'number' && Number.isFinite(this.keepPreviousWeeks)
+				? this.keepPreviousWeeks
+				: 0;
+		const start = this._weekStartLocal(nowTs);
+		const keys = new Set();
+		for (let i = 0; i <= keep; i += 1) {
+			const d = new Date(start.getTime());
+			d.setDate(d.getDate() - i * 7);
+			keys.add(this._formatLocalYyyyMmDd(d));
+		}
+		return keys;
+	}
+
+	/**
+	 * Compute directory + base name for a ref key (already URL-encoded).
+	 *
+	 * @param {string} refKey Encoded ref key (encodeURIComponent(ref)).
+	 * @returns {{dirPath: string, baseName: string}} Directory path and base filename (without segment/ext).
+	 */
+	_refPathInfo(refKey) {
+		const segments = this._refPathSegments(refKey);
+		const baseName = segments.length > 0 ? segments[segments.length - 1] : String(refKey || '').trim() || 'unknown';
+		const relDir = segments.length > 1 ? segments.slice(0, -1).join('/') : '';
+		const dirPath = this.baseDir ? (relDir ? `${this.baseDir}/${relDir}` : this.baseDir) : relDir;
+		return { dirPath, baseName };
+	}
+
+	/**
+	 * Convert an encoded ref key into path segments.
+	 *
+	 * Rules:
+	 * - Split by dot (`.`) to create folder segments.
+	 * - Exception: when the second segment is numeric (plugin instance), keep `<name>.<digits>` together.
+	 *
+	 * @param {string} refKey Encoded ref key (encodeURIComponent(ref)).
+	 * @returns {string[]} Path segments.
+	 */
+	_refPathSegments(refKey) {
+		const key = String(refKey || '').trim();
+		if (!key) {
+			return [];
+		}
+
+		const parts = key.split('.').filter(Boolean);
+		let segments;
+		if (parts.length >= 2 && /^[0-9]+$/.test(parts[1])) {
+			segments = [`${parts[0]}.${parts[1]}`, ...parts.slice(2)];
+		} else {
+			segments = parts;
+		}
+
+		return segments.map((segment, index) => this._limitPathSegment(segment, key, index)).filter(Boolean);
+	}
+
+	/**
+	 * Best-effort delete a file via the active archive backend.
+	 *
+	 * @param {string} filePath Relative archive file path.
+	 * @returns {Promise<void>}
+	 */
+	async _deleteFile(filePath) {
+		await this._storageBackend.deleteFile(filePath);
+	}
+
+	/**
+	 * Enforce retention policy for a single ref by deleting old weekly segment files (best-effort).
+	 *
+	 * @param {string} refKey Encoded ref key.
+	 * @returns {Promise<void>}
+	 */
+	async _applyRetention(refKey) {
+		const keep =
+			typeof this.keepPreviousWeeks === 'number' && Number.isFinite(this.keepPreviousWeeks)
+				? this.keepPreviousWeeks
+				: 0;
+		if (keep < 0) {
+			return;
+		}
+
+		const keepKeys = this._segmentKeysToKeep(Date.now());
+		const { dirPath, baseName } = this._refPathInfo(refKey);
+		const prefix = `${baseName}.`;
+		const suffix = `.${this.fileExtension}`;
+
+		const entries = await this._storageBackend.readDir(dirPath || '');
+		const deletions = [];
+		for (const entry of entries || []) {
+			if (!entry || entry.isDir) {
+				continue;
+			}
+			const file = entry.name;
+			if (typeof file !== 'string' || !file.startsWith(prefix) || !file.endsWith(suffix)) {
+				continue;
+			}
+			const segmentKey = file.slice(prefix.length, file.length - suffix.length);
+			if (!/^[0-9]{8}$/.test(segmentKey) || keepKeys.has(segmentKey)) {
+				continue;
+			}
+
+			const fullPath = dirPath ? `${dirPath}/${file}` : file;
+			deletions.push(this._deleteFile(fullPath));
+		}
+
+		if (deletions.length > 0) {
+			await Promise.allSettled(deletions);
+			this.adapter?.log?.debug?.(
+				`MsgArchive retention: deleted ${deletions.length} old segment file(s) for ${baseName} (keepPreviousWeeks=${keep})`,
+			);
+		}
 	}
 
 	/**
@@ -87,10 +367,14 @@ class MsgArchive {
 	 * @returns {Promise<void>} Resolves when the archive is ready for writes.
 	 */
 	async init() {
-		await ensureMetaObject(this.adapter, this.metaId);
-		await ensureBaseDir(this.adapter, this.metaId, this.baseDir);
+		await this._storageBackend.init();
+		if (this._writeDisabled === true) {
+			this.adapter?.log?.error?.(
+				`MsgArchive writer disabled: strategy=${this.effectiveStrategy} reason=${this.effectiveStrategyReason} nativeProbeError=${this._nativeProbeError || '-'}. Manual action required (retry native or downgrade to ioBroker File-API).`,
+			);
+		}
 		this.adapter?.log?.info?.(
-			`MsgArchive initialized: baseDir=${this.baseDir || '.'}, ext=${this.fileExtension}, interval=${this.flushIntervalMs}ms`,
+			`MsgArchive initialized: strategy=${this.effectiveStrategy} reason=${this.effectiveStrategyReason} baseDir=${this.baseDir || '.'}, nativeRoot=${this.nativeRootDir || '-'}, ext=${this.fileExtension}, interval=${this.flushIntervalMs}ms, keepPreviousWeeks=${this.keepPreviousWeeks}`,
 		);
 	}
 
@@ -282,8 +566,8 @@ class MsgArchive {
 	 * - For id-based arrays (array of plain objects with unique `id`), we diff by `id` and only record
 	 *   added/removed/changed entries.
 	 * - For primitive sets (array of unique primitives), we record only added/removed items.
-	 * - For reorders (same items, different order), we fall back to full before/after arrays to avoid
-	 *   silently dropping a meaningful change.
+	 * - For reorders (same items, different order), we treat id-based arrays and primitive sets as order-insensitive
+	 *   and omit diffs (keeps archives small; order is typically not semantically relevant for these fields).
 	 *
 	 * @param {any[]} existing Previous array.
 	 * @param {any[]} updated Updated array.
@@ -308,7 +592,7 @@ class MsgArchive {
 	 *
 	 * @param {any[]} existing Previous array.
 	 * @param {any[]} updated Updated array.
-	 * @returns {{added: any[]|undefined, removed: any[]|undefined}|null} Diff or null when not applicable.
+	 * @returns {{added: any[]|undefined, removed: any[]|undefined}|null} Diff, or null when not applicable.
 	 */
 	_diffArrayById(existing, updated) {
 		const before = this._indexArrayById(existing);
@@ -350,8 +634,8 @@ class MsgArchive {
 		}
 
 		if (removed.length === 0 && added.length === 0) {
-			// Likely a reorder only; preserve information by falling back to full arrays.
-			return { added: updated, removed: existing };
+			// Likely a reorder only; treat id-based arrays as order-insensitive and omit diffs.
+			return { added: undefined, removed: undefined };
 		}
 
 		return {
@@ -418,8 +702,8 @@ class MsgArchive {
 		}
 
 		if (removed.length === 0 && added.length === 0) {
-			// Likely a reorder only; preserve information by falling back to full arrays.
-			return { added: updated, removed: existing };
+			// Likely a reorder only; treat primitive sets as order-insensitive and omit diffs.
+			return { added: undefined, removed: undefined };
 		}
 
 		return {
@@ -759,8 +1043,10 @@ class MsgArchive {
 			() => waiters.forEach(waiter => waiter.resolve()),
 			err => waiters.forEach(waiter => waiter.reject(err)),
 		);
+		// Prevent unhandled rejection noise when callers consume waiter promises instead of the internal write promise.
+		writePromise.catch(() => undefined);
 
-		writePromise.finally(() => {
+		const onSettled = () => {
 			pending.flushing = false;
 			pending.flushPromise = null;
 
@@ -778,67 +1064,156 @@ class MsgArchive {
 			if (pending.waiters.length === 0) {
 				this._pending.delete(refKey);
 			}
-		});
+		};
+		writePromise.then(onSettled, onSettled);
 
 		return writePromise;
 	}
 
 	/**
-	 * Appends events to the ref file (JSONL).
-	 *
-	 * Implementation detail:
-	 * - ioBroker file storage does not expose append, so this does a read + rewrite of the full file.
-	 * - We preserve a trailing newline and avoid accidental blank lines by trimming the existing tail.
+	 * Appends events to the ref file (JSONL) via the active backend.
 	 *
 	 * @param {string} refKey Normalized ref key.
 	 * @param {Array<object>} events Event entries to append in order.
-	 * @returns {Promise<void>} Resolves after the file has been rewritten with the new lines.
+	 * @returns {Promise<void>} Resolves after the events have been persisted.
 	 */
 	async _appendEvents(refKey, events) {
-		const filePath = this._filePathForRef(refKey);
-		const existing = await this._readFileText(filePath);
-		const existingTrimmed = existing ? existing.replace(/\s+$/, '') : '';
-		const newLines = events.map(entry => serializeWithMaps(entry, this._mapTypeMarker)).join('\n');
-		const combined = existingTrimmed ? `${existingTrimmed}\n${newLines}\n` : `${newLines}\n`;
+		const bySegment = new Map();
+		for (const entry of events) {
+			const ts = typeof entry?.ts === 'number' && Number.isFinite(entry.ts) ? entry.ts : Date.now();
+			const segmentKey = this._segmentKeyForTs(ts);
+			const list = bySegment.get(segmentKey) || [];
+			list.push(entry);
+			bySegment.set(segmentKey, list);
+		}
 
-		await this.adapter.writeFileAsync(this.metaId, filePath, combined);
+		for (const [segmentKey, entries] of bySegment.entries()) {
+			const filePath = this._filePathForRef(refKey, segmentKey);
+			await this._storageBackend.appendEntries(filePath, entries, entry =>
+				serializeWithMaps(entry, this._mapTypeMarker),
+			);
+		}
 
-		this.adapter?.log?.debug?.(
-			`MsgArchive append ${events.length} event(s) -> ${filePath}, ${Buffer.byteLength(combined, 'utf8')} bytes`,
-		);
+		// Best-effort retention cleanup for this ref.
+		try {
+			await this._applyRetention(refKey);
+		} catch {
+			// must never break archiving
+		}
 	}
 
 	/**
-	 * Reads file text from storage (returns empty string when missing).
-	 *
-	 * @param {string} filePath File path under the file store.
-	 * @returns {Promise<string>} File content (utf8) or empty string.
+	 * Marks cached archive size status as stale after writes/deletions.
 	 */
-	async _readFileText(filePath) {
-		try {
-			const res = await this.adapter.readFileAsync(this.metaId, filePath);
-			const raw = res && typeof res === 'object' && 'file' in res ? res.file : res;
-
-			if (raw == null) {
-				return '';
-			}
-
-			return Buffer.isBuffer(raw) ? raw.toString('utf8') : String(raw);
-		} catch (e) {
-			this.adapter?.log?.debug?.(`MsgArchive read failed (${filePath}): ${e?.message || e}`);
-			return '';
-		}
+	_markArchiveMutated() {
+		this._lastFlushedAt = Date.now();
+		this._sizeEstimateAt = 0;
+		this._sizeEstimateBytes = null;
+		this._sizeEstimateIsComplete = false;
 	}
 
 	/**
 	 * Builds the archive file path for a ref key.
 	 *
 	 * @param {string} refKey Normalized ref key.
+	 * @param {string} segmentKey Segment key (YYYYMMDD) for the weekly file, or undefined to omit.
 	 * @returns {string} File path under the archive base dir.
 	 */
-	_filePathForRef(refKey) {
-		const fileName = `${refKey}.${this.fileExtension}`;
+	_filePathForRef(refKey, segmentKey) {
+		const key = String(refKey || '').trim();
+		const relPath = this._refPathSegments(refKey).join('/');
+		const safeSegment =
+			typeof segmentKey === 'string' && /^[0-9]{8}$/.test(segmentKey.trim()) ? segmentKey.trim() : null;
+		const fileName = safeSegment
+			? `${relPath || key || 'unknown'}.${safeSegment}.${this.fileExtension}`
+			: `${relPath || key || 'unknown'}.${this.fileExtension}`;
 		return this.baseDir ? `${this.baseDir}/${fileName}` : fileName;
+	}
+
+	/**
+	 * Return best-effort runtime status for diagnostics / UIs.
+	 *
+	 * @returns {{ baseDir: string, configuredStrategyLock: string, effectiveStrategy: string, effectiveStrategyReason: string, nativeRootDir: string, runtimeRoot: string, nativeProbeError: string, writeDisabled: boolean, fileExtension: string, flushIntervalMs: number, maxBatchSize: number, keepPreviousWeeks: number, lastFlushedAt: number|null, pending: { refs: number, events: number, flushingRefs: number }, approxSizeBytes: number|null, approxSizeUpdatedAt: number|null, approxSizeIsComplete: boolean }} Status snapshot.
+	 */
+	getStatus() {
+		let pendingRefs = 0;
+		let pendingEvents = 0;
+		let flushingRefs = 0;
+
+		for (const p of this._pending.values()) {
+			if (!p) {
+				continue;
+			}
+			if (p.flushing) {
+				flushingRefs += 1;
+			}
+			if (Array.isArray(p.events) && p.events.length > 0) {
+				pendingRefs += 1;
+				pendingEvents += p.events.length;
+			}
+		}
+
+		return {
+			baseDir: this.baseDir || '',
+			configuredStrategyLock: this.configuredStrategyLock || '',
+			effectiveStrategy: this.effectiveStrategy,
+			effectiveStrategyReason: this.effectiveStrategyReason || '',
+			nativeRootDir: this.nativeRootDir || '',
+			runtimeRoot: this._storageBackend.runtimeRoot(),
+			nativeProbeError: this._nativeProbeError || '',
+			writeDisabled: this._writeDisabled === true,
+			fileExtension: this.fileExtension,
+			flushIntervalMs: this.flushIntervalMs,
+			maxBatchSize: this.maxBatchSize,
+			keepPreviousWeeks: this.keepPreviousWeeks,
+			lastFlushedAt: this._lastFlushedAt || null,
+			pending: { refs: pendingRefs, events: pendingEvents, flushingRefs },
+			approxSizeBytes: typeof this._sizeEstimateBytes === 'number' ? this._sizeEstimateBytes : null,
+			approxSizeUpdatedAt: this._sizeEstimateAt || null,
+			approxSizeIsComplete: this._sizeEstimateIsComplete === true,
+		};
+	}
+
+	/**
+	 * Best-effort estimate of archive size on disk (bytes).
+	 *
+	 * Notes:
+	 * - This may be expensive depending on backend and file count; callers should use caching (maxAgeMs).
+	 * - Some ioBroker backends may not provide file sizes via `readDirAsync(...).stats.size`; in that case this returns null.
+	 *
+	 * @param {{ maxAgeMs?: number }} [options] Cache/maxAge options.
+	 * @returns {Promise<{ bytes: number|null, updatedAt: number, isComplete: boolean }>} Estimate result.
+	 */
+	async estimateSizeBytes({ maxAgeMs = 5 * 60 * 1000 } = {}) {
+		const now = Date.now();
+		const cachedAt = this._sizeEstimateAt;
+		if (cachedAt && now - cachedAt < maxAgeMs) {
+			return {
+				bytes: typeof this._sizeEstimateBytes === 'number' ? this._sizeEstimateBytes : null,
+				updatedAt: cachedAt,
+				isComplete: this._sizeEstimateIsComplete === true,
+			};
+		}
+
+		let estimate;
+		try {
+			estimate = await this._storageBackend.estimateSizeBytes();
+		} catch {
+			estimate = { bytes: null, isComplete: false };
+		}
+
+		if (!estimate || typeof estimate !== 'object') {
+			this._sizeEstimateAt = now;
+			this._sizeEstimateBytes = null;
+			this._sizeEstimateIsComplete = false;
+			return { bytes: null, updatedAt: now, isComplete: false };
+		}
+
+		this._sizeEstimateAt = now;
+		this._sizeEstimateBytes =
+			typeof estimate.bytes === 'number' && Number.isFinite(estimate.bytes) ? estimate.bytes : null;
+		this._sizeEstimateIsComplete = estimate.isComplete === true;
+		return { bytes: this._sizeEstimateBytes, updatedAt: now, isComplete: this._sizeEstimateIsComplete };
 	}
 }
 

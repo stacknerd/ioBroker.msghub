@@ -20,7 +20,7 @@
  *   and optionally which external system/id it was derived from.
  * - Lifecycle semantics: `lifecycle` holds the current workflow/UI state (open/acked/closed/...) with attribution.
  * - Temporal semantics: `timing` holds creation/update timestamps plus optional reminder/domain timestamps
- *   (e.g., notifyAt/remindEvery, due dates, appointment start/end).
+ *   (e.g., notifyAt/remindEvery/cooldown, timeBudget planning duration, due dates, appointment start/end).
  * - Extensibility: optional sections (`details`, `metrics`, `attachments`, `actions`, etc.)
  *   allow richer structured content without bloating the required core fields.
  *
@@ -34,11 +34,12 @@
  *   ref: string                   // internal unique ID (stable; auto-generated when omitted)
  *
  *   // Presentation
+ *   icon?: string                 // optional small icon token (producer-owned; normalized; max length 10)
  *   title: string                 // UI headline (e.g., "Hallway")
  *   text: string                  // free-form description
  *
  *   // Classification
- *   level: 0|10|20|30             // none/notice/warning/error
+ *   level: 0|10|20|30|40|50        // none/info/notice/warning/error/critical
  *   kind: "task"|"status"|"appointment"|"shoppinglist"|"inventorylist"
  *
  *   origin: {
@@ -49,7 +50,7 @@
  *
  *   lifecycle: {
  *     state: "open"|"acked"|"closed"|"snoozed"|"deleted"|"expired"
- *     stateChangedAt?: number | null
+ *     stateChangedAt?: number
  *     stateChangedBy?: string | null
  *   }
  *
@@ -59,10 +60,14 @@
  *     expiresAt?: number | null
  *     notifyAt?: number | null
  *     remindEvery?: number | null
+ *     cooldown?: number | null   // notification cooldown duration (ms) on recreate from quasi-deleted states
+ *     notifiedAt?: { [event: string]: number | null } | null // core-managed notification dispatch timestamps (ms)
+ *     timeBudget?: number | null // planning duration (ms)
  *
- *     dueAt?: number | null       // task
- *     startAt?: number | null     // appointment
- *     endAt?: number | null       // appointment
+ *     // Domain time fields (optional; semantics depend on kind)
+ *     dueAt?: number | null
+ *     startAt?: number | null
+ *     endAt?: number | null
  *   }
  *
  *   // Structured details (optional; mainly for task/status/appointment)
@@ -89,6 +94,7 @@
  *     name: string
  *     category?: string
  *     quantity?: { val: number; unit: string }
+ *     perUnit?: { val: number; unit: string }
  *     checked: boolean
  *   }>
  *
@@ -110,8 +116,8 @@
  *
  *   // Progress (optional; mainly for task)
  *   progress: {
- *     startedAt?: number | null
- *     finishedAt?: number | null
+ *     startedAt?: number
+ *     finishedAt?: number
  *     percentage: number
  *   }
  *
@@ -151,8 +157,7 @@ const crypto = require('crypto');
  * - Stable identity: `ref` is normalized to an ASCII/URL-safe identifier; when missing, an auto-ref is generated
  *   so the message remains addressable (updates/deletes). For recurring items, producers should provide `origin.id`
  *   so auto-generated refs stay stable across updates.
- * - Kind-driven rules: some fields are only meaningful for specific kinds (e.g. `timing.dueAt` for tasks,
- *   `timing.startAt/endAt` for appointments, `listItems` for list kinds).
+ * - Kind-driven rules: some fields are only meaningful for specific kinds (e.g. `listItems` for list kinds).
  * - `undefined` vs `null`: `undefined` means "not present" and is removed before persistence; `null` is used by
  *   patch operations as an explicit signal to clear/remove a field.
  */
@@ -201,18 +206,19 @@ class MsgFactory {
 	 *
 	 * @param {object} [options] Raw message fields.
 	 * @param {string} [options.ref] Stable, printable identifier for the message (required unless auto-ref is used).
+	 * @param {string} [options.icon] Optional small icon token (e.g. emoji); normalized to max length 10.
 	 * @param {string} [options.title] Human readable title shown in the UI (required).
 	 * @param {string} [options.text] Main message body text (required).
 	 * @param {number} [options.level] Severity level from msgconst.level (required).
 	 * @param {string} [options.kind] Message kind from msgconst.kind (required).
 	 * @param {object} [options.origin] Origin metadata including type/system/id (required).
-	 * @param {object} [options.timing] Timing metadata including due/start/end.
+	 * @param {object} [options.timing] Timing metadata including due/start/end and timeBudget.
 	 * @param {object} [options.details] Structured details like location or tools.
 	 * @param {object} [options.audience] Audience hints (tags/channels) for notification plugins.
 	 * @param {object} [options.lifecycle] Lifecycle state (state + attribution timestamps).
 	 * @param {Map<string, {val: number|string|boolean|null, unit: string, ts: number}>} [options.metrics] Structured metrics.
 	 * @param {Array<{type: "ssml"|"image"|"video"|"file", value: string}>} [options.attachments] Attachment list.
-	 * @param {Array<{id: string, name: string, category?: string, quantity?: { val: number; unit: string }, checked: boolean}>} [options.listItems] List items for shopping or inventory lists.
+	 * @param {Array<{id: string, name: string, category?: string, quantity?: { val: number; unit: string }, perUnit?: { val: number; unit: string }, checked: boolean}>} [options.listItems] List items for shopping or inventory lists.
 	 * @param {Array<{type: "ack"|"delete"|"close"|"open"|"link"|"custom"|"snooze", id: string, payload?: Record<string, unknown>|null}>} [options.actions] Action descriptors.
 	 * @param {object} [options.progress] Progress metadata such as percentage and timestamps.
 	 * @param {string[]|string} [options.dependencies] Related message refs as array or CSV string.
@@ -220,6 +226,7 @@ class MsgFactory {
 	 */
 	createMessage({
 		ref,
+		icon,
 		title,
 		text,
 		level,
@@ -237,6 +244,31 @@ class MsgFactory {
 		dependencies = [],
 	} = {}) {
 		try {
+			// Core-owned timestamps: ignore producer-provided values. These are derived/enforced by the core.
+			const safeLifecycle =
+				lifecycle && typeof lifecycle === 'object' && !Array.isArray(lifecycle) ? { ...lifecycle } : lifecycle;
+			if (safeLifecycle && typeof safeLifecycle === 'object' && !Array.isArray(safeLifecycle)) {
+				delete safeLifecycle.stateChangedAt;
+				// Core-owned lifecycle states: deleted/expired are only set by the store.
+				const deletedState = this.msgConstants.lifecycle?.state?.deleted;
+				const expiredState = this.msgConstants.lifecycle?.state?.expired;
+				const state = typeof safeLifecycle.state === 'string' ? safeLifecycle.state.trim() : '';
+				if (state && (state === deletedState || state === expiredState)) {
+					delete safeLifecycle.state;
+				}
+			}
+			const safeProgress =
+				progress && typeof progress === 'object' && !Array.isArray(progress) ? { ...progress } : progress;
+			if (safeProgress && typeof safeProgress === 'object' && !Array.isArray(safeProgress)) {
+				delete safeProgress.startedAt;
+				delete safeProgress.finishedAt;
+			}
+			const safeTiming = timing && typeof timing === 'object' && !Array.isArray(timing) ? { ...timing } : timing;
+			if (safeTiming && typeof safeTiming === 'object' && !Array.isArray(safeTiming)) {
+				delete safeTiming.createdAt;
+				delete safeTiming.updatedAt;
+			}
+
 			// Normalize `kind` first because it drives kind-specific validation rules later
 			// (e.g., timing fields like dueAt/startAt/endAt and whether listItems are allowed).
 			const normkind = this._normalizeMsgEnum(kind, this.kindValueSet, 'kind', { required: true });
@@ -245,6 +277,7 @@ class MsgFactory {
 			const normOrigin = this._normalizeMsgOrigin(origin);
 			const normTitle = this._normalizeMsgString(title, 'title', { required: true });
 			const normText = this._normalizeMsgString(text, 'text', { required: true });
+			const normIcon = this._normalizeMsgIcon(icon);
 			const normLevel = this._normalizeMsgEnum(level, this.levelValueSet, 'level', { required: true });
 			const normDetails = this._normalizeMsgDetails(details);
 
@@ -252,20 +285,21 @@ class MsgFactory {
 			// or `undefined` (meaning: omit the field entirely).
 			const msg = {
 				ref: this._resolveMsgRef(ref, { kind: normkind, origin: normOrigin, title: normTitle }),
+				icon: normIcon,
 				title: normTitle,
 				text: normText,
 				level: normLevel,
 				kind: normkind,
 				origin: normOrigin,
-				lifecycle: this._normalizeMsgLifecycle(lifecycle),
-				timing: this._normalineMsgTiming(timing, normkind),
+				lifecycle: this._normalizeMsgLifecycle(safeLifecycle),
+				timing: this._normalineMsgTiming(safeTiming, normkind),
 				details: normDetails,
 				audience: this._normalizeMsgAudience(audience),
 				metrics: this._normalizeMsgMetrics(metrics),
 				attachments: this._normalizeMsgAttachments(attachments),
 				listItems: this._normalizeMsgListItems(listItems, normkind),
 				actions: this._normalizeMsgActions(actions),
-				progress: this._normalineMsgProgress(progress),
+				progress: this._normalineMsgProgress(safeProgress),
 				dependencies: this._normalizeMsgArray(dependencies, 'dependencies'),
 			};
 
@@ -304,10 +338,11 @@ class MsgFactory {
 	 *     => sets/updates timing.dueAt; other timing fields stay as-is.
 	 *   - applyPatch(existing, { timing: { notifyAt: null } })
 	 *     => removes timing.notifyAt from the message.
+	 *   - applyPatch(existing, { timing: { timeBudget: 900000 } })
+	 *     => sets/updates the planning duration (ms).
 	 *   - applyPatch(existing, { progress: { percentage: 60 } })
-	 *     => updates progress.percentage to 60, keeps startedAt/finishedAt unchanged.
-	 *   - applyPatch(existing, { progress: { delete: ['finishedAt'] } })
-	 *     => removes progress.finishedAt (percentage is preserved).
+	 *     => updates progress.percentage to 60, sets startedAt on first start (percentage > 0),
+	 *        clears finishedAt when percentage < 100, and sets finishedAt when percentage == 100.
 	 *
 	 * - audience (object):
 	 *   - Partial updates:
@@ -381,11 +416,12 @@ class MsgFactory {
 	 * @param {object} [patch] Partial update payload.
 	 * @param {string} [patch.title] Updated title (required when provided).
 	 * @param {string} [patch.text] Updated text (required when provided).
+	 * @param {string|null} [patch.icon] Updated icon token (string) or null to remove.
 	 * @param {number} [patch.level] Updated severity level (required when provided).
 	 * @param {string} [patch.ref] Message ref (must match existing ref).
 	 * @param {string} [patch.kind] Message kind (must match existing kind).
 	 * @param {object} [patch.origin] Origin object (must match existing origin).
-	 * @param {object} [patch.timing] Timing patch (only provided fields are applied).
+	 * @param {object} [patch.timing] Timing patch (only provided fields are applied, supports timeBudget).
 	 * @param {object|null} [patch.details] Updated structured details or null to clear.
 	 * @param {object|null} [patch.lifecycle] Lifecycle patch (partial allowed) or null to reset to "open".
 	 * @param {object|null} [patch.audience] Audience patch (partial allowed) or null to clear.
@@ -396,9 +432,10 @@ class MsgFactory {
 	 * @param {object|{set?: object, delete?: string[]}|null} [patch.progress] Progress patch or null to clear.
 	 * @param {string[]|string|{set?: string[]|string, delete?: string[]}|null} [patch.dependencies] Dependencies patch or null to clear.
 	 * @param {boolean} [stealthMode] When true, applies a "silent" patch by suppressing the `timing.updatedAt` bump. This is intended for housekeeping (e.g. rescheduling `notifyAt`) where consumers should not treat the message as "new".
+	 * @param {object} [options] Internal options (core only).
 	 * @returns {object|null} Updated message or null when validation fails.
 	 */
-	applyPatch(existing, patch = {}, stealthMode = false) {
+	applyPatch(existing, patch = {}, stealthMode = false, options = {}) {
 		try {
 			if (!this.isValidMessage(existing)) {
 				throw new TypeError('applyPatch: existing message must be a valid message object');
@@ -407,8 +444,59 @@ class MsgFactory {
 			// Start with a shallow copy; nested objects are replaced/merged by the individual
 			// patch handlers below (timing/details/progress/audience/...).
 			const updated = { ...existing };
+			const patchOptions = options && typeof options === 'object' && !Array.isArray(options) ? options : {};
 			let refreshUpdatedAt = false;
 			const has = key => Object.prototype.hasOwnProperty.call(patch, key);
+			const isEqual = (a, b) => {
+				if (Object.is(a, b)) {
+					return true;
+				}
+				if (a instanceof Map && b instanceof Map) {
+					if (a.size !== b.size) {
+						return false;
+					}
+					for (const [key, val] of a.entries()) {
+						if (!b.has(key) || !isEqual(val, b.get(key))) {
+							return false;
+						}
+					}
+					return true;
+				}
+				if (Array.isArray(a) && Array.isArray(b)) {
+					if (a.length !== b.length) {
+						return false;
+					}
+					for (let i = 0; i < a.length; i += 1) {
+						if (!isEqual(a[i], b[i])) {
+							return false;
+						}
+					}
+					return true;
+				}
+				if (this._isPlainObject(a) && this._isPlainObject(b)) {
+					const aKeys = Object.keys(a);
+					const bKeys = Object.keys(b);
+					if (aKeys.length !== bKeys.length) {
+						return false;
+					}
+					for (const key of aKeys) {
+						if (!Object.prototype.hasOwnProperty.call(b, key) || !isEqual(a[key], b[key])) {
+							return false;
+						}
+					}
+					return true;
+				}
+				return false;
+			};
+			const markUserVisibleChange = (before, after) => {
+				// Once we know we have a user-visible change, no further comparisons are needed.
+				if (refreshUpdatedAt) {
+					return;
+				}
+				if (!isEqual(before, after)) {
+					refreshUpdatedAt = true;
+				}
+			};
 
 			// Enforce immutability: the caller may provide these fields, but only with the
 			// exact same value as the existing message.
@@ -445,28 +533,39 @@ class MsgFactory {
 			// Apply scalar field updates. When one of these changes, we consider it a user-visible
 			// update and refresh timing.updatedAt.
 			if (has('title')) {
-				updated.title = this._normalizeMsgString(patch.title, 'title', { required: true });
-				refreshUpdatedAt = true;
+				const value = this._normalizeMsgString(patch.title, 'title', { required: true });
+				markUserVisibleChange(existing.title, value);
+				updated.title = value;
 			}
 			if (has('text')) {
-				updated.text = this._normalizeMsgString(patch.text, 'text', { required: true });
-				refreshUpdatedAt = true;
+				const value = this._normalizeMsgString(patch.text, 'text', { required: true });
+				markUserVisibleChange(existing.text, value);
+				updated.text = value;
+			}
+			if (has('icon')) {
+				const value = patch.icon === null ? undefined : this._normalizeMsgIcon(patch.icon);
+				markUserVisibleChange(existing.icon, value);
+				updated.icon = value;
 			}
 			if (has('level')) {
-				updated.level = this._normalizeMsgEnum(patch.level, this.levelValueSet, 'level', { required: true });
-				refreshUpdatedAt = true;
+				const value = this._normalizeMsgEnum(patch.level, this.levelValueSet, 'level', { required: true });
+				markUserVisibleChange(existing.level, value);
+				updated.level = value;
 			}
 			if (has('details')) {
-				updated.details = patch.details === null ? undefined : this._normalizeMsgDetails(patch.details);
-				refreshUpdatedAt = true;
+				const value = patch.details === null ? undefined : this._normalizeMsgDetails(patch.details);
+				markUserVisibleChange(existing.details, value);
+				updated.details = value;
 			}
 			if (has('lifecycle')) {
-				updated.lifecycle = this._applyLifecyclePatch(existing.lifecycle, patch.lifecycle);
-				refreshUpdatedAt = true;
+				const value = this._applyLifecyclePatch(existing.lifecycle, patch.lifecycle, patchOptions);
+				markUserVisibleChange(existing.lifecycle, value);
+				updated.lifecycle = value;
 			}
 			if (has('audience')) {
-				updated.audience = this._applyAudiencePatch(existing.audience, patch.audience);
-				refreshUpdatedAt = true;
+				const value = this._applyAudiencePatch(existing.audience, patch.audience);
+				markUserVisibleChange(existing.audience, value);
+				updated.audience = value;
 			}
 			if (has('metrics')) {
 				updated.metrics = this._applyMetricsPatch(existing.metrics, patch.metrics);
@@ -474,38 +573,44 @@ class MsgFactory {
 				// metrics are treated as high-frequency telemetry that should not "bump" the message.
 			}
 			if (has('attachments')) {
-				updated.attachments = this._applyArrayPatchByIndex(
+				const value = this._applyArrayPatchByIndex(
 					existing.attachments,
 					patch.attachments,
 					this._normalizeMsgAttachments.bind(this),
 					'attachments',
 				);
-				refreshUpdatedAt = true;
+				markUserVisibleChange(existing.attachments, value);
+				updated.attachments = value;
 			}
 			if (has('listItems')) {
-				updated.listItems = this._applyListItemsPatch(existing.listItems, patch.listItems, existing.kind);
-				refreshUpdatedAt = true;
+				const value = this._applyListItemsPatch(existing.listItems, patch.listItems, existing.kind);
+				markUserVisibleChange(existing.listItems, value);
+				updated.listItems = value;
 			}
 			if (has('actions')) {
-				updated.actions = this._applyActionsPatch(existing.actions, patch.actions);
-				refreshUpdatedAt = true;
+				const value = this._applyActionsPatch(existing.actions, patch.actions);
+				markUserVisibleChange(existing.actions, value);
+				updated.actions = value;
 			}
 			if (has('progress')) {
-				updated.progress = this._applyProgressPatch(existing.progress, patch.progress);
-				refreshUpdatedAt = true;
+				const value = this._applyProgressPatch(existing.progress, patch.progress);
+				markUserVisibleChange(existing.progress, value);
+				updated.progress = value;
 			}
 			if (has('dependencies')) {
-				updated.dependencies = this._applyDependenciesPatch(existing.dependencies, patch.dependencies);
-				refreshUpdatedAt = true;
-			}
-			if (has('timing')) {
-				refreshUpdatedAt = true;
+				const value = this._applyDependenciesPatch(existing.dependencies, patch.dependencies);
+				markUserVisibleChange(existing.dependencies, value);
+				updated.dependencies = value;
 			}
 
-			updated.timing = this._normalineMsgTiming(has('timing') ? patch.timing : {}, existing.kind, {
-				existing,
-				setUpdatedAt: refreshUpdatedAt && !stealthMode,
-			});
+			const timing = this._normalineMsgTiming(has('timing') ? patch.timing : {}, existing.kind, { existing });
+			if (has('timing')) {
+				markUserVisibleChange(existing?.timing || {}, timing);
+			}
+			if (refreshUpdatedAt && !stealthMode) {
+				timing.updatedAt = Date.now();
+			}
+			updated.timing = timing;
 			// TODO: If timing-only changes should also bump updatedAt, move that decision into
 			// `_normalineMsgTiming` (so timing normalization can decide based on the specific keys).
 
@@ -556,6 +661,14 @@ class MsgFactory {
 			!this.originTypeValueSet.has(message.origin.type) ||
 			message.progress.percentage < 0 ||
 			message.progress.percentage > 100
+		) {
+			return false;
+		}
+
+		if (
+			Object.prototype.hasOwnProperty.call(message, 'icon') &&
+			message.icon !== undefined &&
+			typeof message.icon !== 'string'
 		) {
 			return false;
 		}
@@ -612,6 +725,41 @@ class MsgFactory {
 	}
 
 	/**
+	 * Normalizes an optional icon token.
+	 *
+	 * Notes:
+	 * - This is intentionally strict and small: icons should not turn into "alternative titles".
+	 * - We cap by unicode codepoints to keep emoji sequences intact as much as possible.
+	 *
+	 * @param {any} value Input icon value.
+	 * @returns {string|undefined} Normalized icon value or undefined.
+	 */
+	_normalizeMsgIcon(value) {
+		if (value === undefined || value === null) {
+			return undefined;
+		}
+		const raw = this._normalizeMsgString(value, 'icon', { fallback: undefined });
+		if (!raw) {
+			return undefined;
+		}
+		let withoutControls = '';
+		for (const ch of raw) {
+			const cp = ch.codePointAt(0);
+			withoutControls += cp !== undefined && (cp <= 0x1f || cp === 0x7f) ? ' ' : ch;
+		}
+		let icon = withoutControls.replace(/\s+/g, ' ').trim();
+		if (!icon) {
+			return undefined;
+		}
+		const parts = Array.from(icon);
+		if (parts.length > 10) {
+			this.adapter?.log?.warn?.(`MsgFactory: 'icon' truncated to 10 characters`);
+			icon = parts.slice(0, 10).join('');
+		}
+		return icon || undefined;
+	}
+
+	/**
 	 * Normalizes a numeric field by ensuring it is a finite number.
 	 *
 	 * MsgHub mostly uses numbers as *positive integers* (timestamps, indices, counts).
@@ -644,6 +792,41 @@ class MsgFactory {
 			return fallback;
 		}
 		return ts;
+	}
+
+	/**
+	 * Normalizes a numeric field by ensuring it is a finite, positive number.
+	 *
+	 * Unlike `_normalizeMsgNumber()`, this helper preserves fractional values (e.g. `0.33`).
+	 * It is used for domain values like list item quantities.
+	 *
+	 * @param {any} value Input value to validate.
+	 * @param {string} field Field name for error messages.
+	 * @param {object} [options] Normalization options.
+	 * @param {boolean} [options.required] Whether the value must be > 0.
+	 * @param {number} [options.fallback] Returned when the value is optional but invalid.
+	 * @returns {number|undefined} Normalized number or fallback/undefined.
+	 */
+	_normalizeMsgPositiveNumber(value, field, { required = false, fallback = undefined } = {}) {
+		if (typeof value !== 'number') {
+			if (required) {
+				throw new TypeError(`'${field}' must be a number, received '${typeof value}' instead`);
+			}
+
+			this.adapter?.log?.warn?.(`MsgFactory: '${field}' must be a number, received '${typeof value}' instead`);
+			return fallback;
+		}
+
+		const num = Number.isFinite(value) ? value : NaN;
+		if (required && !(num > 0)) {
+			throw new TypeError(`'${field}' is required but not positive`);
+		}
+		if (!(num > 0)) {
+			this.adapter?.log?.warn?.(`MsgFactory: '${field}' is not positive`);
+			return fallback;
+		}
+
+		return num;
 	}
 
 	/**
@@ -920,11 +1103,17 @@ class MsgFactory {
 	 */
 	_normalizeMsgRef(value) {
 		const ref = this._normalizeMsgString(value, 'ref', { required: true });
-		const saferef = encodeURIComponent(ref);
+		let decoded = ref;
+		try {
+			decoded = decodeURIComponent(ref);
+		} catch {
+			decoded = ref;
+		}
+		const saferef = encodeURIComponent(decoded);
 
 		// Log only when normalization changed something (e.g. spaces -> %20).
-		if (value != saferef) {
-			this.adapter?.log?.warn?.(`MsgFactory: received ref='${value}', normalized to  '${saferef}'`);
+		if (ref !== saferef) {
+			this.adapter?.log?.warn?.(`MsgFactory: received ref='${ref}', normalized to  '${saferef}'`);
 		}
 		return saferef;
 	}
@@ -962,9 +1151,11 @@ class MsgFactory {
 	 * from the existing message and only applies fields explicitly present
 	 * in the provided timing patch.
 	 *
-	 * Kind guards:
-	 * - `dueAt` is only meaningful for tasks.
-	 * - `startAt`/`endAt` are only meaningful for appointments.
+	 * Notes:
+	 * - `dueAt`/`startAt`/`endAt` are optional domain timestamps. They are not restricted by `kind` so
+	 *   producers can model planned windows (e.g. tasks with a planned start date, statuses with a
+	 *   predicted start/end, list kinds with a deadline).
+	 * - `timeBudget` is an optional planning duration in ms (not a timestamp).
 	 *
 	 * Clearing semantics:
 	 * - Passing `null` for a timing key removes that key from the message.
@@ -1004,7 +1195,7 @@ class MsgFactory {
 		// Helper for each timing key:
 		// - Only touch keys that are explicitly present in the patch (own properties).
 		// - Treat `null` as "delete this key".
-		// - Enforce kind-specific fields (e.g. dueAt only for tasks).
+		// - (Optional) enforce kind-specific fields.
 		const setTime = (key, kindGuard) => {
 			if (!has(key)) {
 				return;
@@ -1036,9 +1227,75 @@ class MsgFactory {
 				}
 			}
 		}
-		setTime('dueAt', this.msgConstants.kind.task);
-		setTime('startAt', this.msgConstants.kind.appointment);
-		setTime('endAt', this.msgConstants.kind.appointment);
+		// Planning time budget (duration in ms). This is intentionally treated as a duration, not a timestamp.
+		// Null clears the field.
+		if (has('timeBudget')) {
+			if (value.timeBudget === null) {
+				delete timing.timeBudget;
+			} else {
+				const v = this._normalizeMsgNumber(value.timeBudget, 'timing.timeBudget');
+				if (v !== undefined) {
+					timing.timeBudget = v;
+				}
+			}
+		}
+		// Notification cooldown (duration in ms). Null clears the field.
+		if (has('cooldown')) {
+			if (value.cooldown === null) {
+				delete timing.cooldown;
+			} else {
+				const v = this._normalizeMsgNumber(value.cooldown, 'timing.cooldown');
+				if (v !== undefined) {
+					if (v >= 0) {
+						timing.cooldown = v;
+					} else {
+						this.adapter?.log?.warn?.(`MsgFactory: 'timing.cooldown' must be >= 0, received '${v}'`);
+					}
+				}
+			}
+		}
+		// Core-managed notification markers.
+		// `null` clears the whole object; `timing.notifiedAt.<event>=null` clears just that key.
+		if (has('notifiedAt')) {
+			if (value.notifiedAt === null) {
+				delete timing.notifiedAt;
+			} else {
+				const input = value.notifiedAt;
+				if (!input || typeof input !== 'object' || Array.isArray(input)) {
+					throw new TypeError(`'timing.notifiedAt' must be an object`);
+				}
+				const base =
+					updating &&
+					baseTiming.notifiedAt &&
+					typeof baseTiming.notifiedAt === 'object' &&
+					!Array.isArray(baseTiming.notifiedAt)
+						? { ...baseTiming.notifiedAt }
+						: {};
+				const out = { ...base };
+
+				const events = this.msgConstants?.notfication?.events || {};
+				const allowedKeys = Object.values(events).filter(v => typeof v === 'string' && v.trim());
+				for (const key of allowedKeys) {
+					if (!Object.prototype.hasOwnProperty.call(input, key)) {
+						continue;
+					}
+					if (input[key] === null) {
+						delete out[key];
+						continue;
+					}
+					out[key] = this._normalizeMsgTime(input[key], `timing.notifiedAt.${key}`);
+				}
+
+				if (Object.keys(out).length === 0) {
+					delete timing.notifiedAt;
+				} else {
+					timing.notifiedAt = this._removeUndefinedKeys(out);
+				}
+			}
+		}
+		setTime('dueAt');
+		setTime('startAt');
+		setTime('endAt');
 
 		return this._removeUndefinedKeys(timing);
 	}
@@ -1048,7 +1305,8 @@ class MsgFactory {
 	 *
 	 * Rules:
 	 * - Always returns an object with a valid `state` (fallback: 'open').
-	 * - `stateChangedAt` / `stateChangedBy` are optional and may be `null` to clear.
+	 * - `stateChangedAt` is a core-owned timestamp and should be treated as read-only by producers.
+	 * - `stateChangedBy` is optional and may be `null` to clear.
 	 *
 	 * @param {any} value Lifecycle input.
 	 * @returns {{state: string, stateChangedAt?: number|null, stateChangedBy?: string|null}} Normalized lifecycle.
@@ -1097,37 +1355,55 @@ class MsgFactory {
 	 *
 	 * @param {any} existing Existing lifecycle (may be missing on older stored messages).
 	 * @param {any} patch Patch object or null.
+	 * @param {object} [options] Internal options (core only).
 	 */
-	_applyLifecyclePatch(existing, patch) {
+	_applyLifecyclePatch(existing, patch, options = {}) {
+		const allowCoreLifecycleStates =
+			options &&
+			typeof options === 'object' &&
+			!Array.isArray(options) &&
+			options.allowCoreLifecycleStates === true;
 		const base = this._normalizeMsgLifecycle(existing);
 		if (patch === undefined) {
 			return base;
 		}
 		if (patch === null) {
-			return {
-				state: this.msgConstants.lifecycle.state.open,
-				stateChangedAt: null,
+			const resetState = this.msgConstants.lifecycle.state.open;
+			const merged = {
+				...base,
+				state: resetState,
 				stateChangedBy: null,
 			};
+			if (merged.state !== base.state) {
+				merged.stateChangedAt = Date.now();
+			}
+			return this._removeUndefinedKeys(merged);
 		}
 		if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
 			throw new TypeError("'lifecycle' must be an object or null");
 		}
 		const merged = { ...base };
 		if (Object.prototype.hasOwnProperty.call(patch, 'state')) {
-			merged.state = this._normalizeMsgLifecycle({ state: patch.state }).state;
-		}
-		if (Object.prototype.hasOwnProperty.call(patch, 'stateChangedAt')) {
-			merged.stateChangedAt =
-				patch.stateChangedAt === null
-					? null
-					: this._normalizeMsgTime(patch.stateChangedAt, 'lifecycle.stateChangedAt');
+			const nextState = this._normalizeMsgLifecycle({ state: patch.state }).state;
+			if (!allowCoreLifecycleStates) {
+				const deletedState = this.msgConstants.lifecycle?.state?.deleted || 'deleted';
+				const expiredState = this.msgConstants.lifecycle?.state?.expired || 'expired';
+				if (nextState === deletedState || nextState === expiredState) {
+					throw new TypeError(`applyPatch: lifecycle.state '${nextState}' is core-managed`);
+				}
+			}
+			merged.state = nextState;
 		}
 		if (Object.prototype.hasOwnProperty.call(patch, 'stateChangedBy')) {
 			merged.stateChangedBy =
 				patch.stateChangedBy === null
 					? null
 					: this._normalizeMsgString(patch.stateChangedBy, 'lifecycle.stateChangedBy');
+		}
+
+		// Core-owned timestamp: bump only when the lifecycle state changes.
+		if (merged.state !== base.state) {
+			merged.stateChangedAt = Date.now();
 		}
 		return this._removeUndefinedKeys(merged);
 	}
@@ -1249,8 +1525,8 @@ class MsgFactory {
 				);
 				continue;
 			}
-			if (typeof unit !== 'string' || !unit.trim()) {
-				this.adapter?.log?.warn?.(`MsgFactory: 'metrics.${key}.unit' must be a non-empty string`);
+			if (typeof unit !== 'string') {
+				this.adapter?.log?.warn?.(`MsgFactory: 'metrics.${key}.unit' must be a string`);
 				continue;
 			}
 			const tsOk =
@@ -1319,10 +1595,11 @@ class MsgFactory {
 	 * - Each item must have a stable `id` (used for patching by id).
 	 * - `checked` is always normalized to a boolean, defaulting to `false`.
 	 * - `quantity` is optional and, when present, uses `{ val, unit }`.
+	 * - `perUnit` is optional and, when present, uses `{ val, unit }`.
 	 *
-	 * @param {Array<{id: string, name: string, category?: string, quantity?: { val: number, unit: string }, checked: boolean}>|undefined|null} value List items input.
+	 * @param {Array<{id: string, name: string, category?: string, quantity?: { val: number, unit: string }, perUnit?: { val: number, unit: string }, checked: boolean}>|undefined|null} value List items input.
 	 * @param {string} kind Message kind.
-	 * @returns {Array<{id: string, name: string, category?: string, quantity?: { val: number, unit: string }, checked: boolean}>|undefined} Normalized list items.
+	 * @returns {Array<{id: string, name: string, category?: string, quantity?: { val: number, unit: string }, perUnit?: { val: number, unit: string }, checked: boolean}>|undefined} Normalized list items.
 	 */
 	_normalizeMsgListItems(value, kind) {
 		if (value === undefined || value === null) {
@@ -1361,12 +1638,32 @@ class MsgFactory {
 						`MsgFactory: 'listItems[${index}].quantity' must be an object with { val, unit }`,
 					);
 				} else {
-					const val = this._normalizeMsgNumber(entry.quantity.val, `listItems[${index}].quantity.val`);
+					const val = this._normalizeMsgPositiveNumber(
+						entry.quantity.val,
+						`listItems[${index}].quantity.val`,
+					);
 					const unit = this._normalizeMsgString(entry.quantity.unit, `listItems[${index}].quantity.unit`);
 					if (val === undefined || unit === undefined) {
 						this.adapter?.log?.warn?.(`MsgFactory: 'listItems[${index}].quantity' requires val and unit`);
 					} else {
 						quantity = { val, unit };
+					}
+				}
+			}
+
+			let perUnit;
+			if (entry.perUnit !== undefined && entry.perUnit !== null) {
+				if (!entry.perUnit || typeof entry.perUnit !== 'object' || Array.isArray(entry.perUnit)) {
+					this.adapter?.log?.warn?.(
+						`MsgFactory: 'listItems[${index}].perUnit' must be an object with { val, unit }`,
+					);
+				} else {
+					const val = this._normalizeMsgPositiveNumber(entry.perUnit.val, `listItems[${index}].perUnit.val`);
+					const unit = this._normalizeMsgString(entry.perUnit.unit, `listItems[${index}].perUnit.unit`);
+					if (val === undefined || unit === undefined) {
+						this.adapter?.log?.warn?.(`MsgFactory: 'listItems[${index}].perUnit' requires val and unit`);
+					} else {
+						perUnit = { val, unit };
 					}
 				}
 			}
@@ -1380,7 +1677,7 @@ class MsgFactory {
 				this.adapter?.log?.warn?.(`MsgFactory: 'listItems[${index}].checked' must be boolean`);
 			}
 
-			const item = this._removeUndefinedKeys({ id, name, category, quantity, checked });
+			const item = this._removeUndefinedKeys({ id, name, category, quantity, perUnit, checked });
 			items.push(item);
 		});
 
@@ -1517,10 +1814,10 @@ class MsgFactory {
 	 * - `{ set: Record<string,PartialItem> }`: merge/update by id
 	 * - `{ delete: string[] }`: remove by id
 	 *
-	 * @param {Array<{id: string, name: string, category?: string, quantity?: { val: number, unit: string }, checked: boolean}>|undefined} existingItems Existing list items.
-	 * @param {Array<{id: string, name: string, category?: string, quantity?: { val: number; unit: string }, checked: boolean}>|{set?: Array<{id: string, name: string, category?: string, quantity?: { val: number; unit: string }, checked: boolean}>|Record<string, {name: string, category?: string, quantity?: { val: number; unit: string }, checked: boolean}>, delete?: string[]}|null|undefined} patch List items patch.
+	 * @param {Array<{id: string, name: string, category?: string, quantity?: { val: number, unit: string }, perUnit?: { val: number, unit: string }, checked: boolean}>|undefined} existingItems Existing list items.
+	 * @param {Array<{id: string, name: string, category?: string, quantity?: { val: number; unit: string }, perUnit?: { val: number; unit: string }, checked: boolean}>|{set?: Array<{id: string, name: string, category?: string, quantity?: { val: number; unit: string }, perUnit?: { val: number; unit: string }, checked: boolean}>|Record<string, {name: string, category?: string, quantity?: { val: number; unit: string }, perUnit?: { val: number; unit: string }, checked: boolean}>, delete?: string[]}|null|undefined} patch List items patch.
 	 * @param {string} kind Message kind.
-	 * @returns {Array<{id: string, name: string, category?: string, quantity?: { val: number, unit: string }, checked: boolean}>|undefined} Updated list items.
+	 * @returns {Array<{id: string, name: string, category?: string, quantity?: { val: number, unit: string }, perUnit?: { val: number, unit: string }, checked: boolean}>|undefined} Updated list items.
 	 */
 	_applyListItemsPatch(existingItems, patch, kind) {
 		if (patch === null) {
@@ -1545,19 +1842,24 @@ class MsgFactory {
 				const normalized = this._normalizeMsgListItems(setVal, kind);
 				base = normalized ? [...normalized] : [];
 			} else if (setVal && typeof setVal === 'object' && !Array.isArray(setVal)) {
-				// Id-addressed upsert: convert { [id]: partialItem } into array entries with explicit ids.
-				const entries = [];
+				// Id-addressed merge/upsert:
+				// - supports partial updates like `{ set: { "<id>": { checked: true } } }`
+				// - supports new items when `name` is provided
+				// - preserves existing items unless overwritten by the patch
+				const byId = new Map(base.map(item => [item.id, item]));
 				Object.entries(setVal).forEach(([id, entry]) => {
 					if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
 						this.adapter?.log?.warn?.(`MsgFactory: 'listItems.set.${id}' must be an object`);
 						return;
 					}
-					entries.push({ ...entry, id });
+					const existing = byId.get(id) || null;
+					const merged = { ...(existing || {}), ...entry, id };
+					const normalized = this._normalizeMsgListItems([merged], kind);
+					if (!normalized || normalized.length === 0) {
+						return;
+					}
+					byId.set(id, normalized[0]);
 				});
-				const normalized = this._normalizeMsgListItems(entries, kind) || [];
-				// Merge by id: existing items are preserved unless overwritten by the patch.
-				const byId = new Map(base.map(item => [item.id, item]));
-				normalized.forEach(item => byId.set(item.id, item));
 				base = Array.from(byId.values());
 			} else {
 				throw new TypeError(`'listItems.set' must be an array or object`);
@@ -1713,7 +2015,12 @@ class MsgFactory {
 	 */
 	_applyProgressPatch(existingProgress, patch) {
 		if (patch === null) {
-			return undefined;
+			// Progress is a required core object. Treat `null` as a reset of percentage (but keep first-start timestamp).
+			const base = this._normalineMsgProgress(existingProgress || {});
+			return this._normalineMsgProgress({
+				percentage: 0,
+				...(base.startedAt ? { startedAt: base.startedAt } : {}),
+			});
 		}
 		if (patch === undefined) {
 			return this._normalineMsgProgress(existingProgress || {});
@@ -1736,6 +2043,10 @@ class MsgFactory {
 
 		const merged = { ...(existingProgress || {}) };
 		Object.entries(partial).forEach(([key, val]) => {
+			// Core-owned timestamps: ignore patch attempts (same principle as `timing.updatedAt`).
+			if (key === 'startedAt' || key === 'finishedAt') {
+				return;
+			}
 			if (val === null) {
 				delete merged[key];
 			} else {
@@ -1750,6 +2061,10 @@ class MsgFactory {
 			patch.delete.forEach((key, index) => {
 				const normKey = this._normalizeMsgString(key, `progress.delete[${index}]`);
 				if (!normKey) {
+					return;
+				}
+				// Core-owned timestamps: ignore patch attempts.
+				if (normKey === 'startedAt' || normKey === 'finishedAt') {
 					return;
 				}
 				if (normKey === 'percentage') {
@@ -1934,15 +2249,34 @@ class MsgFactory {
 		if (!value || typeof value !== 'object') {
 			throw new TypeError(`'progress' must be an object`);
 		}
+
+		let percentage = 0;
+		if (Object.prototype.hasOwnProperty.call(value, 'percentage')) {
+			const norm = this._normalizeMsgNumber(value.percentage, 'progress.percentage');
+			if (typeof norm === 'number') {
+				percentage = norm;
+			}
+		}
+
 		const progress = {
 			// `percentage` is the only mandatory progress field in MsgHub.
 			// - It defaults to 0 (not started).
-			// - We only run numeric normalization when a truthy value is provided so that an explicit `0`
-			//   does not trigger the "must be > 0" warning of `_normalizeMsgNumber`.
-			percentage: value.percentage ? this._normalizeMsgNumber(value.percentage, 'progress.percentage') : 0,
+			percentage,
 			startedAt: value.startedAt ? this._normalizeMsgTime(value.startedAt, 'progress.startedAt') : undefined,
 			finishedAt: value.finishedAt ? this._normalizeMsgTime(value.finishedAt, 'progress.finishedAt') : undefined,
 		};
+
+		// Core-owned timestamps:
+		// - startedAt is set on first start and never cleared/updated afterwards.
+		// - finishedAt is set when percentage == 100 and removed when percentage < 100.
+		if (progress.percentage > 0 && !Number.isFinite(progress.startedAt)) {
+			progress.startedAt = Date.now();
+		}
+		if (progress.percentage < 100) {
+			delete progress.finishedAt;
+		} else if (progress.percentage === 100 && !Number.isFinite(progress.finishedAt)) {
+			progress.finishedAt = Date.now();
+		}
 
 		return this._removeUndefinedKeys(progress);
 	}

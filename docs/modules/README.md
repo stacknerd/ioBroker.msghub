@@ -4,7 +4,7 @@ This document explains the **core engine** of Message Hub: the classes in `src/`
 The core is responsible for the message model and lifecycle (store, validation, persistence, rendering, dispatch).
 
 This is “the inside” of Message Hub. It is designed to be stable and integration-agnostic.
-If you are looking for the ioBroker-facing parts, jump to [`docs/plugins/README.md`](../plugins/README.md).
+If you are looking for ioBroker-facing/runtime parts, jump to [`docs/io/README.md`](../io/README.md) and [`docs/plugins/README.md`](../plugins/README.md).
 
 Detailed docs for each module are linked at the bottom of this page.
 
@@ -15,7 +15,7 @@ Core modules can:
 - Define what a valid Message Hub `Message` looks like and how updates (“patches”) work
 - Keep a canonical in-memory list of messages (single source of truth)
 - Persist/restore that list and write append-only history
-- Render messages into display-friendly output (template placeholders → `display.*`)
+- Render messages into display-friendly output (template placeholders → rendered `title`/`text`/`details`)
 - Trigger notification events (dispatch), without caring about delivery channels
 
 Core modules intentionally do not:
@@ -23,8 +23,8 @@ Core modules intentionally do not:
 - Listen to ioBroker events directly
 - Deliver notifications to “real” channels
 
-Those IO responsibilities live in plugins (`lib/`). The adapter wires everything together in `main.js`.
-For runtime enable/disable + configuration of plugins (including bidirectional `Bridge...` plugins wired via `MsgBridge`), the adapter uses `IoPlugins` (see [`docs/plugins/IoPlugins.md`](../plugins/IoPlugins.md)).
+Those IO/runtime responsibilities live in the IO layer + plugins (`lib/`). The adapter wires everything together in `main.js`.
+For runtime enable/disable + configuration of integration plugins (including bidirectional `Bridge...` plugins wired via `MsgBridge`), the adapter uses `IoPlugins` (see [`docs/plugins/IoPlugins.md`](../plugins/IoPlugins.md)).
 
 ## Data Flow (Simplified)
 
@@ -37,9 +37,13 @@ For runtime enable/disable + configuration of plugins (including bidirectional `
 6. **Side Effects (best-effort)**: After mutations, `MsgStore` triggers side effects:
    - Persistence of the full list via `MsgStorage`
    - Append-only history via `MsgArchive`
-   - Notification dispatch via `MsgNotify` (fan-out to notifier plugins in `lib/`)
+   - Notification dispatch via `MsgNotify` (fan-out to notifier plugins in `lib/`, typically with rendered message views via `MsgRender`)
 7. **Notifier Plugins (delivery)**: Notifier plugins (e.g. `lib/Notify*.js`) receive events from `MsgNotify` and perform the actual delivery (ioBroker states, push, TTS, ...). See [`docs/plugins/README.md`](../plugins/README.md).
-8. **Output (read view)**: On reads, `MsgStore` returns a view; `MsgRender` creates `display.*` fields (resolving template placeholders from `metrics`/`timing`).
+   - In interactive channels (`Engage...`), user intents may execute actions (`MsgAction.execute(...)`).
+   - Successful actions are dispatched as events to producer plugins via `MsgIngest` (`onAction(actionInfo, ctx)`).
+8. **Output (read view)**: On reads, `MsgStore` returns a view:
+   - raw snapshots (`getMessages()`), or
+   - rendered output (`getMessageByRef()`, `queryMessages()`) via `MsgRender` (resolving template placeholders from `metrics`/`timing`).
 
 ASCII sketch - WRITE / MUTATE (create/update/delete + side effects):
 ```
@@ -57,7 +61,7 @@ MsgIngest  --->  MsgFactory  --->  MsgStore (canonical list)
 
 ASCII sketch - READ / VIEW (rendering only; no mutation)
 ```
-Consumer/UI  --->  MsgStore.getMessages()/getMessageByRef()  --->  MsgRender  --->  rendered output (display.*)
+Consumer/UI  --->  MsgStore.queryMessages()/getMessageByRef()  --->  MsgRender  --->  rendered output (title/text/details)
 ```
 
 ## Design ideas (why it is built like this)
@@ -73,28 +77,33 @@ Consumer/UI  --->  MsgStore.getMessages()/getMessageByRef()  --->  MsgRender  --
 - `MsgFactory` validates/normalizes the `Message` schema and defines patch semantics.
 - `MsgBridge` is an adapter-wiring helper for bidirectional integrations (register/unregister ingest + notify plugin pairs).
 - `MsgEngage` is an adapter-wiring helper for interactive channels (like MsgBridge, but adds action capability).
-- `MsgStore` is the hub: owns `fullList`, coordinates persistence/archive/notifications, and returns rendered views.
+- `MsgStore` is the hub: owns `fullList`, coordinates persistence/archive/notifications, and returns views (raw snapshots or rendered output, depending on the read API).
 - `MsgStorage` persists and restores the full message list (including revival of `Map` fields such as `metrics`).
 - `MsgArchive` writes an append-only history (JSONL) per message `ref` for audit/debug/replay.
 - `MsgNotify` dispatches notification events to registered notifier plugins (delivery happens in plugins).
-- `MsgRender` resolves template placeholders (`{{m.*}}`, `{{t.*}}`) into a separate `display` block.
+- `MsgRender` resolves template placeholders (`{{m.*}}`, `{{t.*}}`) into rendered `title`/`text`/`details`.
 - `MsgIngest` hosts producer plugins and fans out inbound events to them.
 - `MsgAction` executes whitelisted message actions and patches `lifecycle`/`timing` via the store.
+- `MsgStats` provides on-demand stats snapshots and keeps a persistent “done” rollup for longer windows.
 - `MsgUtils` contains small shared helpers used by storage/archive.
 
 ## Modules
 
 <!-- AUTO-GENERATED:MODULE-INDEX:START -->
 - `MsgAction`: [`./MsgAction.md`](./MsgAction.md)
+- `MsgAi`: [`./MsgAi.md`](./MsgAi.md)
 - `MsgArchive`: [`./MsgArchive.md`](./MsgArchive.md)
 - `MsgBridge`: [`./MsgBridge.md`](./MsgBridge.md)
+- `MsgConfig`: [`./MsgConfig.md`](./MsgConfig.md)
 - `MsgConstants`: [`./MsgConstants.md`](./MsgConstants.md)
 - `MsgEngage`: [`./MsgEngage.md`](./MsgEngage.md)
 - `MsgFactory`: [`./MsgFactory.md`](./MsgFactory.md)
 - `MsgHostApi`: [`./MsgHostApi.md`](./MsgHostApi.md)
 - `MsgIngest`: [`./MsgIngest.md`](./MsgIngest.md)
+- `MsgNotificationPolicy`: [`./MsgNotificationPolicy.md`](./MsgNotificationPolicy.md)
 - `MsgNotify`: [`./MsgNotify.md`](./MsgNotify.md)
 - `MsgRender`: [`./MsgRender.md`](./MsgRender.md)
+- `MsgStats`: [`./MsgStats.md`](./MsgStats.md)
 - `MsgStorage`: [`./MsgStorage.md`](./MsgStorage.md)
 - `MsgStore`: [`./MsgStore.md`](./MsgStore.md)
 - `MsgUtils`: [`./MsgUtils.md`](./MsgUtils.md)

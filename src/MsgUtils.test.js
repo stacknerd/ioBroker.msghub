@@ -10,6 +10,7 @@ const {
 	ensureMetaObject,
 	ensureBaseDir,
 	createOpQueue,
+	shouldDispatchByAudienceChannels,
 } = require('./MsgUtils');
 
 function delay(ms) {
@@ -368,6 +369,28 @@ describe('MsgUtils', () => {
 			await expect(op1).to.be.rejectedWith(Error, 'boom');
 			await expect(op2).to.eventually.equal('ok');
 			assert.deepStrictEqual(events, ['op1:start', 'op1:error', 'op2:start', 'op2:end']);
+		});
+	});
+
+	describe('shouldDispatchByAudienceChannels', () => {
+		it('treats plugin channel "*" and "all" as match-all (ignores include/exclude)', () => {
+			const msg = { audience: { channels: { include: ['x'], exclude: ['x'] } } };
+			expect(shouldDispatchByAudienceChannels(msg, '*')).to.equal(true);
+			expect(shouldDispatchByAudienceChannels(msg, 'all')).to.equal(true);
+			expect(shouldDispatchByAudienceChannels(msg, ' All ')).to.equal(true);
+		});
+
+		it('treats empty plugin channel as unscoped-only', () => {
+			expect(shouldDispatchByAudienceChannels({ audience: { channels: { include: ['x'] } } }, '')).to.equal(false);
+			expect(shouldDispatchByAudienceChannels({ audience: { channels: { exclude: ['x'] } } }, '')).to.equal(true);
+			expect(shouldDispatchByAudienceChannels({}, '')).to.equal(true);
+		});
+
+		it('applies include/exclude for non-empty plugin channels', () => {
+			expect(shouldDispatchByAudienceChannels({ audience: { channels: { include: ['push'] } } }, 'push')).to.equal(true);
+			expect(shouldDispatchByAudienceChannels({ audience: { channels: { include: ['other'] } } }, 'push')).to.equal(false);
+			expect(shouldDispatchByAudienceChannels({ audience: { channels: { exclude: ['push'] } } }, 'push')).to.equal(false);
+			expect(shouldDispatchByAudienceChannels({ audience: { channels: { exclude: ['PUSH'] } } }, 'push')).to.equal(false);
 		});
 	});
 });

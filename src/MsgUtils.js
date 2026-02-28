@@ -118,6 +118,78 @@ function createOpQueue() {
 	return queue;
 }
 
+/**
+ * Normalize a routing channel string for matching (trim + lower-case).
+ *
+ * @param {any} value Input value.
+ * @returns {string} Normalized channel (or empty string).
+ */
+function normalizeRoutingChannel(value) {
+	return typeof value === 'string' ? value.trim().toLowerCase() : '';
+}
+
+/**
+ * Normalize a list of routing channel strings.
+ *
+ * @param {any} list Input list.
+ * @returns {string[]} Normalized channel list.
+ */
+function normalizeRoutingList(list) {
+	if (!Array.isArray(list)) {
+		return [];
+	}
+	const out = [];
+	for (const item of list) {
+		const s = normalizeRoutingChannel(item);
+		if (s) {
+			out.push(s);
+		}
+	}
+	return out;
+}
+
+/**
+ * Decide whether a message should be dispatched to a given plugin routing channel.
+ *
+ * Semantics:
+ * - plugin channel empty => only unscoped messages (include empty)
+ * - plugin channel set => exclude blocks, include restricts
+ *
+ * @param {any} message Message-like object (expects `audience.channels.include/exclude`).
+ * @param {any} pluginChannel Plugin channel value.
+ * @returns {boolean} True when the message should be dispatched.
+ */
+function shouldDispatchByAudienceChannels(message, pluginChannel) {
+	const channel = normalizeRoutingChannel(pluginChannel);
+	if (channel === '*' || channel === 'all') {
+		return true;
+	}
+
+	const audience = message && typeof message === 'object' ? message.audience : null;
+	const channels = audience && typeof audience === 'object' ? audience.channels : null;
+
+	const include = normalizeRoutingList(channels && typeof channels === 'object' ? channels.include : null);
+	const exclude = normalizeRoutingList(channels && typeof channels === 'object' ? channels.exclude : null);
+
+	// Semantics
+	// - If plugin channel is empty: deliver only for "unscoped" messages (include empty).
+	//   Exclude is ignored for empty plugin channels.
+	// - If plugin channel is set:
+	//   - exclude wins
+	//   - include restricts when non-empty
+	if (!channel) {
+		return include.length === 0;
+	}
+
+	if (exclude.includes(channel)) {
+		return false;
+	}
+	if (include.length > 0 && !include.includes(channel)) {
+		return false;
+	}
+	return true;
+}
+
 module.exports = {
 	DEFAULT_MAP_TYPE_MARKER,
 	serializeWithMaps,
@@ -126,4 +198,7 @@ module.exports = {
 	ensureBaseDir,
 	createOpQueue,
 	isObject,
+	normalizeRoutingChannel,
+	normalizeRoutingList,
+	shouldDispatchByAudienceChannels,
 };

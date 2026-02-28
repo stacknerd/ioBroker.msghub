@@ -1,9 +1,10 @@
-# Message Hub Plugins (IO Layer) – Developer Guide
+# Message Hub Plugins (Integrations) – Developer Guide
 
 This document focuses on **how to integrate your own custom plugin** into Message Hub:
 what interfaces exist, what data you receive, and how the adapter wires plugins at runtime.
 
-If you want the “big picture” first, see [`docs/README.md`](../README.md). For the core internals, see [`docs/modules/README.md`](../modules/README.md).
+If you want the “big picture” first, see [`docs/README.md`](../README.md). For the core internals, see [`docs/modules/README.md`](../modules/README.md). For platform/runtime IO internals, see [`docs/io/README.md`](../io/README.md).
+For a full reference table of `ctx.api` / `ctx.meta`, see [`docs/plugins/API.md`](./API.md).
 
 ## Mental model: code-level plugins vs. runtime wiring
 
@@ -23,13 +24,8 @@ Read more: [`docs/plugins/IoPlugins.md`](./IoPlugins.md)
 
 ## Status of this repo (built-in plugins)
 
-This repository currently ships only a small set of built-in plugins:
-
-- `EngageSendTo` (control plane via ioBroker `sendTo`)
-- `NotifyStates` (writes notifications to ioBroker states)
-- `NotifyDebug` (debug notifier)
-
-There are no built-in `Ingest...` or `Bridge...` plugins yet. The core supports these plugin families, and you can add your own.
+For the canonical “what this repo ships today” list (types, defaults, and docs links), see
+[`docs/plugins/PLUGIN-INDEX.md`](./PLUGIN-INDEX.md).
 
 ## Plugin families (concept): `Ingest` / `Notify` / `Bridge` / `Engage`
 
@@ -76,8 +72,10 @@ Note: `Engage` is wired via `MsgEngage` (see “Engage plugins” below).
 
 ```
 ioBroker Objects (per plugin instance)
-  - state boolean      -> enable/disable (ack:false = user intent)
-  - object.native JSON -> plugin options
+  - base object (channel) -> plugin options in `object.native`
+  - enable state (boolean) -> enable/disable (ack:false = user intent)
+  - status state (string)  -> starting|running|stopping|stopped|error
+  - watchlist state (optional) -> JSON array of managed ids (ingest plugins)
             |
             v
       IoPlugins (lib/)
@@ -111,7 +109,7 @@ Message Hub supports four plugin families:
 
 - **Ingest plugins** (type prefix `Ingest...`): ioBroker events → message create/update/remove
 - **Notify plugins** (type prefix `Notify...`): Message Hub events → delivery (one-way)
-- **Bridge plugins** (type prefix `Bridge...`): bidirectional integrations (one enable switch; registered as ingest+notify via `MsgBridge`)
+- **Bridge plugins** (type prefix `Bridge...`): bidirectional integrations (one runtime-managed instance; registered as ingest+notify via `MsgBridge`)
 - **Engage plugins** (type prefix `Engage...`): interactive channels (bidirectional; messages + inbound intents + actions)
 
 Naming is not cosmetic: `IoPlugins` enforces the prefix by category to prevent catalog mistakes
@@ -128,22 +126,40 @@ The runtime will pass your `options` from ioBroker `native` plus an extra field:
 
 - `options.pluginBaseObjectId` (full id) so you can create states below your own subtree if needed
 
+Additionally, for every plugin call you get a stable identity bundle in `ctx.meta.plugin`:
+
+- `category`, `type`, `instanceId`, `regId`
+- `baseFullId` (full ioBroker id) and `baseOwnId` (own id)
+- `manifest` (includes the options schema in `manifest.options`)
+
+And you get manifest-backed option helpers:
+
+- `ctx.meta.options.resolveInt/resolveString/resolveBool`
+
 Example: ingest plugin skeleton:
 
 ```js
 // lib/IngestMyPlugin/index.js
 'use strict';
 
-function IngestMyPlugin(options) {
-  return {
-    start(ctx) {
-      // optional: subscribe / discovery using ctx.api.iobroker.*
-      // ctx.api.log.info('IngestMyPlugin started');
-    },
-    onStateChange(id, state, ctx) {
-      // decide: ignore / create / patch
+	function IngestMyPlugin(options) {
+	  return {
+	    start(ctx) {
+	      // optional: subscribe / discovery using ctx.api.iobroker.*
+	      // tip: for performant lookups in `system/custom`, use ctx.api.iobroker.objects.getObjectView('system', 'custom', ...)
+	      // tip: to write to foreign states, use ctx.api.iobroker.states.setForeignState('some.0.id', { val, ack })
+	      // ctx.api.log.info('IngestMyPlugin started');
+	    },
+	    onStateChange(id, state, ctx) {
+	      // decide: ignore / create / patch
       // writes go through ctx.api.store.*
     },
+		onAction(actionInfo, ctx) {
+			// optional: react to executed message actions (ctx.meta.event === MsgConstants.action.events.executed)
+			// example use cases:
+			// - treat "close" as "done" and update plugin-owned runtime state
+			// - implement plugin-specific behavior for action.type === "custom"
+		},
   };
 }
 
@@ -179,7 +195,8 @@ function EngageMyChannel(options) {
       // optional: connect, poll, webhook registration, etc.
       // inbound user intents may translate into:
       // - ctx.api.store.addMessage/updateMessage/removeMessage(...)
-      // - ctx.api.action.execute({ ref, actionId, actor, payload })
+      // - ctx.api.store.completeAfterCauseEliminated(ref, { actor })
+      // - ctx.api.action.execute({ ref, actionId, actor, payload, snoozeForMs })
     },
     stop(ctx) {
       // cleanup timers/subscriptions/connections
@@ -205,6 +222,11 @@ function BridgeMySystem(options) {
   return {
     start(ctx) {
       // optional: subscribe / discovery / resync using ctx.api.iobroker.*
+
+      // Option helpers (manifest-backed)
+      // - Schema source of truth: `ctx.meta.plugin.manifest.options`
+      // - Resolvers: `ctx.meta.options.resolveInt/resolveString/resolveBool`
+      // const maxItems = ctx.meta.options.resolveInt('maxItems', options.maxItems);
     },
     onStateChange(id, state, ctx) {
       // inbound: external -> Message Hub mutations (via ctx.api.store.*)
@@ -218,18 +240,43 @@ function BridgeMySystem(options) {
 module.exports = { BridgeMySystem };
 ```
 
-### 3) Add the plugin to the catalog (`lib/index.js`)
+### 3) Autodiscovery (no manual catalog wiring)
 
-To make the plugin show up as a runtime-managed plugin, add it to `IoPluginsCatalog`:
+To make the plugin show up as a runtime-managed plugin, just follow the conventions:
 
-- choose `type` (stable identifier; usually the factory name)
-- put it into the correct category list (`ingest` / `notify` / `bridge` / `engage`)
-- set `defaultEnabled` and `defaultOptions`
-- set `create` to your factory
+- put it into a folder `lib/<TypeName>/`
+- export `{ manifest }` from `lib/<TypeName>/manifest.js` with at least `manifest.type`
+- export a factory function named exactly like `manifest.type` from `lib/<TypeName>/index.js`
+- set `defaultEnabled` and define `options.<key>.default` (used to seed per-instance `native` on first creation)
+- set `supportsMultiple` to `true` if the plugin can run in multiple instances
+- set `title` and `description` (shown in the Admin Tab)
 
-After that, the adapter’s `IoPlugins` layer will create the enable/config object and can start/stop your plugin.
+`lib/index.js` builds `IoPluginsCatalog` at runtime by scanning `lib/<plugin>/manifest.js` and inferring the category from the
+type prefix (`Ingest*` / `Notify*` / `Bridge*` / `Engage*`).
 
-Note: `IoPlugins` wires `ingest` / `notify` / `bridge` / `engage`.
+#### Plugin manifest format (quick reference)
+
+`lib/<TypeName>/manifest.js` exports `{ manifest }` (plain JSON object).
+
+Common fields:
+
+- `schemaVersion` (`number`): manifest format version (currently `1`)
+- `type` (`string`): plugin type name (must match the exported factory function name)
+- `defaultEnabled` (`boolean`): initial enable state when instance `0` is first created
+- `supportsMultiple` (`boolean`): whether multiple instances (`0`, `1`, `2`, …) are allowed
+- `title` / `description`: translated strings shown in the Admin Tab (`{ en: '...', de: '...', ... }`)
+- `options`: option schema used for:
+  - seeding defaults into `object.native` (`options.<key>.default`)
+  - dynamic Admin Tab config UI
+  - `ctx.meta.options` resolvers (manifest-backed)
+
+Option spec fields (per `options.<key>`):
+
+- common: `type` (`number|string|boolean`), `default`, `order`, `label`, `help`
+- number: optionally `min`, `max`, `step`
+- enum selects (Admin Tab convenience):
+  - `options: 'MsgConstants.<path>'` for a single-select dropdown
+  - `multiOptions: 'MsgConstants.<path>'` for a multi-select dropdown (only for `type: 'string'`, stored as CSV)
 
 ### 4) Create documentation and keep indexes updated
 
@@ -238,27 +285,43 @@ Note: `IoPlugins` wires `ingest` / `notify` / `bridge` / `engage`.
 
 ## Runtime model: enable/disable + configuration
 
-With `IoPlugins`, each plugin instance is represented by one ioBroker object id that has **two roles**:
+With `IoPlugins`, each plugin instance is represented by a small ioBroker object subtree:
 
-- the **state value** (`boolean`) is the enable switch
-- the object’s **`native`** JSON is the plugin options
+- Base object (type `channel`): `msghub.0.<TypeName>.<instanceId>`
+  - raw plugin options live in `object.native`
+- Enable switch (type `state`, boolean, rw): `msghub.0.<TypeName>.<instanceId>.enable`
+- Status (type `state`, string, ro): `msghub.0.<TypeName>.<instanceId>.status`
+- Watchlist (optional, ingest plugins only): `msghub.0.<TypeName>.<instanceId>.watchlist`
 
 Practical consequences:
 
-- Enable/disable is done by writing the boolean with `ack: false` (user intent)
-- Changing `native` does not automatically reconfigure a running plugin
-  - practical rule: disable + enable (or restart the adapter) to apply option changes
+- Enable/disable is done by writing `*.enable` with `ack: false` (user intent).
+- When `object.native` is updated via `IoPlugins` (Admin Tab / admin command), enabled instances are restarted automatically:
+  `IoPlugins` restarts the **single affected plugin instance** (no adapter restart).
+  If you change `native` manually in the Objects view, do a disable+enable toggle to apply the new config.
 
 ID scheme (today):
 
-- own id (inside adapter APIs): `<TypeName>.<instanceId>` (instance id is currently always `0`)
+- own id (inside adapter APIs): `<TypeName>.<instanceId>` (instance ids are numeric, starting at `0`)
 - full id (in ioBroker object tree): `<namespace>.<TypeName>.<instanceId>` (example: `msghub.0.NotifyStates.0`)
   - `namespace` is available as `ctx.api.iobroker.ids.namespace`
 
-`IoPlugins` also passes `options.pluginBaseObjectId` to your factory as the **full id** of that base object.
-Many ioBroker adapter APIs expect “own ids” (without namespace). Use `ctx.api.iobroker.ids.toOwnId(fullId)` / `toFullId(ownId)` instead of manual string slicing.
+Multiple instances:
 
-Bridge plugins follow the same storage model (one enable/config object, options in `native`), but they result in **two registrations**
+- Plugins may allow multiple instances (`manifest.supportsMultiple === true`).
+- Instance ids are assigned automatically (`0`, `1`, `2`, …).
+- New ids are allocated by incrementing the current max id (deleted ids are not reused today).
+- If `supportsMultiple === false`, only instance `0` is allowed.
+
+`IoPlugins` also passes `options.pluginBaseObjectId` to your factory as the **full id** of that base object.
+Additionally, `IoPlugins` injects `ctx.meta.plugin.baseFullId` and `ctx.meta.plugin.baseOwnId` on every call.
+
+Best practice:
+
+- For ids **inside your plugin subtree**, prefer `ctx.meta.plugin.baseOwnId` (own id) and `ctx.meta.plugin.baseFullId` (full id).
+- Use `ctx.api.iobroker.ids.toOwnId(fullId)` / `toFullId(ownId)` only for converting arbitrary ids (and avoid manual string slicing).
+
+Bridge plugins follow the same storage model (one instance subtree), but they result in **two registrations**
 behind the scenes (ingest + notify) via `MsgBridge`.
 
 ## Interfaces you must implement
@@ -288,31 +351,59 @@ use `ctx.api.*` and do not mutate `MsgStore` internals.
 
 When the adapter is wired via `IoPlugins`, ingest plugins receive an additional helper:
 
-- `ctx.meta.managedObjects.report(ids, { managedBy, managedText })`
+- `await ctx.meta.managedObjects.report(ids, { managedText })`
+- `await ctx.meta.managedObjects.applyReported()`
 
-This lets ingest plugins report which ioBroker objects they “own”/monitor (typically foreign states). `IoPlugins` then writes a small metadata block into those objects:
+This lets ingest plugins report which ioBroker objects they “own”/monitor (typically foreign states). MsgHub then writes a small metadata block into those objects:
 
 - `managedBy`
 - `managedText`
 - `managedSince`
+- `managedMessage` (`true` while actively managed; used by the Admin UI)
 
 Where it is stored:
 
-- `obj.native.meta` (always)
-- `obj.common.custom[<adapter namespace>].meta` (only if that custom block already exists)
+- under `obj.common.custom[<adapter namespace>]` as flat keys:
+  - `managedMeta-managedBy`
+  - `managedMeta-managedText`
+  - `managedMeta-managedSince`
+  - `managedMeta-managedMessage`
 
 Signature:
 
 - `ids`: `string` or `string[]` (ioBroker object ids, usually full foreign ids)
-- `managedBy`: string (human-readable owner label, e.g. `"IngestMySystem plugin"`)
 - `managedText`: string (should already be localized via `ctx.api.i18n.t(...)`)
 
 Semantics:
 
-- Best-effort: failures are logged and swallowed by `IoPlugins`.
+- `report(...)` buffers ids (deduped); it does not write immediately.
+- `applyReported()` performs the writes (managed-meta stamping + watchlist update) and clears the buffer.
+- Stored `managedBy` is always `options.pluginBaseObjectId` (e.g. `"msghub.0.IngestHue.0"`).
+- Best-effort: failures are logged and swallowed.
 - Minimal writes: only updates when content differs or `managedSince` is missing.
+- Cleanup: when a plugin instance is disabled, MsgHub clears the plugin watchlist and marks previously listed objects as “no longer managed” (`managedMeta-managedMessage=false`). If the object has no active IngestStates rule (`mode===""`) and `enabled===true`, MsgHub also sets `enabled=false`.
 
-If a plugin depends on this feature, validate it in `start(ctx)` (throw a clear error when missing).
+	If a plugin depends on this feature, validate it in `start(ctx)` (throw a clear error when missing).
+
+### Plugin resources (auto-cleanup)
+
+When the adapter is wired via `IoPlugins`, every plugin call receives a per-instance resource tracker:
+
+- `ctx.meta.resources` (`IoPluginResources`)
+
+It is meant to prevent leaked intervals/subscriptions and is disposed automatically when the instance stops/unregisters (best-effort, even if `stop(ctx)` throws).
+
+Tracked resources:
+
+- Timers
+  - `ctx.meta.resources.setTimeout(fn, ms, ...args)` / `ctx.meta.resources.clearTimeout(handle)`
+  - `ctx.meta.resources.setInterval(fn, ms, ...args)` / `ctx.meta.resources.clearInterval(handle)`
+  - Note: one-shot timeouts are automatically forgotten after they fire; you only need `clearTimeout` when canceling early.
+- Generic cleanup hooks
+  - `ctx.meta.resources.add(disposer)` where `disposer` is `() => void` or `{ dispose() }`
+- ioBroker subscriptions
+  - Calls to `ctx.api.iobroker.subscribe.*` are automatically tracked and unsubscribed on stop/unregister.
+  - When you manually call `ctx.api.iobroker.subscribe.unsubscribe...`, the tracker forgets that subscription to avoid double-unsubscribe attempts.
 
 ---
 
@@ -339,11 +430,11 @@ The plugin hosts expose a **capability-based** API surface:
     - `ids.namespace`: adapter namespace (e.g. `msghub.0`)
     - `ids.toOwnId(fullId)`: strip `<namespace>.` from a full id (returns the input if it’s not under the namespace)
     - `ids.toFullId(ownId)`: add `<namespace>.` to an own id (returns the input if it already has the prefix)
-    - Best practice: use this to convert `options.pluginBaseObjectId` before calling ioBroker APIs that expect “own ids”.
+    - Best practice: prefer `ctx.meta.plugin.baseOwnId` / `baseFullId` for your plugin subtree ids; use `ids.*` for converting arbitrary ids when needed.
   - `objects` (foreign object access)
     - `objects.setObjectNotExists(ownId, obj): Promise<void>`
     - `objects.delObject(ownId): Promise<void>`
-    - `objects.getForeignObjects(pattern): Promise<Record<string, ioBroker.Object>>`
+    - `objects.getForeignObjects(pattern, type?): Promise<Record<string, ioBroker.Object>>`
     - `objects.getForeignObject(id): Promise<ioBroker.Object|null>`
     - `objects.extendForeignObject(id, patch): Promise<void>` (deep-merge for `common/native`)
     - Best practice: keep `extendForeignObject` patches minimal to avoid overwriting unrelated data.
@@ -355,6 +446,12 @@ The plugin hosts expose a **capability-based** API surface:
     - `subscribeObjects(pattern)`, `unsubscribeObjects(pattern)`
     - `subscribeForeignStates(idOrPattern)`, `unsubscribeForeignStates(idOrPattern)`
     - `subscribeForeignObjects(idOrPattern)`, `unsubscribeForeignObjects(idOrPattern)`
+- `ctx.api.ai`: optional AI enhancement facade (can be `null`; never throws/rejects)
+  - `getStatus()` → `{ enabled, provider?, reason? }`
+  - `text(request)` → best-effort text result (`{ ok, value|error }`)
+  - `json(request)` → best-effort JSON result (`BAD_JSON` when output is invalid JSON)
+  - Model selection is core-controlled (uses `request.purpose` + `request.hints.quality`).
+  - Design doc: [`docs/modules/MsgAi.md`](../modules/MsgAi.md)
 
 ### Ingest plugins (producer)
 
@@ -369,9 +466,10 @@ What you receive:
     - `updateMessage(msgOrRef, patch)`
     - `addOrUpdateMessage(msg)`
     - `removeMessage(ref)`
+	    - `completeAfterCauseEliminated(ref, { actor? })`
   - read API (views)
     - `getMessageByRef(ref)`
-    - `getMessages()`
+    - `getMessages()` (raw/unrendered snapshot)
     - `queryMessages({ where, page?, sort? })`
 - `ctx.api.factory` normalization gate: `createMessage(...)`
 - `ctx.api.constants` for enums and shared vocabulary
@@ -386,7 +484,8 @@ Where events come from (important):
 
 Subscribing from inside a plugin:
 
-- Subscribe in `start(ctx)` and unsubscribe in `stop(ctx)` via `ctx.api.iobroker.subscribe.*`.
+- Subscribe in `start(ctx)` via `ctx.api.iobroker.subscribe.*` (auto-cleanup is provided by `ctx.meta.resources` when wired via `IoPlugins`).
+- Unsubscribe explicitly when you need to release early (manual unsubs are automatically forgotten by the tracker).
 - Use `subscribeForeignStates(fullId)` / `subscribeForeignObjects(fullId)` for specific external ids.
 - Use `subscribeStates(ownId)` / `subscribeObjects(ownId)` for ids in your own namespace (own ids).
 - Keep subscriptions narrow (avoid `'*'`); after you subscribe, every matching update will go through the adapter and be fanned out to all ingest plugins, so always filter by `id` inside `onStateChange`.
@@ -404,12 +503,12 @@ Host: `MsgNotify` (see [`docs/modules/MsgNotify.md`](../modules/MsgNotify.md))
 What you receive:
 
 - `(event, notifications, ctx)` where `notifications` is always an array
-- `event` is a value from `MsgConstants.notfication.events` (for example `"due"`, `"updated"`)
+- `event` is a value from `MsgConstants.notfication.events` (for example `"added"`, `"due"`, `"updated"`)
 - optional lifecycle: `start(ctx)` (on registration) and `stop(ctx)` (on unregister/overwrite)
 - `ctx.api.constants` for allowed event names and enums
 - `ctx.api.store` read API (optional; when the host was constructed with a store)
   - `getMessageByRef(ref)`
-  - `getMessages()`
+  - `getMessages()` (raw/unrendered snapshot)
   - `queryMessages({ where, page?, sort? })`
 - `ctx.api.i18n` / `ctx.api.log` for translations and logging
 - `ctx.api.iobroker` for ID conversion and optional ioBroker read/subscribe tasks (see API reference above)
@@ -445,10 +544,10 @@ What you can do (functional contract):
 
 - Everything an Ingest plugin can do:
   - `ctx.api.factory.createMessage(...)` (normalization gate)
-  - `ctx.api.store.addMessage(...)`, `updateMessage(...)`, `addOrUpdateMessage(...)`, `removeMessage(...)`
-  - `ctx.api.store.getMessageByRef(...)`, `getMessages()`, `queryMessages(...)`
+  - `ctx.api.store.addMessage(...)`, `updateMessage(...)`, `addOrUpdateMessage(...)`, `removeMessage(...)`, `completeAfterCauseEliminated(...)`
+  - `ctx.api.store.getMessageByRef(...)`, `getMessages()` (raw), `queryMessages(...)`
 - Plus execute whitelisted actions via MsgAction:
-  - `ctx.api.action.execute({ ref, actionId, actor?, payload? })`
+  - `ctx.api.action.execute({ ref, actionId, actor?, payload?, snoozeForMs? })`
 
 How inbound interaction usually works:
 
@@ -495,7 +594,7 @@ Bidirectional integrations always have **two directions** (inbound + outbound):
 You can implement this in two ways:
 
 1. **Two separate plugins** (`Ingest...` + `Notify...`) and wire them together manually (or via `MsgBridge` in adapter code).
-2. **One bridge plugin** (`Bridge...`) and let `IoPlugins` manage it as one runtime instance (one enable switch + one `native` config object),
+2. **One bridge plugin** (`Bridge...`) and let `IoPlugins` manage it as one runtime instance subtree (base object + enable/status states; options in `native`),
    with a single handler wired into both hosts via `MsgBridge`.
 
 In both cases, the safe wiring helper is `MsgBridge` (see [`docs/modules/MsgBridge.md`](../modules/MsgBridge.md)).
@@ -505,17 +604,36 @@ In both cases, the safe wiring helper is `MsgBridge` (see [`docs/modules/MsgBrid
 - Keep handlers fast (plugins run in the adapter process).
 - Be idempotent where possible (ioBroker events can repeat; restarts happen).
 - Use stable ids (`ref`) to avoid uncontrolled message growth.
-- Avoid throwing: log and continue; the hosts will isolate failures, but best-effort behavior is still the goal.
+- Fail fast on hard misconfiguration: validate required capabilities in `start(ctx)` and throw a clear error when missing.
+- During regular operation (delivery / per-event processing): avoid throwing; log and continue (best-effort).
 
 ## Built-in plugins in this repo
 
-The plugin docs in this folder are for the built-in plugins shipped with this repository. They are also good templates for your own code.
+This repo ships built-in plugin implementations under `lib/*/` (see [`docs/plugins/PLUGIN-INDEX.md`](./PLUGIN-INDEX.md)).
+
+They are designed to run **only** in the Message Hub runtime (wired via `IoPlugins`). As a result, built-in plugins validate required `ctx.api`/`ctx.meta`
+capabilities in `start(ctx)` and throw on missing wiring (no “non-IoPlugins” fallbacks).
+
+To keep this validation readable and consistent, the repo provides a small helper:
+
+- `lib/IoPluginGuards.js` (`ensureCtxAvailability(prefix, ctx, { plainObject, fn, stringNonEmpty })`)
 
 ## Modules
 
 <!-- AUTO-GENERATED:MODULE-INDEX:START -->
+- `API`: [`./API.md`](./API.md)
+- `BridgeAlexaShopping`: [`./BridgeAlexaShopping.md`](./BridgeAlexaShopping.md)
+- `BridgeAlexaTasks`: [`./BridgeAlexaTasks.md`](./BridgeAlexaTasks.md)
 - `EngageSendTo`: [`./EngageSendTo.md`](./EngageSendTo.md)
+- `EngageTelegram`: [`./EngageTelegram.md`](./EngageTelegram.md)
+- `IngestDwd`: [`./IngestDwd.md`](./IngestDwd.md)
+- `IngestHue`: [`./IngestHue.md`](./IngestHue.md)
+- `IngestRandomChaos`: [`./IngestRandomChaos.md`](./IngestRandomChaos.md)
+- `IngestStates`: [`./IngestStates.md`](./IngestStates.md)
 - `IoPlugins`: [`./IoPlugins.md`](./IoPlugins.md)
 - `NotifyDebug`: [`./NotifyDebug.md`](./NotifyDebug.md)
+- `NotifyPushover`: [`./NotifyPushover.md`](./NotifyPushover.md)
+- `NotifyShoppingPdf`: [`./NotifyShoppingPdf.md`](./NotifyShoppingPdf.md)
 - `NotifyStates`: [`./NotifyStates.md`](./NotifyStates.md)
+- `PLUGIN-INDEX`: [`./PLUGIN-INDEX.md`](./PLUGIN-INDEX.md)
 <!-- AUTO-GENERATED:MODULE-INDEX:END -->
