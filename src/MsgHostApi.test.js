@@ -6,6 +6,7 @@ const { expect } = require('chai');
 const {
 	buildLogApi,
 	buildI18nApi,
+	buildFormatApi,
 	buildConfigApi,
 	buildIoBrokerApi,
 	buildIdsApi,
@@ -92,9 +93,7 @@ describe('MsgHostApi', () => {
 				i18n: {
 					t: key => `t:${key}`,
 					getTranslatedObject: obj => ({ ...obj, __t: true }),
-					locale: 'en-US',
 					i18nlocale: 'de-DE',
-					lang: 'de',
 				},
 			});
 			const i18n = buildI18nApi(adapter);
@@ -102,9 +101,7 @@ describe('MsgHostApi', () => {
 			expect(Object.isFrozen(i18n)).to.equal(true);
 			expect(i18n.t('x')).to.equal('t:x');
 			expect(i18n.getTranslatedObject({ a: 1 })).to.deep.equal({ a: 1, __t: true });
-			expect(i18n.locale).to.equal('en-US');
 			expect(i18n.i18nlocale).to.equal('de-DE');
-			expect(i18n.lang).to.equal('de');
 		});
 
 		it('exposes empty string metadata when locale fields are missing', () => {
@@ -116,9 +113,35 @@ describe('MsgHostApi', () => {
 			});
 			const i18n = buildI18nApi(adapter);
 			expect(i18n).to.not.equal(null);
-			expect(i18n.locale).to.equal('');
 			expect(i18n.i18nlocale).to.equal('');
-			expect(i18n.lang).to.equal('');
+		});
+	});
+
+	describe('buildFormatApi', () => {
+		it('returns null when i18n is not available', () => {
+			const { adapter } = createAdapterStub({ i18n: null });
+			expect(buildFormatApi(adapter)).to.equal(null);
+		});
+
+		it('exposes formatlocale from adapter.i18n.locale', () => {
+			const { adapter } = createAdapterStub({
+				i18n: {
+					locale: 'en-US',
+				},
+			});
+			const format = buildFormatApi(adapter);
+			expect(format).to.not.equal(null);
+			expect(Object.isFrozen(format)).to.equal(true);
+			expect(format.formatlocale).to.equal('en-US');
+		});
+
+		it('exposes empty string formatlocale when missing', () => {
+			const { adapter } = createAdapterStub({
+				i18n: {},
+			});
+			const format = buildFormatApi(adapter);
+			expect(format).to.not.equal(null);
+			expect(format.formatlocale).to.equal('');
 		});
 	});
 

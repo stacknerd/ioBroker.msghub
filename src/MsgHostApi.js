@@ -81,15 +81,27 @@ function buildI18nApi(adapter) {
 	// This facade intentionally just forwards those values so plugins have one stable place (`ctx.api.i18n`)
 	// and still get `null` when i18n is not wired at all.
 	const i18n = adapter.i18n;
-	const locale = typeof i18n?.locale === 'string' ? i18n.locale : '';
 	const i18nlocale = typeof i18n?.i18nlocale === 'string' ? i18n.i18nlocale : '';
-	const lang = typeof i18n?.lang === 'string' ? i18n.lang : '';
 	return Object.freeze({
 		t: i18n.t,
 		getTranslatedObject: i18n.getTranslatedObject,
-		locale,
 		i18nlocale,
-		lang,
+	});
+}
+
+/**
+ * Build an optional format facade. Returns null when format metadata is not wired.
+ *
+ * @param {import('@iobroker/adapter-core').AdapterInstance & { i18n?: ({ locale?: string } | null) }} adapter Adapter instance.
+ */
+function buildFormatApi(adapter) {
+	const i18n = adapter?.i18n;
+	if (!i18n || typeof i18n !== 'object') {
+		return null;
+	}
+	const formatlocale = typeof i18n?.locale === 'string' ? i18n.locale : '';
+	return Object.freeze({
+		formatlocale,
 	});
 }
 
@@ -668,6 +680,7 @@ function buildIoBrokerApi(adapter, { hostName }) {
 module.exports = {
 	buildLogApi,
 	buildI18nApi,
+	buildFormatApi,
 	buildConfigApi,
 	buildIoBrokerApi,
 	buildIdsApi,

@@ -24,6 +24,7 @@
 const {
 	buildIoBrokerApi,
 	buildI18nApi,
+	buildFormatApi,
 	buildLogApi,
 	buildConfigApi,
 	buildStoreApi,
@@ -39,7 +40,7 @@ class MsgIngest {
 	/**
 	 * Create a new ingest host instance.
 	 *
-	 * @param {import('@iobroker/adapter-core').AdapterInstance & { i18n?: ({ t?: Function, getTranslatedObject?: Function } | null) }} adapter Adapter instance.
+	 * @param {import('@iobroker/adapter-core').AdapterInstance & { i18n?: ({ t?: Function, getTranslatedObject?: Function, locale?: string, i18nlocale?: string, lang?: string } | null) }} adapter Adapter instance.
 	 * @param {import('./MsgConstants').MsgConstants} msgConstants Centralized enum-like constants (optional for plugins).
 	 * @param {import('./MsgFactory').MsgFactory} msgFactory Factory (used to create normalized messages on "create" paths).
 	 * @param {import('./MsgStore').MsgStore} msgStore Store API (single write path).
@@ -78,6 +79,7 @@ class MsgIngest {
 
 		const config = buildConfigApi(this.adapter);
 		const i18n = buildI18nApi(this.adapter);
+		const format = buildFormatApi(this.adapter);
 
 		const iobroker = buildIoBrokerApi(this.adapter, { hostName });
 		const log = buildLogApi(this.adapter, { hostName });
@@ -91,6 +93,7 @@ class MsgIngest {
 			stats,
 			ai,
 			i18n,
+			format,
 			iobroker,
 			log,
 		});

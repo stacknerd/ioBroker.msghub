@@ -35,6 +35,7 @@ This module exports small builder functions. Hosts call them once and then pass 
 
 - `buildLogApi(adapter, { hostName })` → `ctx.api.log`
 - `buildI18nApi(adapter)` → `ctx.api.i18n` (or `null`)
+- `buildFormatApi(adapter)` → `ctx.api.format` (or `null`)
 - `buildConfigApi(snapshot)` → `ctx.api.config` (or `null`)
 - `buildIoBrokerApi(adapter, { hostName })` → `ctx.api.iobroker`
 - `buildStoreApi(store, { hostName })` → `ctx.api.store`
@@ -64,15 +65,22 @@ Why this exists:
 Builds an optional i18n facade:
 
 - Returns `null` when i18n is not available (for example, when `main.js` did not attach `adapter.i18n`).
-- Otherwise returns `{ t, getTranslatedObject, locale, i18nlocale, lang }` from the adapter-scoped i18n instance.
+- Otherwise returns `{ t, getTranslatedObject, i18nlocale }` from the adapter-scoped i18n instance.
 
-Semantics of these fields:
-
-- `locale`: format locale for date/number rendering (adapter config `locale`, fallback `en-US`).
+Semantics of this metadata:
 - `i18nlocale`: effective ioBroker text language (`system.config.common.language`, normalized).
-- `lang`: base language code derived from `i18nlocale` (for example `de` from `de-DE`).
 
 This makes translation support opt-in without breaking plugins that do not need it.
+
+### `buildFormatApi(adapter)`
+
+Builds an optional format facade:
+
+- Returns `null` when i18n metadata is not available.
+- Otherwise returns `{ formatlocale }`.
+
+Semantics:
+- `formatlocale`: format locale for date/number rendering (adapter config `locale`, fallback `en-US`).
 
 ### `buildConfigApi(snapshot)`
 

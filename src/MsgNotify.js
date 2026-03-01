@@ -27,6 +27,7 @@
 const {
 	buildIoBrokerApi,
 	buildI18nApi,
+	buildFormatApi,
 	buildLogApi,
 	buildConfigApi,
 	buildStoreApi,
@@ -41,7 +42,7 @@ class MsgNotify {
 	/**
 	 * Create a new dispatcher instance.
 	 *
-	 * @param {import('@iobroker/adapter-core').AdapterInstance & { i18n?: ({ t?: Function, getTranslatedObject?: Function } | null) }} adapter Adapter instance (used for logging only).
+	 * @param {import('@iobroker/adapter-core').AdapterInstance & { i18n?: ({ t?: Function, getTranslatedObject?: Function, locale?: string, i18nlocale?: string, lang?: string } | null) }} adapter Adapter instance (used for logging only).
 	 * @param {import('./MsgConstants').MsgConstants} msgConstants Centralized enum-like constants (source of truth for events).
 	 * @param {object} [options] Optional extensions (advanced).
 	 * @param {object} [options.store] Optional MsgStore instance (plugins get a facade via `ctx.api.store`).
@@ -72,6 +73,7 @@ class MsgNotify {
 
 		const config = buildConfigApi(this.adapter);
 		const i18n = buildI18nApi(this.adapter);
+		const format = buildFormatApi(this.adapter);
 		const iobroker = buildIoBrokerApi(this.adapter, { hostName });
 		const log = buildLogApi(this.adapter, { hostName });
 
@@ -80,6 +82,7 @@ class MsgNotify {
 			constants: this.msgConstants,
 			config,
 			i18n,
+			format,
 			iobroker,
 			log,
 			store,
