@@ -83,6 +83,41 @@ UI docs cover admin surfaces and user-facing flows, currently centered on the Ad
 
 Read more: [`docs/ui/README.md`](./ui/README.md)
 
+## Language and Format Locale
+
+Message Hub maintains a deliberate separation between three independent language/locale sources and two independent concerns (text translation vs. number/date formatting).
+
+### Text Language (i18n key resolution)
+
+**ioBroker backend language**
+- Source: `system.config.common.language`
+- Resolved once at adapter startup; requires adapter restart after a system language change.
+- Used for: ioBroker state and object names (plugin states, managed-meta watchlist), `jsonCustom` dropdown labels.
+- Runtime access: `adapter.i18nBackend` (internal) — not exposed via `ctx.api`.
+
+**AdminTab UI language**
+- When embedded in the ioBroker Admin iFrame: resolved from the `runtime.about` response (`data.lang.backendTextLanguage`) on socket connect. This reflects the ioBroker backend language.
+- When opened standalone (no parent frame): falls back to `navigator.language`.
+- Controls which `admin/i18n/<lang>.json` dictionary the AdminTab loads.
+
+**MsgHub Core text language**
+- Source: explicit adapter config field `coreTextLanguage`.
+- Fallback: ioBroker backend language when `coreTextLanguage` is not set.
+- Used for: message translations in Core and plugins (i18n key resolution for message content).
+- Runtime access: `ctx.api.i18n.i18nlocale` (read-only, plugins).
+
+### Format Locale (number and date formatting)
+
+**MsgHub Core format locale**
+- Source: explicit adapter config field `coreFormatLocale` (e.g. `de-DE`, `en-US`), default `de-DE`.
+- Independent of text language — a German text output can still use `en-US` number formatting.
+- Stable fallback for plugins that produce output in an unknown rendering context (e.g. notification plugins).
+- Runtime access: `ctx.api.format.formatlocale` (read-only, plugins).
+
+The ioBroker backend format and AdminTab UI format are currently not in use.
+
+See also: [`docs/plugins/API.md`](./plugins/API.md) for the full `ctx.api` reference.
+
 ## Where Things Live (Code Map)
 
 - `src/`: core engine (modules)

@@ -53,15 +53,24 @@ const MsgConfig = Object.freeze({
 	 * @param {string} [params.decrypted.aiOpenAiApiKey] Decrypted OpenAI API key.
 	 * @param {object} [params.msgConstants] MsgConstants (levels/kinds); used for normalization later.
 	 * @param {object} [params.log] Optional logger facade (supports `error|warn|info|debug`).
+	 * @param {string} [params.backendTextLanguage] ioBroker system language resolved from `system.config.common.language` (e.g. "de", "en"). Provided by main.js before normalization; used as fallback for `coreTextLanguage`.
 	 * @returns {{ corePrivate: object, pluginPublic: object, errors: ReadonlyArray<string> }} Normalized config bundle.
 	 */
 	normalize(params = {}) {
 		const errors = [];
-		const { adapterConfig: _adapterConfig, decrypted: _decrypted, msgConstants: _msgConstants, log: _log } = params;
+		const {
+			adapterConfig: _adapterConfig,
+			decrypted: _decrypted,
+			msgConstants: _msgConstants,
+			log: _log,
+			backendTextLanguage: _backendTextLanguage,
+		} = params;
 		const adapterConfig = _adapterConfig && typeof _adapterConfig === 'object' ? _adapterConfig : {};
 		const decrypted = _decrypted && typeof _decrypted === 'object' ? _decrypted : {};
 		const msgConstants = _msgConstants && typeof _msgConstants === 'object' ? _msgConstants : null;
 		const log = _log && typeof _log === 'object' ? _log : null;
+		const backendTextLanguage =
+			typeof _backendTextLanguage === 'string' ? _backendTextLanguage.trim().toLowerCase() : '';
 
 		/**
 		 * Record a normalization issue.
@@ -199,6 +208,32 @@ const MsgConfig = Object.freeze({
 		const normalizeStats = () => {
 			const rollupKeepDays = Math.max(1, safeTrunc(adapterConfig?.rollupKeepDays) ?? 400);
 			return Object.freeze({ rollupKeepDays });
+		};
+
+		/**
+		 * Normalize general configuration (locale and language settings).
+		 *
+		 * Three separate concepts:
+		 * - `coreFormatLocale`: full BCP-47 locale string for number/date formatting (e.g. "de-DE", "en-US").
+		 *   Fallback: "de-DE".
+		 * - `backendTextLanguage`: ioBroker system language resolved from `system.config.common.language`.
+		 *   Provided by caller (main.js) before normalization; empty string when unavailable.
+		 * - `coreTextLanguage`: explicit MsgHub Core text language for message i18n key resolution.
+		 *   Fallback: `backendTextLanguage` (follows ioBroker system language when not configured).
+		 *
+		 * @returns {{ coreFormatLocale: string, coreTextLanguage: string, backendTextLanguage: string }} General config.
+		 */
+		const normalizeGeneral = () => {
+			const coreFormatLocale =
+				typeof adapterConfig?.coreFormatLocale === 'string' && adapterConfig.coreFormatLocale.trim()
+					? adapterConfig.coreFormatLocale.trim()
+					: 'de-DE';
+			const rawCoreTextLanguage =
+				typeof adapterConfig?.coreTextLanguage === 'string'
+					? adapterConfig.coreTextLanguage.trim().toLowerCase()
+					: '';
+			const coreTextLanguage = rawCoreTextLanguage || backendTextLanguage;
+			return Object.freeze({ coreFormatLocale, coreTextLanguage, backendTextLanguage });
 		};
 
 		/**
@@ -433,10 +468,12 @@ const MsgConfig = Object.freeze({
 			});
 		};
 
+		const general = normalizeGeneral();
 		const quietHours = normalizeQuietHours();
 		const render = normalizeRender();
 
 		const corePrivate = Object.freeze({
+			general,
 			store,
 			storage,
 			archive,
@@ -448,6 +485,7 @@ const MsgConfig = Object.freeze({
 
 		// Separate copy to keep the plugin-facing snapshot isolated from core-private objects.
 		const pluginPublic = Object.freeze({
+			general: Object.freeze({ ...general }),
 			quietHours: quietHours ? Object.freeze({ ...quietHours }) : null,
 			render: Object.freeze({
 				// Whitelist-only: allow plugins to read the effective presentation config.

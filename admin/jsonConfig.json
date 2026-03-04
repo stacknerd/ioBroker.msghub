@@ -6,13 +6,25 @@
 			"type": "panel",
 			"label": "msghub.i18n.core.admin.jsonConfig.general.panel.label",
 			"items": {
-				"locale": {
+				"coreFormatLocale": {
 					"type": "text",
-					"label": "msghub.i18n.core.admin.jsonConfig.general.locale.label",
-					"help": "msghub.i18n.core.admin.jsonConfig.general.locale.help",
-					"placeholder": "msghub.i18n.core.admin.jsonConfig.general.locale.placeholder",
+					"label": "msghub.i18n.core.admin.jsonConfig.general.coreFormatLocale.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.general.coreFormatLocale.help",
+					"placeholder": "msghub.i18n.core.admin.jsonConfig.general.coreFormatLocale.placeholder",
 					"default": "de-DE",
 					"newLine": true,
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 4,
+					"xl": 4
+				},
+				"coreTextLanguage": {
+					"type": "text",
+					"label": "msghub.i18n.core.admin.jsonConfig.general.coreTextLanguage.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.general.coreTextLanguage.help",
+					"placeholder": "msghub.i18n.core.admin.jsonConfig.general.coreTextLanguage.placeholder",
+					"default": "",
 					"xs": 12,
 					"sm": 12,
 					"md": 6,

@@ -83,14 +83,14 @@ describe('MsgHostApi', () => {
 	});
 
 	describe('buildI18nApi', () => {
-		it('returns null when i18n is not available', () => {
-			const { adapter } = createAdapterStub({ i18n: null });
+		it('returns null when i18nCore is not available', () => {
+			const { adapter } = createAdapterStub({ i18nCore: null });
 			expect(buildI18nApi(adapter)).to.equal(null);
 		});
 
 		it('exposes a small i18n facade when present', () => {
 			const { adapter } = createAdapterStub({
-				i18n: {
+				i18nCore: {
 					t: key => `t:${key}`,
 					getTranslatedObject: obj => ({ ...obj, __t: true }),
 					i18nlocale: 'de-DE',
@@ -106,7 +106,7 @@ describe('MsgHostApi', () => {
 
 		it('exposes empty string metadata when locale fields are missing', () => {
 			const { adapter } = createAdapterStub({
-				i18n: {
+				i18nCore: {
 					t: key => `t:${key}`,
 					getTranslatedObject: obj => ({ ...obj }),
 				},
@@ -118,14 +118,14 @@ describe('MsgHostApi', () => {
 	});
 
 	describe('buildFormatApi', () => {
-		it('returns null when i18n is not available', () => {
-			const { adapter } = createAdapterStub({ i18n: null });
+		it('returns null when i18nCore is not available', () => {
+			const { adapter } = createAdapterStub({ i18nCore: null });
 			expect(buildFormatApi(adapter)).to.equal(null);
 		});
 
-		it('exposes formatlocale from adapter.i18n.locale', () => {
+		it('exposes formatlocale from adapter.i18nCore.locale', () => {
 			const { adapter } = createAdapterStub({
-				i18n: {
+				i18nCore: {
 					locale: 'en-US',
 				},
 			});
@@ -137,7 +137,7 @@ describe('MsgHostApi', () => {
 
 		it('exposes empty string formatlocale when missing', () => {
 			const { adapter } = createAdapterStub({
-				i18n: {},
+				i18nCore: {},
 			});
 			const format = buildFormatApi(adapter);
 			expect(format).to.not.equal(null);

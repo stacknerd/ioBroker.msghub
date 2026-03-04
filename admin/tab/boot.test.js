@@ -209,6 +209,10 @@ ${applyRuntimeAboutPayloadSource}
 globalThis.__applyRuntimeAboutPayload = applyRuntimeAboutPayload;
 `,
 			{
+				isEmbeddedInAdmin: false,
+				overrideLang: () => {},
+				ensureAdminI18nLoaded: () => Promise.resolve(),
+				applyStaticI18n: () => {},
 				api: {
 					time: {
 						setPolicy: payload => {
@@ -258,6 +262,10 @@ ${applyRuntimeAboutPayloadSource}
 globalThis.__applyRuntimeAboutPayload = applyRuntimeAboutPayload;
 `,
 			{
+				isEmbeddedInAdmin: false,
+				overrideLang: () => {},
+				ensureAdminI18nLoaded: () => Promise.resolve(),
+				applyStaticI18n: () => {},
 				api: {
 					time: {
 						setPolicy: () => ({ isFallbackUtc: true, warning: 'timezone_fallback_utc:missing_timezone' }),
@@ -281,5 +289,70 @@ globalThis.__applyRuntimeAboutPayload = applyRuntimeAboutPayload;
 		assert.equal(toasts.length, 1);
 		assert.equal(warnings.length, 1);
 		assert.match(toasts[0], /timezone\.fallbackUtc\.text/);
+	});
+
+	it('overrides lang from backendTextLanguage when embedded in admin', async function () {
+		const source = await readRepoFile('admin/tab/boot.js');
+		const applyRuntimeAboutPayloadSource = extractFunctionSource(source, 'applyRuntimeAboutPayload');
+		const overrideCalls = [];
+		const i18nCalls = [];
+		const sandbox = runInSandbox(
+			`
+let timezoneFallbackToastShown = false;
+${applyRuntimeAboutPayloadSource}
+globalThis.__applyRuntimeAboutPayload = applyRuntimeAboutPayload;
+`,
+			{
+				isEmbeddedInAdmin: true,
+				overrideLang: lang => overrideCalls.push(lang),
+				ensureAdminI18nLoaded: () => { i18nCalls.push(1); return Promise.resolve(); },
+				applyStaticI18n: () => {},
+				api: { time: { setPolicy: () => ({ isFallbackUtc: false }) }, log: { warn() {} } },
+				ui: { contextMenu: { setBrandingText() {} }, toast() {} },
+				t: key => key,
+			},
+			'boot-langOverride.js',
+		);
+		sandbox.__applyRuntimeAboutPayload({
+			title: 'MsgHub',
+			version: '0.0.3',
+			time: { timeZone: 'Europe/Berlin', source: 'server' },
+			lang: { backendTextLanguage: 'de', coreTextLanguage: 'de' },
+		});
+
+		assert.equal(overrideCalls.length, 1);
+		assert.equal(overrideCalls[0], 'de');
+		assert.equal(i18nCalls.length, 1);
+	});
+
+	it('does not override lang when not embedded in admin', async function () {
+		const source = await readRepoFile('admin/tab/boot.js');
+		const applyRuntimeAboutPayloadSource = extractFunctionSource(source, 'applyRuntimeAboutPayload');
+		const overrideCalls = [];
+		const sandbox = runInSandbox(
+			`
+let timezoneFallbackToastShown = false;
+${applyRuntimeAboutPayloadSource}
+globalThis.__applyRuntimeAboutPayload = applyRuntimeAboutPayload;
+`,
+			{
+				isEmbeddedInAdmin: false,
+				overrideLang: lang => overrideCalls.push(lang),
+				ensureAdminI18nLoaded: () => Promise.resolve(),
+				applyStaticI18n: () => {},
+				api: { time: { setPolicy: () => ({ isFallbackUtc: false }) }, log: { warn() {} } },
+				ui: { contextMenu: { setBrandingText() {} }, toast() {} },
+				t: key => key,
+			},
+			'boot-langOverrideSkip.js',
+		);
+		sandbox.__applyRuntimeAboutPayload({
+			title: 'MsgHub',
+			version: '0.0.3',
+			time: { timeZone: 'Europe/Berlin', source: 'server' },
+			lang: { backendTextLanguage: 'de', coreTextLanguage: 'de' },
+		});
+
+		assert.equal(overrideCalls.length, 0);
 	});
 });

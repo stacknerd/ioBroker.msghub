@@ -17,7 +17,9 @@ declare global {
 	const args: any;
 	const adapterInstance: string;
 	const socket: any;
-	const lang: string;
+	let lang: string;
+	const isEmbeddedInAdmin: boolean;
+	function overrideLang(newLang: string): void;
 
 	function sendTo(command: string, message: any): Promise<any>;
 	function h(tag: string, attrs?: any, children?: any): HTMLElement;

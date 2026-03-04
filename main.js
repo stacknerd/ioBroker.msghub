@@ -17,89 +17,49 @@ const { MsgAi } = require(`${__dirname}/src/MsgAi`);
 const { IoArchiveResolver } = require(`${__dirname}/lib/IoArchiveResolver`);
 const { IoStorageIobroker } = require(`${__dirname}/lib/IoStorageIobroker`);
 
-function buildI18nRuntime(params) {
-	const p = params && typeof params === 'object' && !Array.isArray(params) ? params : {};
-	const { adapter, baseI18n, locale, i18nlocale, lang, debug } = p;
-
-	const getI18nFns = i18n => {
-		const translateFn =
-			typeof i18n?.t === 'function'
-				? i18n.t
-				: typeof i18n?.translate === 'function'
-					? i18n.translate
-					: typeof i18n?.default?.t === 'function'
-						? i18n.default.t
-						: typeof i18n?.default?.translate === 'function'
-							? i18n.default.translate
-							: null;
-
-		const getTranslatedObjectFn =
-			typeof i18n?.getTranslatedObject === 'function'
-				? i18n.getTranslatedObject
-				: typeof i18n?.default?.getTranslatedObject === 'function'
-					? i18n.default.getTranslatedObject
-					: null;
-
-		return { translateFn, getTranslatedObjectFn };
-	};
-
-	const fixTranslatedObject = (getTranslatedObjectFn, text, strings = []) => {
-		let obj =
-			typeof getTranslatedObjectFn === 'function' ? getTranslatedObjectFn(text, '%s') : { en: String(text) };
-		if (!obj || typeof obj !== 'object') {
-			obj = { en: String(text) };
-		}
-		for (const lang of Object.keys(obj)) {
-			let s = obj[lang];
-			for (const arg of strings) {
-				s = s.replace('%s', String(arg));
+function buildI18nWords(rootDir) {
+	const langs = ['de', 'en', 'es', 'fr', 'it', 'nl', 'pl', 'pt', 'ru', 'uk', 'zh-cn'];
+	const words = {};
+	for (const lang of langs) {
+		const data = require(`${rootDir}/i18n/${lang}.json`);
+		for (const key of Object.keys(data)) {
+			if (!words[key]) {
+				words[key] = {};
 			}
-			obj[lang] = s;
+			words[key][lang] = data[key];
 		}
-		return obj;
-	};
-
-	const { translateFn, getTranslatedObjectFn } = getI18nFns(baseI18n);
-
-	if (!translateFn) {
-		adapter?.log?.warn?.(
-			'I18n: adapter-core did not provide a translate function (I18n.t/I18n.translate); falling back to identity translation',
-		);
 	}
+	return words;
+}
 
-	const i18n = baseI18n
-		? Object.freeze({
-				t: (...args) => {
-					const [key, options] = args;
-					if (debug === true) {
-						adapter?.log?.debug?.(
-							`MsgHub main.js: [i18n.t] key=${JSON.stringify(key)} opts=${JSON.stringify(options ?? {})}`,
-						);
-					}
-					if (translateFn) {
-						return translateFn(...args);
-					}
-					return String(key);
-				},
-				getTranslatedObject: (...args) => {
-					const ret = fixTranslatedObject(getTranslatedObjectFn, args[0], args.slice(1));
-					if (debug === true) {
-						adapter?.log?.debug?.(
-							`MsgHub main.js: [i18n.getTranslatedObject] args=${JSON.stringify(args)} ret=${JSON.stringify(ret, null, 2)}`,
-						);
-					}
-
-					// The real function is currently broken and returns wrong strings in some environments.
-					// Until this gets fixed in ioBroker core, we keep using this workaround.
-					return ret;
-				},
-				locale,
-				i18nlocale,
-				lang,
-			})
-		: null;
-
-	return { i18n };
+function createI18nInstance(words, language) {
+	const lang = language || 'en';
+	const t = (key, ...args) => {
+		let text = words[key]?.[lang] || words[key]?.en || key;
+		for (const arg of args) {
+			text = text.replace('%s', arg === null ? 'null' : String(arg));
+		}
+		return text;
+	};
+	const getTranslatedObject = (key, ...args) => {
+		if (!words[key]) {
+			return { en: key };
+		}
+		const word = words[key];
+		if (word.en && word.en.includes('%s')) {
+			const result = {};
+			for (const l of Object.keys(word)) {
+				let s = word[l];
+				for (const arg of args) {
+					s = s.replace('%s', arg === null ? 'null' : String(arg));
+				}
+				result[l] = s;
+			}
+			return result;
+		}
+		return { ...word };
+	};
+	return { t, getTranslatedObject };
 }
 
 function decryptIfPossible(adapter, value) {
@@ -157,9 +117,6 @@ function sanitizeForLog(value) {
 	return out;
 }
 
-// Load your modules here, e.g.:
-// const fs = require('fs');
-
 class Msghub extends utils.Adapter {
 	/**
 	 * @param {Partial<utils.AdapterOptions>} [options] - Adapter options
@@ -176,10 +133,6 @@ class Msghub extends utils.Adapter {
 		this.on('unload', this.onUnload.bind(this));
 		this.msgConstants = MsgConstants;
 
-		// Default locale (overridden via instance config in onReady)
-		// This is the format locale (numbers/date-time), not the i18n text language.
-		this.locale = 'en-US';
-
 		// Runtime plugin enable/disable handler  (initialized in onReady)
 		this._msgPlugins = null;
 
@@ -192,20 +145,10 @@ class Msghub extends utils.Adapter {
 	 */
 	async onReady() {
 		/////////////////////////////////////////
-		//    Translator Interface
+		//    Locale & Translator Interface
 		/////////////////////////////////////////
 
-		const configuredLocale = typeof this.config.locale === 'string' ? this.config.locale.trim() : '';
-		if (configuredLocale) {
-			this.locale = configuredLocale;
-		}
-		await this._i18ninit(this.locale);
-
-		/////////////////////////////////////////
-		// Message Hub Core
-		/////////////////////////////////////////
-
-		this.msgFactory = new MsgFactory(this, this.msgConstants);
+		const backendTextLanguage = await this._resolveBackendTextLanguage();
 		const config = this.config || {};
 
 		const msgCfg = MsgConfig.normalize({
@@ -213,10 +156,21 @@ class Msghub extends utils.Adapter {
 			decrypted: { aiOpenAiApiKey: decryptIfPossible(this, config?.aiOpenAiApiKey) },
 			msgConstants: this.msgConstants,
 			log: this.log,
+			backendTextLanguage,
 		});
+		this.log?.debug?.(`MsgHub MsgConfig.normalize result: ${JSON.stringify(sanitizeForLog(msgCfg), null, 2)}`);
+
 		// Expose the plugin-facing config snapshot via adapter for `ctx.api.config`.
 		// This is intentionally read-only and schema-versioned.
 		this._msgConfigPublic = Object.freeze({ schemaVersion: MsgConfig.schemaVersion, ...msgCfg.pluginPublic });
+
+		this._i18ninit(msgCfg.corePrivate.general);
+
+		/////////////////////////////////////////
+		// Message Hub Core
+		/////////////////////////////////////////
+
+		this.msgFactory = new MsgFactory(this, this.msgConstants);
 
 		const msgAi = new MsgAi(this, msgCfg.corePrivate.ai);
 		this.msgAi = msgAi;
@@ -407,6 +361,10 @@ class Msghub extends utils.Adapter {
 							timeZone: timeZone || 'UTC',
 							source: timeZone ? 'server' : 'fallback-utc',
 						},
+						lang: {
+							backendTextLanguage: this.i18nBackend?.i18nlocale || 'en',
+							coreTextLanguage: this.i18nCore?.i18nlocale || 'en',
+						},
 					},
 				};
 			} else {
@@ -484,8 +442,15 @@ class Msghub extends utils.Adapter {
 		await this.setForeignObjectAsync(id, next);
 	}
 
-	async _i18ninit(locale) {
-		const _i18ndebug = false;
+	/**
+	 * Resolve ioBroker backend text language from system.config.
+	 *
+	 * Reads `system.config.common.language` and normalizes it to a lowercase BCP-47 tag.
+	 * Falls back to the adapter's own `this.language` property, then to "en".
+	 *
+	 * @returns {Promise<string>} Normalized backend text language (e.g. "de", "en").
+	 */
+	async _resolveBackendTextLanguage() {
 		const normalizeLangTag = value =>
 			String(value || '')
 				.trim()
@@ -496,9 +461,6 @@ class Msghub extends utils.Adapter {
 			return normalized ? normalized.split('-')[0] : '';
 		};
 
-		const formatLocale = typeof locale === 'string' && locale.trim() ? locale.trim() : this.locale || 'en-US';
-
-		// Text language must follow ioBroker's system language, not the adapter's format locale config.
 		let systemLanguage = '';
 		try {
 			const sys = await this.getForeignObjectAsync('system.config');
@@ -510,25 +472,42 @@ class Msghub extends utils.Adapter {
 		if (!systemLanguage) {
 			systemLanguage = splitBaseLang(this.language) || 'en';
 		}
+		return systemLanguage;
+	}
 
-		// Initialize adapter-core i18n from adapter context, so translate() follows system.config.common.language.
-		await utils.I18n.init(__dirname, this);
-		const lang = splitBaseLang(systemLanguage) || 'en';
-		const i18nlocale = systemLanguage;
-
+	/**
+	 * Initialize i18n translators from normalized general config.
+	 *
+	 * Wires two independent translator instances onto the adapter:
+	 * - `adapter.i18nBackend`: follows backendTextLanguage; used for ioBroker-native output
+	 *   (object/state names, jsonCustom dropdown labels).
+	 * - `adapter.i18nCore`: follows coreTextLanguage; consumed by MsgHostApi as `ctx.api.i18n`
+	 *   (Core and plugin message translations).
+	 *
+	 * Both carry `locale` (format locale) and `i18nlocale` (effective text language) as metadata
+	 * for downstream consumers (MsgHostApi.buildI18nApi / buildFormatApi).
+	 *
+	 * @param {{ coreFormatLocale: string, coreTextLanguage: string, backendTextLanguage: string }} general Normalized general config from MsgConfig.
+	 * @returns {void}
+	 */
+	_i18ninit(general) {
 		this.log?.debug?.(
-			`MsgHub main.js locale policy: formatLocale=${formatLocale} / systemLanguage=${i18nlocale} (i18n)`,
+			`MsgHub main.js locale policy: coreFormatLocale=${general.coreFormatLocale} / coreTextLanguage=${general.coreTextLanguage} / backendTextLanguage=${general.backendTextLanguage}`,
 		);
 
-		const { i18n } = buildI18nRuntime({
-			adapter: this,
-			baseI18n: utils.I18n,
-			locale: formatLocale,
-			i18nlocale,
-			lang,
-			debug: _i18ndebug,
+		const words = buildI18nWords(__dirname);
+
+		this.i18nBackend = Object.freeze({
+			...createI18nInstance(words, general.backendTextLanguage || 'en'),
+			locale: general.coreFormatLocale,
+			i18nlocale: general.backendTextLanguage,
 		});
-		this.i18n = i18n;
+
+		this.i18nCore = Object.freeze({
+			...createI18nInstance(words, general.coreTextLanguage || 'en'),
+			locale: general.coreFormatLocale,
+			i18nlocale: general.coreTextLanguage,
+		});
 	}
 }
 

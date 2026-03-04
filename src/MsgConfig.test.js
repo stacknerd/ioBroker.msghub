@@ -220,4 +220,80 @@ describe('MsgConfig', () => {
 			expect(res.errors).to.include('archive.strategy.invalidLock');
 		});
 	});
+
+	describe('general normalization', () => {
+		it('uses coreFormatLocale from adapterConfig when set', () => {
+			const res = MsgConfig.normalize({ adapterConfig: { coreFormatLocale: 'en-US' } });
+			expect(res.corePrivate.general.coreFormatLocale).to.equal('en-US');
+		});
+
+		it('trims coreFormatLocale', () => {
+			const res = MsgConfig.normalize({ adapterConfig: { coreFormatLocale: '  fr-FR  ' } });
+			expect(res.corePrivate.general.coreFormatLocale).to.equal('fr-FR');
+		});
+
+		it('falls back to de-DE when coreFormatLocale is empty', () => {
+			const res = MsgConfig.normalize({ adapterConfig: { coreFormatLocale: '' } });
+			expect(res.corePrivate.general.coreFormatLocale).to.equal('de-DE');
+		});
+
+		it('falls back to de-DE when coreFormatLocale is absent', () => {
+			const res = MsgConfig.normalize({ adapterConfig: {} });
+			expect(res.corePrivate.general.coreFormatLocale).to.equal('de-DE');
+		});
+
+		it('uses coreTextLanguage from adapterConfig when set', () => {
+			const res = MsgConfig.normalize({
+				adapterConfig: { coreTextLanguage: 'ru' },
+				backendTextLanguage: 'de',
+			});
+			expect(res.corePrivate.general.coreTextLanguage).to.equal('ru');
+		});
+
+		it('lowercases coreTextLanguage', () => {
+			const res = MsgConfig.normalize({
+				adapterConfig: { coreTextLanguage: 'DE' },
+				backendTextLanguage: 'en',
+			});
+			expect(res.corePrivate.general.coreTextLanguage).to.equal('de');
+		});
+
+		it('falls back to backendTextLanguage when coreTextLanguage is empty', () => {
+			const res = MsgConfig.normalize({
+				adapterConfig: { coreTextLanguage: '' },
+				backendTextLanguage: 'de',
+			});
+			expect(res.corePrivate.general.coreTextLanguage).to.equal('de');
+		});
+
+		it('falls back to backendTextLanguage when coreTextLanguage is absent', () => {
+			const res = MsgConfig.normalize({ adapterConfig: {}, backendTextLanguage: 'fr' });
+			expect(res.corePrivate.general.coreTextLanguage).to.equal('fr');
+		});
+
+		it('exposes backendTextLanguage as provided', () => {
+			const res = MsgConfig.normalize({ adapterConfig: {}, backendTextLanguage: 'de' });
+			expect(res.corePrivate.general.backendTextLanguage).to.equal('de');
+		});
+
+		it('backendTextLanguage defaults to empty string when not provided', () => {
+			const res = MsgConfig.normalize({ adapterConfig: {} });
+			expect(res.corePrivate.general.backendTextLanguage).to.equal('');
+		});
+
+		it('general is frozen', () => {
+			const res = MsgConfig.normalize({ adapterConfig: {} });
+			expect(Object.isFrozen(res.corePrivate.general)).to.equal(true);
+		});
+
+		it('general is exposed in pluginPublic as a separate frozen copy', () => {
+			const res = MsgConfig.normalize({ adapterConfig: { coreFormatLocale: 'en-US' }, backendTextLanguage: 'en' });
+			expect(res.pluginPublic).to.have.property('general');
+			expect(Object.isFrozen(res.pluginPublic.general)).to.equal(true);
+			expect(res.pluginPublic.general).to.not.equal(res.corePrivate.general);
+			expect(res.pluginPublic.general.coreFormatLocale).to.equal('en-US');
+			expect(res.pluginPublic.general.coreTextLanguage).to.equal('en');
+			expect(res.pluginPublic.general.backendTextLanguage).to.equal('en');
+		});
+	});
 });

@@ -65,7 +65,8 @@ function createSocket() {
 const args = parseQuery();
 const adapterInstance = `msghub.${args.instance}`;
 const socket = createSocket();
-const lang = typeof args.lang === 'string' ? args.lang : 'en';
+let lang = typeof args.lang === 'string' ? args.lang : 'en';
+const isEmbeddedInAdmin = window !== window.top;
 const debugTheme = args.debugTheme === true || args.debugTheme === '1' || args.debugTheme === 'true';
 const initialThemeFromQuery = resolveTheme(args);
 // Wörterbuch und Lade-Promise sind bewusst im Modulzustand gehalten.
@@ -81,6 +82,20 @@ let adminDictPromise = null;
 function normalizeLang(x) {
 	const s = typeof x === 'string' ? x.trim().toLowerCase() : '';
 	return s || 'en';
+}
+
+/**
+ * Überschreibt die aktive Sprache und erzwingt einen Reload des Dictionaries.
+ *
+ * @param {string} newLang - Neue Sprache (z. B. `de`, `en`).
+ */
+function overrideLang(newLang) {
+	const normalized = normalizeLang(newLang);
+	if (normalized === lang) {
+		return;
+	}
+	lang = normalized;
+	adminDictPromise = null;
 }
 
 /**
@@ -326,6 +341,8 @@ function detectTheme() {
 
 void adapterInstance;
 void socket;
+void isEmbeddedInAdmin;
+void overrideLang;
 void ensureAdminI18nLoaded;
 void t;
 

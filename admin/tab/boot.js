@@ -1,4 +1,4 @@
-/* global window, document, HTMLElement, HTMLInputElement, HTMLTextAreaElement, hasAdminKey, t, lang, createUi, createAdminApi, sendTo, socket, adapterInstance, args, h, getPanelDefinition, win, loadJsFilesSequential, renderPanelBootError, buildLayoutFromRegistry, getActiveComposition, computeAssetsForComposition, ensureAdminI18nLoaded, loadCssFiles, initTabs */
+/* global window, document, HTMLElement, HTMLInputElement, HTMLTextAreaElement, hasAdminKey, t, lang, createUi, createAdminApi, sendTo, socket, adapterInstance, args, h, getPanelDefinition, win, loadJsFilesSequential, renderPanelBootError, buildLayoutFromRegistry, getActiveComposition, computeAssetsForComposition, ensureAdminI18nLoaded, loadCssFiles, initTabs, isEmbeddedInAdmin, overrideLang */
 'use strict';
 
 /**
@@ -100,6 +100,17 @@ function applyRuntimeAboutPayload(payload) {
 		timezoneFallbackToastShown = true;
 		api?.log?.warn?.(`AdminTab timezone fallback active: ${policy.warning || 'unknown_reason'}`);
 		ui?.toast?.(t('msghub.i18n.core.admin.ui.timezone.fallbackUtc.text', policy.warning || 'unknown_reason'));
+	}
+
+	if (isEmbeddedInAdmin) {
+		const remoteLang =
+			typeof data?.lang?.backendTextLanguage === 'string'
+				? data.lang.backendTextLanguage.trim().toLowerCase()
+				: '';
+		if (remoteLang) {
+			overrideLang(remoteLang);
+			void ensureAdminI18nLoaded().then(() => applyStaticI18n());
+		}
 	}
 }
 

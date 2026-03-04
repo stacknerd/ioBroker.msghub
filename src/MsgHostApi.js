@@ -71,20 +71,19 @@ function buildLogApi(adapter, { hostName }) {
 /**
  * Build an optional i18n facade. Returns null when i18n is not wired.
  *
- * @param {import('@iobroker/adapter-core').AdapterInstance & { i18n?: ({ t?: Function, getTranslatedObject?: Function, locale?: string, i18nlocale?: string, lang?: string } | null) }} adapter Adapter instance.
+ * @param {import('@iobroker/adapter-core').AdapterInstance & { i18nCore?: ({ t?: Function, getTranslatedObject?: Function, locale?: string, i18nlocale?: string, lang?: string } | null) }} adapter Adapter instance.
  */
 function buildI18nApi(adapter) {
-	if (!adapter?.i18n || typeof adapter.i18n.t !== 'function') {
+	if (!adapter?.i18nCore || typeof adapter.i18nCore.t !== 'function') {
 		return null;
 	}
-	// `main.js` wires a patched `adapter.i18n` object that already contains the effective locale fields.
-	// This facade intentionally just forwards those values so plugins have one stable place (`ctx.api.i18n`)
-	// and still get `null` when i18n is not wired at all.
-	const i18n = adapter.i18n;
-	const i18nlocale = typeof i18n?.i18nlocale === 'string' ? i18n.i18nlocale : '';
+	// `main.js` wires `adapter.i18nCore` for message translations consumed by Core and plugins.
+	// This facade forwards those values so plugins have one stable place (`ctx.api.i18n`).
+	const i18nCore = adapter.i18nCore;
+	const i18nlocale = typeof i18nCore?.i18nlocale === 'string' ? i18nCore.i18nlocale : '';
 	return Object.freeze({
-		t: i18n.t,
-		getTranslatedObject: i18n.getTranslatedObject,
+		t: i18nCore.t,
+		getTranslatedObject: i18nCore.getTranslatedObject,
 		i18nlocale,
 	});
 }
@@ -92,14 +91,14 @@ function buildI18nApi(adapter) {
 /**
  * Build an optional format facade. Returns null when format metadata is not wired.
  *
- * @param {import('@iobroker/adapter-core').AdapterInstance & { i18n?: ({ locale?: string } | null) }} adapter Adapter instance.
+ * @param {import('@iobroker/adapter-core').AdapterInstance & { i18nCore?: ({ locale?: string } | null) }} adapter Adapter instance.
  */
 function buildFormatApi(adapter) {
-	const i18n = adapter?.i18n;
-	if (!i18n || typeof i18n !== 'object') {
+	const i18nCore = adapter?.i18nCore;
+	if (!i18nCore || typeof i18nCore !== 'object') {
 		return null;
 	}
-	const formatlocale = typeof i18n?.locale === 'string' ? i18n.locale : '';
+	const formatlocale = typeof i18nCore?.locale === 'string' ? i18nCore.locale : '';
 	return Object.freeze({
 		formatlocale,
 	});
