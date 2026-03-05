@@ -2174,6 +2174,8 @@
 				preset.message.icon = typeof preset.message.icon === 'string' ? preset.message.icon : '';
 				preset.message.title = typeof preset.message.title === 'string' ? preset.message.title : '';
 				preset.message.text = typeof preset.message.text === 'string' ? preset.message.text : '';
+				preset.message.textRecovered =
+					typeof preset.message.textRecovered === 'string' ? preset.message.textRecovered : '';
 				if (!preset.message.timing || typeof preset.message.timing !== 'object') {
 					preset.message.timing = { timeBudget: 0, dueInMs: 0, expiresInMs: 0, cooldown: 0, remindEvery: 0 };
 				}
@@ -2756,9 +2758,34 @@
 					};
 				})();
 
+				const textRecoveredField = (() => {
+					const id = `f_textRecovered_${Math.random().toString(36).slice(2, 8)}`;
+					const textarea = h('textarea', {
+						id,
+						class: '',
+						text: draft?.message?.textRecovered ?? '',
+					});
+					if (disabled) {
+						textarea.disabled = true;
+					}
+					return {
+						textarea,
+						getValue: () => textarea.value,
+						wrapper: h('div', { class: 'msghub-field' }, [
+							textarea,
+							h('label', { for: id, text: 'Text (recovered)' }),
+							h('div', {
+								class: 'msghub-muted',
+								text: 'Optional. Shown when the condition that triggered this message has been resolved.',
+							}),
+						]),
+					};
+				})();
+
 				fields.push(titleField);
 				fields.push(iconField);
 				fields.push(textField);
+				fields.push(textRecoveredField);
 
 				fields.push(buildFieldInput({ type: 'header', key: '_h_timing', label: 'Timing' }));
 				const fTimeBudget = buildFieldInput({
@@ -3058,6 +3085,7 @@
 					updateMessageNested('title', titleField.getValue());
 					updateMessageNested('icon', iconField.getValue());
 					updateMessageNested('text', textField.getValue());
+					updateMessageNested('textRecovered', textRecoveredField.getValue());
 					updateMessageNested('timing.timeBudget', fTimeBudget?.getValue ? fTimeBudget.getValue() || 0 : 0);
 					updateMessageNested('timing.dueInMs', fDueIn?.getValue ? fDueIn.getValue() || 0 : 0);
 					updateMessageNested('timing.expiresInMs', fExpiresIn?.getValue ? fExpiresIn.getValue() || 0 : 0);
