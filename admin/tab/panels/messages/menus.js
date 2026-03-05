@@ -313,22 +313,46 @@
 							{
 								id: 'copyJson',
 								label: t('msghub.i18n.core.admin.ui.messages.contextMenu.copyJson.action'),
-								onSelect: () => copyTextToClipboard(msgJson()),
+								onSelect: () =>
+									copyTextToClipboard(msgJson()).then(() =>
+										ui?.toast?.({
+											text: t('msghub.i18n.core.admin.ui.messages.contextMenu.copyJson.toast'),
+											variant: 'ok',
+										}),
+									),
 							},
 							{
 								id: 'copyRef',
 								label: t('msghub.i18n.core.admin.ui.messages.contextMenu.copyRef.action'),
-								onSelect: () => copyTextToClipboard(ref),
+								onSelect: () =>
+									copyTextToClipboard(ref).then(() =>
+										ui?.toast?.({
+											text: t('msghub.i18n.core.admin.ui.messages.contextMenu.copyRef.toast'),
+											variant: 'ok',
+										}),
+									),
 							},
 							{
 								id: 'copyTitle',
 								label: t('msghub.i18n.core.admin.ui.messages.contextMenu.copyTitle.action'),
-								onSelect: () => copyTextToClipboard(safeStr(pick(msg, 'title'))),
+								onSelect: () =>
+									copyTextToClipboard(safeStr(pick(msg, 'title'))).then(() =>
+										ui?.toast?.({
+											text: t('msghub.i18n.core.admin.ui.messages.contextMenu.copyTitle.toast'),
+											variant: 'ok',
+										}),
+									),
 							},
 							{
 								id: 'copyText',
 								label: t('msghub.i18n.core.admin.ui.messages.contextMenu.copyText.action'),
-								onSelect: () => copyTextToClipboard(safeStr(pick(msg, 'text'))),
+								onSelect: () =>
+									copyTextToClipboard(safeStr(pick(msg, 'text'))).then(() =>
+										ui?.toast?.({
+											text: t('msghub.i18n.core.admin.ui.messages.contextMenu.copyText.toast'),
+											variant: 'ok',
+										}),
+									),
 							},
 						],
 					},

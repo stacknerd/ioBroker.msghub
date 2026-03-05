@@ -107,6 +107,7 @@ describe('admin/tab/panels/messages/menus.js', function () {
 		};
 		options.copyTextToClipboard = text => {
 			copied = text;
+			return Promise.resolve();
 		};
 		options.isArchiveActionEnabled = () => true;
 		const menus = moduleApi.createMessagesMenus(options);
@@ -124,5 +125,33 @@ describe('admin/tab/panels/messages/menus.js', function () {
 		const copySubmenu = actions.find(item => item.id === 'copy');
 		copySubmenu.items.find(item => item.id === 'copyRef').onSelect();
 		assert.equal(copied, 'r1');
+	});
+
+	it('shows ok toast after each copy action succeeds', async function () {
+		const sandbox = await loadPanelModule('admin/tab/panels/messages/menus.js');
+		const moduleApi = sandbox.window.MsghubAdminTabMessagesMenus;
+		const { options, spies } = setupMenus();
+		const toasts = [];
+		options.ui.toast = opts => toasts.push(opts);
+		options.copyTextToClipboard = () => Promise.resolve();
+		const menus = moduleApi.createMessagesMenus(options);
+
+		menus.openRowContextMenu({ clientX: 1, clientY: 2 }, { ref: 'r1', title: 'T', text: 'X' });
+		const copy = spies.openCalls[0].items.find(item => item.id === 'copy');
+
+		await copy.items.find(item => item.id === 'copyJson').onSelect();
+		await copy.items.find(item => item.id === 'copyRef').onSelect();
+		await copy.items.find(item => item.id === 'copyTitle').onSelect();
+		await copy.items.find(item => item.id === 'copyText').onSelect();
+
+		assert.equal(toasts.length, 4);
+		assert.ok(
+			toasts.every(t => t.variant === 'ok'),
+			'all toasts are ok variant',
+		);
+		assert.ok(toasts[0].text.includes('copyJson.toast'), 'copyJson toast key');
+		assert.ok(toasts[1].text.includes('copyRef.toast'), 'copyRef toast key');
+		assert.ok(toasts[2].text.includes('copyTitle.toast'), 'copyTitle toast key');
+		assert.ok(toasts[3].text.includes('copyText.toast'), 'copyText toast key');
 	});
 });
