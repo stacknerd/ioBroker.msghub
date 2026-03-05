@@ -275,4 +275,55 @@ describe('admin/tab/ui.js', function () {
 		ui.overlayLarge.close();
 		assert.equal(ui.overlayLarge.isOpen(), false);
 	});
+
+	it('toast applies variant class and adds a close button', async function () {
+		const { sandbox } = await loadUiSandbox();
+		// Deferred setTimeout so toasts stay in DOM for inspection
+		const timers = [];
+		sandbox.window.setTimeout = fn => {
+			timers.push(fn);
+			return timers.length;
+		};
+		sandbox.window.clearTimeout = () => {};
+		const ui = sandbox.window.__uiFactory();
+
+		ui.toast({ text: 'ok msg', variant: 'ok' });
+		ui.toast({ text: 'warn msg', variant: 'warning' });
+		ui.toast({ text: 'err msg', variant: 'danger' });
+		ui.toast({ text: 'plain msg' });
+
+		const toastHost = sandbox.document.getElementById('msghub-toast-host');
+		assert.equal(toastHost.children.length, 4);
+		assert.ok(toastHost.children[0].className.includes('is-ok'), 'ok variant');
+		assert.ok(toastHost.children[1].className.includes('is-warning'), 'warning variant');
+		assert.ok(toastHost.children[2].className.includes('is-danger'), 'danger variant');
+		assert.ok(toastHost.children[3].className.includes('is-neutral'), 'neutral default');
+		for (const toastEl of toastHost.children) {
+			const closeBtn = toastEl.children[toastEl.children.length - 1];
+			assert.ok(closeBtn.className.includes('msghub-toast-close'), 'has close button');
+		}
+	});
+
+	it('toast close button removes the toast from DOM', async function () {
+		const { sandbox } = await loadUiSandbox();
+		const timers = [];
+		sandbox.window.setTimeout = fn => {
+			timers.push(fn);
+			return timers.length;
+		};
+		sandbox.window.clearTimeout = () => {};
+		sandbox.clearTimeout = () => {};
+		const ui = sandbox.window.__uiFactory();
+
+		ui.toast({ text: 'closeable', variant: 'danger' });
+
+		const toastHost = sandbox.document.getElementById('msghub-toast-host');
+		assert.equal(toastHost.children.length, 1);
+
+		const toastEl = toastHost.children[0];
+		const closeBtn = toastEl.children[toastEl.children.length - 1];
+		closeBtn.dispatchEvent({ type: 'click' });
+
+		assert.equal(toastHost.children.length, 0, 'toast removed after close click');
+	});
 });

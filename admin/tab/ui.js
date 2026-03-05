@@ -84,11 +84,14 @@ function createUi() {
 	/**
 	 * Zeigt eine kurze Toast-Nachricht an.
 	 *
-	 * @param {string|object} opts - Text oder Optionen mit `text`/`timeoutMs`.
+	 * @param {object} opts - Optionen mit `text`, `variant` (`ok`|`warning`|`danger`|`neutral`) und optional `timeoutMs`.
 	 */
 	const toast = opts => {
-		const text = typeof opts === 'string' ? opts : String(opts?.text ?? opts?.html ?? '');
-		const timeoutMsRaw = typeof opts === 'object' && opts ? opts.timeoutMs : undefined;
+		const text = String(opts?.text ?? '');
+		const variantRaw = typeof opts?.variant === 'string' ? opts.variant.trim() : '';
+		const variant =
+			variantRaw === 'ok' || variantRaw === 'warning' || variantRaw === 'danger' ? variantRaw : 'neutral';
+		const timeoutMsRaw = opts?.timeoutMs;
 		const timeoutMs = Number.isFinite(Number(timeoutMsRaw))
 			? Math.max(250, Math.trunc(Number(timeoutMsRaw)))
 			: 2500;
@@ -97,13 +100,19 @@ function createUi() {
 		}
 
 		const el = document.createElement('div');
-		el.className = 'msghub-toast';
-		el.textContent = text;
-		toastHost.appendChild(el);
-		toastHost.classList.remove('is-hidden');
-		toastHost.setAttribute('aria-hidden', 'false');
+		el.className = `msghub-toast is-${variant}`;
 
-		window.setTimeout(() => {
+		const textNode = document.createElement('span');
+		textNode.textContent = text;
+		el.appendChild(textNode);
+
+		const closeBtn = document.createElement('button');
+		closeBtn.className = 'msghub-uibutton-icon msghub-toast-close';
+		closeBtn.setAttribute('aria-label', 'close');
+		closeBtn.setAttribute('type', 'button');
+		el.appendChild(closeBtn);
+
+		const removeEl = () => {
 			try {
 				el.remove();
 				if (!toastHost.childElementCount) {
@@ -113,7 +122,18 @@ function createUi() {
 			} catch {
 				// ignore
 			}
-		}, timeoutMs);
+		};
+
+		closeBtn.addEventListener('click', () => {
+			clearTimeout(timer);
+			removeEl();
+		});
+
+		toastHost.appendChild(el);
+		toastHost.classList.remove('is-hidden');
+		toastHost.setAttribute('aria-hidden', 'false');
+
+		const timer = window.setTimeout(removeEl, timeoutMs);
 	};
 
 	// Context menu (Phase 2: DOM + minimal CSS; always in DOM, default-hidden)

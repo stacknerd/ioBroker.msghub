@@ -4,7 +4,7 @@
 /* Universal UI infrastructure */
 .msghub-root .msghub-toast-host {
 	position: fixed;
-	right: var(--msghub-space-3);
+	right: var(--msghub-indent-2); /* scrollbar gutter + margin */
 	bottom: var(--msghub-space-3);
 	z-index: 1200;
 	display: flex;
@@ -16,14 +16,51 @@
 
 .msghub-root .msghub-toast {
 	pointer-events: auto;
-	max-width: min(520px, calc(100vw - 2 * var(--msghub-space-3)));
-	background: var(--msghub-bg);
+	min-width: 160px;
+	min-height: 36px;
+	max-width: min(420px, calc(100vw - var(--msghub-indent-4)));
+	background-color: var(--msghub-bg);
 	color: var(--msghub-text);
 	border: 1px solid var(--msghub-border);
 	border-radius: var(--msghub-radius);
 	box-shadow: 0 6px 18px var(--msghub-shadow-md);
 	padding: var(--msghub-space-2) var(--msghub-space-3);
 	font: var(--msghub-font-body);
+	display: flex;
+	align-items: center;
+	gap: var(--msghub-space-2);
+	cursor: default;
+	user-select: none;
+	word-break: break-word;
+	overflow-wrap: break-word;
+}
+
+.msghub-root .msghub-toast.is-ok {
+	background-color: var(--msghub-bg);
+	background-image: linear-gradient(var(--msghub-ok-dim), var(--msghub-ok-dim));
+	border-color: var(--msghub-ok);
+	color: var(--msghub-ok);
+}
+
+.msghub-root .msghub-toast.is-warning {
+	background-color: var(--msghub-bg);
+	background-image: linear-gradient(var(--msghub-warning-dim), var(--msghub-warning-dim));
+	border-color: var(--msghub-warning);
+	color: var(--msghub-warning);
+}
+
+.msghub-root .msghub-toast.is-danger {
+	background-color: var(--msghub-bg);
+	background-image: linear-gradient(var(--msghub-danger-dim), var(--msghub-danger-dim));
+	border-color: var(--msghub-danger);
+	color: var(--msghub-danger);
+}
+
+.msghub-root .msghub-toast-close {
+	flex-shrink: 0;
+	margin-left: auto;
+	--msghub-uibutton-icon: var(--msghub-icon-close);
+	color: inherit;
 }
 
 /* ========================================================================== */

@@ -105,9 +105,9 @@
 			}));
 		}
 
-		const toast = message => {
+		const toast = (text, variant = 'neutral') => {
 			try {
-				ui?.toast?.(String(message));
+				ui?.toast?.({ text: String(text), variant });
 			} catch {
 				// ignore
 			}
@@ -1011,7 +1011,7 @@
 								}
 								target.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 							} catch (err) {
-								toast(String(err?.message || err));
+								toast(String(err?.message || err), 'danger');
 							}
 						},
 					})),
@@ -1890,7 +1890,7 @@
 					return true;
 				}
 				setStatus('IngestStates is disabled. Enable the plugin to use Bulk Apply.');
-				toast('IngestStates is disabled. Enable the plugin to use Bulk Apply.');
+				toast('IngestStates is disabled. Enable the plugin to use Bulk Apply.', 'warning');
 				return false;
 			};
 
@@ -2035,7 +2035,7 @@
 						`Done: updated=${res.updated}, unchanged=${res.unchanged}, errors=${(res.errors || []).length}`,
 					);
 					setPreview(null);
-					toast(`Bulk apply done: updated=${res.updated}`);
+					toast(`Bulk apply done: updated=${res.updated}`, 'ok');
 				} catch (err) {
 					setStatus(`Apply failed: ${String(err?.message || err)}`);
 				} finally {
@@ -2296,14 +2296,14 @@
 				return preset;
 			};
 
-			const toast = msg => {
+			const toast = (text, variant = 'neutral') => {
 				try {
-					console.warn(`Msghub presets: ${String(msg || '')}`);
+					console.warn(`Msghub presets: ${String(text || '')}`);
 				} catch {
 					// ignore
 				}
 				try {
-					ui?.toast?.(String(msg || ''));
+					ui?.toast?.({ text: String(text || ''), variant });
 				} catch {
 					// ignore
 				}
@@ -2342,7 +2342,7 @@
 					if (!preset) {
 						const msg = `Preset '${nextId}' could not be loaded`;
 						setError(msg);
-						toast(msg);
+						toast(msg, 'danger');
 						return;
 					}
 					selectedId = nextId;
@@ -2352,7 +2352,7 @@
 				} catch (e) {
 					const msg = String(e?.message || e);
 					setError(msg);
-					toast(msg);
+					toast(msg, 'danger');
 				} finally {
 					presetLoading = false;
 					render();
@@ -2375,7 +2375,7 @@
 					return;
 				}
 				if (!original || typeof original !== 'object') {
-					toast('No preset selected');
+					toast('No preset selected', 'warning');
 					return;
 				}
 				setError('');
@@ -2417,7 +2417,7 @@
 					.catch(e => {
 						const msg = String(e?.message || e);
 						setError(msg);
-						toast(msg);
+						toast(msg, 'danger');
 					})
 					.finally(() => {
 						saving = false;
@@ -2456,7 +2456,7 @@
 				const err = validateDraft();
 				if (err) {
 					setError(err);
-					toast(err);
+					toast(err, 'danger');
 					render();
 					return;
 				}
@@ -2489,7 +2489,7 @@
 					.catch(e => {
 						const msg = String(e?.message || e);
 						setError(msg);
-						toast(msg);
+						toast(msg, 'danger');
 					})
 					.finally(() => {
 						saving = false;
@@ -2563,7 +2563,7 @@
 						void loadList().catch(err => {
 							const msg = String(err?.message || err);
 							setError(msg);
-							toast(msg);
+							toast(msg, 'danger');
 						});
 					},
 					text: '⟳',
@@ -3177,7 +3177,7 @@
 			void loadList().catch(e => {
 				const msg = String(e?.message || e);
 				setError(msg);
-				toast(msg);
+				toast(msg, 'danger');
 			});
 			return el;
 		}
@@ -3452,6 +3452,7 @@
 										'msghub.i18n.core.admin.ui.plugins.instance.channel.saveFailed.text',
 										String(e?.message || e),
 									),
+									'danger',
 								);
 							}
 						};
@@ -3685,7 +3686,7 @@
 								initial[k] = normalize(info.getValue());
 							}
 						} catch (e) {
-							toast(String(e?.message || e));
+							toast(String(e?.message || e), 'danger');
 						} finally {
 							saveBtn.removeAttribute('data-saving');
 							updateDirtyUi();

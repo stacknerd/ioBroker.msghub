@@ -125,11 +125,12 @@
 		/**
 		 * Shows a non-throwing toast message.
 		 *
-		 * @param {string} message - Toast message.
+		 * @param {string} text - Toast message.
+		 * @param {string} [variant] - Toast variant.
 		 */
-		const toast = message => {
+		const toast = (text, variant = 'neutral') => {
 			try {
-				ui?.toast?.(String(message));
+				ui?.toast?.({ text: String(text), variant });
 			} catch {
 				// Ignore toast failures.
 			}
@@ -442,7 +443,7 @@
 				}
 				state.lastError = String(e?.message || e);
 				if (!state.silentLoading) {
-					toast(state.lastError);
+					toast(state.lastError, 'danger');
 				}
 			} finally {
 				if (reqId === state.requestSeq) {
@@ -484,7 +485,7 @@
 				metaApi.updateDeleteButton();
 				await loadMessages({ silent: false });
 			} catch (err) {
-				toast(String(err?.message || err));
+				toast(String(err?.message || err), 'danger');
 			}
 		}
 

@@ -99,7 +99,10 @@ function applyRuntimeAboutPayload(payload) {
 	if (policy?.isFallbackUtc && !timezoneFallbackToastShown) {
 		timezoneFallbackToastShown = true;
 		api?.log?.warn?.(`AdminTab timezone fallback active: ${policy.warning || 'unknown_reason'}`);
-		ui?.toast?.(t('msghub.i18n.core.admin.ui.timezone.fallbackUtc.text', policy.warning || 'unknown_reason'));
+		ui?.toast?.({
+			text: t('msghub.i18n.core.admin.ui.timezone.fallbackUtc.text', policy.warning || 'unknown_reason'),
+			variant: 'warning',
+		});
 	}
 
 	if (isEmbeddedInAdmin) {
@@ -128,9 +131,10 @@ async function refreshRuntimeAbout() {
 		if (policy?.isFallbackUtc && !timezoneFallbackToastShown) {
 			timezoneFallbackToastShown = true;
 			api?.log?.warn?.(`AdminTab timezone fallback active: ${policy.warning || 'runtime_about_error'}`);
-			ui?.toast?.(
-				t('msghub.i18n.core.admin.ui.timezone.fallbackUtc.text', policy.warning || 'runtime_about_error'),
-			);
+			ui?.toast?.({
+				text: t('msghub.i18n.core.admin.ui.timezone.fallbackUtc.text', policy.warning || 'runtime_about_error'),
+				variant: 'warning',
+			});
 		}
 	}
 }
@@ -565,7 +569,7 @@ async function initPanelsForComposition(panelIds) {
 		} catch (err) {
 			renderPanelBootError(panelId, err);
 			try {
-				ui?.toast?.(String(err?.message || err));
+				ui?.toast?.({ text: String(err?.message || err), variant: 'danger' });
 			} catch {
 				// ignore
 			}
@@ -580,7 +584,7 @@ async function initPanelsForComposition(panelIds) {
 		} catch (err) {
 			renderPanelBootError(panelId, err);
 			try {
-				ui?.toast?.(String(err?.message || err));
+				ui?.toast?.({ text: String(err?.message || err), variant: 'danger' });
 			} catch {
 				// ignore
 			}
@@ -609,7 +613,7 @@ function ensureBooted() {
 			await ensureAdminI18nLoaded();
 			const cssRes = await loadCssFiles(assets.css);
 			if (cssRes?.failed?.length) {
-				ui?.toast?.(`Failed to load CSS: ${cssRes.failed.join(', ')}`);
+				ui?.toast?.({ text: `Failed to load CSS: ${cssRes.failed.join(', ')}`, variant: 'danger' });
 			}
 
 			applyStaticI18n();
@@ -623,7 +627,7 @@ function ensureBooted() {
 		})
 		.catch(err => {
 			try {
-				ui?.toast?.(String(err?.message || err));
+				ui?.toast?.({ text: String(err?.message || err), variant: 'danger' });
 			} catch {
 				// ignore
 			}

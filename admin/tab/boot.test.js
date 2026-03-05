@@ -230,7 +230,7 @@ globalThis.__applyRuntimeAboutPayload = applyRuntimeAboutPayload;
 							branding = String(value);
 						},
 					},
-					toast: msg => toasts.push(String(msg)),
+					toast: opts => toasts.push(opts && typeof opts === 'object' ? opts.text : String(opts)),
 				},
 				t: (key, arg) => `${key}:${arg || ''}`,
 			},
@@ -276,7 +276,7 @@ globalThis.__applyRuntimeAboutPayload = applyRuntimeAboutPayload;
 				},
 				ui: {
 					contextMenu: { setBrandingText() {} },
-					toast: msg => toasts.push(String(msg)),
+					toast: opts => toasts.push(opts && typeof opts === 'object' ? opts.text : String(opts)),
 				},
 				t: (key, arg) => `${key}:${arg || ''}`,
 			},
