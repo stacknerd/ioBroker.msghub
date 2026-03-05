@@ -113,15 +113,23 @@ function createUi() {
 		el.appendChild(closeBtn);
 
 		const removeEl = () => {
-			try {
-				el.remove();
-				if (!toastHost.childElementCount) {
-					toastHost.classList.add('is-hidden');
-					toastHost.setAttribute('aria-hidden', 'true');
-				}
-			} catch {
-				// ignore
+			if (el.classList.contains('is-exiting')) {
+				return;
 			}
+			el.classList.add('is-exiting');
+			const doRemove = () => {
+				try {
+					el.remove();
+					if (!toastHost.childElementCount) {
+						toastHost.classList.add('is-hidden');
+						toastHost.setAttribute('aria-hidden', 'true');
+					}
+				} catch {
+					// ignore
+				}
+			};
+			el.addEventListener('animationend', doRemove, { once: true });
+			window.setTimeout(doRemove, 400); // safety fallback (> --msghub-toast-anim-out) if animationend never fires
 		};
 
 		closeBtn.addEventListener('click', () => {

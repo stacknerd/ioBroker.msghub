@@ -20,6 +20,14 @@
 	--msghub-anim-overlay-in: 160ms;
 	--msghub-anim-overlay-out: 120ms;
 
+	/* Toast */
+	--msghub-toast-anim-in:    300ms;
+	--msghub-toast-anim-out:   220ms;
+	--msghub-toast-ease:       cubic-bezier(0.2, 0, 0.3, 1);
+	--msghub-toast-min-width:  160px;
+	--msghub-toast-min-height: 36px;
+	--msghub-toast-max-width:  420px;
+
 	--msghub-accent: rgb(51 153 204);
 	--msghub-ok: rgb(38 166 154);
 	--msghub-ok-dim: rgb(38 166 154 / 0.1);

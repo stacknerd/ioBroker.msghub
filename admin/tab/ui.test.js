@@ -324,6 +324,11 @@ describe('admin/tab/ui.js', function () {
 		const closeBtn = toastEl.children[toastEl.children.length - 1];
 		closeBtn.dispatchEvent({ type: 'click' });
 
-		assert.equal(toastHost.children.length, 0, 'toast removed after close click');
+		// is-exiting set; DOM removal happens after animationend (not immediately)
+		assert.ok(toastEl.classList.contains('is-exiting'), 'is-exiting class set after close click');
+		assert.equal(toastHost.children.length, 1, 'toast still in DOM while animating out');
+
+		toastEl.dispatchEvent({ type: 'animationend' });
+		assert.equal(toastHost.children.length, 0, 'toast removed after animationend');
 	});
 });

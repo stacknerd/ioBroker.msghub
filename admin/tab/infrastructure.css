@@ -1,14 +1,47 @@
 /* ========================================================================== */
 /* Infrastructure: Toast                                                     */
 /* ========================================================================== */
+@keyframes msghub-toast-in {
+	0% {
+		opacity: 0;
+		transform: translateX(calc(100% + var(--msghub-indent-2)));
+	}
+	72% {
+		opacity: 1;
+		transform: translateX(-5px);
+	}
+	100% {
+		opacity: 1;
+		transform: translateX(0);
+	}
+}
+
+@keyframes msghub-toast-out {
+	0% {
+		opacity: 1;
+		transform: translateY(0);
+		max-height: 120px;
+	}
+	55% {
+		opacity: 0;
+		transform: translateY(28px);
+		max-height: 120px;
+	}
+	100% {
+		opacity: 0;
+		transform: translateY(28px);
+		max-height: 0;
+	}
+}
+
 /* Universal UI infrastructure */
 .msghub-root .msghub-toast-host {
 	position: fixed;
-	right: var(--msghub-indent-2); /* scrollbar gutter + margin */
-	bottom: var(--msghub-space-3);
+	right: var(--msghub-indent-3);
+	bottom: var(--msghub-indent-2);
 	z-index: 1200;
 	display: flex;
-	flex-direction: column;
+	flex-direction: column-reverse;
 	gap: var(--msghub-space-2);
 	align-items: flex-end;
 	pointer-events: none;
@@ -16,14 +49,14 @@
 
 .msghub-root .msghub-toast {
 	pointer-events: auto;
-	min-width: 160px;
-	min-height: 36px;
-	max-width: min(420px, calc(100vw - var(--msghub-indent-4)));
+	min-width: var(--msghub-toast-min-width);
+	min-height: var(--msghub-toast-min-height);
+	max-width: min(var(--msghub-toast-max-width), calc(100vw - var(--msghub-indent-4)));
 	background-color: var(--msghub-bg);
 	color: var(--msghub-text);
 	border: 1px solid var(--msghub-border);
 	border-radius: var(--msghub-radius);
-	box-shadow: 0 6px 18px var(--msghub-shadow-md);
+	box-shadow: var(--msghub-shadow-elevated);
 	padding: var(--msghub-space-2) var(--msghub-space-3);
 	font: var(--msghub-font-body);
 	display: flex;
@@ -33,6 +66,8 @@
 	user-select: none;
 	word-break: break-word;
 	overflow-wrap: break-word;
+	overflow: hidden;
+	animation: msghub-toast-in var(--msghub-toast-anim-in) var(--msghub-toast-ease) both;
 }
 
 .msghub-root .msghub-toast.is-ok {
@@ -54,6 +89,11 @@
 	background-image: linear-gradient(var(--msghub-danger-dim), var(--msghub-danger-dim));
 	border-color: var(--msghub-danger);
 	color: var(--msghub-danger);
+}
+
+.msghub-root .msghub-toast.is-exiting {
+	animation: msghub-toast-out var(--msghub-toast-anim-out) ease-in both;
+	pointer-events: none;
 }
 
 .msghub-root .msghub-toast-close {
@@ -333,7 +373,7 @@
 	color: var(--msghub-text);
 	border: 1px solid var(--msghub-border);
 	border-radius: var(--msghub-radius);
-	box-shadow: 0 10px 28px var(--msghub-shadow-md);
+	box-shadow: var(--msghub-shadow-elevated);
 	display: flex;
 	flex-direction: column;
 	min-height: 0;
