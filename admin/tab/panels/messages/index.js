@@ -366,7 +366,6 @@
 			headerApi.updateHeaderButtons();
 			metaApi.updatePaging();
 
-			metaApi.setProgressVisible(state.loading && !state.silentLoading);
 			metaApi.setError(state.lastError ? String(state.lastError) : null);
 
 			const meta = isObject(state.lastMeta) ? state.lastMeta : {};
@@ -416,6 +415,9 @@
 			void optionsArg.keepPopover;
 			const silent = optionsArg.silent === true;
 			const reqId = ++state.requestSeq;
+			const spinnerId = silent
+				? null
+				: (ui?.spinner?.show({ message: t('msghub.i18n.core.admin.panels.messages.loading.text') }) ?? null);
 			state.loading = true;
 			state.silentLoading = silent;
 			state.lastError = null;
@@ -446,6 +448,9 @@
 					toast(state.lastError, 'danger');
 				}
 			} finally {
+				if (spinnerId != null) {
+					ui?.spinner?.hide(spinnerId);
+				}
 				if (reqId === state.requestSeq) {
 					state.loading = false;
 					state.silentLoading = false;

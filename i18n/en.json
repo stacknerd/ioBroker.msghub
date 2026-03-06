@@ -176,6 +176,7 @@
 	"msghub.i18n.core.admin.jsonCustom.managedNotice.managedText.help": "Additional information from the source that manages this object.",
 	"msghub.i18n.core.admin.jsonCustom.managedNotice.managedText.label": "Note (from system)",
 	"msghub.i18n.core.admin.jsonCustom.managedNotice.panel.label": "Notice",
+	"msghub.i18n.core.admin.panels.messages.loading.text": "Refreshing messages…",
 	"msghub.i18n.core.admin.ui.action.cancel": "Cancel",
 	"msghub.i18n.core.admin.ui.action.delete": "Delete",
 	"msghub.i18n.core.admin.ui.connection.connected.text": "Connected · %s",

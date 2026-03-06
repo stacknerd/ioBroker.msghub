@@ -142,11 +142,6 @@
 			h('div', { class: 'msghub-toolbar__center' }, [paging]),
 			h('div', { class: 'msghub-toolbar__right' }, [pageSizeControl]),
 		]);
-		const progress = h(
-			'div',
-			{ class: 'msghub-progress is-hidden' },
-			h('div', { class: 'msghub-muted', text: t('msghub.i18n.core.admin.ui.loading.text') }),
-		);
 		const errorEl = h('div', { class: 'msghub-error is-hidden' });
 		const metaEl = h('div', { class: 'msghub-muted msghub-messages-meta' });
 		const emptyEl = h('div', {
@@ -199,7 +194,7 @@
 		 * @param {HTMLElement} root - Messages root element.
 		 */
 		function mount(root) {
-			root.replaceChildren(head, progress, errorEl, metaEl, tableWrap, emptyEl);
+			root.replaceChildren(head, errorEl, metaEl, tableWrap, emptyEl);
 			updatePaging();
 		}
 
@@ -246,15 +241,6 @@
 			refreshBtn.classList.toggle('msghub-btn-loading', state.loading && state.silentLoading);
 			autoBtn.setAttribute('aria-checked', state.autoRefresh ? 'true' : 'false');
 			updateDeleteButton();
-		}
-
-		/**
-		 * Toggles progress visibility.
-		 *
-		 * @param {boolean} isVisible - Whether loading indicator is visible.
-		 */
-		function setProgressVisible(isVisible) {
-			progress.classList.toggle('is-hidden', !isVisible);
 		}
 
 		/**
@@ -333,7 +319,6 @@
 			updateDeleteButton,
 			updatePaging,
 			updateButtons,
-			setProgressVisible,
 			setError,
 			setMeta,
 			setEmptyVisible,

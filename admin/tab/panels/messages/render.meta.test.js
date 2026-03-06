@@ -89,7 +89,7 @@ describe('admin/tab/panels/messages/render.meta.js', function () {
 		const root = createElement('div');
 
 		renderer.mount(root);
-		assert.equal(root.children.length, 6);
+		assert.equal(root.children.length, 5);
 		assert.equal(root.children[0].classList.contains('msghub-toolbar'), true);
 			assert.equal(renderer.elements.refreshBtn.classList.contains('msghub-uibutton-icon'), true);
 			assert.equal(renderer.elements.refreshBtn.classList.contains('msghub-toolbarbutton-icon'), true);
@@ -156,13 +156,12 @@ describe('admin/tab/panels/messages/render.meta.js', function () {
 		assert.equal(renderer.elements.pageSizeSelect.value, '50');
 	});
 
-	it('renders progress/error/meta/empty and tbody loading row', async function () {
+	it('renders error/meta/empty and tbody loading row', async function () {
 		const sandbox = await loadPanelModule('admin/tab/panels/messages/render.meta.js');
 		const moduleApi = sandbox.window.MsghubAdminTabMessagesRenderMeta;
 		const fixture = createFixture();
 		const renderer = moduleApi.createMetaRenderer(fixture.options);
 
-		renderer.setProgressVisible(true);
 		renderer.setError('boom');
 		const mountedRoot = createElement('div');
 		renderer.mount(mountedRoot);
@@ -174,10 +173,10 @@ describe('admin/tab/panels/messages/render.meta.js', function () {
 		renderer.setEmptyVisible(true);
 		renderer.updateTbody([], { showLoadingRow: true });
 		assert.equal(renderer.elements.tbodyEl.children.length, 1);
-		assert.equal(mountedRoot.children[3].children.length, 1);
-		assert.equal(mountedRoot.children[3].children[0].textContent, 'generatedAt: x');
+		assert.equal(mountedRoot.children[2].children.length, 1);
+		assert.equal(mountedRoot.children[2].children[0].textContent, 'generatedAt: x');
 		assert.equal(
-			mountedRoot.children[3].title,
+			mountedRoot.children[2].title,
 			'msghub.i18n.core.admin.ui.messages.meta.timeZone.label:: Europe/Berlin\n' +
 				'msghub.i18n.core.admin.ui.messages.meta.source.label:: server',
 		);
