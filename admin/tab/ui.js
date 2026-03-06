@@ -875,7 +875,7 @@ function createUi() {
 		menuEl.style.visibility = '';
 	};
 
-	// Kontextmenü-Primitive für Panels und Core.
+	// Context menu primitive for panels and core.
 	const contextMenu = Object.freeze({
 		open: contextMenuOpen,
 		close: contextMenuClose,
@@ -1110,7 +1110,7 @@ function createUi() {
 		}
 	});
 
-	// Einheitliches Escape-Handling für alle Modal-/Menüzustände.
+	// Unified Escape handling for all modal and menu states.
 	document.addEventListener('keydown', e => {
 		if (e.key !== 'Escape' && e.key !== 'Esc') {
 			return;
@@ -1122,7 +1122,7 @@ function createUi() {
 		}
 		if (contextMenuIsOpen) {
 			e.preventDefault();
-			// Erst Submenüs schließen, danach Root-Menü.
+			// Close submenus first, then the root menu.
 			if (Array.isArray(contextMenuStack) && contextMenuStack.length > 1) {
 				closeContextMenuLevel(contextMenuStack.length - 2);
 			} else {

@@ -247,8 +247,8 @@ function normalizeTimePolicy(policy) {
  * Erzeugt die stabile API-Fassade für alle Panels.
  *
  * @param {object} deps - Laufzeitabhängigkeiten aus dem Bootstrapping.
- * @param {Function} deps.sendTo - Backend-Brücke für `sendTo`-Kommandos.
- * @param {any} deps.socket - Socket-Instanz zur Verbindungsprüfung.
+ * @param {Function} deps.msghubRequest - Backend-Brücke für msghub-Kommandos.
+ * @param {any} deps.msghubSocket - Socket instance for connection state checks.
  * @param {string} deps.adapterInstance - Adapter-Instanzkennung.
  * @param {string} deps.lang - Aktuelle Sprache.
  * @param {Function} deps.t - Übersetzungsfunktion.
@@ -256,7 +256,7 @@ function normalizeTimePolicy(policy) {
  * @param {object} deps.ui - UI-Fassade (`toast`, `contextMenu`, `dialog`, ...).
  * @returns {object} Gefrorene API-Oberfläche (`ctx.api`).
  */
-function createAdminApi({ sendTo, socket, adapterInstance, lang, t, pickText, ui }) {
+function createAdminApi({ msghubRequest, msghubSocket, adapterInstance, lang, t, pickText, ui }) {
 	const registry = win.MsghubAdminTabRegistry || null;
 	const viewIdRaw = document?.documentElement?.getAttribute?.('data-msghub-view') || '';
 	const viewId = String(viewIdRaw || '').trim() || 'adminTab';
@@ -418,7 +418,7 @@ function createAdminApi({ sendTo, socket, adapterInstance, lang, t, pickText, ui
 		});
 	};
 
-	// `uiApi` ist der einzige UI-Einstiegspunkt für Panels.
+	// `uiApi` is the sole UI entry point for panels.
 	const uiApi = Object.freeze({
 		toast: opts => ui?.toast?.(opts),
 		contextMenu: Object.freeze({
@@ -452,7 +452,7 @@ function createAdminApi({ sendTo, socket, adapterInstance, lang, t, pickText, ui
 		closeAll: () => ui?.closeAll?.(),
 	});
 
-	// Host-Metadaten geben Panels Kontext über laufende Composition und Verbindungszustand.
+	// Host metadata gives panels context about the active composition and connection state.
 	const host = Object.freeze({
 		viewId,
 		layout: composition?.layout || 'tabs',
@@ -460,7 +460,7 @@ function createAdminApi({ sendTo, socket, adapterInstance, lang, t, pickText, ui
 		panels: Object.freeze(panelIds),
 		defaultPanel: defaultPanelId,
 		adapterInstance,
-		isConnected: () => !!socket?.connected,
+		isConnected: () => !!msghubSocket?.connected,
 	});
 
 	/**
@@ -473,9 +473,9 @@ function createAdminApi({ sendTo, socket, adapterInstance, lang, t, pickText, ui
 		throw createNotSupportedError(method);
 	};
 
-	// Konstanten werden stark gecacht, da sie sich zur Laufzeit selten ändern.
-	const constantsCache = createAsyncCache(() => sendTo('admin.constants.get', {}), { maxAgeMs: Infinity });
-	const ingestStatesConstantsCache = createAsyncCache(() => sendTo('admin.ingestStates.constants.get', {}), {
+	// Constants are heavily cached as they rarely change at runtime.
+	const constantsCache = createAsyncCache(() => msghubRequest('admin.constants.get', {}), { maxAgeMs: Infinity });
+	const ingestStatesConstantsCache = createAsyncCache(() => msghubRequest('admin.ingestStates.constants.get', {}), {
 		maxAgeMs: Infinity,
 	});
 
@@ -485,21 +485,21 @@ function createAdminApi({ sendTo, socket, adapterInstance, lang, t, pickText, ui
 	});
 
 	const stats = Object.freeze({
-		get: params => sendTo('admin.stats.get', params || {}),
+		get: params => msghubRequest('admin.stats.get', params || {}),
 	});
 
 	const messages = Object.freeze({
-		query: params => sendTo('admin.messages.query', params || {}),
-		delete: refs => sendTo('admin.messages.delete', { refs }),
+		query: params => msghubRequest('admin.messages.query', params || {}),
+		delete: refs => msghubRequest('admin.messages.delete', { refs }),
 	});
 
 	const plugins = Object.freeze({
-		getCatalog: () => sendTo('admin.plugins.getCatalog', {}),
-		listInstances: () => sendTo('admin.plugins.listInstances', {}),
-		createInstance: params => sendTo('admin.plugins.createInstance', params || {}),
-		updateInstance: params => sendTo('admin.plugins.updateInstance', params || {}),
-		setEnabled: params => sendTo('admin.plugins.setEnabled', params || {}),
-		deleteInstance: params => sendTo('admin.plugins.deleteInstance', params || {}),
+		getCatalog: () => msghubRequest('admin.plugins.getCatalog', {}),
+		listInstances: () => msghubRequest('admin.plugins.listInstances', {}),
+		createInstance: params => msghubRequest('admin.plugins.createInstance', params || {}),
+		updateInstance: params => msghubRequest('admin.plugins.updateInstance', params || {}),
+		setEnabled: params => msghubRequest('admin.plugins.setEnabled', params || {}),
+		deleteInstance: params => msghubRequest('admin.plugins.deleteInstance', params || {}),
 	});
 
 	const ingestStates = Object.freeze({
@@ -508,25 +508,25 @@ function createAdminApi({ sendTo, socket, adapterInstance, lang, t, pickText, ui
 			invalidate: () => ingestStatesConstantsCache.invalidate(),
 		}),
 		schema: Object.freeze({
-			get: () => sendTo('admin.ingestStates.schema.get', {}),
+			get: () => msghubRequest('admin.ingestStates.schema.get', {}),
 		}),
 		custom: Object.freeze({
-			read: params => sendTo('admin.ingestStates.custom.read', params || {}),
+			read: params => msghubRequest('admin.ingestStates.custom.read', params || {}),
 		}),
 		bulkApply: Object.freeze({
-			preview: params => sendTo('admin.ingestStates.bulkApply.preview', params || {}),
-			apply: params => sendTo('admin.ingestStates.bulkApply.apply', params || {}),
+			preview: params => msghubRequest('admin.ingestStates.bulkApply.preview', params || {}),
+			apply: params => msghubRequest('admin.ingestStates.bulkApply.apply', params || {}),
 		}),
 		presets: Object.freeze({
-			list: () => sendTo('admin.ingestStates.presets.list', {}),
-			get: params => sendTo('admin.ingestStates.presets.get', params || {}),
-			delete: params => sendTo('admin.ingestStates.presets.delete', params || {}),
-			upsert: params => sendTo('admin.ingestStates.presets.upsert', params || {}),
+			list: () => msghubRequest('admin.ingestStates.presets.list', {}),
+			get: params => msghubRequest('admin.ingestStates.presets.get', params || {}),
+			delete: params => msghubRequest('admin.ingestStates.presets.delete', params || {}),
+			upsert: params => msghubRequest('admin.ingestStates.presets.upsert', params || {}),
 		}),
 	});
 
 	const runtime = Object.freeze({
-		about: () => sendTo('runtime.about', {}),
+		about: () => msghubRequest('runtime.about', {}),
 	});
 
 	const time = Object.freeze({
@@ -557,7 +557,7 @@ function createAdminApi({ sendTo, socket, adapterInstance, lang, t, pickText, ui
 		},
 	});
 
-	// Stabile API-Oberfläche: Panels sprechen ausschließlich mit `ctx.api`.
+	// Stable API surface: panels interact exclusively with `ctx.api`.
 	return Object.freeze({
 		i18n,
 		ui: uiApi,

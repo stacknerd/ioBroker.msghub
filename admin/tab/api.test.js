@@ -155,11 +155,11 @@ describe('admin/tab/api.js', function () {
 
 		const createAdminApi = sandbox.window.__apiFns.createAdminApi;
 		const api = createAdminApi({
-			sendTo: async (command, payload) => {
+			msghubRequest: async (command, payload) => {
 				sentCommands.push({ command, payload });
 				return { command, payload };
 			},
-			socket: { connected: true },
+			msghubSocket: { connected: true },
 			adapterInstance: 'msghub.0',
 			lang: 'de',
 			t: (key, arg) => {
@@ -223,8 +223,8 @@ describe('admin/tab/api.js', function () {
 			const sandbox = await loadApiSandbox();
 			const createAdminApi = sandbox.window.__apiFns.createAdminApi;
 			const api = createAdminApi({
-				sendTo: async () => ({}),
-				socket: { connected: true },
+				msghubRequest: async () => ({}),
+				msghubSocket: { connected: true },
 				adapterInstance: 'msghub.0',
 				lang: 'en',
 				t: key => String(key),

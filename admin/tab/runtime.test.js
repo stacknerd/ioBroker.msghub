@@ -24,7 +24,8 @@ window.__runtime = {
 	detectTheme,
 	args,
 	adapterInstance,
-	socket,
+	msghubSocket: window.msghubSocket,
+	msghubRequest,
 	lang
 };
 `;
@@ -61,10 +62,11 @@ window.__runtime = {
 	const topDocument = options.topDocument || null;
 
 	const ioCalls = [];
+	const socketEmit = options.socketEmit || function () {};
 	const ioMock = {
 		connect: (url, connectOptions) => {
 			ioCalls.push({ url, options: connectOptions });
-			return { connected: true, on() {} };
+			return { connected: true, on() {}, emit: socketEmit };
 		},
 	};
 
@@ -142,6 +144,17 @@ describe('admin/tab/runtime.js', function () {
 		assert.equal(call.options.path, '/socket.io');
 	});
 
+	it('uses /socket.io path for adapter tab URLs', async function () {
+		const sandbox = await loadRuntimeSandbox({
+			pathname: '/adapter/msghub/tab.html',
+			search: '?instance=0',
+		});
+		assert.equal(sandbox.__meta.ioCalls.length, 1);
+		const call = sandbox.__meta.ioCalls[0];
+		assert.equal(call.url, '/');
+		assert.equal(call.options.path, '/socket.io');
+	});
+
 	it('normalizes language and resolves theme precedence', async function () {
 		const sandbox = await loadRuntimeSandbox({
 			search: '?instance=1',
@@ -176,6 +189,21 @@ describe('admin/tab/runtime.js', function () {
 		assert.equal(runtime.t('msg.key'), 'hallo');
 		assert.equal(runtime.t('missing.key'), 'missing.key');
 		assert.equal(sandbox.__meta.fetchCalls.length, 2, 'dictionary load should be cached');
+	});
+
+	it('msghubRequest sends sendTo via socket and resolves on ok response', async function () {
+		const sandbox = await loadRuntimeSandbox({
+			search: '?instance=2',
+			socketEmit(event, adapter, command, message, callback) {
+				callback({ ok: true, data: { command, adapter } });
+			},
+		});
+		const runtime = sandbox.window.__runtime;
+		const result = await runtime.msghubRequest('admin.stats.get', { q: 1 });
+
+		assert.equal(result.command, 'admin.stats.get');
+		assert.equal(result.adapter, 'msghub.2');
+		assert.equal(runtime.msghubSocket, sandbox.window.msghubSocket);
 	});
 
 	it('applies theme to document root and keeps debug marker when enabled', async function () {

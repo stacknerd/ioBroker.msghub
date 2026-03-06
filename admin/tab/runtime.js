@@ -1,4 +1,4 @@
-/* global window, location, document, io, win */
+/* global window, document, io, win */
 'use strict';
 
 /**
@@ -53,18 +53,36 @@ function parseQuery() {
  * @returns {any} Socket.io-Clientinstanz.
  */
 function createSocket() {
-	const path = location.pathname;
-	const parts = path.split('/');
-	parts.splice(-3);
-	if (location.pathname.match(/^\/admin\//)) {
-		parts.length = 0;
-	}
-	return io.connect('/', { path: `${parts.join('/')}/socket.io` });
+	// ioBroker always serves socket.io at /socket.io — regardless of the tab URL path.
+	return io.connect('/', { path: '/socket.io' });
 }
 
 const args = parseQuery();
 const adapterInstance = `msghub.${args.instance}`;
-const socket = createSocket();
+// Expose on a dedicated property that the admin host will not override.
+window.msghubSocket = createSocket();
+
+/**
+ * Sends an admin command to the backend over socket.io.
+ *
+ * @param {string} command - Backend command (e.g. `admin.stats.get`).
+ * @param {object} message - Payload for the command.
+ * @returns {Promise<any>} Resolved backend data or error.
+ */
+function msghubRequest(command, message) {
+	return new Promise((resolve, reject) => {
+		window.msghubSocket.emit('sendTo', adapterInstance, command, message, res => {
+			if (!res) {
+				return reject(new Error('No response'));
+			}
+			if (res.ok) {
+				return resolve(res.data);
+			}
+			const msg = res?.error?.message || res?.error || 'Unknown error';
+			return reject(new Error(String(msg)));
+		});
+	});
+}
 let lang = typeof args.lang === 'string' ? args.lang : 'en';
 const isEmbeddedInAdmin = window !== window.top;
 const debugTheme = args.debugTheme === true || args.debugTheme === '1' || args.debugTheme === 'true';
@@ -340,7 +358,7 @@ function detectTheme() {
 }
 
 void adapterInstance;
-void socket;
+void msghubRequest;
 void isEmbeddedInAdmin;
 void overrideLang;
 void ensureAdminI18nLoaded;

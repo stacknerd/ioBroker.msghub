@@ -1,4 +1,4 @@
-/* global window, document, HTMLElement, HTMLInputElement, HTMLTextAreaElement, hasAdminKey, t, lang, createUi, createAdminApi, sendTo, socket, adapterInstance, args, h, getPanelDefinition, win, loadJsFilesSequential, renderPanelBootError, buildLayoutFromRegistry, getActiveComposition, computeAssetsForComposition, ensureAdminI18nLoaded, loadCssFiles, initTabs, isEmbeddedInAdmin, overrideLang */
+/* global window, document, HTMLElement, HTMLInputElement, HTMLTextAreaElement, hasAdminKey, t, lang, createUi, createAdminApi, msghubRequest, msghubSocket, adapterInstance, args, h, getPanelDefinition, win, loadJsFilesSequential, renderPanelBootError, buildLayoutFromRegistry, getActiveComposition, computeAssetsForComposition, ensureAdminI18nLoaded, loadCssFiles, initTabs, isEmbeddedInAdmin, overrideLang */
 'use strict';
 
 /**
@@ -62,14 +62,14 @@ const elements = Object.freeze({
 const ui = createUi();
 ui?.contextMenu?.setBrandingText?.('Message Hub');
 
-const api = createAdminApi({ sendTo, socket, adapterInstance, lang, t, pickText, ui });
+const api = createAdminApi({ msghubRequest, msghubSocket, adapterInstance, lang, t, pickText, ui });
 
 // `ctx` ist die einzige Runtime-Sicht, die Panels erhalten.
 const ctx = Object.freeze({
 	args,
 	adapterInstance,
-	socket,
-	sendTo,
+	msghubSocket,
+	msghubRequest,
 	api,
 	h,
 	ui,
@@ -386,13 +386,13 @@ function buildInputContextMenuItems(editable) {
 	].map(it => Object.freeze(it));
 }
 
-// Globales Context-Menü ersetzt Browser-Right-Click innerhalb der MsgHub-Root.
+// Global context menu replaces the browser right-click within the MsgHub root.
 document.addEventListener('contextmenu', e => {
 	try {
 		if (!e || typeof e !== 'object') {
 			return;
 		}
-		// Versteckter Bypass: Ctrl+Right-Click öffnet bewusst das native Browser-Menü.
+		// Hidden bypass: Ctrl+right-click intentionally opens the native browser menu.
 		if (e.ctrlKey === true) {
 			try {
 				ctx.api.ui.contextMenu.close();
@@ -423,11 +423,11 @@ document.addEventListener('contextmenu', e => {
 		}
 		const insideMenu = target.closest('.msghub-contextmenu');
 		if (insideMenu) {
-			// Auf eigener Menü-UI immer das native Menü blocken.
+			// Always block the native menu when inside the custom context menu UI.
 			e.preventDefault();
 			return;
 		}
-		// Panels dürfen das Event selbst übernehmen (`preventDefault()`).
+		// Panels may handle the event themselves (`preventDefault()`).
 		if (e.defaultPrevented) {
 			return;
 		}
@@ -587,7 +587,7 @@ async function initPanelsForComposition(panelIds) {
 
 		try {
 			const section = initPanelById(panelId);
-			if (section && socket?.connected) {
+			if (section && msghubSocket?.connected) {
 				section?.onConnect?.();
 			}
 		} catch (err) {
@@ -671,7 +671,7 @@ async function warmupAdminApis() {
 	const maxWaitMs = 30000;
 	let delayMs = 200;
 
-	while (socket?.connected && connectWarmupToken === token && Date.now() - startedAt <= maxWaitMs) {
+	while (msghubSocket?.connected && connectWarmupToken === token && Date.now() - startedAt <= maxWaitMs) {
 		try {
 			await api.constants.get();
 			await api.ingestStates?.constants?.get?.();
@@ -696,7 +696,7 @@ function triggerWarmupReconnect() {
 	connectWarmupPromise = Promise.resolve()
 		.then(async () => {
 			const ok = await warmupAdminApis();
-			if (!ok || !socket?.connected) {
+			if (!ok || !msghubSocket?.connected) {
 				return;
 			}
 			for (const section of panelSections.values()) {
@@ -713,7 +713,14 @@ function triggerWarmupReconnect() {
 	return connectWarmupPromise;
 }
 
-socket.on('connect', () => {
+const PING_INTERVAL_MS = 15_000;
+const PING_TIMEOUT_MS = 5_000;
+let pingToken = 0;
+
+/**
+ * Transitions to online state and notifies all panels.
+ */
+function onBecomeOnline() {
 	connOnline = true;
 	setConnStatus(true);
 	void ensureBooted().then(() => {
@@ -725,9 +732,12 @@ socket.on('connect', () => {
 		}
 		void triggerWarmupReconnect();
 	});
-});
+}
 
-socket.on('disconnect', () => {
+/**
+ * Transitions to offline state and cancels any running warmup.
+ */
+function onBecomeOffline() {
 	connOnline = false;
 	setConnStatus(false);
 	connectWarmupToken++;
@@ -736,4 +746,55 @@ socket.on('disconnect', () => {
 		applyStaticI18n();
 		setConnTextFromState();
 	});
+}
+
+/**
+ * Sends a single ping and updates connection state based on the result.
+ *
+ * A response within the timeout window marks the connection as online.
+ * A timeout or error marks it as offline. A superseded token (new ping
+ * started) causes this ping to be silently discarded.
+ *
+ * @returns {Promise<void>}
+ */
+async function sendPing() {
+	const token = ++pingToken;
+	try {
+		await Promise.race([
+			msghubRequest('admin.ping', null),
+			new Promise((_, reject) => setTimeout(() => reject(new Error('ping timeout')), PING_TIMEOUT_MS)),
+		]);
+		if (pingToken !== token) {
+			return;
+		}
+		if (!connOnline) {
+			onBecomeOnline();
+		}
+	} catch {
+		if (pingToken !== token) {
+			return;
+		}
+		if (connOnline) {
+			onBecomeOffline();
+		}
+	}
+}
+
+// Transport-level reconnect: verify health with a ping before declaring online.
+msghubSocket.on('connect', () => {
+	void sendPing();
 });
+
+// Transport-level disconnect: go offline immediately, keep pinging for recovery.
+msghubSocket.on('disconnect', () => {
+	pingToken++;
+	if (connOnline) {
+		onBecomeOffline();
+	}
+});
+
+// Periodic health check — catches backend-dead / silently-broken socket scenarios.
+setInterval(() => void sendPing(), PING_INTERVAL_MS);
+
+// Initial check: socket may already be connected when this script loads.
+void sendPing();

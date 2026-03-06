@@ -90,7 +90,6 @@ async function loadLayoutSandbox() {
 	const expose = `
 window.__layoutFns = {
 	initTabs,
-	sendTo,
 	h,
 	getActiveComposition,
 	buildLayoutFromRegistry,
@@ -218,12 +217,6 @@ window.__layoutFns = {
 		readThemeFromTopWindow() {
 			return null;
 		},
-		socket: {
-			emit(event, adapter, command, message, callback) {
-				callback({ ok: true, data: { event, adapter, command, message } });
-			},
-		},
-		adapterInstance: 'msghub.0',
 	};
 
 	vm.runInNewContext(`${source}\n${expose}`, sandbox, { filename: 'admin/tab/layout.js' });
@@ -274,16 +267,6 @@ describe('admin/tab/layout.js', function () {
 		assert.ok(getPanelDefinition('stats'));
 		assert.equal(getPanelDefinition('unknown'), null);
 		assert.equal(getActiveComposition().defaultPanel, 'messages');
-	});
-
-	it('sends backend commands via socket emit wrapper', async function () {
-		const { sandbox } = await loadLayoutSandbox();
-		const sendTo = sandbox.window.__layoutFns.sendTo;
-		const result = await sendTo('admin.stats.get', { quick: true });
-
-		assert.equal(result.command, 'admin.stats.get');
-		assert.deepEqual(result.message, { quick: true });
-		assert.equal(result.adapter, 'msghub.0');
 	});
 
 	it('loads CSS/JS assets and keeps ordering stable', async function () {

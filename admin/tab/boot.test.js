@@ -191,8 +191,8 @@ globalThis.__execCommandSafe = execCommandSafe;
 		assert.match(source, /\bloadJsFilesSequential\s*\(/);
 		assert.match(source, /\binitPanelById\s*\(/);
 		assert.match(source, /\binitTabs\s*\(/);
-		assert.match(source, /\bsocket\.on\(\s*['"]connect['"]/);
-		assert.match(source, /\bsocket\.on\(\s*['"]disconnect['"]/);
+		assert.match(source, /\bmsghubSocket\.on\(\s*['"]connect['"]/);
+		assert.match(source, /\bmsghubSocket\.on\(\s*['"]disconnect['"]/);
 	});
 
 	it('applies runtime.about payload to branding and timezone policy', async function () {

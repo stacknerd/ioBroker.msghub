@@ -1,4 +1,4 @@
-/* global window, document, location, history, MutationObserver, win, applyTheme, detectTheme, readThemeFromTopWindow, socket, adapterInstance */
+/* global window, document, location, history, MutationObserver, win, applyTheme, detectTheme, readThemeFromTopWindow */
 'use strict';
 
 /**
@@ -176,7 +176,7 @@ window.addEventListener('storage', () => {
 	applyTheme(detectTheme());
 });
 
-// Fallback-Polling, falls weder Message noch Storage-Event verfügbar/trustworthy sind.
+// Fallback polling when neither message nor storage events are available or trustworthy.
 window.setInterval(() => {
 	applyTheme(detectTheme());
 }, 1500);
@@ -184,7 +184,7 @@ window.setInterval(() => {
 try {
 	const topDoc = window.top && window.top.document ? window.top.document : null;
 	if (topDoc) {
-		// Beobachtet Host-Attributänderungen, um Theme-Drift zu vermeiden.
+		// Observes host attribute changes to prevent theme drift.
 		const observer = new MutationObserver(() => {
 			const t = readThemeFromTopWindow();
 			if (t) {
@@ -199,28 +199,6 @@ try {
 	}
 } catch {
 	// ignore
-}
-
-/**
- * Sendet einen Admin-Befehl über socket.io an das Backend.
- *
- * @param {string} command - Backend-Kommando (z. B. `admin.stats.get`).
- * @param {object} message - Payload für das Kommando.
- * @returns {Promise<any>} Aufgelöste Backend-Daten oder Fehler.
- */
-function sendTo(command, message) {
-	return new Promise((resolve, reject) => {
-		socket.emit('sendTo', adapterInstance, command, message, res => {
-			if (!res) {
-				return reject(new Error('No response'));
-			}
-			if (res.ok) {
-				return resolve(res.data);
-			}
-			const msg = res?.error?.message || res?.error || 'Unknown error';
-			return reject(new Error(String(msg)));
-		});
-	});
 }
 
 /**
@@ -515,7 +493,6 @@ function renderPanelBootError(panelId, err) {
 }
 
 void initTabs;
-void sendTo;
 void h;
 void buildLayoutFromRegistry;
 void loadCssFiles;
