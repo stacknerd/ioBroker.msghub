@@ -103,6 +103,108 @@
 	color: inherit;
 }
 
+/* Spinner ring inside toast replaces close button — same right-aligned position */
+.msghub-root .msghub-toast .msghub-spinner-ring {
+	margin-left: auto;
+}
+
+/* ========================================================================== */
+/* Infrastructure: Spinner                                                    */
+/* ========================================================================== */
+
+@keyframes msghub-spinner-ring {
+	to {
+		transform: rotate(1turn);
+	}
+}
+
+/* Three-ring spinner: border technique — element + ::before + ::after */
+.msghub-root .msghub-spinner-ring {
+	--_bw: var(--msghub-spinner-border); /* scoped border-width — overrideable via context */
+	width: var(--msghub-spinner-size);
+	aspect-ratio: 1;
+	border-radius: 50%;
+	border: var(--_bw) solid transparent;
+	border-right-color: var(--msghub-spinner-arc);
+	position: relative;
+	flex-shrink: 0;
+	animation: msghub-spinner-ring var(--msghub-spinner-speed) infinite linear;
+}
+
+.msghub-root .msghub-spinner-ring::before,
+.msghub-root .msghub-spinner-ring::after {
+	content: '';
+	position: absolute;
+	inset: calc(-1 * var(--_bw));
+	border-radius: 50%;
+	border: inherit;
+	animation: inherit;
+}
+
+.msghub-root .msghub-spinner-ring::before {
+	animation-duration: calc(var(--msghub-spinner-speed) * 2);
+}
+
+.msghub-root .msghub-spinner-ring::after {
+	animation-duration: calc(var(--msghub-spinner-speed) * 4);
+}
+
+/* Blocking spinner — larger ring via context selector */
+.msghub-root .msghub-spinner-inner .msghub-spinner-ring {
+	--_bw: var(--msghub-spinner-border-lg);
+	width: var(--msghub-spinner-size-lg);
+}
+
+/* Host: full-screen overlay, only visible in blocking mode */
+.msghub-root .msghub-spinner-host {
+	position: fixed;
+	inset: 0;
+	z-index: 1210; /* above toast (1200) */
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity var(--msghub-anim-overlay-in) var(--msghub-ease-overlay);
+}
+
+.msghub-root .msghub-spinner-host.is-hidden {
+	transition-duration: var(--msghub-anim-overlay-out);
+}
+
+.msghub-root .msghub-spinner-host.is-blocking {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: var(--msghub-backdrop);
+	opacity: 1;
+	pointer-events: auto;
+}
+
+/* Card (blocking mode) */
+.msghub-root .msghub-spinner-inner {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: var(--msghub-space-3);
+	padding: var(--msghub-indent-2) var(--msghub-indent-3);
+	background: var(--msghub-bg-overlay);
+	border: 1px solid var(--msghub-border);
+	border-radius: var(--msghub-radius);
+	box-shadow: var(--msghub-shadow-elevated);
+}
+
+/* Message text (blocking mode) */
+.msghub-root .msghub-spinner-msg {
+	font: var(--msghub-font-body);
+	color: var(--msghub-text);
+	text-align: center;
+	max-width: 240px;
+	min-width: var(--msghub-toast-min-width);
+	margin: 0;
+}
+
+.msghub-root .msghub-spinner-msg.is-hidden {
+	display: none;
+}
+
 /* ========================================================================== */
 /* Infrastructure: Context Menu                                               */
 /* ========================================================================== */
@@ -334,6 +436,10 @@
 	overflow: hidden;
 	text-overflow: ellipsis;
 }
+
+/* ========================================================================== */
+/* Infrastructure: Overlay + Dialog                                                    */
+/* ========================================================================== */
 
 .msghub-root .msghub-overlay-backdrop,
 .msghub-root .msghub-dialog-backdrop {

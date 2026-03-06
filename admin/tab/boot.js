@@ -401,15 +401,24 @@ document.addEventListener('contextmenu', e => {
 			}
 			return;
 		}
-		if (ctx.api.ui.dialog?.isOpen?.()) {
-			return;
-		}
 		const target = e.target instanceof HTMLElement ? e.target : null;
 		if (!target) {
 			return;
 		}
 		const rootEl = target.closest('.msghub-root');
 		if (!rootEl) {
+			return;
+		}
+		if (target.closest('.msghub-spinner-host.is-blocking')) {
+			e.preventDefault();
+			return;
+		}
+		if (target.closest('.msghub-dialog-backdrop')) {
+			e.preventDefault();
+			return;
+		}
+		if (target.closest('.msghub-overlay-backdrop') && !target.closest('.msghub-overlay')) {
+			e.preventDefault();
 			return;
 		}
 		const insideMenu = target.closest('.msghub-contextmenu');

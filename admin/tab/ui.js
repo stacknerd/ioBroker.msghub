@@ -15,7 +15,7 @@
  * - Panels nutzen die resultierenden Funktionen über `ctx.api.ui`.
  *
  * Schnittstellen:
- * - Rückgabeobjekt mit `toast`, `contextMenu`, `overlayLarge`, `dialog`, `closeAll`.
+ * - Rückgabeobjekt mit `toast`, `toastClose`, `contextMenu`, `overlayLarge`, `dialog`, `spinner`, `closeAll`.
  * - Keine direkte Backend-Logik; rein visuelles Verhalten und DOM-Interaktion.
  */
 
@@ -40,6 +40,36 @@ function createUi() {
 			(root || document.body).appendChild(el);
 			return el;
 		})();
+
+	const toastRegistry = new Map(); // id → forceRemoveFn
+
+	let spinnerMsgEl = null;
+	const spinnerHost = (() => {
+		const existing = document.getElementById('msghub-spinner-host');
+		if (existing) {
+			// Pre-existing element in tab.html — look up msg child if possible.
+			spinnerMsgEl = existing.querySelector?.('.msghub-spinner-msg') ?? null;
+			return existing;
+		}
+		const el = document.createElement('div');
+		el.id = 'msghub-spinner-host';
+		el.setAttribute('class', 'msghub-spinner-host is-hidden');
+		el.setAttribute('aria-hidden', 'true');
+		el.setAttribute('role', 'status');
+		el.setAttribute('aria-live', 'polite');
+		const inner = document.createElement('div');
+		inner.setAttribute('class', 'msghub-spinner-inner');
+		const ringEl = document.createElement('div');
+		ringEl.setAttribute('class', 'msghub-spinner-ring');
+		const msgEl = document.createElement('p');
+		msgEl.setAttribute('class', 'msghub-spinner-msg is-hidden');
+		inner.appendChild(ringEl);
+		inner.appendChild(msgEl); // msg lives inside the card
+		el.appendChild(inner);
+		(root || document.body).appendChild(el);
+		spinnerMsgEl = msgEl;
+		return el;
+	})();
 
 	const overlayBackdrop =
 		document.getElementById('msghub-overlay-large') ||
@@ -84,7 +114,13 @@ function createUi() {
 	/**
 	 * Zeigt eine kurze Toast-Nachricht an.
 	 *
-	 * @param {object} opts - Optionen mit `text`, `variant` (`ok`|`warning`|`danger`|`neutral`) und optional `timeoutMs`.
+	 * @param {object}       opts           - Optionen.
+	 * @param {string}       opts.text      - Anzeigetext.
+	 * @param {string}       [opts.variant] - `ok`|`warning`|`danger`|`neutral` (Standard).
+	 * @param {number}       [opts.timeoutMs] - Auto-Close-Verzögerung in ms (Standard 2500).
+	 * @param {string}       [opts.id]      - Benannter Toast; wiederholter Aufruf ersetzt bestehenden.
+	 * @param {boolean}      [opts.persist] - Kein Auto-Close. Close-Button bleibt unberührt.
+	 * @param {object|null}  [opts.closeEl] - Ersetzt den Close-Button durch dieses Element.
 	 */
 	const toast = opts => {
 		const text = String(opts?.text ?? '');
@@ -95,53 +131,92 @@ function createUi() {
 		const timeoutMs = Number.isFinite(Number(timeoutMsRaw))
 			? Math.max(250, Math.trunc(Number(timeoutMsRaw)))
 			: 2500;
+		const id = typeof opts?.id === 'string' && opts.id.trim() ? opts.id.trim() : null;
+		const persist = opts?.persist === true;
+		const closeEl = opts?.closeEl ?? null;
 		if (!text.trim()) {
 			return;
 		}
 
+		// Replace existing named toast immediately (no exit animation)
+		if (id && toastRegistry.has(id)) {
+			toastRegistry.get(id)();
+		}
+
 		const el = document.createElement('div');
 		el.className = `msghub-toast is-${variant}`;
+		if (id) {
+			el.setAttribute('data-toast-id', id);
+		}
 
 		const textNode = document.createElement('span');
 		textNode.textContent = text;
 		el.appendChild(textNode);
 
-		const closeBtn = document.createElement('button');
-		closeBtn.className = 'msghub-uibutton-icon msghub-toast-close';
-		closeBtn.setAttribute('aria-label', 'close');
-		closeBtn.setAttribute('type', 'button');
-		el.appendChild(closeBtn);
+		if (closeEl !== null) {
+			el.appendChild(closeEl);
+		} else {
+			const closeBtn = document.createElement('button');
+			closeBtn.className = 'msghub-uibutton-icon msghub-toast-close';
+			closeBtn.setAttribute('aria-label', 'close');
+			closeBtn.setAttribute('type', 'button');
+			closeBtn.addEventListener('click', () => {
+				if (timer !== null) {
+					clearTimeout(timer);
+				}
+				removeEl();
+			});
+			el.appendChild(closeBtn);
+		}
+
+		const forceRemove = () => {
+			try {
+				if (!el.parentNode) {
+					return;
+				}
+				el.remove();
+				if (id) {
+					toastRegistry.delete(id);
+				}
+				if (!toastHost.childElementCount) {
+					toastHost.classList.add('is-hidden');
+					toastHost.setAttribute('aria-hidden', 'true');
+				}
+			} catch {
+				// ignore
+			}
+		};
 
 		const removeEl = () => {
 			if (el.classList.contains('is-exiting')) {
 				return;
 			}
 			el.classList.add('is-exiting');
-			const doRemove = () => {
-				try {
-					el.remove();
-					if (!toastHost.childElementCount) {
-						toastHost.classList.add('is-hidden');
-						toastHost.setAttribute('aria-hidden', 'true');
-					}
-				} catch {
-					// ignore
-				}
-			};
-			el.addEventListener('animationend', doRemove, { once: true });
-			window.setTimeout(doRemove, 400); // safety fallback (> --msghub-toast-anim-out) if animationend never fires
+			el.addEventListener('animationend', forceRemove, { once: true });
+			window.setTimeout(forceRemove, 400); // safety fallback (> --msghub-toast-anim-out)
 		};
 
-		closeBtn.addEventListener('click', () => {
-			clearTimeout(timer);
-			removeEl();
-		});
+		if (id) {
+			toastRegistry.set(id, forceRemove);
+		}
 
 		toastHost.appendChild(el);
 		toastHost.classList.remove('is-hidden');
 		toastHost.setAttribute('aria-hidden', 'false');
 
-		const timer = window.setTimeout(removeEl, timeoutMs);
+		const timer = persist ? null : window.setTimeout(removeEl, timeoutMs);
+	};
+
+	/**
+	 * Schließt einen benannten Toast sofort (ohne Animation).
+	 *
+	 * @param {string} id - Die ID des zu schließenden Toasts.
+	 */
+	const toastClose = id => {
+		const fn = toastRegistry.get(String(id ?? ''));
+		if (fn) {
+			fn();
+		}
 	};
 
 	// Context menu (Phase 2: DOM + minimal CSS; always in DOM, default-hidden)
@@ -1117,17 +1192,102 @@ function createUi() {
 			}
 		});
 
+	// Spinner primitive — supports multiple concurrent instances
+	const spinnerRegistry = new Map(); // id → { blocking: boolean }
+	let spinnerSeq = 0;
+
 	/**
-	 * Schließt alle offenen UI-Primitives in definierter Reihenfolge.
+	 * Shows a loading spinner and returns its ID.
+	 * Non-blocking mode appears as a persistent toast with a spinning ring.
+	 * Blocking mode uses a full-screen overlay (shared; stays visible while any blocking spinner is active).
+	 *
+	 * @param {object}  [opts]          - Options object.
+	 * @param {string}  [opts.id]       - Optional stable ID; auto-generated if omitted.
+	 * @param {string}  [opts.message]  - Visible label (pre-translated; caller applies i18n fallback).
+	 * @param {boolean} [opts.blocking] - If true, adds a semi-transparent backdrop and
+	 *                                    blocks pointer events. Defaults to false.
+	 * @returns {string} The spinner ID (use with `spinnerHide`).
+	 */
+	const spinnerShow = opts => {
+		const message = typeof opts?.message === 'string' ? opts.message.trim() : '';
+		const blocking = opts?.blocking === true;
+		const id = typeof opts?.id === 'string' && opts.id.trim() ? opts.id.trim() : `s${++spinnerSeq}`;
+
+		spinnerRegistry.set(id, { blocking });
+
+		if (blocking) {
+			if (spinnerMsgEl) {
+				spinnerMsgEl.textContent = message;
+				spinnerMsgEl.classList.toggle('is-hidden', !message);
+			}
+			spinnerHost.classList.add('is-blocking');
+			spinnerHost.classList.remove('is-hidden');
+			spinnerHost.setAttribute('aria-hidden', 'false');
+		} else {
+			const ringEl = document.createElement('div');
+			ringEl.setAttribute('class', 'msghub-spinner-ring');
+			toast({ id: `msghub-toast-${id}`, text: message, variant: 'neutral', persist: true, closeEl: ringEl });
+		}
+
+		return id;
+	};
+
+	/**
+	 * Hides a specific spinner by ID. Without an argument, closes all active spinners.
+	 *
+	 * @param {string} [id] - The ID returned by `spinnerShow`. Omit to close all.
+	 */
+	const spinnerHide = id => {
+		if (id == null) {
+			for (const sid of [...spinnerRegistry.keys()]) {
+				spinnerHide(sid);
+			}
+			return;
+		}
+		const sid = String(id);
+		const entry = spinnerRegistry.get(sid);
+		if (!entry) {
+			return;
+		}
+		spinnerRegistry.delete(sid);
+		if (entry.blocking) {
+			const stillBlocking = [...spinnerRegistry.values()].some(e => e.blocking);
+			if (!stillBlocking) {
+				spinnerHost.classList.add('is-hidden');
+				spinnerHost.classList.remove('is-blocking');
+				spinnerHost.setAttribute('aria-hidden', 'true');
+			}
+		} else {
+			toastClose(`msghub-toast-${sid}`);
+		}
+	};
+
+	/**
+	 * Returns whether a spinner is currently active.
+	 *
+	 * @param {string} [id] - Specific spinner ID. Omit to check if any spinner is open.
+	 * @returns {boolean} True if the spinner (or any spinner) is open.
+	 */
+	const spinnerIsOpen = id => {
+		if (id == null) {
+			return spinnerRegistry.size > 0;
+		}
+		return spinnerRegistry.has(String(id));
+	};
+
+	/**
+	 * Closes all open UI primitives in a defined order.
 	 */
 	const closeAll = () => {
 		overlayCloseFn();
 		dialogCloseFn(false);
 		contextMenuClose();
+		spinnerHide();
 	};
 
 	return Object.freeze({
 		toast,
+		toastClose,
 		contextMenu,
 		overlayLarge: Object.freeze({
 			open: overlayOpen,
@@ -1138,6 +1298,11 @@ function createUi() {
 			confirm,
 			close: dialogCloseFn,
 			isOpen: () => dialogIsOpen,
+		}),
+		spinner: Object.freeze({
+			show: spinnerShow,
+			hide: spinnerHide,
+			isOpen: spinnerIsOpen,
 		}),
 		closeAll,
 	});

@@ -174,6 +174,26 @@ async function loadUiSandbox() {
 			if (selector === '.msghub-root') {
 				return root;
 			}
+			// Support simple single-class selectors (e.g. '.msghub-spinner-msg')
+			if (typeof selector === 'string' && /^\.[a-z][a-z0-9-]*$/i.test(selector)) {
+				const cls = selector.slice(1);
+				const find = node => {
+					if (!node || !node.tagName) {
+						return null;
+					}
+					if (node.classList?.contains(cls)) {
+						return node;
+					}
+					for (const child of node.children || []) {
+						const found = find(child);
+						if (found) {
+							return found;
+						}
+					}
+					return null;
+				};
+				return find(body);
+			}
 			return null;
 		},
 		querySelectorAll(selector) {
@@ -330,5 +350,209 @@ describe('admin/tab/ui.js', function () {
 
 		toastEl.dispatchEvent({ type: 'animationend' });
 		assert.equal(toastHost.children.length, 0, 'toast removed after animationend');
+	});
+});
+
+describe('spinner', function () {
+	it('starts hidden — isOpen false, host hidden', async function () {
+		const { sandbox } = await loadUiSandbox();
+		const ui = sandbox.window.__uiFactory();
+		assert.equal(ui.spinner.isOpen(), false);
+		const host = sandbox.document.getElementById('msghub-spinner-host');
+		assert.ok(host.classList.contains('is-hidden'), 'host hidden initially');
+	});
+
+	it('show() returns a string id', async function () {
+		const { sandbox } = await loadUiSandbox();
+		const ui = sandbox.window.__uiFactory();
+		const id = ui.spinner.show({ message: 'Loading…' });
+		assert.ok(typeof id === 'string' && id.length > 0, 'show() returns non-empty string id');
+	});
+
+	it('show({ id }) uses the provided id', async function () {
+		const { sandbox } = await loadUiSandbox();
+		const ui = sandbox.window.__uiFactory();
+		const id = ui.spinner.show({ id: 'my-spinner', message: 'Loading…' });
+		assert.equal(id, 'my-spinner');
+		assert.equal(ui.spinner.isOpen('my-spinner'), true);
+	});
+
+	it('non-blocking show() sets isOpen; host stays hidden; toast appears', async function () {
+		const { sandbox } = await loadUiSandbox();
+		const ui = sandbox.window.__uiFactory();
+		ui.spinner.show({ message: 'Loading…' });
+		assert.equal(ui.spinner.isOpen(), true);
+		const host = sandbox.document.getElementById('msghub-spinner-host');
+		assert.ok(host.classList.contains('is-hidden'), 'host stays hidden for non-blocking');
+		const toastHost = sandbox.document.getElementById('msghub-toast-host');
+		assert.equal(toastHost.childElementCount, 1, 'toast created for non-blocking spinner');
+	});
+
+	it('non-blocking hide(id) removes only the targeted spinner', async function () {
+		const { sandbox } = await loadUiSandbox();
+		const ui = sandbox.window.__uiFactory();
+		const id = ui.spinner.show({ message: 'Loading…' });
+		ui.spinner.hide(id);
+		assert.equal(ui.spinner.isOpen(), false);
+		const toastHost = sandbox.document.getElementById('msghub-toast-host');
+		assert.equal(toastHost.childElementCount, 0, 'spinner toast removed after hide(id)');
+	});
+
+	it('non-blocking show({ message }) toast carries message text', async function () {
+		const { sandbox } = await loadUiSandbox();
+		const ui = sandbox.window.__uiFactory();
+		ui.spinner.show({ message: 'Loading...' });
+		const toastHost = sandbox.document.getElementById('msghub-toast-host');
+		const span = toastHost.children[0]?.children?.[0];
+		assert.equal(span?.textContent, 'Loading...', 'message text in toast span');
+	});
+
+	it('multiple non-blocking spinners coexist as separate toasts', async function () {
+		const { sandbox } = await loadUiSandbox();
+		const ui = sandbox.window.__uiFactory();
+		const id1 = ui.spinner.show({ message: 'Lade Daten…' });
+		const id2 = ui.spinner.show({ message: 'Aktualisiere JSON…' });
+		const toastHost = sandbox.document.getElementById('msghub-toast-host');
+		assert.equal(toastHost.childElementCount, 2, 'two toasts in stack');
+		assert.equal(ui.spinner.isOpen(id1), true, 'id1 open');
+		assert.equal(ui.spinner.isOpen(id2), true, 'id2 open');
+		ui.spinner.hide(id1);
+		assert.equal(toastHost.childElementCount, 1, 'one toast after hiding id1');
+		assert.equal(ui.spinner.isOpen(id1), false, 'id1 closed');
+		assert.equal(ui.spinner.isOpen(id2), true, 'id2 still open');
+	});
+
+	it('isOpen(id) checks a specific spinner', async function () {
+		const { sandbox } = await loadUiSandbox();
+		const ui = sandbox.window.__uiFactory();
+		const id = ui.spinner.show({ message: 'Loading…' });
+		assert.equal(ui.spinner.isOpen(id), true, 'specific spinner open');
+		assert.equal(ui.spinner.isOpen('unknown-id'), false, 'unknown id not open');
+	});
+
+	it('show({ blocking: true }) adds is-blocking class and shows host', async function () {
+		const { sandbox } = await loadUiSandbox();
+		const ui = sandbox.window.__uiFactory();
+		ui.spinner.show({ blocking: true, message: 'Please wait' });
+		const host = sandbox.document.getElementById('msghub-spinner-host');
+		assert.ok(host.classList.contains('is-blocking'), 'is-blocking class present');
+		assert.ok(!host.classList.contains('is-hidden'), 'host visible for blocking');
+	});
+
+	it('blocking show({ message }) sets visible message text', async function () {
+		const { sandbox } = await loadUiSandbox();
+		const ui = sandbox.window.__uiFactory();
+		ui.spinner.show({ blocking: true, message: 'Working…' });
+		const msg = sandbox.document.querySelector('.msghub-spinner-msg');
+		assert.ok(msg !== null, 'spinner-msg element exists');
+		assert.equal(msg?.textContent, 'Working…');
+		assert.ok(!msg?.classList.contains('is-hidden'), 'message visible');
+	});
+
+	it('blocking show() without message hides message element', async function () {
+		const { sandbox } = await loadUiSandbox();
+		const ui = sandbox.window.__uiFactory();
+		ui.spinner.show({ blocking: true });
+		const msg = sandbox.document.querySelector('.msghub-spinner-msg');
+		assert.ok(msg !== null, 'spinner-msg element exists');
+		assert.ok(msg?.classList.contains('is-hidden'), 'message hidden when no text given');
+	});
+
+	it('hide(id) removes blocking spinner; overlay hides when last blocking closes', async function () {
+		const { sandbox } = await loadUiSandbox();
+		const ui = sandbox.window.__uiFactory();
+		const id1 = ui.spinner.show({ blocking: true, message: 'Warte…' });
+		const id2 = ui.spinner.show({ blocking: true, message: 'Noch mehr…' });
+		const host = sandbox.document.getElementById('msghub-spinner-host');
+		ui.spinner.hide(id1);
+		assert.ok(!host.classList.contains('is-hidden'), 'overlay still visible (id2 active)');
+		ui.spinner.hide(id2);
+		assert.ok(host.classList.contains('is-hidden'), 'overlay hidden after last blocking closes');
+		assert.ok(!host.classList.contains('is-blocking'), 'is-blocking removed');
+	});
+
+	it('hide() with no arg closes all spinners', async function () {
+		const { sandbox } = await loadUiSandbox();
+		const ui = sandbox.window.__uiFactory();
+		ui.spinner.show({ message: 'A' });
+		ui.spinner.show({ message: 'B' });
+		assert.equal(ui.spinner.isOpen(), true);
+		ui.spinner.hide();
+		assert.equal(ui.spinner.isOpen(), false);
+		const toastHost = sandbox.document.getElementById('msghub-toast-host');
+		assert.equal(toastHost.childElementCount, 0, 'all toasts removed');
+	});
+
+	it('hide() is idempotent when nothing is open', async function () {
+		const { sandbox } = await loadUiSandbox();
+		const ui = sandbox.window.__uiFactory();
+		assert.doesNotThrow(() => ui.spinner.hide());
+	});
+
+	it('closeAll() hides spinner', async function () {
+		const { sandbox } = await loadUiSandbox();
+		const ui = sandbox.window.__uiFactory();
+		ui.spinner.show({ message: 'working', blocking: true });
+		ui.closeAll();
+		assert.equal(ui.spinner.isOpen(), false);
+	});
+});
+
+describe('toast extensions', function () {
+	it('exposes toastClose in the public API', async function () {
+		const { sandbox } = await loadUiSandbox();
+		const ui = sandbox.window.__uiFactory();
+		assert.ok(typeof ui.toastClose === 'function', 'toastClose is a function');
+	});
+
+	it('toast({ persist: true }) is not auto-removed', async function () {
+		const { sandbox } = await loadUiSandbox();
+		const ui = sandbox.window.__uiFactory();
+		ui.toast({ text: 'hello', persist: true });
+		const toastHost = sandbox.document.getElementById('msghub-toast-host');
+		assert.equal(toastHost.childElementCount, 1, 'persistent toast stays in DOM');
+	});
+
+	it('toast({ persist: true }) close button still present', async function () {
+		const { sandbox } = await loadUiSandbox();
+		const ui = sandbox.window.__uiFactory();
+		ui.toast({ text: 'hello', persist: true });
+		const toastHost = sandbox.document.getElementById('msghub-toast-host');
+		const toastEl = toastHost.children[0];
+		const hasCloseBtn = toastEl?.children?.some(c => c.tagName === 'BUTTON');
+		assert.ok(hasCloseBtn, 'close button present when persist without closeEl');
+	});
+
+	it('toast({ closeEl }) inserts closeEl instead of close button', async function () {
+		const { sandbox } = await loadUiSandbox();
+		const ui = sandbox.window.__uiFactory();
+		const customEl = sandbox.document.createElement('div');
+		ui.toast({ text: 'loading', persist: true, closeEl: customEl });
+		const toastHost = sandbox.document.getElementById('msghub-toast-host');
+		const toastEl = toastHost.children[0];
+		const hasCloseBtn = toastEl?.children?.some(c => c.tagName === 'BUTTON');
+		assert.ok(!hasCloseBtn, 'no close button when closeEl provided');
+		assert.ok(toastEl?.children?.includes(customEl), 'closeEl appended to toast');
+	});
+
+	it('toastClose(id) removes named toast', async function () {
+		const { sandbox } = await loadUiSandbox();
+		const ui = sandbox.window.__uiFactory();
+		ui.toast({ id: 'my-toast', text: 'hello', persist: true });
+		const toastHost = sandbox.document.getElementById('msghub-toast-host');
+		assert.equal(toastHost.childElementCount, 1, 'toast present before close');
+		ui.toastClose('my-toast');
+		assert.equal(toastHost.childElementCount, 0, 'toast removed by toastClose');
+	});
+
+	it('toast with same id replaces the existing toast', async function () {
+		const { sandbox } = await loadUiSandbox();
+		const ui = sandbox.window.__uiFactory();
+		ui.toast({ id: 'dup', text: 'first', persist: true });
+		ui.toast({ id: 'dup', text: 'second', persist: true });
+		const toastHost = sandbox.document.getElementById('msghub-toast-host');
+		assert.equal(toastHost.childElementCount, 1, 'only one toast after replace');
+		const span = toastHost.children[0]?.children?.[0];
+		assert.equal(span?.textContent, 'second', 'replaced toast shows new text');
 	});
 });

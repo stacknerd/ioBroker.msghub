@@ -434,6 +434,21 @@ function createAdminApi({ sendTo, socket, adapterInstance, lang, t, pickText, ui
 		dialog:
 			ui?.dialog ||
 			Object.freeze({ confirm: () => Promise.resolve(false), close: () => {}, isOpen: () => false }),
+		spinner: Object.freeze({
+			/** @param {{ message?: string, blocking?: boolean, id?: string } | undefined} opts - Spinner options. */
+			show: opts => {
+				const message =
+					(typeof opts?.message === 'string' ? opts.message.trim() : '') ||
+					t('msghub.i18n.core.admin.ui.spinner.pleaseWait.text');
+				return ui?.spinner?.show({ ...opts, message });
+			},
+			/** @param {string} [id] - Spinner-ID; ohne Argument werden alle geschlossen. */
+			hide: id => ui?.spinner?.hide(id),
+			/** @param {string} [id] - Spinner-ID; ohne Argument: irgendein offen? */
+			isOpen: id => ui?.spinner?.isOpen(id) ?? false,
+		}),
+		/** @param {string} id - Toast ID to close. */
+		toastClose: id => ui?.toastClose?.(String(id ?? '')),
 		closeAll: () => ui?.closeAll?.(),
 	});
 

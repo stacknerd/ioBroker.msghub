@@ -250,6 +250,7 @@
   "msghub.i18n.core.admin.ui.plugins.tools.loading.text": "Loading tools…",
   "msghub.i18n.core.admin.ui.plugins.viewer.empty.text": "No content available.",
   "msghub.i18n.core.admin.ui.plugins.viewer.title": "Viewer",
+  "msghub.i18n.core.admin.ui.spinner.pleaseWait.text": "Please wait…",
   "msghub.i18n.core.admin.ui.tabs.messages.label": "Messages",
   "msghub.i18n.core.admin.ui.tabs.plugins.label": "Plugin config",
   "msghub.i18n.core.admin.ui.tabs.stats.label": "Statistics",
