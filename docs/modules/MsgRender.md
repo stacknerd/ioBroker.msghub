@@ -15,7 +15,7 @@ Simplified flow:
 1. A producer plugin creates or patches a message (usually via `MsgFactory` and `MsgStore`).
 2. `MsgStore` stores the **raw** message in its canonical list (`fullList`).
 3. When a consumer reads messages for UI/human output (`getMessageByRef()`, `queryMessages()`, …), `MsgStore` returns a **rendered view**:
-   - `MsgRender.renderMessage(msg)` returns the message with rendered `title`/`text`/`details` plus a view-only `display` block.
+    - `MsgRender.renderMessage(msg)` returns the message with rendered `title`/`text`/`details` plus a view-only `display` block.
 4. The rendered output is used for UI or human-facing text, but it is not written back to storage.
 
 This keeps the persisted data stable and compact, while still allowing dynamic display text.
@@ -110,10 +110,26 @@ You can reference:
 Examples:
 
 ```js
-{{m.temperature}}      // "21.75 C" (formatted, locale-aware)
-{{m.temperature.val}}  // "21.75"
-{{m.temperature.unit}} // "C"
-{{m.temperature.ts}}   // 1735776000000
+{
+	{
+		m.temperature;
+	}
+} // "21.75 C" (formatted, locale-aware)
+{
+	{
+		m.temperature.val;
+	}
+} // "21.75"
+{
+	{
+		m.temperature.unit;
+	}
+} // "C"
+{
+	{
+		m.temperature.ts;
+	}
+} // 1735776000000
 ```
 
 Practical note: metric keys are split by `.` internally, so keep metric keys simple (avoid dots).
@@ -130,9 +146,21 @@ Timing values come from `msg.timing` (plain object). Example fields:
 Example:
 
 ```js
-{{t.createdAt}}         // raw timestamp value
-{{timing.createdAt}}    // same as above
-{{t.createdAt|datetime}} // formatted date/time (locale-aware)
+{
+	{
+		t.createdAt;
+	}
+} // raw timestamp value
+{
+	{
+		timing.createdAt;
+	}
+} // same as above
+{
+	{
+		t.createdAt | datetime;
+	}
+} // formatted date/time (locale-aware)
 ```
 
 #### Details: `d.<field>` (or `details.<field>`)
@@ -196,8 +224,16 @@ Filters are small, deterministic formatting steps. They are intentionally limite
 For metrics, `raw` disables the default “value + unit” formatting:
 
 ```js
-{{m.temperature}}     // "21.75 C"
-{{m.temperature|raw}} // "21.75"
+{
+	{
+		m.temperature;
+	}
+} // "21.75 C"
+{
+	{
+		m.temperature | raw;
+	}
+} // "21.75"
 ```
 
 ### `num:<digits>`
@@ -215,9 +251,21 @@ Works for numbers and numeric strings.
 Formats a Unix ms timestamp (or a numeric/date string) as a localized date/time:
 
 ```js
-{{m.lastSeen.val|datetime}}
-{{m.lastSeen.ts|datetime}}
-{{t.createdAt|datetime}}
+{
+	{
+		m.lastSeen.val | datetime;
+	}
+}
+{
+	{
+		m.lastSeen.ts | datetime;
+	}
+}
+{
+	{
+		t.createdAt | datetime;
+	}
+}
 ```
 
 ### `durationSince`
@@ -234,8 +282,16 @@ If the timestamp is in the future, the output is an empty string.
 Examples:
 
 ```js
-{{m.lastSeenAt|durationSince}}
-{{m.lastSeenAt.val|durationSince}}
+{
+	{
+		m.lastSeenAt | durationSince;
+	}
+}
+{
+	{
+		m.lastSeenAt.val | durationSince;
+	}
+}
 ```
 
 Practical note: for metrics, this filter implies `raw` resolution, so `{{m.lastSeenAt|durationSince}}` works even when
@@ -252,8 +308,16 @@ If the timestamp is in the past, the output is an empty string.
 Examples:
 
 ```js
-{{m.nextRunAt|durationUntil}}
-{{t.notifyAt|durationUntil}}
+{
+	{
+		m.nextRunAt | durationUntil;
+	}
+}
+{
+	{
+		t.notifyAt | durationUntil;
+	}
+}
 ```
 
 ### `bool:trueLabel/falseLabel`
@@ -275,6 +339,36 @@ Replaces `null`, `undefined`, or `''` with a fallback string:
 {{m.missing|default:--}}
 {{m.temperature.unit|default:(no unit)}}
 ```
+
+### `case:key=value/...`
+
+Maps the value to a label by exact string comparison (`String(val)`).
+
+Syntax:
+
+- `{{ <expr> | case:key1=value1/key2=value2 }}`
+- Optional else as the last segment without `=`:
+  `{{ <expr> | case:key1=value1/key2=value2/elseText }}`
+
+Behavior:
+
+- If a key matches exactly (case-sensitive), its value is returned.
+- If no key matches and an else segment is present, the else text is returned.
+- If no key matches and no else is given, the original value is returned unchanged.
+- If the value is `null`/`undefined` and no else is given, the output is `''` (empty string).
+
+```js
+{{m.trendDir|case:up=rising/down=falling/unknown}}
+{{m.status|case:ok=OK/warn=Warning/error=Error}}
+{{m.enabled|bool:true/false|case:true=yes/no}}
+```
+
+Notes:
+
+- Comparison is always against `String(val)`, so numeric and boolean values are coerced: `1` matches key `"1"`, `true` matches key `"true"`.
+- Segments without `=` that are not the last segment are ignored (invalid, no error).
+- Empty keys (`=value`) are ignored.
+- No escaping for `/` or `=` in labels (v1).
 
 ---
 

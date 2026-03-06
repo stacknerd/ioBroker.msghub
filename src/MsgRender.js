@@ -649,7 +649,7 @@ class MsgRender {
 	/**
 	 * Applies a single filter to a value.
 	 *
-	 * @param {string} name Filter name (default|num|datetime|bool); "raw" is handled during path resolution.
+	 * @param {string} name Filter name (default|num|datetime|bool|case); "raw" is handled during path resolution.
 	 * @param {string|undefined} arg Optional filter argument.
 	 * @param {any} val Current value to transform.
 	 * @param {object} ctx Render context (metrics + locale).
@@ -703,6 +703,41 @@ class MsgRender {
 				return val;
 			}
 			return b ? t : f;
+		}
+		// case:key1=value1/key2=value2[/elseText]: map val (as string) to a label; optional trailing else segment.
+		if (name === 'case') {
+			if (!arg) {
+				return val;
+			}
+			const segments = arg.split('/');
+			const str = val == null ? null : String(val);
+			let elseText = undefined;
+			for (const seg of segments) {
+				const eqIdx = seg.indexOf('=');
+				if (eqIdx === -1) {
+					// Only the last segment without "=" is a valid else; others are ignored per spec.
+					if (seg === segments[segments.length - 1]) {
+						elseText = seg;
+					}
+				} else {
+					const key = seg.slice(0, eqIdx);
+					if (key === '') {
+						continue; // invalid: empty key — ignore
+					}
+					const value = seg.slice(eqIdx + 1);
+					if (str !== null && str === key) {
+						return value;
+					}
+				}
+			}
+			// No key matched.
+			if (elseText !== undefined) {
+				return elseText;
+			}
+			if (val == null) {
+				return ''; // null/undefined without else → empty string (existing renderer behavior)
+			}
+			return val;
 		}
 		return val;
 	}

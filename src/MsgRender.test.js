@@ -357,6 +357,88 @@ describe('MsgRender', () => {
 		expect(out.title).to.equal('A1-B2');
 	});
 
+	describe('filter: case', () => {
+		it('returns mapped value when key matches (no else)', () => {
+			const renderer = createRenderer({ locale });
+			const metrics = buildMetrics([['x', { val: 'a', unit: '', ts: Date.UTC(2025, 0, 1) }]]);
+			const msg = createMessage({ title: '{{m.x.val|case:a=A/b=B}}', metrics });
+
+			const out = renderer.renderMessage(msg);
+
+			expect(out.title).to.equal('A');
+		});
+
+		it('returns original val when no key matches and no else', () => {
+			const renderer = createRenderer({ locale });
+			const metrics = buildMetrics([['x', { val: 'c', unit: '', ts: Date.UTC(2025, 0, 1) }]]);
+			const msg = createMessage({ title: '{{m.x.val|case:a=A/b=B}}', metrics });
+
+			const out = renderer.renderMessage(msg);
+
+			expect(out.title).to.equal('c');
+		});
+
+		it('returns else text when no key matches and else is provided', () => {
+			const renderer = createRenderer({ locale });
+			const metrics = buildMetrics([['x', { val: 'c', unit: '', ts: Date.UTC(2025, 0, 1) }]]);
+			const msg = createMessage({ title: '{{m.x.val|case:a=A/b=B/OTHER}}', metrics });
+
+			const out = renderer.renderMessage(msg);
+
+			expect(out.title).to.equal('OTHER');
+		});
+
+		it('returns empty string for missing metric without else', () => {
+			const renderer = createRenderer({ locale });
+			const msg = createMessage({ title: '{{m.missing.val|case:a=A/b=B}}' });
+
+			const out = renderer.renderMessage(msg);
+
+			expect(out.title).to.equal('');
+		});
+
+		it('returns else text for missing metric with else', () => {
+			const renderer = createRenderer({ locale });
+			const msg = createMessage({ title: '{{m.missing.val|case:a=A/b=B/OTHER}}' });
+
+			const out = renderer.renderMessage(msg);
+
+			expect(out.title).to.equal('OTHER');
+		});
+
+		it('matches numeric values via String() coercion', () => {
+			const renderer = createRenderer({ locale });
+			const metrics = buildMetrics([['x', { val: 1, unit: '', ts: Date.UTC(2025, 0, 1) }]]);
+			const msg = createMessage({ title: '{{m.x.val|case:1=one/2=two}}', metrics });
+
+			const out = renderer.renderMessage(msg);
+
+			expect(out.title).to.equal('one');
+		});
+
+		it('matches boolean values via String() coercion', () => {
+			const renderer = createRenderer({ locale });
+			const metrics = buildMetrics([['x', { val: true, unit: '', ts: Date.UTC(2025, 0, 1) }]]);
+			const msg = createMessage({ title: '{{m.x.val|case:true=ja/false=nein}}', metrics });
+
+			const out = renderer.renderMessage(msg);
+
+			expect(out.title).to.equal('ja');
+		});
+
+		it('ignores invalid segments and still maps valid pairs', () => {
+			const renderer = createRenderer({ locale });
+			const metrics = buildMetrics([['x', { val: 'a', unit: '', ts: Date.UTC(2025, 0, 1) }]]);
+			// Mid-list segment without "=" is invalid and ignored; empty key "=" is invalid and ignored
+			const msg = createMessage({ title: '{{m.x.val|case:invalid/a=A/=ignored}}', metrics });
+
+			const out = renderer.renderMessage(msg);
+
+			// "invalid" is not the last segment so it's ignored; "a=A" is a valid match
+			expect(out.title).to.equal('A');
+		});
+	});
+
 	it('renders a list of messages via renderMessages', () => {
 		const renderer = createRenderer({ locale });
 		const metrics = buildMetrics([
