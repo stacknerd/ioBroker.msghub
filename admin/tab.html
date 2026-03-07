@@ -9,8 +9,77 @@
 </head>
 <body>
 	<div class="msghub-root">
-		<div id="msghub-connection" class="msghub-connectionbar offline" role="status">
-			…
+		<div class="msghub-connpanel-host">
+			<div id="msghub-connection" class="msghub-connectionbar offline" role="status">
+				<button
+					id="msghub-connection-trigger"
+					type="button"
+					aria-label="Connection info"
+					aria-expanded="false"
+					aria-controls="msghub-connection-panel"
+				>i</button>
+			</div>
+			<div
+				id="msghub-connection-panel"
+				class="msghub-connpanel"
+				role="tooltip"
+				aria-hidden="true"
+			>
+				<div class="msghub-connpanel-row">
+					<span data-i18n="msghub.i18n.core.admin.ui.connection.panel.field.status"></span>
+					<span id="msghub-conn-status"></span>
+				</div>
+				<div class="msghub-connpanel-row">
+					<span data-i18n="msghub.i18n.core.admin.ui.connection.panel.field.host"></span>
+					<span id="msghub-conn-host">—</span>
+				</div>
+				<div class="msghub-connpanel-row">
+					<span data-i18n="msghub.i18n.core.admin.ui.connection.panel.field.adapter"></span>
+					<span id="msghub-conn-adapter">—</span>
+				</div>
+				<div class="msghub-connpanel-row">
+					<span data-i18n="msghub.i18n.core.admin.ui.connection.panel.field.latency"></span>
+					<span id="msghub-conn-latency">—</span>
+				</div>
+				<div class="msghub-connpanel-row">
+					<span data-i18n="msghub.i18n.core.admin.ui.connection.panel.field.version"></span>
+					<span id="msghub-conn-version">—</span>
+				</div>
+				<hr>
+				<div class="msghub-connpanel-row">
+					<span data-i18n="msghub.i18n.core.admin.ui.connection.panel.field.coreLanguage"></span>
+					<span id="msghub-conn-core-lang">—</span>
+				</div>
+				<div class="msghub-connpanel-row">
+					<span data-i18n="msghub.i18n.core.admin.ui.connection.panel.field.backendLanguage"></span>
+					<span id="msghub-conn-backend-lang">—</span>
+				</div>
+				<div class="msghub-connpanel-row">
+					<span data-i18n="msghub.i18n.core.admin.ui.connection.panel.field.browserLanguage"></span>
+					<span id="msghub-conn-fe-lang">—</span>
+				</div>
+				<hr>
+				<div class="msghub-connpanel-row">
+					<span data-i18n="msghub.i18n.core.admin.ui.connection.panel.field.coreFormat"></span>
+					<span id="msghub-conn-core-fmt">—</span>
+				</div>
+				<div class="msghub-connpanel-row">
+					<span data-i18n="msghub.i18n.core.admin.ui.connection.panel.field.browserFormat"></span>
+					<span id="msghub-conn-fe-fmt">—</span>
+				</div>
+				<hr>
+				<div class="msghub-connpanel-row">
+					<span data-i18n="msghub.i18n.core.admin.ui.connection.panel.field.serverTimezone"></span>
+					<span id="msghub-conn-server-tz">—</span>
+				</div>
+				<div class="msghub-connpanel-row">
+					<span data-i18n="msghub.i18n.core.admin.ui.connection.panel.field.browserTimezone"></span>
+					<span id="msghub-conn-fe-tz">—</span>
+				</div>
+				<div id="msghub-conn-tz-hint" class="is-hidden" aria-hidden="true">
+					<hr>
+					<span class="msghub-connpanel-accent" data-i18n="msghub.i18n.core.admin.ui.connection.panel.tzHint"></span></div>
+			</div>
 		</div>
 		<div id="msghub-layout"></div>
 

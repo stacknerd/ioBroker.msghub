@@ -115,6 +115,16 @@ function applyRuntimeAboutPayload(payload) {
 			void ensureAdminI18nLoaded().then(() => applyStaticI18n());
 		}
 	}
+
+	// Cache server metadata for the connection panel
+	connPanelData = {
+		serverTz: typeof data?.time?.timeZone === 'string' ? data.time.timeZone : '',
+		coreTextLang: typeof data?.lang?.coreTextLanguage === 'string' ? data.lang.coreTextLanguage : '',
+		coreFormatLocale: typeof data?.lang?.coreFormatLocale === 'string' ? data.lang.coreFormatLocale : '',
+		backendTextLang: typeof data?.lang?.backendTextLanguage === 'string' ? data.lang.backendTextLanguage : '',
+		version: typeof data?.version === 'string' ? data.version.trim() : '',
+	};
+	updateConnectionPanel();
 }
 
 /**
@@ -445,17 +455,6 @@ document.addEventListener('contextmenu', e => {
 });
 
 /**
- * Setzt den Verbindungsstatus-Text.
- *
- * @param {string} text - Sichtbarer Status-Text.
- */
-const setConnText = text => {
-	if (elements.connection) {
-		elements.connection.textContent = text;
-	}
-};
-
-/**
  * Schreibt Layout-/Device-Infos als Root-Attribute.
  *
  * @param {'tabs'|'single'} layout - Aktive Layoutart.
@@ -491,6 +490,14 @@ const setConnStatus = isOnline => {
 };
 
 let connOnline = false;
+/** RTT of the last successful ping in milliseconds, or null if unknown. */
+let lastPingLatencyMs = null;
+/** Cached server-side metadata for the connection panel. */
+let connPanelData = {};
+/** Shared toast ID for connection-status toasts (disconnect → reconnect). */
+const CONN_TOAST_ID = 'msghub-connection-status';
+/** True while the "connection lost" toast is active; guards the reconnect toast. */
+let connLostToastActive = false;
 
 /**
  * Wendet `data-i18n`-Texte für statische DOM-Knoten an.
@@ -506,13 +513,122 @@ function applyStaticI18n() {
 }
 
 /**
- * Setzt den Connection-Text basierend auf dem aktuellen Online-Status.
+ * Fills all connection-panel value spans with current state.
+ * Safe to call before the panel exists in the DOM.
  */
-function setConnTextFromState() {
-	const key = connOnline
-		? 'msghub.i18n.core.admin.ui.connection.connected.text'
-		: 'msghub.i18n.core.admin.ui.connection.disconnected.text';
-	setConnText(t(key, adapterInstance));
+function updateConnectionPanel() {
+	const set = (id, val) => {
+		const el = document.getElementById(id);
+		if (el) {
+			el.textContent = val;
+		}
+	};
+	const dash = '—';
+	set(
+		'msghub-conn-status',
+		t(
+			connOnline
+				? 'msghub.i18n.core.admin.ui.connection.panel.connected.text'
+				: 'msghub.i18n.core.admin.ui.connection.panel.disconnected.text',
+		),
+	);
+	const rawHostUrl = msghubSocket?.url || msghubSocket?.io?.uri;
+	let hostDisplay = dash;
+	if (rawHostUrl) {
+		try {
+			hostDisplay = new URL(rawHostUrl).origin;
+		} catch {
+			hostDisplay = rawHostUrl;
+		}
+	}
+	set('msghub-conn-host', hostDisplay);
+	set('msghub-conn-adapter', adapterInstance || dash);
+	set(
+		'msghub-conn-latency',
+		lastPingLatencyMs != null
+			? t('msghub.i18n.core.admin.ui.connection.panel.value.latencyMs', lastPingLatencyMs)
+			: dash,
+	);
+	set('msghub-conn-server-tz', connPanelData.serverTz || dash);
+	set('msghub-conn-core-lang', connPanelData.coreTextLang || dash);
+	set('msghub-conn-core-fmt', connPanelData.coreFormatLocale || dash);
+	set('msghub-conn-backend-lang', connPanelData.backendTextLang || dash);
+	set('msghub-conn-version', connPanelData.version || dash);
+	set('msghub-conn-fe-tz', Intl.DateTimeFormat().resolvedOptions().timeZone || dash);
+	set('msghub-conn-fe-lang', lang || dash);
+	set('msghub-conn-fe-fmt', navigator.language || dash);
+	// Timezone hint: visible only when server TZ differs from browser TZ
+	const tzHint = document.getElementById('msghub-conn-tz-hint');
+	if (tzHint) {
+		const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+		const differ = Boolean(connPanelData.serverTz && browserTz && connPanelData.serverTz !== browserTz);
+		tzHint.classList.toggle('is-hidden', !differ);
+		tzHint.setAttribute('aria-hidden', differ ? 'false' : 'true');
+	}
+}
+
+/**
+ * Registers hover and touch interaction for the connection info panel.
+ * Desktop: 400 ms delay to open on mouseenter; 300 ms grace on mouseleave.
+ * Touch: tap on the trigger toggles open/closed.
+ */
+function initConnectionPanelInteraction() {
+	const host = document.querySelector('.msghub-connpanel-host');
+	const trigger = document.getElementById('msghub-connection-trigger');
+	const pill = document.getElementById('msghub-connection');
+	const panel = document.getElementById('msghub-connection-panel');
+	if (!host || !trigger || !pill || !panel) {
+		return;
+	}
+
+	/** @param {boolean} open - true to show the panel, false to hide it */
+	const setPanelOpen = open => {
+		panel.classList.toggle('is-open', open);
+		panel.setAttribute('aria-hidden', open ? 'false' : 'true');
+		trigger.setAttribute('aria-expanded', open ? 'true' : 'false');
+		if (open) {
+			updateConnectionPanel();
+		}
+	};
+
+	const isOpen = () => panel.classList.contains('is-open');
+
+	/** Timer handles for hover open/close delays. */
+	let hoverOpenTimer;
+	let hoverCloseTimer;
+
+	// Pill: open after 400 ms hover; cancel on quick leave
+	pill.addEventListener('mouseenter', () => {
+		clearTimeout(hoverCloseTimer);
+		hoverOpenTimer = setTimeout(() => setPanelOpen(true), 400);
+	});
+	pill.addEventListener('mouseleave', () => {
+		clearTimeout(hoverOpenTimer);
+		hoverCloseTimer = setTimeout(() => setPanelOpen(false), 300);
+	});
+
+	// Panel: keep open while hovering (panel overflows the pill bounds)
+	panel.addEventListener('mouseenter', () => clearTimeout(hoverCloseTimer));
+	panel.addEventListener('mouseleave', () => {
+		hoverCloseTimer = setTimeout(() => setPanelOpen(false), 300);
+	});
+
+	// Touch: tap trigger toggles
+	trigger.addEventListener('touchstart', e => {
+		e.preventDefault();
+		setPanelOpen(!isOpen());
+	});
+
+	// Outside click closes
+	document.addEventListener(
+		'click',
+		e => {
+			if (isOpen() && e.target instanceof window.HTMLElement && !host.contains(e.target)) {
+				setPanelOpen(false);
+			}
+		},
+		true,
+	);
 }
 
 const panelSections = new Map();
@@ -626,7 +742,8 @@ function ensureBooted() {
 			}
 
 			applyStaticI18n();
-			setConnTextFromState();
+			updateConnectionPanel();
+			initConnectionPanelInteraction();
 
 			if (layout === 'tabs') {
 				initTabs({ defaultPanelId });
@@ -726,7 +843,15 @@ function onBecomeOnline() {
 	void ensureBooted().then(() => {
 		void refreshRuntimeAbout();
 		applyStaticI18n();
-		setConnTextFromState();
+		updateConnectionPanel();
+		if (connLostToastActive) {
+			connLostToastActive = false;
+			ui.toast({
+				id: CONN_TOAST_ID,
+				text: t('msghub.i18n.core.admin.ui.connection.toast.connected.text'),
+				variant: 'ok',
+			});
+		}
 		for (const section of panelSections.values()) {
 			section?.onConnect?.();
 		}
@@ -744,7 +869,14 @@ function onBecomeOffline() {
 	connectWarmupPromise = null;
 	void ensureAdminI18nLoaded().then(() => {
 		applyStaticI18n();
-		setConnTextFromState();
+		updateConnectionPanel();
+		connLostToastActive = true;
+		ui.toast({
+			id: CONN_TOAST_ID,
+			text: t('msghub.i18n.core.admin.ui.connection.toast.disconnected.text'),
+			variant: 'danger',
+			persist: true,
+		});
 	});
 }
 
@@ -759,6 +891,7 @@ function onBecomeOffline() {
  */
 async function sendPing() {
 	const token = ++pingToken;
+	const t0 = Date.now();
 	try {
 		await Promise.race([
 			msghubRequest('admin.ping', null),
@@ -767,6 +900,7 @@ async function sendPing() {
 		if (pingToken !== token) {
 			return;
 		}
+		lastPingLatencyMs = Date.now() - t0;
 		if (!connOnline) {
 			onBecomeOnline();
 		}
@@ -774,10 +908,13 @@ async function sendPing() {
 		if (pingToken !== token) {
 			return;
 		}
+		lastPingLatencyMs = null;
 		if (connOnline) {
 			onBecomeOffline();
 		}
 	}
+	// Keep the connection panel fresh after every non-superseded ping
+	updateConnectionPanel();
 }
 
 // Transport-level reconnect: verify health with a ping before declaring online.

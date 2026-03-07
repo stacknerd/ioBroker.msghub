@@ -43,19 +43,26 @@
 	background: transparent;
 }
 
-.msghub-root #msghub-connection {
+/* Host: positioning context for pill + floating panel */
+.msghub-root .msghub-connpanel-host {
+	position: relative;
 	align-self: flex-end;
+}
+
+html[data-msghub-layout='tabs'] .msghub-root .msghub-connpanel-host {
+	position: fixed;
+	top: 20px;
+	right: 20px;
+	z-index: 1030; /* above panel content (max z-index: 2), below overlay (1050) */
+}
+
+/* Pill: visual appearance only */
+.msghub-root #msghub-connection {
 	padding: 5px 10px;
 	border-radius: 999px;
 	border: 1px solid var(--msghub-border);
 	font: var(--msghub-font-badge);
 	white-space: nowrap;
-}
-
-html[data-msghub-layout='tabs'] .msghub-root #msghub-connection {
-	position: fixed;
-	top: 20px;
-	right: 20px;
 }
 
 .msghub-root #msghub-connection.online {
@@ -68,6 +75,62 @@ html[data-msghub-layout='tabs'] .msghub-root #msghub-connection {
 	color: var(--msghub-danger);
 	border-color: var(--msghub-danger);
 	background: var(--msghub-danger-dim);
+}
+
+/* Trigger button reset */
+.msghub-root #msghub-connection-trigger {
+	cursor: pointer;
+	background: none;
+	border: none;
+	padding: 0;
+	font: inherit;
+	color: inherit;
+}
+
+/* Floating info panel — sibling of pill, positioned by host */
+.msghub-root .msghub-connpanel {
+	position: absolute;
+	right: 0;
+	top: calc(100% + var(--msghub-space-2));
+	z-index: 750; /* below contextmenu (1075), dialog (1100), overlay (1050) */
+	min-width: 260px;
+	background: var(--msghub-bg-overlay);
+	border: 1px solid var(--msghub-border);
+	border-radius: var(--msghub-radius);
+	box-shadow: var(--msghub-shadow-elevated);
+	padding: var(--msghub-space-3);
+	font: var(--msghub-font-badge);
+	opacity: 0;
+	visibility: hidden;
+	pointer-events: none;
+	transition:
+		opacity var(--msghub-anim-overlay-out) var(--msghub-ease-overlay),
+		visibility 0s var(--msghub-anim-overlay-out);
+}
+
+.msghub-root .msghub-connpanel.is-open {
+	opacity: 1;
+	visibility: visible;
+	pointer-events: auto;
+	transition:
+		opacity var(--msghub-anim-overlay-in) var(--msghub-ease-overlay),
+		visibility 0s 0s;
+}
+
+.msghub-root .msghub-connpanel-row {
+	display: flex;
+	justify-content: space-between;
+	gap: var(--msghub-space-2);
+}
+
+.msghub-root .msghub-connpanel hr {
+	border: none;
+	border-top: 1px solid var(--msghub-border);
+	margin: var(--msghub-space-2) 0;
+}
+
+.msghub-root .msghub-connpanel-accent {
+	color: var(--msghub-accent);
 }
 
 /* ========================================================================== */
@@ -96,4 +159,3 @@ html[data-msghub-layout='tabs'] .msghub-root #msghub-connection {
 .msghub-root.is-modal-open .msghub-panel {
 	overflow: hidden;
 }
-

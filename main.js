@@ -364,6 +364,7 @@ class Msghub extends utils.Adapter {
 						lang: {
 							backendTextLanguage: this.i18nBackend?.i18nlocale || 'en',
 							coreTextLanguage: this.i18nCore?.i18nlocale || 'en',
+							coreFormatLocale: this.i18nCore?.locale || 'en',
 						},
 					},
 				};
