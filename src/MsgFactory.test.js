@@ -196,6 +196,20 @@ function buildBase(overrides = {}) {
 				expect(msg).to.be.an('object');
 				expect(msg).to.not.have.property('icon');
 			});
+
+			it('omits icon silently when icon is an empty string', () => {
+				const { factory, logs } = makeFactory();
+				const msg = factory.createMessage(buildBase({ icon: '' }));
+				expect(msg).to.not.have.property('icon');
+				expect(logs.warn).to.have.length(0);
+			});
+
+			it('omits icon silently when icon is whitespace only', () => {
+				const { factory, logs } = makeFactory();
+				const msg = factory.createMessage(buildBase({ icon: '   ' }));
+				expect(msg).to.not.have.property('icon');
+				expect(logs.warn).to.have.length(0);
+			});
 		});
 
 		describe('lifecycle', () => {

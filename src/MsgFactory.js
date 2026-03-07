@@ -684,14 +684,14 @@ class MsgFactory {
 	 * @overload
 	 * @param {any} value Input value to validate.
 	 * @param {string} field Field name for error messages.
-	 * @param {{ required: true, trim?: boolean, fallback?: string }} options Normalization options.
+	 * @param {{ required: true, trim?: boolean, fallback?: string, warn?: boolean }} options Normalization options.
 	 * @returns {string} Normalized string.
 	 */
 	/**
 	 * @overload
 	 * @param {any} value Input value to validate.
 	 * @param {string} field Field name for error messages.
-	 * @param {{ required?: false, trim?: boolean, fallback?: string }} [options] Normalization options.
+	 * @param {{ required?: false, trim?: boolean, fallback?: string, warn?: boolean }} [options] Normalization options.
 	 * @returns {string|undefined} Normalized string or fallback/undefined.
 	 */
 	/**
@@ -703,9 +703,10 @@ class MsgFactory {
 	 * @param {boolean} [options.required] Whether the value must be a non-empty string.
 	 * @param {boolean} [options.trim] Whether to trim whitespace.
 	 * @param {string} [options.fallback] Returned when the value is optional but invalid.
+	 * @param {boolean} [options.warn] Whether to log a warning when the value is an empty string (default true).
 	 * @returns {string|undefined} Normalized string or fallback/undefined.
 	 */
-	_normalizeMsgString(value, field, { required = false, trim = true, fallback = undefined } = {}) {
+	_normalizeMsgString(value, field, { required = false, trim = true, fallback = undefined, warn = true } = {}) {
 		if (typeof value !== 'string') {
 			if (required) {
 				throw new TypeError(`'${field}' must be a string, received '${typeof value}' instead`);
@@ -718,7 +719,9 @@ class MsgFactory {
 		if (required && !text) {
 			throw new TypeError(`'${field}' is required but an empty string`);
 		} else if (!text) {
-			this.adapter?.log?.warn?.(`MsgFactory: '${field}' is an empty string`);
+			if (warn) {
+				this.adapter?.log?.warn?.(`MsgFactory: '${field}' is an empty string`);
+			}
 			return fallback;
 		}
 		return text;
@@ -738,7 +741,7 @@ class MsgFactory {
 		if (value === undefined || value === null) {
 			return undefined;
 		}
-		const raw = this._normalizeMsgString(value, 'icon', { fallback: undefined });
+		const raw = this._normalizeMsgString(value, 'icon', { fallback: undefined, warn: false });
 		if (!raw) {
 			return undefined;
 		}
