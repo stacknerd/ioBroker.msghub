@@ -56,7 +56,18 @@
 			initGlobal: 'MsghubAdminTabPlugins',
 			assets: Object.freeze({
 				css: Object.freeze(['tab/panels/plugins/styles.css', 'tab/panels/plugins/ingeststates.css']),
-				js: Object.freeze(['tab/panels/plugins/index.js']),
+				js: Object.freeze([
+					'tab/panels/plugins/state.js',
+					'tab/panels/plugins/data.plugins.js',
+					'tab/panels/plugins/data.ingeststates.js',
+					'tab/panels/plugins/render.form.js',
+					'tab/panels/plugins/menus.js',
+					'tab/panels/plugins/render.catalog.js',
+					'tab/panels/plugins/render.instance.js',
+					'tab/panels/plugins/overlay.bulkapply.js',
+					'tab/panels/plugins/overlay.presets.js',
+					'tab/panels/plugins/index.js',
+				]),
 			}),
 		}),
 	});
