@@ -192,6 +192,30 @@ describe('admin/tab/panels/plugins/render.catalog.js', function () {
 		);
 	});
 
+	it('renderAddToolbar opens the add menu on right click', async function () {
+		const sandbox = await loadCatalogModule();
+		const openCalls = [];
+		const api = makeCatalogApi(sandbox, {
+			ui: {
+				contextMenu: {
+					open: payload => openCalls.push(payload),
+				},
+			},
+		});
+		const vm = {
+			plugins: [{ type: 'IngestFoo', category: 'ingest', discoverable: true, supportsMultiple: true }],
+			byType: new Map(),
+		};
+
+		const toolbar = api.renderAddToolbar(vm);
+		const addBtn = toolbar.children[0].children[0];
+		addBtn.oncontextmenu({ preventDefault() {} });
+
+		assert.equal(openCalls.length, 1);
+		assert.equal(openCalls[0].anchorEl, addBtn);
+		assert.equal(openCalls[0].placement, 'bottom-start');
+	});
+
 	// --- toAccKey ---
 
 	it('toAccKey returns category key without instanceId', async function () {

@@ -156,9 +156,10 @@
 				if (!ui?.contextMenu?.open) {
 					return;
 				}
+				const menuAnchor = anchorEl && typeof anchorEl === 'object' ? anchorEl : null;
 				ui.contextMenu.open({
-					anchorEl: anchorEl instanceof HTMLElement ? anchorEl : null,
-					anchorPoint: !anchorEl && e ? { x: e.clientX, y: e.clientY } : null,
+					anchorEl: menuAnchor,
+					anchorPoint: !menuAnchor && e ? { x: e.clientX, y: e.clientY } : null,
 					ariaLabel: 'Plugin context menu',
 					placement: 'bottom-start',
 					items: cfg.items,
@@ -242,6 +243,10 @@
 				'aria-label': t('msghub.i18n.core.admin.ui.plugins.instance.tools.button'),
 				text: t('msghub.i18n.core.admin.ui.plugins.instance.tools.button'),
 				onclick: e => openToolsMenu(toolsBtn, e),
+				oncontextmenu: e => {
+					e?.preventDefault?.();
+					openToolsMenu(toolsBtn, e);
+				},
 			});
 
 			const channelId = `ch_${plugin.type}_${inst.instanceId}_${adapterInstance}`;

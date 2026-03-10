@@ -352,6 +352,18 @@
 					items: menuItems,
 				});
 			};
+			addBtn.oncontextmenu = e => {
+				e?.preventDefault?.();
+				if (!ui?.contextMenu?.open) {
+					return;
+				}
+				ui.contextMenu.open({
+					anchorEl: addBtn,
+					ariaLabel: 'Plugin context menu',
+					placement: 'bottom-start',
+					items: menuItems,
+				});
+			};
 			return h('div', { class: 'msghub-toolbar msghub-plugin-toolbar' }, [
 				h('div', { class: 'msghub-toolbar__group' }, [addBtn]),
 			]);

@@ -107,6 +107,12 @@ const PLUGIN_WITH_OPTIONS = Object.freeze({
 	options: { host: { type: 'string', order: 1, default: 'localhost', label: 'Host' } },
 });
 
+/** IngestStates plugin with tools availability. */
+const PLUGIN_INGESTSTATES = Object.freeze({
+	type: 'IngestStates',
+	category: 'ingest',
+});
+
 /** Minimal instance descriptor. */
 function makeInst(overrides = {}) {
 	return Object.assign({ type: 'IngestFoo', instanceId: 0, enabled: true, native: {}, status: 'ok' }, overrides);
@@ -293,5 +299,33 @@ describe('admin/tab/panels/plugins/render.instance.js', function () {
 		const head = el.children.find(c => c?.classList?.contains('msghub-instance-head'));
 		const toolsBtn = head?.children?.find(c => c?.classList?.contains('msghub-instance-tools'));
 		assert.ok(toolsBtn?.classList?.contains('is-invisible'));
+	});
+
+	it('renderInstanceRow opens tools menu on right click for IngestStates', async function () {
+		const sandbox = await loadInstanceModule();
+		const openCalls = [];
+		const { renderInstanceRow } = makeInstanceApi(sandbox, {
+			ui: {
+				contextMenu: {
+					open: payload => openCalls.push(payload),
+				},
+			},
+		});
+		const el = renderInstanceRow({
+			plugin: PLUGIN_INGESTSTATES,
+			inst: makeInst({ type: 'IngestStates' }),
+			instList: [makeInst({ type: 'IngestStates', instanceId: 0, enabled: true })],
+			expandedById: new Map(),
+			readmesByType: new Map(),
+		});
+		const head = el.children.find(c => c?.classList?.contains('msghub-instance-head'));
+		const toolsBtn = head?.children?.find(c => c?.classList?.contains('msghub-instance-tools'));
+
+		toolsBtn.dispatchEvent({ type: 'contextmenu', preventDefault() {}, clientX: 10, clientY: 20 });
+
+		assert.equal(openCalls.length, 1);
+		assert.equal(openCalls[0].anchorEl, toolsBtn);
+		assert.equal(openCalls[0].placement, 'bottom-start');
+		assert.equal(openCalls[0].items.map(item => item.id).join(','), 'ingeststates_bulk,ingeststates_presets');
 	});
 });
