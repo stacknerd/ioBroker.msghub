@@ -244,6 +244,20 @@
 			}
 
 			/**
+			 * Formats serialized JSON strings for display line breaks.
+			 *
+			 * Keeps the visible `\n` token and inserts a real newline character
+			 * afterwards so CSS `white-space: pre-wrap` renders a line break.
+			 *
+			 * @param {string} value - Raw string value.
+			 * @returns {string} Display string for overlay rendering.
+			 */
+			function formatStringLiteralForDisplay(value) {
+				const serialized = JSON.stringify(value);
+				return serialized.replace(/\\n/g, '\\n\n');
+			}
+
+			/**
 			 * Renders value as annotated JSON into overlay body.
 			 *
 			 * @param {any} value - Root value.
@@ -287,7 +301,7 @@
 						return;
 					}
 					if (typeof val === 'string') {
-						appendSpan(targetEl, 'msghub-json-string', JSON.stringify(val));
+						appendSpan(targetEl, 'msghub-json-string', formatStringLiteralForDisplay(val));
 						return;
 					}
 					if (typeof val === 'number') {

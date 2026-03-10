@@ -61,6 +61,33 @@ describe('admin/tab/panels/messages/overlay.json.js', function () {
 		assert.ok(String(openPayload.bodyEl.textContent).length > 0);
 	});
 
+	it('renders visible \\n tokens and inserts real line breaks after them', async function () {
+		const sandbox = await loadPanelModule('admin/tab/panels/messages/overlay.json.js');
+		const moduleApi = sandbox.window.MsghubAdminTabMessagesOverlayJson;
+		let openPayload = null;
+
+		const overlay = moduleApi.createJsonOverlay({
+			ui: {
+				overlayLarge: {
+					open: payload => {
+						openPayload = payload;
+					},
+					isOpen: () => false,
+				},
+			},
+			t: key => `i18n:${key}`,
+			getServerTimeZone: () => '',
+			getLevelLabel: value => String(value),
+		});
+
+		overlay.openMessageJson({ text: 'foo\nbar' });
+
+		const propertyLine = openPayload.bodyEl.children[1];
+		const stringEl = propertyLine?.children?.[1]?.children?.[0];
+		assert.ok(stringEl);
+		assert.equal(stringEl.textContent, '"foo\\n\nbar"');
+	});
+
 	it('does not contain hover tooltip logic anymore', async function () {
 		const source = await readRepoFile('admin/tab/panels/messages/overlay.json.js');
 		assert.doesNotMatch(source, /toLocaleString\(/);
