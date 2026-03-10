@@ -15,6 +15,7 @@ const { MsgConfig } = require(`${__dirname}/src/MsgConfig`);
 const { MsgStore } = require(`${__dirname}/src/MsgStore`);
 const { MsgAi } = require(`${__dirname}/src/MsgAi`);
 const { IoArchiveResolver } = require(`${__dirname}/lib/IoArchiveResolver`);
+const { IoCoreConnection } = require(`${__dirname}/lib/IoCoreConnection`);
 const { IoStorageIobroker } = require(`${__dirname}/lib/IoStorageIobroker`);
 
 function buildI18nWords(rootDir) {
@@ -138,6 +139,9 @@ class Msghub extends utils.Adapter {
 
 		// AdminTab command facade (initialized in onReady)
 		this._adminTab = null;
+
+		// Official platform-side core-link connection state.
+		this._coreConnection = null;
 	}
 
 	/**
@@ -165,6 +169,8 @@ class Msghub extends utils.Adapter {
 		this._msgConfigPublic = Object.freeze({ schemaVersion: MsgConfig.schemaVersion, ...msgCfg.pluginPublic });
 
 		this._i18ninit(msgCfg.corePrivate.general);
+		this._coreConnection = new IoCoreConnection(this);
+		await this._coreConnection.init();
 
 		/////////////////////////////////////////
 		// Message Hub Core
@@ -213,6 +219,8 @@ class Msghub extends utils.Adapter {
 			ai: msgAi,
 		});
 		await this.msgStore.init();
+		const coreHealth = this._coreConnection.checkHealthLocal({ msgStore: this.msgStore });
+		await this._coreConnection.markFromHealth(coreHealth);
 		await this._syncArchiveRuntimeNativeFields();
 
 		/////////////////////////////////////////
@@ -263,7 +271,11 @@ class Msghub extends utils.Adapter {
 			} catch {
 				// swallow
 			}
-			callback();
+			Promise.resolve(this._coreConnection?.markDisconnected?.())
+				.catch(error => {
+					this.log?.warn?.(`Could not mark info.connection=false during unload: ${error?.message || error}`);
+				})
+				.finally(() => callback());
 		}
 	}
 
@@ -365,6 +377,11 @@ class Msghub extends utils.Adapter {
 							backendTextLanguage: this.i18nBackend?.i18nlocale || 'en',
 							coreTextLanguage: this.i18nCore?.i18nlocale || 'en',
 							coreFormatLocale: this.i18nCore?.locale || 'en',
+						},
+						connection: this._coreConnection?.getRuntimeAbout?.() || {
+							scope: 'core-link',
+							connected: false,
+							mode: 'local',
 						},
 					},
 				};

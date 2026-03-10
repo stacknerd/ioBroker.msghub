@@ -123,6 +123,7 @@ function applyRuntimeAboutPayload(payload) {
 		coreFormatLocale: typeof data?.lang?.coreFormatLocale === 'string' ? data.lang.coreFormatLocale : '',
 		backendTextLang: typeof data?.lang?.backendTextLanguage === 'string' ? data.lang.backendTextLanguage : '',
 		version: typeof data?.version === 'string' ? data.version.trim() : '',
+		coreConnectionConnected: typeof data?.connection?.connected === 'boolean' ? data.connection.connected : null,
 	};
 	updateConnectionPanel();
 }
@@ -531,6 +532,16 @@ function updateConnectionPanel() {
 				? 'msghub.i18n.core.admin.ui.connection.panel.connected.text'
 				: 'msghub.i18n.core.admin.ui.connection.panel.disconnected.text',
 		),
+	);
+	set(
+		'msghub-conn-core-connection',
+		typeof connPanelData.coreConnectionConnected === 'boolean'
+			? t(
+					connPanelData.coreConnectionConnected
+						? 'msghub.i18n.core.admin.ui.connection.panel.connected.text'
+						: 'msghub.i18n.core.admin.ui.connection.panel.disconnected.text',
+				)
+			: dash,
 	);
 	const rawHostUrl = msghubSocket?.url || msghubSocket?.io?.uri;
 	let hostDisplay = dash;

@@ -22,5 +22,6 @@ Design boundary:
 - `IoArchiveIobroker`: [`./IoArchiveIobroker.md`](./IoArchiveIobroker.md)
 - `IoArchiveNative`: [`./IoArchiveNative.md`](./IoArchiveNative.md)
 - `IoArchiveResolver`: [`./IoArchiveResolver.md`](./IoArchiveResolver.md)
+- `IoCoreConnection`: [`./IoCoreConnection.md`](./IoCoreConnection.md)
 - `IoStorageIobroker`: [`./IoStorageIobroker.md`](./IoStorageIobroker.md)
 <!-- AUTO-GENERATED:MODULE-INDEX:END -->

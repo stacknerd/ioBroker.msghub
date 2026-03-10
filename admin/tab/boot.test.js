@@ -350,6 +350,7 @@ globalThis.__applyRuntimeAboutPayload = applyRuntimeAboutPayload;
 		};
 		const elMap = {
 			'msghub-conn-status':       makeEl(),
+			'msghub-conn-core-connection': makeEl(),
 			'msghub-conn-host':         makeEl(),
 			'msghub-conn-adapter':      makeEl(),
 			'msghub-conn-latency':      makeEl(),
@@ -374,6 +375,7 @@ let connPanelData = {
     coreFormatLocale: 'de-DE',
     backendTextLang: 'en',
     version: '1.2.3',
+    coreConnectionConnected: true,
 };
 ${fnSource}
 globalThis.__fn = updateConnectionPanel;
@@ -393,6 +395,8 @@ globalThis.__fn = updateConnectionPanel;
 		sandbox.__fn();
 
 		assert.equal(elMap['msghub-conn-status'].textContent,
+			'msghub.i18n.core.admin.ui.connection.panel.connected.text');
+		assert.equal(elMap['msghub-conn-core-connection'].textContent,
 			'msghub.i18n.core.admin.ui.connection.panel.connected.text');
 		assert.equal(elMap['msghub-conn-host'].textContent, 'http://localhost:8081');
 		assert.equal(elMap['msghub-conn-adapter'].textContent, 'msghub.0');
@@ -428,6 +432,7 @@ globalThis.__fn = updateConnectionPanel;
 		};
 		const elMap = {
 			'msghub-conn-status':       makeEl(),
+			'msghub-conn-core-connection': makeEl(),
 			'msghub-conn-host':         makeEl(),
 			'msghub-conn-adapter':      makeEl(),
 			'msghub-conn-latency':      makeEl(),
@@ -446,7 +451,14 @@ globalThis.__fn = updateConnectionPanel;
 			`
 let connOnline = false;
 let lastPingLatencyMs = null;
-let connPanelData = { serverTz: 'Europe/Berlin', coreTextLang: '', coreFormatLocale: '', backendTextLang: '', version: '' };
+let connPanelData = {
+    serverTz: 'Europe/Berlin',
+    coreTextLang: '',
+    coreFormatLocale: '',
+    backendTextLang: '',
+    version: '',
+    coreConnectionConnected: false
+};
 ${fnSource}
 globalThis.__fn = updateConnectionPanel;
 `,
@@ -465,6 +477,8 @@ globalThis.__fn = updateConnectionPanel;
 		sandbox.__fn();
 
 		assert.equal(elMap['msghub-conn-latency'].textContent, '—');
+		assert.equal(elMap['msghub-conn-core-connection'].textContent,
+			'msghub.i18n.core.admin.ui.connection.panel.disconnected.text');
 		assert.equal(elMap['msghub-conn-host'].textContent, '—');
 		assert.equal(elMap['msghub-conn-adapter'].textContent, '—');
 		// serverTz=Europe/Berlin, browserTz=Europe/Berlin → same → hint hidden
@@ -502,6 +516,7 @@ globalThis.__connPanelData = () => connPanelData;
 			title: 'MsgHub',
 			version: '1.2.3',
 			time: { timeZone: 'Europe/Berlin', source: 'server' },
+			connection: { scope: 'core-link', connected: true, mode: 'local' },
 			lang: { coreTextLanguage: 'de', coreFormatLocale: 'de-DE', backendTextLanguage: 'en' },
 		});
 
@@ -511,6 +526,7 @@ globalThis.__connPanelData = () => connPanelData;
 		assert.equal(data.coreFormatLocale, 'de-DE');
 		assert.equal(data.backendTextLang, 'en');
 		assert.equal(data.version, '1.2.3');
+		assert.equal(data.coreConnectionConnected, true);
 		assert.equal(panelUpdates.length, 1);
 	});
 
