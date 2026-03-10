@@ -245,6 +245,7 @@
 				onclick: e => openToolsMenu(toolsBtn, e),
 				oncontextmenu: e => {
 					e?.preventDefault?.();
+					e?.stopPropagation?.();
 					openToolsMenu(toolsBtn, e);
 				},
 			});

@@ -354,6 +354,7 @@
 			};
 			addBtn.oncontextmenu = e => {
 				e?.preventDefault?.();
+				e?.stopPropagation?.();
 				if (!ui?.contextMenu?.open) {
 					return;
 				}
