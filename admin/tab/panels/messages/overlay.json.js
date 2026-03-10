@@ -38,9 +38,12 @@
 		const getServerTimeZone = typeof opts.getServerTimeZone === 'function' ? opts.getServerTimeZone : () => '';
 		const formatDate = typeof opts.formatDate === 'function' ? opts.formatDate : () => '';
 		const getLevelLabel = typeof opts.getLevelLabel === 'function' ? opts.getLevelLabel : value => String(value);
+		const openCopyContextMenu =
+			typeof opts.openCopyContextMenu === 'function' ? opts.openCopyContextMenu : () => undefined;
 
 		let jsonPre = null;
 		let renderAnnotatedFn = null;
+		let currentMessage = null;
 
 		/**
 		 * Creates (lazy) overlay body element and renderer internals.
@@ -55,6 +58,15 @@
 			// Line-based rendering allows wrapping after key prefixes.
 			const pre = document.createElement('div');
 			pre.className = 'msghub-overlay-pre msghub-messages-json';
+			pre.addEventListener('contextmenu', event => {
+				if (event?.ctrlKey === true) {
+					return;
+				}
+				if (!currentMessage || typeof currentMessage !== 'object') {
+					return;
+				}
+				openCopyContextMenu(event, currentMessage);
+			});
 
 			/**
 			 * Safely converts value to string.
@@ -374,6 +386,7 @@
 		 */
 		function openMessageJson(msg) {
 			const pre = ensureJsonPre();
+			currentMessage = msg && typeof msg === 'object' ? msg : null;
 			try {
 				if (typeof renderAnnotatedFn === 'function') {
 					renderAnnotatedFn(msg, [], 0);

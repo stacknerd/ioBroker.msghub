@@ -88,6 +88,42 @@ describe('admin/tab/panels/messages/overlay.json.js', function () {
 		assert.equal(stringEl.textContent, '"foo\\n\nbar"');
 	});
 
+	it('opens copy context menu on right click inside the JSON overlay', async function () {
+		const sandbox = await loadPanelModule('admin/tab/panels/messages/overlay.json.js');
+		const moduleApi = sandbox.window.MsghubAdminTabMessagesOverlayJson;
+		let openPayload = null;
+		const contextMenuCalls = [];
+
+		const overlay = moduleApi.createJsonOverlay({
+			ui: {
+				overlayLarge: {
+					open: payload => {
+						openPayload = payload;
+					},
+					isOpen: () => false,
+				},
+			},
+			t: key => `i18n:${key}`,
+			getServerTimeZone: () => '',
+			getLevelLabel: value => String(value),
+			openCopyContextMenu: (event, msg) => {
+				contextMenuCalls.push({ event, msg });
+			},
+		});
+
+		overlay.openMessageJson({ ref: 'r1', title: 'Hello', text: 'World' });
+		openPayload.bodyEl.dispatchEvent({
+			type: 'contextmenu',
+			clientX: 11,
+			clientY: 22,
+			preventDefault() {},
+		});
+
+		assert.equal(contextMenuCalls.length, 1);
+		assert.equal(contextMenuCalls[0].msg.ref, 'r1');
+		assert.equal(contextMenuCalls[0].event.clientX, 11);
+	});
+
 	it('does not contain hover tooltip logic anymore', async function () {
 		const source = await readRepoFile('admin/tab/panels/messages/overlay.json.js');
 		assert.doesNotMatch(source, /toLocaleString\(/);

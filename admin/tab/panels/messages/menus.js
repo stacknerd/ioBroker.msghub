@@ -264,12 +264,12 @@
 		}
 
 		/**
-		 * Opens row context menu at pointer location.
+		 * Creates the shared copy submenu items for one message object.
 		 *
-		 * @param {MouseEvent} event - Contextmenu event.
 		 * @param {object} msg - Message row object.
+		 * @returns {Array<object>} Copy submenu items.
 		 */
-		function openRowContextMenu(event, msg) {
+		function buildCopyMenuItems(msg) {
 			const ref = safeStr(pick(msg, 'ref'));
 
 			/**
@@ -284,6 +284,63 @@
 					return String(msg);
 				}
 			};
+
+			return [
+				{
+					id: 'copyJson',
+					label: t('msghub.i18n.core.admin.ui.messages.contextMenu.copyJson.action'),
+					onSelect: () =>
+						copyTextToClipboard(msgJson()).then(() =>
+							ui?.toast?.({
+								text: t('msghub.i18n.core.admin.ui.messages.contextMenu.copyJson.toast'),
+								variant: 'ok',
+							}),
+						),
+				},
+				{
+					id: 'copyRef',
+					label: t('msghub.i18n.core.admin.ui.messages.contextMenu.copyRef.action'),
+					onSelect: () =>
+						copyTextToClipboard(ref).then(() =>
+							ui?.toast?.({
+								text: t('msghub.i18n.core.admin.ui.messages.contextMenu.copyRef.toast'),
+								variant: 'ok',
+							}),
+						),
+				},
+				{
+					id: 'copyTitle',
+					label: t('msghub.i18n.core.admin.ui.messages.contextMenu.copyTitle.action'),
+					onSelect: () =>
+						copyTextToClipboard(safeStr(pick(msg, 'title'))).then(() =>
+							ui?.toast?.({
+								text: t('msghub.i18n.core.admin.ui.messages.contextMenu.copyTitle.toast'),
+								variant: 'ok',
+							}),
+						),
+				},
+				{
+					id: 'copyText',
+					label: t('msghub.i18n.core.admin.ui.messages.contextMenu.copyText.action'),
+					onSelect: () =>
+						copyTextToClipboard(safeStr(pick(msg, 'text'))).then(() =>
+							ui?.toast?.({
+								text: t('msghub.i18n.core.admin.ui.messages.contextMenu.copyText.toast'),
+								variant: 'ok',
+							}),
+						),
+				},
+			];
+		}
+
+		/**
+		 * Opens row context menu at pointer location.
+		 *
+		 * @param {MouseEvent} event - Contextmenu event.
+		 * @param {object} msg - Message row object.
+		 */
+		function openRowContextMenu(event, msg) {
+			const ref = safeStr(pick(msg, 'ref'));
 
 			const archiveEnabled = isArchiveActionEnabled(msg) === true;
 
@@ -309,54 +366,31 @@
 					{
 						id: 'copy',
 						label: t('msghub.i18n.core.admin.ui.messages.contextMenu.copy.submenu.label'),
-						items: [
-							{
-								id: 'copyJson',
-								label: t('msghub.i18n.core.admin.ui.messages.contextMenu.copyJson.action'),
-								onSelect: () =>
-									copyTextToClipboard(msgJson()).then(() =>
-										ui?.toast?.({
-											text: t('msghub.i18n.core.admin.ui.messages.contextMenu.copyJson.toast'),
-											variant: 'ok',
-										}),
-									),
-							},
-							{
-								id: 'copyRef',
-								label: t('msghub.i18n.core.admin.ui.messages.contextMenu.copyRef.action'),
-								onSelect: () =>
-									copyTextToClipboard(ref).then(() =>
-										ui?.toast?.({
-											text: t('msghub.i18n.core.admin.ui.messages.contextMenu.copyRef.toast'),
-											variant: 'ok',
-										}),
-									),
-							},
-							{
-								id: 'copyTitle',
-								label: t('msghub.i18n.core.admin.ui.messages.contextMenu.copyTitle.action'),
-								onSelect: () =>
-									copyTextToClipboard(safeStr(pick(msg, 'title'))).then(() =>
-										ui?.toast?.({
-											text: t('msghub.i18n.core.admin.ui.messages.contextMenu.copyTitle.toast'),
-											variant: 'ok',
-										}),
-									),
-							},
-							{
-								id: 'copyText',
-								label: t('msghub.i18n.core.admin.ui.messages.contextMenu.copyText.action'),
-								onSelect: () =>
-									copyTextToClipboard(safeStr(pick(msg, 'text'))).then(() =>
-										ui?.toast?.({
-											text: t('msghub.i18n.core.admin.ui.messages.contextMenu.copyText.toast'),
-											variant: 'ok',
-										}),
-									),
-							},
-						],
+						items: buildCopyMenuItems(msg),
 					},
 				],
+			});
+		}
+
+		/**
+		 * Opens the JSON overlay copy menu at pointer position.
+		 *
+		 * @param {MouseEvent} event - Contextmenu event.
+		 * @param {object} msg - Message row object.
+		 */
+		function openJsonOverlayContextMenu(event, msg) {
+			if (!event || typeof event !== 'object' || !msg || typeof msg !== 'object') {
+				return;
+			}
+			if (!ui?.contextMenu?.open) {
+				return;
+			}
+			event?.preventDefault?.();
+			ui.contextMenu.open({
+				anchorPoint: { x: event.clientX, y: event.clientY },
+				ariaLabel: 'Message copy actions',
+				placement: 'bottom-start',
+				items: buildCopyMenuItems(msg),
 			});
 		}
 
@@ -364,6 +398,7 @@
 			openHeaderSortMenu,
 			openHeaderFilterMenu,
 			openRowContextMenu,
+			openJsonOverlayContextMenu,
 		});
 	}
 

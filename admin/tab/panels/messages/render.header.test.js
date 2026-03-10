@@ -102,6 +102,38 @@ describe('admin/tab/panels/messages/render.header.js', function () {
 		assert.equal(fixture.filterCalls[0].payload.key, 'details.location');
 	});
 
+	it('opens the same header menus on right click', async function () {
+		const sandbox = await loadPanelModule('admin/tab/panels/messages/render.header.js');
+		const moduleApi = sandbox.window.MsghubAdminTabMessagesRenderHeader;
+		const fixture = setup();
+		const renderer = moduleApi.createHeaderRenderer(fixture.rendererOptions);
+
+		renderer.renderThead();
+
+		const sortButton = findAll(
+			fixture.theadEl,
+			node => node.tagName === 'BUTTON' && String(node.className).includes('msghub-thBtn--sort'),
+		)[0];
+		const filterButton = findAll(
+			fixture.theadEl,
+			node => node.tagName === 'BUTTON' && String(node.className).includes('msghub-thBtn--filter'),
+		)[0];
+		const filterHeaderCell = filterButton.parentNode;
+
+		sortButton.dispatchEvent({ type: 'contextmenu', preventDefault() {}, currentTarget: sortButton, target: sortButton });
+		filterHeaderCell.dispatchEvent({
+			type: 'contextmenu',
+			preventDefault() {},
+			currentTarget: filterHeaderCell,
+			target: filterHeaderCell,
+		});
+
+		assert.equal(fixture.sortCalls.length, 1);
+		assert.equal(fixture.sortCalls[0].payload.field, 'icon');
+		assert.equal(fixture.filterCalls.length, 1);
+		assert.equal(fixture.filterCalls[0].payload.key, 'details.location');
+	});
+
 	it('updates filter badges and sort direction markers', async function () {
 		const sandbox = await loadPanelModule('admin/tab/panels/messages/render.header.js');
 		const moduleApi = sandbox.window.MsghubAdminTabMessagesRenderHeader;

@@ -81,6 +81,11 @@
 					const anchor = e?.currentTarget?.closest?.('th') || e?.currentTarget || e?.target;
 					menusApi.openHeaderSortMenu(anchor, { field, title });
 				},
+				oncontextmenu: e => {
+					e?.preventDefault?.();
+					const anchor = e?.currentTarget?.closest?.('th') || e?.currentTarget || e?.target;
+					menusApi.openHeaderSortMenu(anchor, { field, title });
+				},
 			});
 			btn.appendChild(
 				h('span', {
@@ -108,6 +113,12 @@
 				type: 'button',
 				onclick: e => {
 					e.preventDefault();
+					const optionsList = typeof getOptions === 'function' ? getOptions() : [];
+					const anchor = e?.currentTarget?.closest?.('th') || e?.currentTarget || e?.target;
+					menusApi.openHeaderFilterMenu(anchor, { key, title, options: optionsList });
+				},
+				oncontextmenu: e => {
+					e?.preventDefault?.();
 					const optionsList = typeof getOptions === 'function' ? getOptions() : [];
 					const anchor = e?.currentTarget?.closest?.('th') || e?.currentTarget || e?.target;
 					menusApi.openHeaderFilterMenu(anchor, { key, title, options: optionsList });
@@ -149,6 +160,19 @@
 							return;
 						}
 						btn?.click?.();
+					},
+					oncontextmenu: e => {
+						e?.preventDefault?.();
+						const target = e?.target;
+						if (target && btn && typeof btn.contains === 'function' && btn.contains(target)) {
+							return;
+						}
+						btn?.dispatchEvent?.({
+							type: 'contextmenu',
+							preventDefault() {},
+							currentTarget: btn,
+							target: btn,
+						});
 					},
 				},
 				[btn],

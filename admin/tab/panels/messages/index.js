@@ -146,12 +146,15 @@
 
 		const archiveDataApi = archiveDataModule.createArchiveDataApi({ api });
 
+		let menusApi = null;
+
 		const jsonOverlayApi = jsonOverlayModule.createJsonOverlay({
 			ui,
 			t,
 			getServerTimeZone: () => state.serverTz,
 			formatDate: date => api?.time?.formatDate?.(date) || '',
 			getLevelLabel: dataApi.getLevelLabel,
+			openCopyContextMenu: (event, msg) => menusApi?.openJsonOverlayContextMenu?.(event, msg),
 		});
 
 		const archiveOverlayApi = archiveOverlayModule.createArchiveOverlay({ ui, t });
@@ -261,7 +264,7 @@
 			loadMessages({ silent: false }).catch(() => undefined);
 		}
 
-		const menusApi = menusModule.createMessagesMenus({
+		menusApi = menusModule.createMessagesMenus({
 			ui,
 			t,
 			state,

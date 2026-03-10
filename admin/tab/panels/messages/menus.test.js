@@ -127,6 +127,26 @@ describe('admin/tab/panels/messages/menus.js', function () {
 		assert.equal(copied, 'r1');
 	});
 
+	it('opens JSON overlay context menu with the same copy actions as row copy submenu', async function () {
+		const sandbox = await loadPanelModule('admin/tab/panels/messages/menus.js');
+		const moduleApi = sandbox.window.MsghubAdminTabMessagesMenus;
+		const { options, spies } = setupMenus();
+		const menus = moduleApi.createMessagesMenus(options);
+		const msg = { ref: 'r1', title: 'T', text: 'X' };
+
+		menus.openRowContextMenu({ clientX: 1, clientY: 2 }, msg);
+		menus.openJsonOverlayContextMenu({ clientX: 3, clientY: 4, preventDefault() {} }, msg);
+
+		const rowCopy = spies.openCalls[0].items.find(item => item.id === 'copy');
+		const overlayCopy = spies.openCalls[1].items;
+
+		assert.deepEqual(
+			overlayCopy.map(item => item.id),
+			rowCopy.items.map(item => item.id),
+		);
+		assert.equal(spies.openCalls[1].ariaLabel, 'Message copy actions');
+	});
+
 	it('shows ok toast after each copy action succeeds', async function () {
 		const sandbox = await loadPanelModule('admin/tab/panels/messages/menus.js');
 		const moduleApi = sandbox.window.MsghubAdminTabMessagesMenus;
