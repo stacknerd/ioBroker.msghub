@@ -225,6 +225,8 @@
   "msghub.i18n.core.admin.ui.messages.contextMenu.openJson.action": "View details (JSON)",
   "msghub.i18n.core.admin.ui.messages.delete.confirm.text": "Are you sure you want to delete %s messages?",
   "msghub.i18n.core.admin.ui.messages.delete.confirm.title": "Delete messages?",
+  "msghub.i18n.core.admin.ui.messages.delete.deleted.text": "Message '%s' deleted.",
+  "msghub.i18n.core.admin.ui.messages.delete.deletedMany.text": "%s messages deleted.",
   "msghub.i18n.core.admin.ui.messages.empty.text": "No matching messages could be loaded.",
   "msghub.i18n.core.admin.ui.messages.filter.apply.action": "Apply filter",
   "msghub.i18n.core.admin.ui.messages.filter.none.label": "No filter",

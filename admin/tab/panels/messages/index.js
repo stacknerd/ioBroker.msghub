@@ -552,6 +552,14 @@
 				state.selectedRefs.clear();
 				metaApi.updateDeleteButton();
 				await loadMessages({ silent: false });
+				if (!state.lastError) {
+					toast(
+						refs.length === 1
+							? t('msghub.i18n.core.admin.ui.messages.delete.deleted.text', safeStr(refs[0]))
+							: t('msghub.i18n.core.admin.ui.messages.delete.deletedMany.text', refs.length),
+						'danger',
+					);
+				}
 			} catch (err) {
 				toast(String(err?.message || err), 'danger');
 			}

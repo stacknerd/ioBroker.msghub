@@ -54,8 +54,8 @@ describe('admin/tab/panels/messages/index.js', function () {
 	 * @param {boolean} [opts.failExecuteAction] - Whether executeAction should reject.
 	 * @returns {Promise<object>} Captured context.
 	 */
-	async function setupPanelWithActionCapture(opts = {}) {
-		const { failExecuteAction = false } = opts;
+		async function setupPanelWithActionCapture(opts = {}) {
+			const { failExecuteAction = false } = opts;
 		const sandbox = await loadIndexModule();
 		const root = createElement('div');
 		root.closest = () => ({ classList: { toggle() {} } });
@@ -181,7 +181,7 @@ describe('admin/tab/panels/messages/index.js', function () {
 			elements: { messagesRoot: root },
 		});
 
-		return {
+			return {
 			capturedOnActionExecute: () => capturedOnActionExecute,
 			capturedOnLinkOpen: () => capturedOnLinkOpen,
 			executeActionCalls,
@@ -194,8 +194,151 @@ describe('admin/tab/panels/messages/index.js', function () {
 			setDialogConfirmResult: val => {
 				dialogConfirmResult = val;
 			},
-		};
-	}
+			};
+		}
+
+		/**
+		 * Creates a minimal panel setup and captures the toolbar delete handler.
+		 *
+		 * @returns {Promise<object>} Captured context.
+		 */
+		async function setupPanelWithDeleteCapture() {
+			const sandbox = await loadIndexModule();
+			const root = createElement('div');
+			root.closest = () => ({ classList: { toggle() {} } });
+
+			let capturedOnDelete = null;
+			const deleteMessagesCalls = [];
+			const toasts = [];
+			const confirmCalls = [];
+			let queryMessagesPageCalls = 0;
+			let dialogConfirmResult = true;
+
+			const metaElements = {
+				tbodyEl: createElement('tbody'),
+				theadEl: createElement('thead'),
+				colgroupEl: createElement('colgroup'),
+				tableEl: createElement('table'),
+			};
+			const visibleRow = createElement('tr');
+			visibleRow.setAttribute('data-ref', 'r1');
+			metaElements.tbodyEl.appendChild(visibleRow);
+			metaElements.tbodyEl.querySelectorAll = selector => (selector === 'tr[data-ref]' ? [visibleRow] : []);
+
+			sandbox.window.MsghubAdminTabMessagesState = {
+				createMessagesState: () => {
+					const state = createState();
+					state.expertMode = true;
+					state.selectedRefs = new Set(['r1']);
+					return state;
+				},
+				detectExpertMode: () => true,
+				isObject: value => !!value && typeof value === 'object' && !Array.isArray(value),
+				safeStr: value => (value == null ? '' : String(value)),
+				pick: (obj, path) => path.split('.').reduce((cur, key) => (cur ? cur[key] : undefined), obj),
+				formatTs: value => `ts:${value}`,
+			};
+			sandbox.window.MsghubAdminTabMessagesDataMessages = {
+				createMessagesDataApi: () => ({
+					loadConstants: async () => undefined,
+					queryMessagesPage: async () => {
+						queryMessagesPageCalls += 1;
+						return { items: [], total: 0, pages: 1, meta: {} };
+					},
+					deleteMessages: async refs => {
+						deleteMessagesCalls.push(refs);
+					},
+					getLevelLabel: value => String(value),
+					getFilterSet: () => new Set(),
+				}),
+			};
+			sandbox.window.MsghubAdminTabMessagesDataArchive = {
+				createArchiveDataApi: () => ({ normalizeCursorEdge: value => value }),
+			};
+			sandbox.window.MsghubAdminTabMessagesOverlayJson = {
+				createJsonOverlay: () => ({ openMessageJson() {} }),
+			};
+			sandbox.window.MsghubAdminTabMessagesOverlayArchive = {
+				createArchiveOverlay: () => ({ openArchiveOverlay() {}, renderArchiveView() {} }),
+			};
+			sandbox.window.MsghubAdminTabMessagesMenus = {
+				createMessagesMenus: () => ({ openRowContextMenu() {} }),
+			};
+			sandbox.window.MsghubAdminTabMessagesRenderMeta = {
+				createMetaRenderer: optsArg => {
+					capturedOnDelete = optsArg.onDelete;
+					return {
+						mount() {},
+						updateDeleteButton() {},
+						updateButtons() {},
+						updatePaging() {},
+						setError() {},
+						setMeta() {},
+						setEmptyVisible() {},
+						updateTbody() {},
+						elements: metaElements,
+					};
+				},
+			};
+			sandbox.window.MsghubAdminTabMessagesRenderHeader = {
+				createHeaderRenderer: () => ({
+					renderThead() {},
+					updateHeaderButtons() {},
+				}),
+			};
+			sandbox.window.MsghubAdminTabMessagesRenderTable = {
+				createTableRenderer: () => ({ renderRows: () => [] }),
+			};
+			sandbox.window.MsghubAdminTabMessagesLifecycle = {
+				createLifecycle: () => ({
+					scheduleAuto() {},
+					stopAuto() {},
+					bindEvents() {},
+					unbindEvents() {},
+					canAutoRefresh: () => true,
+				}),
+			};
+
+			sandbox.window.MsghubAdminTabMessages.init({
+				api: {
+					i18n: {
+						t: (key, ...args) =>
+							args.reduce((out, arg) => out.replace('%s', String(arg)), String(key)),
+					},
+					ui: {
+						toast: toastOpts => toasts.push(toastOpts),
+						dialog: {
+							confirm: async optsArg => {
+								confirmCalls.push(optsArg);
+								return dialogConfirmResult;
+							},
+						},
+						spinner: { show: () => 'sid', hide: () => undefined },
+					},
+					time: {
+						formatTs: () => '',
+						formatDate: () => '',
+						getPolicy: () => ({ timeZone: 'UTC', source: 'server' }),
+					},
+				},
+				ui: {},
+				h: createH(),
+				elements: { messagesRoot: root },
+			});
+
+			return {
+				capturedOnDelete: () => capturedOnDelete,
+				deleteMessagesCalls,
+				toasts,
+				confirmCalls,
+				get queryMessagesPageCalls() {
+					return queryMessagesPageCalls;
+				},
+				setDialogConfirmResult: val => {
+					dialogConfirmResult = val;
+				},
+			};
+		}
 
 	it('throws when messages root is missing', async function () {
 		const sandbox = await loadIndexModule();
@@ -422,18 +565,34 @@ describe('admin/tab/panels/messages/index.js', function () {
 			);
 		});
 
-	it('onActionExecute: delete marks confirm dialog as danger', async function () {
-		const ctx = await setupPanelWithActionCapture();
-		const onActionExecute = ctx.capturedOnActionExecute();
+		it('onActionExecute: delete marks confirm dialog as danger', async function () {
+			const ctx = await setupPanelWithActionCapture();
+			const onActionExecute = ctx.capturedOnActionExecute();
 
 		await onActionExecute('r1', 'delete-1', 'delete');
 
 		assert.equal(ctx.confirmCalls.length, 1);
-		assert.equal(ctx.confirmCalls[0].danger, true);
-	});
+			assert.equal(ctx.confirmCalls[0].danger, true);
+		});
 
-	it('onLinkOpen is wired to createMessagesMenus; calling it calls window.open with correct args', async function () {
-		const sandbox = await loadIndexModule();
+		it('handleDeleteSelection: confirmed single delete shows danger toast with ref', async function () {
+			const ctx = await setupPanelWithDeleteCapture();
+			const onDelete = ctx.capturedOnDelete();
+			const queryBefore = ctx.queryMessagesPageCalls;
+
+			onDelete();
+			await new Promise(resolve => setTimeout(resolve, 0));
+
+			assert.equal(ctx.deleteMessagesCalls.length, 1);
+			assert.equal(JSON.stringify(ctx.deleteMessagesCalls[0]), JSON.stringify(['r1']));
+			assert.ok(ctx.queryMessagesPageCalls > queryBefore, 'list must be refreshed after delete');
+			assert.equal(ctx.toasts.length, 1);
+			assert.equal(ctx.toasts[0].variant, 'danger');
+			assert.equal(ctx.toasts[0].text, "msghub.i18n.core.admin.ui.messages.delete.deleted.text".replace('%s', 'r1'));
+		});
+
+		it('onLinkOpen is wired to createMessagesMenus; calling it calls window.open with correct args', async function () {
+			const sandbox = await loadIndexModule();
 		const root = createElement('div');
 		root.closest = () => ({ classList: { toggle() {} } });
 

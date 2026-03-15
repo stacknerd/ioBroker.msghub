@@ -223,6 +223,8 @@
 	"msghub.i18n.core.admin.ui.messages.contextMenu.openJson.action": "Details (JSON) anzeigen",
 	"msghub.i18n.core.admin.ui.messages.delete.confirm.text": "Sicher, dass du %s Nachrichten löschen möchtest?",
 	"msghub.i18n.core.admin.ui.messages.delete.confirm.title": "Nachrichten löschen?",
+	"msghub.i18n.core.admin.ui.messages.delete.deleted.text": "Message '%s' wurde gelöscht.",
+	"msghub.i18n.core.admin.ui.messages.delete.deletedMany.text": "%s Messages wurden gelöscht.",
 	"msghub.i18n.core.admin.ui.messages.empty.text": "Es konnten keine entsprechenden Messages geladen werden.",
 	"msghub.i18n.core.admin.ui.messages.filter.apply.action": "Filter anwenden",
 	"msghub.i18n.core.admin.ui.messages.filter.none.label": "Kein Filter",
