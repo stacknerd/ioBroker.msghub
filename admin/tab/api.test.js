@@ -191,6 +191,7 @@ describe('admin/tab/api.js', function () {
 		await api.stats.get({ fast: true });
 		await api.messages.query({ page: 1 });
 		await api.messages.delete(['ref-1']);
+		await api.messages.executeAction({ ref: 'r1', actionId: 'ack' });
 		await api.plugins.listInstances();
 		await api.ingestStates.constants.get();
 		await api.runtime.about();
@@ -200,6 +201,7 @@ describe('admin/tab/api.js', function () {
 		assert.ok(commands.includes('admin.stats.get'));
 		assert.ok(commands.includes('admin.messages.query'));
 		assert.ok(commands.includes('admin.messages.delete'));
+		assert.ok(commands.includes('admin.messages.action'));
 		assert.ok(commands.includes('admin.plugins.listInstances'));
 		assert.ok(commands.includes('admin.ingestStates.constants.get'));
 		assert.ok(commands.includes('runtime.about'));

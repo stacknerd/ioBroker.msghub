@@ -167,12 +167,7 @@
 						if (target && btn && typeof btn.contains === 'function' && btn.contains(target)) {
 							return;
 						}
-						btn?.dispatchEvent?.({
-							type: 'contextmenu',
-							preventDefault() {},
-							currentTarget: btn,
-							target: btn,
-						});
+						btn?.dispatchEvent?.(new Event('contextmenu', { bubbles: false, cancelable: true }));
 					},
 				},
 				[btn],

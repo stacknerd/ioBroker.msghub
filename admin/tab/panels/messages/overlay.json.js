@@ -21,6 +21,25 @@
 	 */
 
 	/**
+	 * Action types that are executed in core (ack/close/delete/snooze).
+	 * open/custom remain intentional no-ops in core and are excluded from action
+	 * execution buttons. `link` is handled separately as frontend-only navigation.
+	 */
+	const CORE_ACTION_TYPES = new Set(['ack', 'close', 'delete', 'snooze']);
+
+	/**
+	 * Maps action type to its common admin i18n label key.
+	 * Used to translate action button text in the JSON overlay.
+	 */
+	const ACTION_LABEL_KEYS = Object.freeze({
+		ack: 'msghub.i18n.core.admin.common.action.ack.label',
+		close: 'msghub.i18n.core.admin.common.action.close.label',
+		delete: 'msghub.i18n.core.admin.common.action.delete.label',
+		link: 'msghub.i18n.core.admin.common.action.link.label',
+		snooze: 'msghub.i18n.core.admin.common.action.snooze.label',
+	});
+
+	/**
 	 * Creates the JSON overlay controller for one panel instance.
 	 *
 	 * @param {object} options - Factory options.
@@ -29,6 +48,8 @@
 	 * @param {Function} options.getServerTimeZone - Getter for server timezone.
 	 * @param {Function} options.formatDate - Shared timezone-aware date formatter.
 	 * @param {Function} options.getLevelLabel - Resolver for numeric level labels.
+	 * @param {Function} [options.onActionExecute] - Callback for action execution: (ref, actionId, actionType) => void.
+	 * @param {Function} [options.onLinkOpen] - Callback for link navigation: (url) => void.
 	 * @returns {{openMessageJson: Function}} JSON overlay controller.
 	 */
 	function createJsonOverlay(options) {
@@ -40,6 +61,8 @@
 		const getLevelLabel = typeof opts.getLevelLabel === 'function' ? opts.getLevelLabel : value => String(value);
 		const openCopyContextMenu =
 			typeof opts.openCopyContextMenu === 'function' ? opts.openCopyContextMenu : () => undefined;
+		const onActionExecute = typeof opts.onActionExecute === 'function' ? opts.onActionExecute : null;
+		const onLinkOpen = typeof opts.onLinkOpen === 'function' ? opts.onLinkOpen : null;
 
 		let jsonPre = null;
 		let renderAnnotatedFn = null;
@@ -283,7 +306,7 @@
 				 * Creates one output line.
 				 *
 				 * @param {number} level - Indent level.
-				 * @returns {{prefixEl:HTMLElement,valueEl:HTMLElement}} Line slots.
+				 * @returns {{prefixEl:HTMLElement,valueEl:HTMLElement,lineEl:HTMLElement}} Line slots.
 				 */
 				const createLine = level => {
 					const lineEl = document.createElement('div');
@@ -296,56 +319,222 @@
 					lineEl.appendChild(prefixEl);
 					lineEl.appendChild(valueEl);
 					pre.appendChild(lineEl);
-					return { prefixEl, valueEl };
+					return { prefixEl, valueEl, lineEl };
+				};
+
+				/**
+				 * Returns true when a value is a core-executable action item.
+				 * Only ack/close/delete/snooze get execute buttons; open/custom are
+				 * core no-ops and excluded, while link is handled separately.
+				 *
+				 * @param {any} val - Candidate value.
+				 * @returns {boolean} True when val is a core action object.
+				 */
+				const isCoreActionItem = val => {
+					if (!val || typeof val !== 'object' || Array.isArray(val)) {
+						return false;
+					}
+					const id = typeof val.id === 'string' ? val.id.trim() : '';
+					const type = typeof val.type === 'string' ? val.type.trim() : '';
+					return id !== '' && CORE_ACTION_TYPES.has(type);
+				};
+
+				/**
+				 * Creates a dedicated button line and inserts it before the closing brace
+				 * of the current action item object. The line is styled as a JSON comment
+				 * so the button reads as an inline annotation (comment-style colour).
+				 *
+				 * @param {number} level - Indent level matching the action item's properties.
+				 * @returns {HTMLElement} The line element; caller appends the button to it.
+				 */
+				const createButtonLine = level => {
+					const lineEl = document.createElement('div');
+					lineEl.className = 'msghub-json-line';
+					const prefixEl = document.createElement('span');
+					prefixEl.className = 'msghub-json-prefix';
+					prefixEl.appendChild(document.createTextNode(IND.repeat(level)));
+					const commentEl = document.createElement('span');
+					commentEl.className = 'msghub-json-comment';
+					commentEl.appendChild(document.createTextNode('// '));
+					lineEl.appendChild(prefixEl);
+					lineEl.appendChild(commentEl);
+					// Insert before the last child of pre (the closing '}' of the action item).
+					const lastChild = pre.children[pre.children.length - 1];
+					if (lastChild) {
+						pre.insertBefore(lineEl, lastChild);
+					} else {
+						pre.appendChild(lineEl);
+					}
+					return lineEl;
+				};
+
+				/**
+				 * Inserts a dedicated action execution button line before the closing brace
+				 * of the current action item object.
+				 *
+				 * @param {string} actionId - Action id.
+				 * @param {string} actionType - Action type (used as button label).
+				 * @param {boolean} disabled - Whether the button is disabled (blocked action).
+				 * @param {number} level - Indent level matching the action item's properties.
+				 */
+				const appendActionButton = (actionId, actionType, disabled, level) => {
+					const lineEl = createButtonLine(level);
+					const btn = document.createElement('button');
+					btn.className = 'msghub-uibutton-iconandtext msghub-json-action-btn';
+					btn.textContent = t(ACTION_LABEL_KEYS[actionType] || actionType);
+					btn.setAttribute('aria-label', 'Execute action');
+					if (disabled) {
+						btn.disabled = true;
+					} else if (onActionExecute) {
+						btn.addEventListener('click', () => {
+							const ref =
+								currentMessage && typeof currentMessage.ref === 'string' ? currentMessage.ref : '';
+							onActionExecute(ref, actionId, actionType);
+						});
+					}
+					lineEl.appendChild(btn);
+				};
+
+				/**
+				 * Extracts URL from a link action payload, trying url → href → link keys in order.
+				 *
+				 * @param {any} payload - Action payload.
+				 * @returns {string} Extracted URL or empty string.
+				 */
+				const extractLinkUrl = payload => {
+					if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+						return '';
+					}
+					for (const key of ['url', 'href', 'link']) {
+						const v = payload[key];
+						if (typeof v === 'string' && v.trim()) {
+							return v.trim();
+						}
+					}
+					return '';
+				};
+
+				/**
+				 * Returns true only for http:// or https:// URLs.
+				 *
+				 * @param {string} url - URL to check.
+				 * @returns {boolean} True when url starts with http:// or https://.
+				 */
+				const isHttpUrl = url =>
+					typeof url === 'string' && (url.startsWith('http://') || url.startsWith('https://'));
+
+				/**
+				 * Returns true when val is a link action item with a usable http[s] URL.
+				 *
+				 * @param {any} val - Candidate value.
+				 * @returns {boolean} True when val is a link action with a valid http[s] URL.
+				 */
+				const isLinkActionItem = val => {
+					if (!val || typeof val !== 'object' || Array.isArray(val)) {
+						return false;
+					}
+					const type = typeof val.type === 'string' ? val.type.trim() : '';
+					if (type !== 'link') {
+						return false;
+					}
+					return isHttpUrl(extractLinkUrl(val.payload));
+				};
+
+				/**
+				 * Inserts a dedicated navigation button line before the closing brace
+				 * of the current link action item object.
+				 * Calls onLinkOpen(url) directly — no confirm dialog, no backend call.
+				 *
+				 * @param {any} payload - Action payload containing the URL.
+				 * @param {number} level - Indent level matching the action item's properties.
+				 */
+				const appendLinkButton = (payload, level) => {
+					const url = extractLinkUrl(payload);
+					if (!isHttpUrl(url) || !onLinkOpen) {
+						return;
+					}
+					const lineEl = createButtonLine(level);
+					const btn = document.createElement('button');
+					btn.className = 'msghub-uibutton-iconandtext msghub-json-action-btn';
+					// Use payload.label when present; fall back to i18n key.
+					const labelText =
+						payload && typeof payload.label === 'string' && payload.label.trim()
+							? payload.label.trim()
+							: t(ACTION_LABEL_KEYS.link);
+					btn.textContent = labelText;
+					btn.setAttribute('aria-label', 'Open link');
+					btn.addEventListener('click', () => onLinkOpen(url));
+					lineEl.appendChild(btn);
 				};
 
 				/**
 				 * Recursively renders JSON value.
 				 *
+				 * Returns the trailing value slot so callers can append commas to the
+				 * line that actually ends the rendered value (`}` / `]` for nested
+				 * objects and arrays).
+				 *
 				 * @param {any} val - Current value.
 				 * @param {string[]} currentPath - Current path.
 				 * @param {number} level - Indent level.
 				 * @param {HTMLElement} targetEl - Target value element.
+				 * @returns {{tailValueEl: HTMLElement}} Trailing render slot.
 				 */
 				const renderValue = (val, currentPath, level, targetEl) => {
 					if (val === null) {
 						appendSpan(targetEl, 'msghub-json-null', 'null');
-						return;
+						return { tailValueEl: targetEl };
 					}
 					if (typeof val === 'string') {
 						appendSpan(targetEl, 'msghub-json-string', formatStringLiteralForDisplay(val));
-						return;
+						return { tailValueEl: targetEl };
 					}
 					if (typeof val === 'number') {
 						appendSpan(targetEl, 'msghub-json-number', String(val));
-						return;
+						return { tailValueEl: targetEl };
 					}
 					if (typeof val === 'boolean') {
 						appendSpan(targetEl, 'msghub-json-bool', val ? 'true' : 'false');
-						return;
+						return { tailValueEl: targetEl };
 					}
 					if (Array.isArray(val)) {
 						if (val.length === 0) {
 							appendSpan(targetEl, 'msghub-json-punct', '[]');
-							return;
+							return { tailValueEl: targetEl };
 						}
 						appendSpan(targetEl, 'msghub-json-punct', '[');
+						// Detect actions/actionsInactive arrays at root level for action buttons.
+						const isActionsArray =
+							currentPath.length === 1 &&
+							(currentPath[0] === 'actions' || currentPath[0] === 'actionsInactive');
+						const isInactiveArray = isActionsArray && currentPath[0] === 'actionsInactive';
 						for (let i = 0; i < val.length; i++) {
 							const line = createLine(level + 1);
-							renderValue(val[i], currentPath.concat(String(i)), level + 1, line.valueEl);
+							const rendered = renderValue(
+								val[i],
+								currentPath.concat(String(i)),
+								level + 1,
+								line.valueEl,
+							);
 							if (i < val.length - 1) {
-								appendSpan(line.valueEl, 'msghub-json-punct', ',');
+								appendSpan(rendered.tailValueEl, 'msghub-json-punct', ',');
+							}
+							if (isActionsArray && isCoreActionItem(val[i])) {
+								appendActionButton(val[i].id, val[i].type, isInactiveArray, level + 2);
+							}
+							if (isActionsArray && !isInactiveArray && isLinkActionItem(val[i])) {
+								appendLinkButton(val[i].payload, level + 2);
 							}
 						}
 						const closeLine = createLine(level);
 						appendSpan(closeLine.valueEl, 'msghub-json-punct', ']');
-						return;
+						return { tailValueEl: closeLine.valueEl };
 					}
 					if (val && typeof val === 'object') {
 						const entries = Object.entries(val);
 						if (entries.length === 0) {
 							appendSpan(targetEl, 'msghub-json-punct', '{}');
-							return;
+							return { tailValueEl: targetEl };
 						}
 						appendSpan(targetEl, 'msghub-json-punct', '{');
 						for (let i = 0; i < entries.length; i++) {
@@ -353,10 +542,10 @@
 							const line = createLine(level + 1);
 							appendSpan(line.prefixEl, 'msghub-json-key', JSON.stringify(key));
 							appendSpan(line.prefixEl, 'msghub-json-punct', ': ');
-							renderValue(nested, currentPath.concat(key), level + 1, line.valueEl);
+							const rendered = renderValue(nested, currentPath.concat(key), level + 1, line.valueEl);
 							const comment = resolveAnnotation(currentPath, key, nested);
 							if (i < entries.length - 1) {
-								appendSpan(line.valueEl, 'msghub-json-punct', ',');
+								appendSpan(rendered.tailValueEl, 'msghub-json-punct', ',');
 							}
 							if (comment) {
 								appendSpan(line.valueEl, 'msghub-json-comment', ` // ${comment}`);
@@ -364,9 +553,10 @@
 						}
 						const closeLine = createLine(level);
 						appendSpan(closeLine.valueEl, 'msghub-json-punct', '}');
-						return;
+						return { tailValueEl: closeLine.valueEl };
 					}
 					appendSpan(targetEl, 'msghub-json-null', JSON.stringify(val));
+					return { tailValueEl: targetEl };
 				};
 
 				pre.replaceChildren();

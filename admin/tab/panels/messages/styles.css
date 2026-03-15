@@ -79,6 +79,14 @@
 	color: var(--msghub-syntax-comment);
 }
 
+.msghub-root .msghub-messages-json .msghub-json-action-btn {
+	--msghub-uibutton-icon: var(--msghub-icon-action);
+	color: var(--msghub-syntax-comment);
+	font: var(--msghub-font-mono);
+	height: auto;
+	line-height: inherit;
+}
+
 /* Messages table (SharePoint-like list) */
 .msghub-root .msghub-messages .msghub-table {
 	width: 100%;

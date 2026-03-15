@@ -217,6 +217,14 @@ sendTo(
 
 		actions: [
 			{ type: 'ack', id: 'ack-1' },
+			{
+				type: 'link',
+				id: 'link-example',
+				payload: {
+					url: 'https://example.com/msghub',
+					label: 'Open example.com',
+				},
+			},
 			{ type: 'snooze', id: 'snooze-15m', payload: { forMs: 15 * 60 * 1000 } },
 			{ type: 'close', id: 'close-1' },
 		],

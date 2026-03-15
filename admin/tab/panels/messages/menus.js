@@ -10,7 +10,7 @@
 	 * Contains:
 	 * - Header sort menu.
 	 * - Header filter menu (with select-all/none/apply flow).
-	 * - Row context menu actions (open JSON, archive entry, copy submenu).
+	 * - Row context menu actions (open JSON, archive entry, actions submenu, copy submenu).
 	 *
 	 * Integration:
 	 * - Relies on shared state and data facade.
@@ -19,6 +19,54 @@
 	 * Public API:
 	 * - `createMessagesMenus(options)` with header and row menu openers.
 	 */
+
+	/**
+	 * Core-executable action types that are offered in the context menu.
+	 * Non-core types open/custom remain intentional no-ops in core and are not shown
+	 * as executable items. `link` is handled separately as navigation.
+	 */
+	const CORE_ACTION_TYPES = new Set(['ack', 'close', 'delete', 'snooze']);
+
+	/**
+	 * Maps action type to its common admin i18n label key.
+	 * Used to translate action menu item labels in the row context menu.
+	 */
+	const ACTION_LABEL_KEYS = Object.freeze({
+		ack: 'msghub.i18n.core.admin.common.action.ack.label',
+		close: 'msghub.i18n.core.admin.common.action.close.label',
+		delete: 'msghub.i18n.core.admin.common.action.delete.label',
+		link: 'msghub.i18n.core.admin.common.action.link.label',
+		snooze: 'msghub.i18n.core.admin.common.action.snooze.label',
+	});
+
+	/**
+	 * Extracts URL from a link action payload, trying url → href → link keys in order.
+	 *
+	 * @param {any} payload - Action payload.
+	 * @returns {string} Extracted URL or empty string.
+	 */
+	function extractLinkUrl(payload) {
+		if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+			return '';
+		}
+		for (const key of ['url', 'href', 'link']) {
+			const v = payload[key];
+			if (typeof v === 'string' && v.trim()) {
+				return v.trim();
+			}
+		}
+		return '';
+	}
+
+	/**
+	 * Returns true only for http:// or https:// URLs.
+	 *
+	 * @param {string} url - URL to check.
+	 * @returns {boolean} True when url starts with http:// or https://.
+	 */
+	function isHttpUrl(url) {
+		return typeof url === 'string' && (url.startsWith('http://') || url.startsWith('https://'));
+	}
 
 	/**
 	 * Creates menu facade for one messages panel instance.
@@ -35,6 +83,8 @@
 	 * @param {Function} options.safeStr - Safe string helper.
 	 * @param {Function} options.pick - Path getter.
 	 * @param {Function} [options.isArchiveActionEnabled] - Archive action feature gate.
+	 * @param {Function} [options.onActionExecute] - Callback invoked when a core action is selected: `(ref, actionId, actionType) => void`.
+	 * @param {Function} [options.onLinkOpen] - Callback invoked when a link action is selected: `(url) => void`.
 	 * @returns {{openHeaderSortMenu:Function, openHeaderFilterMenu:Function, openRowContextMenu:Function}} Menu facade.
 	 */
 	function createMessagesMenus(options) {
@@ -51,6 +101,8 @@
 		const pick = opts.pick;
 		const isArchiveActionEnabled =
 			typeof opts.isArchiveActionEnabled === 'function' ? opts.isArchiveActionEnabled : () => false;
+		const onActionExecute = typeof opts.onActionExecute === 'function' ? opts.onActionExecute : null;
+		const onLinkOpen = typeof opts.onLinkOpen === 'function' ? opts.onLinkOpen : null;
 
 		/**
 		 * Opens sort menu for one sortable header field.
@@ -344,6 +396,38 @@
 
 			const archiveEnabled = isArchiveActionEnabled(msg) === true;
 
+			const coreActions = Array.isArray(msg?.actions)
+				? msg.actions.filter(
+						a => a && typeof a.id === 'string' && a.id.trim() !== '' && CORE_ACTION_TYPES.has(a.type),
+					)
+				: [];
+			const linkActions = Array.isArray(msg?.actions)
+				? msg.actions.filter(a => {
+						if (!a || a.type !== 'link') {
+							return false;
+						}
+						return isHttpUrl(extractLinkUrl(a.payload));
+					})
+				: [];
+
+			const actionsSubmenuItems = [
+				...coreActions.map(a => ({
+					id: `action-${a.id}`,
+					label: t(ACTION_LABEL_KEYS[a.type] || a.type),
+					onSelect: onActionExecute ? () => onActionExecute(msg.ref, a.id, a.type) : undefined,
+				})),
+				...linkActions.map(a => ({
+					id: `link-${a.id}`,
+					// Use payload.label when present; fall back to i18n key.
+					label:
+						a.payload && typeof a.payload.label === 'string' && a.payload.label.trim()
+							? a.payload.label.trim()
+							: t(ACTION_LABEL_KEYS.link),
+					icon: 'url',
+					onSelect: onLinkOpen ? () => onLinkOpen(extractLinkUrl(a.payload)) : undefined,
+				})),
+			];
+
 			ui?.contextMenu?.open?.({
 				anchorPoint: { x: event.clientX, y: event.clientY },
 				ariaLabel: 'Message actions',
@@ -363,6 +447,13 @@
 						onSelect: archiveEnabled ? () => openArchiveOverlay(ref) : undefined,
 					},
 					{ type: 'separator' },
+					{
+						id: 'actions',
+						label: t('msghub.i18n.core.admin.ui.messages.contextMenu.actions.label'),
+						icon: 'action',
+						disabled: actionsSubmenuItems.length === 0,
+						items: actionsSubmenuItems,
+					},
 					{
 						id: 'copy',
 						label: t('msghub.i18n.core.admin.ui.messages.contextMenu.copy.submenu.label'),

@@ -174,4 +174,233 @@ describe('admin/tab/panels/messages/menus.js', function () {
 		assert.ok(toasts[2].text.includes('copyTitle.toast'), 'copyTitle toast key');
 		assert.ok(toasts[3].text.includes('copyText.toast'), 'copyText toast key');
 	});
+
+	it('actions submenu is present in row context menu', async function () {
+		const sandbox = await loadPanelModule('admin/tab/panels/messages/menus.js');
+		const moduleApi = sandbox.window.MsghubAdminTabMessagesMenus;
+		const { options, spies } = setupMenus();
+		const menus = moduleApi.createMessagesMenus(options);
+
+		menus.openRowContextMenu({ clientX: 1, clientY: 2 }, { ref: 'r1' });
+
+		const items = spies.openCalls[0].items;
+		const actionsItem = items.find(item => item.id === 'actions');
+		assert.ok(actionsItem, 'actions submenu item must be present');
+		assert.ok(actionsItem.label.includes('actions.label'), 'label must use i18n key');
+	});
+
+	it('actions submenu is disabled when msg.actions has no core-type items', async function () {
+		const sandbox = await loadPanelModule('admin/tab/panels/messages/menus.js');
+		const moduleApi = sandbox.window.MsghubAdminTabMessagesMenus;
+		const { options, spies } = setupMenus();
+		const menus = moduleApi.createMessagesMenus(options);
+
+		menus.openRowContextMenu({ clientX: 1, clientY: 2 }, { ref: 'r1', actions: [] });
+		const emptyItem = spies.openCalls[0].items.find(item => item.id === 'actions');
+		assert.equal(emptyItem.disabled, true, 'disabled when actions is empty');
+
+		spies.openCalls.length = 0;
+		menus.openRowContextMenu(
+			{ clientX: 1, clientY: 2 },
+			{ ref: 'r1', actions: [{ id: 'open-1', type: 'open' }, { id: 'link-1', type: 'link' }] },
+		);
+		const nonCoreItem = spies.openCalls[0].items.find(item => item.id === 'actions');
+		assert.equal(nonCoreItem.disabled, true, 'disabled when only non-core types present');
+	});
+
+	it('actions submenu is enabled when msg.actions has at least one core-type item', async function () {
+		const sandbox = await loadPanelModule('admin/tab/panels/messages/menus.js');
+		const moduleApi = sandbox.window.MsghubAdminTabMessagesMenus;
+		const { options, spies } = setupMenus();
+		const menus = moduleApi.createMessagesMenus(options);
+
+		menus.openRowContextMenu(
+			{ clientX: 1, clientY: 2 },
+			{ ref: 'r1', actions: [{ id: 'ack-1', type: 'ack' }, { id: 'open-1', type: 'open' }] },
+		);
+
+		const actionsItem = spies.openCalls[0].items.find(item => item.id === 'actions');
+		assert.equal(actionsItem.disabled, false, 'enabled when at least one core-type action');
+		assert.equal(actionsItem.items.length, 1, 'only the core-type item appears in submenu');
+		assert.equal(actionsItem.items[0].id, 'action-ack-1');
+		assert.ok(actionsItem.items[0].label.includes('action.ack.label'), 'core action label must use common action label key');
+	});
+
+	it('selecting actions submenu item calls onActionExecute with correct args', async function () {
+		const sandbox = await loadPanelModule('admin/tab/panels/messages/menus.js');
+		const moduleApi = sandbox.window.MsghubAdminTabMessagesMenus;
+		const { options, spies } = setupMenus();
+		const executeCalls = [];
+		options.onActionExecute = (ref, actionId, actionType) => executeCalls.push({ ref, actionId, actionType });
+		const menus = moduleApi.createMessagesMenus(options);
+
+		menus.openRowContextMenu(
+			{ clientX: 1, clientY: 2 },
+			{ ref: 'r1', actions: [{ id: 'close-1', type: 'close' }] },
+		);
+
+		const actionsItem = spies.openCalls[0].items.find(item => item.id === 'actions');
+		actionsItem.items[0].onSelect();
+
+		assert.equal(executeCalls.length, 1);
+		assert.equal(executeCalls[0].ref, 'r1');
+		assert.equal(executeCalls[0].actionId, 'close-1');
+		assert.equal(executeCalls[0].actionType, 'close');
+	});
+
+	it('actions submenu item onSelect is undefined when onActionExecute not provided', async function () {
+		const sandbox = await loadPanelModule('admin/tab/panels/messages/menus.js');
+		const moduleApi = sandbox.window.MsghubAdminTabMessagesMenus;
+		const { options, spies } = setupMenus();
+		// onActionExecute intentionally omitted
+		const menus = moduleApi.createMessagesMenus(options);
+
+		menus.openRowContextMenu(
+			{ clientX: 1, clientY: 2 },
+			{ ref: 'r1', actions: [{ id: 'snooze-1', type: 'snooze' }] },
+		);
+
+		const actionsItem = spies.openCalls[0].items.find(item => item.id === 'actions');
+		assert.equal(actionsItem.items[0].onSelect, undefined, 'no-op when callback not provided');
+	});
+
+	it('link item appears in actions submenu for link action with valid https URL', async function () {
+		const sandbox = await loadPanelModule('admin/tab/panels/messages/menus.js');
+		const moduleApi = sandbox.window.MsghubAdminTabMessagesMenus;
+		const { options, spies } = setupMenus();
+		const linkOpenCalls = [];
+		options.onLinkOpen = url => linkOpenCalls.push(url);
+		const menus = moduleApi.createMessagesMenus(options);
+
+		menus.openRowContextMenu(
+			{ clientX: 1, clientY: 2 },
+			{ ref: 'r1', actions: [{ id: 'link-1', type: 'link', payload: { url: 'https://example.com' } }] },
+		);
+
+		const actionsItem = spies.openCalls[0].items.find(item => item.id === 'actions');
+		assert.equal(actionsItem.disabled, false, 'actions submenu enabled for link action');
+		assert.equal(actionsItem.items.length, 1);
+		assert.equal(actionsItem.items[0].id, 'link-link-1');
+
+		actionsItem.items[0].onSelect();
+		assert.equal(linkOpenCalls.length, 1);
+		assert.equal(linkOpenCalls[0], 'https://example.com');
+	});
+
+	it('actions submenu is disabled when link action has no valid URL', async function () {
+		const sandbox = await loadPanelModule('admin/tab/panels/messages/menus.js');
+		const moduleApi = sandbox.window.MsghubAdminTabMessagesMenus;
+		const { options, spies } = setupMenus();
+		options.onLinkOpen = () => undefined;
+		const menus = moduleApi.createMessagesMenus(options);
+
+		menus.openRowContextMenu(
+			{ clientX: 1, clientY: 2 },
+			{
+				ref: 'r1',
+				actions: [
+					{ id: 'link-1', type: 'link', payload: { url: 'ftp://files.example.com' } },
+					{ id: 'link-2', type: 'link' },
+				],
+			},
+		);
+
+		const actionsItem = spies.openCalls[0].items.find(item => item.id === 'actions');
+		assert.equal(actionsItem.disabled, true, 'disabled when link URL is not http/https or missing');
+		assert.equal(actionsItem.items.length, 0);
+	});
+
+	it('actions submenu enabled with both core and link actions; link item uses common action link label', async function () {
+		const sandbox = await loadPanelModule('admin/tab/panels/messages/menus.js');
+		const moduleApi = sandbox.window.MsghubAdminTabMessagesMenus;
+		const { options, spies } = setupMenus();
+		const executeCalls = [];
+		const linkOpenCalls = [];
+		options.onActionExecute = (ref, actionId, actionType) => executeCalls.push({ ref, actionId, actionType });
+		options.onLinkOpen = url => linkOpenCalls.push(url);
+		const menus = moduleApi.createMessagesMenus(options);
+
+		menus.openRowContextMenu(
+			{ clientX: 1, clientY: 2 },
+			{
+				ref: 'r1',
+				actions: [
+					{ id: 'ack-1', type: 'ack' },
+					{ id: 'link-1', type: 'link', payload: { href: 'http://example.com/page' } },
+				],
+			},
+		);
+
+		const actionsItem = spies.openCalls[0].items.find(item => item.id === 'actions');
+		assert.equal(actionsItem.disabled, false);
+		assert.equal(actionsItem.items.length, 2);
+		assert.equal(actionsItem.items[0].id, 'action-ack-1');
+		assert.equal(actionsItem.items[1].id, 'link-link-1');
+		assert.ok(
+			actionsItem.items[1].label.includes('action.link.label'),
+			'link item must use common action link label key',
+		);
+
+		actionsItem.items[0].onSelect();
+		assert.equal(executeCalls.length, 1);
+		assert.equal(executeCalls[0].actionType, 'ack');
+
+		actionsItem.items[1].onSelect();
+		assert.equal(linkOpenCalls.length, 1);
+		assert.equal(linkOpenCalls[0], 'http://example.com/page');
+	});
+
+	it('link submenu item uses payload.label when present, falling back to i18n key when absent', async function () {
+		const sandbox = await loadPanelModule('admin/tab/panels/messages/menus.js');
+		const moduleApi = sandbox.window.MsghubAdminTabMessagesMenus;
+		const { options, spies } = setupMenus();
+		options.onLinkOpen = () => undefined;
+		const menus = moduleApi.createMessagesMenus(options);
+
+		// payload.label present — must use it as menu item label.
+		menus.openRowContextMenu(
+			{ clientX: 1, clientY: 2 },
+			{
+				ref: 'r1',
+				actions: [
+					{ id: 'link-1', type: 'link', payload: { url: 'https://example.com', label: 'runbook #42' } },
+				],
+			},
+		);
+		let actionsItem = spies.openCalls[0].items.find(item => item.id === 'actions');
+		assert.equal(actionsItem.items[0].label, 'runbook #42', 'payload.label must be used as menu item label');
+
+		// payload.label absent — must fall back to i18n key.
+		spies.openCalls.length = 0;
+		menus.openRowContextMenu(
+			{ clientX: 1, clientY: 2 },
+			{
+				ref: 'r1',
+				actions: [{ id: 'link-2', type: 'link', payload: { url: 'https://example.com' } }],
+			},
+		);
+		actionsItem = spies.openCalls[0].items.find(item => item.id === 'actions');
+		assert.ok(
+			actionsItem.items[0].label.includes('action.link.label'),
+			'i18n fallback used when payload.label is absent',
+		);
+	});
+
+	it('link action onSelect is undefined when onLinkOpen not provided', async function () {
+		const sandbox = await loadPanelModule('admin/tab/panels/messages/menus.js');
+		const moduleApi = sandbox.window.MsghubAdminTabMessagesMenus;
+		const { options, spies } = setupMenus();
+		// onLinkOpen intentionally omitted
+		const menus = moduleApi.createMessagesMenus(options);
+
+		menus.openRowContextMenu(
+			{ clientX: 1, clientY: 2 },
+			{ ref: 'r1', actions: [{ id: 'link-1', type: 'link', payload: { url: 'https://example.com' } }] },
+		);
+
+		const actionsItem = spies.openCalls[0].items.find(item => item.id === 'actions');
+		assert.equal(actionsItem.disabled, false, 'submenu still enabled even without onLinkOpen handler');
+		assert.equal(actionsItem.items.length, 1);
+		assert.equal(actionsItem.items[0].onSelect, undefined, 'onSelect is undefined when onLinkOpen not provided');
+	});
 });

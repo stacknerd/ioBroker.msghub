@@ -1,7 +1,7 @@
 /// <reference lib="dom" />
 /// <reference lib="dom.iterable" />
 
-/* global window, HTMLElement */
+/* global window */
 (function () {
 	'use strict';
 

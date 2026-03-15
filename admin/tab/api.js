@@ -491,6 +491,7 @@ function createAdminApi({ msghubRequest, msghubSocket, adapterInstance, lang, t,
 	const messages = Object.freeze({
 		query: params => msghubRequest('admin.messages.query', params || {}),
 		delete: refs => msghubRequest('admin.messages.delete', { refs }),
+		executeAction: params => msghubRequest('admin.messages.action', params || {}),
 	});
 
 	const plugins = Object.freeze({

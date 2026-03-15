@@ -75,6 +75,18 @@ function createElement(tagName = 'div') {
 			this.children.push(child);
 			return child;
 		},
+		insertBefore(newNode, refNode) {
+			const idx = this.children.indexOf(refNode);
+			if (idx === -1) {
+				this.children.push(newNode);
+			} else {
+				this.children.splice(idx, 0, newNode);
+			}
+			if (newNode) {
+				newNode.parentNode = this;
+			}
+			return newNode;
+		},
 		replaceChildren(...children) {
 			this.children = JSON.parse('[]');
 			for (const child of children) {
@@ -107,10 +119,18 @@ function createElement(tagName = 'div') {
 		dispatchEvent(event) {
 			const nextEvent = event && typeof event === 'object' ? event : {};
 			if (!Object.prototype.hasOwnProperty.call(nextEvent, 'target')) {
-				nextEvent.target = this;
+				try {
+					nextEvent.target = this;
+				} catch {
+					// Read-only on real Event objects — skip.
+				}
 			}
 			if (!Object.prototype.hasOwnProperty.call(nextEvent, 'currentTarget')) {
-				nextEvent.currentTarget = this;
+				try {
+					nextEvent.currentTarget = this;
+				} catch {
+					// Read-only on real Event objects — skip.
+				}
 			}
 			const list = listeners.get(String(nextEvent?.type || '')) || [];
 			for (const handler of list) {
@@ -218,6 +238,8 @@ async function loadPanelModule(relPath, extras = {}) {
 		window: windowObject,
 		document: documentObject,
 		console,
+		// Expose browser globals that panel modules may use directly.
+		Event: typeof Event !== 'undefined' ? Event : undefined,
 		...extras,
 	};
 	vm.runInNewContext(source, sandbox, { filename: relPath });

@@ -136,6 +136,45 @@
 			}
 		};
 
+		/**
+		 * Opens a link action URL in a new browser tab.
+		 *
+		 * @param {string} url - Validated http[s] URL from action payload.
+		 */
+		const onLinkOpen = url => {
+			win.open(url, '_blank', 'noopener,noreferrer');
+		};
+
+		/**
+		 * Executes a core action after user confirmation, then refreshes the list.
+		 *
+		 * @param {string} ref - Message ref.
+		 * @param {string} actionId - Action id.
+		 * @param {string} actionType - Action type shown in confirm dialog.
+		 */
+		const onActionExecute = async (ref, actionId, actionType) => {
+			const text = t('msghub.i18n.core.admin.ui.messages.action.confirm.text', actionType);
+			const ok = ui?.dialog?.confirm
+				? await ui.dialog.confirm({
+						title: t('msghub.i18n.core.admin.ui.messages.action.confirm.title'),
+						text,
+						danger: actionType === 'delete',
+						confirmText: t('msghub.i18n.core.admin.ui.action.execute'),
+						cancelText: t('msghub.i18n.core.admin.ui.action.cancel'),
+					})
+				: win.confirm(text);
+			if (!ok) {
+				return;
+			}
+			try {
+				await api.messages.executeAction({ ref, actionId });
+				ui?.overlayLarge?.close?.();
+				await loadMessages({ silent: false });
+			} catch (e) {
+				toast(String(e?.message || e), 'danger');
+			}
+		};
+
 		const dataApi = dataModule.createMessagesDataApi({
 			api,
 			state,
@@ -155,6 +194,8 @@
 			formatDate: date => api?.time?.formatDate?.(date) || '',
 			getLevelLabel: dataApi.getLevelLabel,
 			openCopyContextMenu: (event, msg) => menusApi?.openJsonOverlayContextMenu?.(event, msg),
+			onActionExecute,
+			onLinkOpen,
 		});
 
 		const archiveOverlayApi = archiveOverlayModule.createArchiveOverlay({ ui, t });
@@ -277,6 +318,8 @@
 			pick,
 			// Archive action remains visible but disabled in this refactor step.
 			isArchiveActionEnabled: () => false,
+			onActionExecute,
+			onLinkOpen,
 		});
 
 		const metaApi = metaRenderModule.createMetaRenderer({
