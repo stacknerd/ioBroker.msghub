@@ -423,7 +423,7 @@
 						a.payload && typeof a.payload.label === 'string' && a.payload.label.trim()
 							? a.payload.label.trim()
 							: t(ACTION_LABEL_KEYS.link),
-					icon: 'url',
+					icon: 'link',
 					onSelect: onLinkOpen ? () => onLinkOpen(extractLinkUrl(a.payload)) : undefined,
 				})),
 			];

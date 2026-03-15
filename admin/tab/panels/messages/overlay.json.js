@@ -455,7 +455,7 @@
 					}
 					const lineEl = createButtonLine(level);
 					const btn = document.createElement('button');
-					btn.className = 'msghub-uibutton-iconandtext msghub-json-action-btn';
+					btn.className = 'msghub-uibutton-iconandtext msghub-json-link-btn';
 					// Use payload.label when present; fall back to i18n key.
 					const labelText =
 						payload && typeof payload.label === 'string' && payload.label.trim()

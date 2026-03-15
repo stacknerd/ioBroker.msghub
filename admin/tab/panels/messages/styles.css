@@ -79,12 +79,18 @@
 	color: var(--msghub-syntax-comment);
 }
 
-.msghub-root .msghub-messages-json .msghub-json-action-btn {
-	--msghub-uibutton-icon: var(--msghub-icon-action);
+.msghub-root .msghub-messages-json .msghub-json-action-btn,
+.msghub-root .msghub-messages-json .msghub-json-link-btn {
 	color: var(--msghub-syntax-comment);
 	font: var(--msghub-font-mono);
 	height: auto;
 	line-height: inherit;
+}
+.msghub-root .msghub-messages-json .msghub-json-action-btn {
+	--msghub-uibutton-icon: var(--msghub-icon-action);
+}
+.msghub-root .msghub-messages-json .msghub-json-link-btn {
+	--msghub-uibutton-icon: var(--msghub-icon-link);
 }
 
 /* Messages table (SharePoint-like list) */
