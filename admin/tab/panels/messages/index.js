@@ -170,8 +170,25 @@
 				await api.messages.executeAction({ ref, actionId });
 				ui?.overlayLarge?.close?.();
 				await loadMessages({ silent: false });
+				if (!state.lastError) {
+					toast(
+						t('msghub.i18n.core.admin.ui.messages.action.executed.text', safeStr(actionType), safeStr(ref)),
+						'ok',
+					);
+				}
 			} catch (e) {
-				toast(String(e?.message || e), 'danger');
+				const reason = safeStr(e?.message || e).trim();
+				toast(
+					reason
+						? t(
+								'msghub.i18n.core.admin.ui.messages.action.failedWithReason.text',
+								safeStr(actionType),
+								safeStr(ref),
+								reason,
+							)
+						: t('msghub.i18n.core.admin.ui.messages.action.failed.text', safeStr(actionType), safeStr(ref)),
+					'danger',
+				);
 			}
 		};
 

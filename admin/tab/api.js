@@ -1,4 +1,4 @@
-/* global window, document, win, hasAdminKey */
+/* global document, win, hasAdminKey */
 'use strict';
 
 /**
@@ -348,66 +348,7 @@ function createAdminApi({ msghubRequest, msghubSocket, adapterInstance, lang, t,
 					} catch {
 						// ignore
 					}
-
-					let waitShown = false;
-					let waitTimer = null;
-
-					try {
-						waitTimer = window.setTimeout(() => {
-							waitShown = true;
-							try {
-								ui?.toast?.({ text: t('msghub.i18n.core.admin.ui.contextMenu.wait.text') });
-							} catch {
-								// ignore
-							}
-						}, 100);
-					} catch {
-						// ignore
-					}
-
-					/**
-					 * Räumt den "Warten..."-Timer auf, sobald eine Aktion endet.
-					 */
-					const clearWaitTimer = () => {
-						if (waitTimer == null) {
-							return;
-						}
-						try {
-							window.clearTimeout(waitTimer);
-						} catch {
-							// ignore
-						}
-						waitTimer = null;
-					};
-
-					return Promise.resolve()
-						.then(() => onSelectRaw())
-						.then(result => {
-							clearWaitTimer();
-							if (waitShown) {
-								try {
-									ui?.toast?.({ text: t('msghub.i18n.core.admin.ui.contextMenu.done.text') });
-								} catch {
-									// ignore
-								}
-							}
-							return result;
-						})
-						.catch(err => {
-							clearWaitTimer();
-							const msg =
-								typeof err?.message === 'string' && err.message.trim()
-									? err.message.trim()
-									: typeof err === 'string' && err.trim()
-										? err.trim()
-										: 'Error';
-							try {
-								ui?.toast?.({ text: t('msghub.i18n.core.admin.ui.contextMenu.failed.text', msg) });
-							} catch {
-								// ignore
-							}
-							throw err;
-						});
+					return Promise.resolve().then(() => onSelectRaw());
 				});
 
 			return Object.freeze({

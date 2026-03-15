@@ -146,7 +146,10 @@ describe('admin/tab/panels/messages/index.js', function () {
 
 		sandbox.window.MsghubAdminTabMessages.init({
 				api: {
-					i18n: { t: (key, arg) => (arg != null ? `${key}:${arg}` : key) },
+					i18n: {
+						t: (key, ...args) =>
+							args.reduce((out, arg) => out.replace('%s', String(arg)), String(key)),
+					},
 					ui: {
 						toast: toastOpts => toasts.push(toastOpts),
 						dialog: {
@@ -367,45 +370,57 @@ describe('admin/tab/panels/messages/index.js', function () {
 		assert.ok(calls.updateTbody >= 1);
 	});
 
-	it('onActionExecute: confirm accepted fires executeAction, closes overlay, and refreshes list', async function () {
-		const ctx = await setupPanelWithActionCapture();
-		const onActionExecute = ctx.capturedOnActionExecute();
-		assert.equal(typeof onActionExecute, 'function', 'onActionExecute must be wired through createMessagesMenus');
+		it('onActionExecute: confirm accepted fires executeAction, closes overlay, refreshes list, and shows success toast', async function () {
+			const ctx = await setupPanelWithActionCapture();
+			const onActionExecute = ctx.capturedOnActionExecute();
+			assert.equal(typeof onActionExecute, 'function', 'onActionExecute must be wired through createMessagesMenus');
 
 		const queryBefore = ctx.queryMessagesPageCalls;
 		await onActionExecute('r1', 'ack-1', 'ack');
 
 		assert.equal(ctx.executeActionCalls.length, 1);
-		assert.equal(ctx.executeActionCalls[0].ref, 'r1');
-		assert.equal(ctx.executeActionCalls[0].actionId, 'ack-1');
-		assert.equal(ctx.overlayCloseCalls.length, 1, 'overlay must be closed after execute');
-		assert.ok(ctx.queryMessagesPageCalls > queryBefore, 'list must be refreshed after execute');
-		assert.equal(ctx.toasts.length, 0, 'no error toast on success');
-	});
+			assert.equal(ctx.executeActionCalls[0].ref, 'r1');
+			assert.equal(ctx.executeActionCalls[0].actionId, 'ack-1');
+			assert.equal(ctx.overlayCloseCalls.length, 1, 'overlay must be closed after execute');
+			assert.ok(ctx.queryMessagesPageCalls > queryBefore, 'list must be refreshed after execute');
+			assert.equal(ctx.toasts.length, 1, 'success toast must be shown after execute');
+			assert.equal(ctx.toasts[0].variant, 'ok');
+			assert.equal(
+				ctx.toasts[0].text,
+				"msghub.i18n.core.admin.ui.messages.action.executed.text".replace('%s', 'ack').replace('%s', 'r1'),
+			);
+		});
 
-	it('onActionExecute: confirm cancelled → executeAction not called', async function () {
-		const ctx = await setupPanelWithActionCapture();
-		ctx.setDialogConfirmResult(false);
-		const onActionExecute = ctx.capturedOnActionExecute();
-
-		await onActionExecute('r1', 'ack-1', 'ack');
-
-		assert.equal(ctx.executeActionCalls.length, 0, 'executeAction must not be called when confirm is cancelled');
-		assert.equal(ctx.overlayCloseCalls.length, 0, 'overlay must not be closed when confirm is cancelled');
-	});
-
-	it('onActionExecute: execute throws → error toast shown, overlay not closed', async function () {
-		const ctx = await setupPanelWithActionCapture({ failExecuteAction: true });
-		const onActionExecute = ctx.capturedOnActionExecute();
+		it('onActionExecute: confirm cancelled → executeAction not called and no toast shown', async function () {
+			const ctx = await setupPanelWithActionCapture();
+			ctx.setDialogConfirmResult(false);
+			const onActionExecute = ctx.capturedOnActionExecute();
 
 		await onActionExecute('r1', 'ack-1', 'ack');
 
-		assert.equal(ctx.executeActionCalls.length, 1, 'executeAction must have been attempted');
-		assert.equal(ctx.overlayCloseCalls.length, 0, 'overlay must not be closed on execute error');
-		assert.equal(ctx.toasts.length, 1, 'error toast must be shown');
-		assert.equal(ctx.toasts[0].variant, 'danger');
-		assert.ok(String(ctx.toasts[0].text).includes('execute_failed'));
-	});
+			assert.equal(ctx.executeActionCalls.length, 0, 'executeAction must not be called when confirm is cancelled');
+			assert.equal(ctx.overlayCloseCalls.length, 0, 'overlay must not be closed when confirm is cancelled');
+			assert.equal(ctx.toasts.length, 0, 'cancel must not show any toast');
+		});
+
+		it('onActionExecute: execute throws → error toast shown with reason, overlay not closed', async function () {
+			const ctx = await setupPanelWithActionCapture({ failExecuteAction: true });
+			const onActionExecute = ctx.capturedOnActionExecute();
+
+		await onActionExecute('r1', 'ack-1', 'ack');
+
+			assert.equal(ctx.executeActionCalls.length, 1, 'executeAction must have been attempted');
+			assert.equal(ctx.overlayCloseCalls.length, 0, 'overlay must not be closed on execute error');
+			assert.equal(ctx.toasts.length, 1, 'error toast must be shown');
+			assert.equal(ctx.toasts[0].variant, 'danger');
+			assert.equal(
+				ctx.toasts[0].text,
+				'msghub.i18n.core.admin.ui.messages.action.failedWithReason.text'
+					.replace('%s', 'ack')
+					.replace('%s', 'r1')
+					.replace('%s', 'execute_failed'),
+			);
+		});
 
 	it('onActionExecute: delete marks confirm dialog as danger', async function () {
 		const ctx = await setupPanelWithActionCapture();

@@ -119,14 +119,15 @@ describe('admin/tab/api.js', function () {
 	});
 
 		it('builds stable admin API contracts and routes backend calls', async function () {
-		const sentCommands = [];
-		let closeCalls = 0;
-		let openPayload = null;
-		const uiStub = {
-			toast: () => {},
-			contextMenu: {
-				open(payload) {
-					openPayload = payload;
+			const sentCommands = [];
+			let closeCalls = 0;
+			let openPayload = null;
+			const toastCalls = [];
+			const uiStub = {
+				toast: payload => toastCalls.push(payload),
+				contextMenu: {
+					open(payload) {
+						openPayload = payload;
 					return undefined;
 				},
 				close() {
@@ -214,14 +215,56 @@ describe('admin/tab/api.js', function () {
 				},
 			],
 		});
-		assert.ok(openPayload && Array.isArray(openPayload.items));
-		await openPayload.items[0].onSelect();
-		assert.equal(closeCalls > 0, true, 'context menu should close before action execution');
+			assert.ok(openPayload && Array.isArray(openPayload.items));
+			await openPayload.items[0].onSelect();
+			assert.equal(closeCalls > 0, true, 'context menu should close before action execution');
+			assert.equal(toastCalls.length, 0, 'context menu wrapper must not emit generic toasts');
 
-			assert.throws(() => api.notSupported('x'), err => err && err.code === 'NOT_SUPPORTED');
+				assert.throws(() => api.notSupported('x'), err => err && err.code === 'NOT_SUPPORTED');
+			});
+
+		it('context menu wrapper does not emit generic error toasts when handlers reject', async function () {
+			let openPayload = null;
+			const toastCalls = [];
+			const sandbox = await loadApiSandbox();
+			const createAdminApi = sandbox.window.__apiFns.createAdminApi;
+			const api = createAdminApi({
+				msghubRequest: async () => ({}),
+				msghubSocket: { connected: true },
+				adapterInstance: 'msghub.0',
+				lang: 'en',
+				t: key => String(key),
+				pickText: value => String(value || ''),
+				ui: {
+					toast: payload => toastCalls.push(payload),
+					contextMenu: {
+						open(payload) {
+							openPayload = payload;
+						},
+						close() {},
+						isOpen() {
+							return false;
+						},
+					},
+				},
+			});
+
+			api.ui.contextMenu.open({
+				items: [
+					{
+						label: 'Explode',
+						onSelect: async () => {
+							throw new Error('boom');
+						},
+					},
+				],
+			});
+
+			await assert.rejects(() => openPayload.items[0].onSelect(), /boom/);
+			assert.equal(toastCalls.length, 0, 'rejected handlers must not trigger generic error toasts');
 		});
 
-		it('normalizes timezone policy and formats timestamps with UTC fallback', async function () {
+			it('normalizes timezone policy and formats timestamps with UTC fallback', async function () {
 			const sandbox = await loadApiSandbox();
 			const createAdminApi = sandbox.window.__apiFns.createAdminApi;
 			const api = createAdminApi({
