@@ -90,15 +90,8 @@
 				if (!preset.policy || typeof preset.policy !== 'object') {
 					preset.policy = { resetOnNormal: true };
 				}
-				if (!preset.ui || typeof preset.ui !== 'object') {
-					preset.ui = {
-						timingUnits: {
-							timeBudgetUnit: 60000,
-							dueInUnit: 3600000,
-							cooldownUnit: 1000,
-							remindEveryUnit: 3600000,
-						},
-					};
+				if (Object.prototype.hasOwnProperty.call(preset, 'ui')) {
+					delete preset.ui;
 				}
 				return preset;
 			};
@@ -363,7 +356,15 @@
 						}
 					})
 					.then(() => {
-						return ingestStatesDataApi.upsertPreset({ preset: cloneJson(draft) });
+						const preset = cloneJson(draft);
+						if (
+							preset &&
+							typeof preset === 'object' &&
+							Object.prototype.hasOwnProperty.call(preset, 'ui')
+						) {
+							delete preset.ui;
+						}
+						return ingestStatesDataApi.upsertPreset({ preset });
 					})
 					.then(() => loadList({ selectPresetId: draft.presetId }))
 					.then(() => {
@@ -562,6 +563,18 @@
 					fOwnedBy.input.disabled = true;
 				}
 				fields.push(fOwnedBy);
+
+				const fSubset = formApi.buildFieldInput({
+					type: 'string',
+					key: 'subset',
+					label: 'Subset',
+					value: typeof draft?.subset === 'string' ? draft.subset : '',
+					help: '',
+				});
+				if (fSubset?.input) {
+					fSubset.input.disabled = true;
+				}
+				fields.push(fSubset);
 
 				const kindOptions = resolveOptions('MsgConstants.kind');
 				const levelOptions = resolveOptions('MsgConstants.level');
