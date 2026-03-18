@@ -192,6 +192,8 @@
 			formApi,
 			pickText,
 			ingestStatesDataApi,
+			t,
+			getMsgConstants: () => pluginsState.cachedConstants,
 		});
 		// instanceApi.onRefreshAll is also a lazy reference — refreshAll() is defined later.
 		const instanceApi = createPluginsInstanceApi({

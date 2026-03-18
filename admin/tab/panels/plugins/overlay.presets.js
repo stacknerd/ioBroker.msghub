@@ -15,6 +15,8 @@
 		const formApi = opts.formApi || null;
 		const pickText = typeof opts.pickText === 'function' ? opts.pickText : v => String(v ?? '');
 		const ingestStatesDataApi = opts.ingestStatesDataApi || null;
+		const t = typeof opts.t === 'function' ? opts.t : k => k;
+		const getMsgConstants = typeof opts.getMsgConstants === 'function' ? opts.getMsgConstants : () => null;
 
 		function renderIngestStatesMessagePresetsTool(options) {
 			const root = options && typeof options === 'object' ? options : null;
@@ -25,6 +27,14 @@
 			const presetTemplate =
 				ingestConstants && typeof ingestConstants.presetTemplateV1 === 'object'
 					? ingestConstants.presetTemplateV1
+					: null;
+			const presetBindingCatalog =
+				ingestConstants && typeof ingestConstants.presetBindingCatalog === 'object'
+					? ingestConstants.presetBindingCatalog
+					: null;
+			const ruleTemplateCatalog =
+				ingestConstants && typeof ingestConstants.ruleTemplateCatalog === 'object'
+					? ingestConstants.ruleTemplateCatalog
 					: null;
 
 			if (!presetSchema || !presetTemplate) {
@@ -52,19 +62,24 @@
 			const cloneJson = value => JSON.parse(JSON.stringify(value ?? null));
 
 			const buildPresetBase = () => cloneJson(presetTemplate);
+			const BINDING_NONE_VALUE = '__msghub_none__';
 
 			const defaultPreset = ({
 				presetId = '',
 				description = '',
+				source = 'user',
 				ownedBy = '',
 				kind = 'status',
 				level = 20,
+				subset = null,
 			} = {}) => {
 				const preset = buildPresetBase();
 				preset.schema = presetSchema;
 				preset.presetId = String(presetId || '').trim();
 				preset.description = typeof description === 'string' ? description : '';
+				preset.source = source === 'builtin' ? 'builtin' : 'user';
 				preset.ownedBy = typeof ownedBy === 'string' && ownedBy.trim() ? ownedBy.trim() : null;
+				preset.subset = String(subset ?? '').trim() || null;
 				if (!preset.message || typeof preset.message !== 'object') {
 					preset.message = {};
 				}
@@ -108,64 +123,91 @@
 			let lastError = '';
 
 			const el = h('div', { class: 'msghub-tools-presets' });
-			const elList = h('div', {
-				class: 'msghub-tools-presets-list',
-				style: 'flex: 0 0 38%; min-width: 260px;',
-			});
-			const elEditor = h('div', { class: 'msghub-tools-presets-editor', style: 'flex: 1 1 auto;' });
+			const elList = h('div', { class: 'msghub-tools-presets-list' });
+			const elEditor = h('div', { class: 'msghub-tools-presets-editor' });
 
 			const isDirty = () => JSON.stringify(original) !== JSON.stringify(draft);
 
-			const presetLabel = p => {
-				const id = String(p?.presetId || '').trim();
-				const desc = typeof p?.description === 'string' ? p.description.trim() : '';
-				const kind = String(p?.message?.kind || '').trim();
-				const level = p?.message?.level;
-				const lvl = typeof level === 'number' && Number.isFinite(level) ? String(level) : '';
-				const name = desc || id;
-				return `${kind || 'msg'}, ${lvl || '?'}: ${name || '(unnamed)'}`;
-			};
-
 			const sortPresets = () => {
-				presets.sort((a, b) => presetLabel(a).localeCompare(presetLabel(b)));
+				const sortText = value =>
+					typeof value === 'string' ? value.trim() : value == null ? '' : String(value).trim();
+				const compareText = (a, b) =>
+					sortText(a).localeCompare(sortText(b), undefined, { sensitivity: 'base' });
+
+				presets.sort((a, b) => {
+					const aOwnedBy = sortText(a?.ownedBy);
+					const bOwnedBy = sortText(b?.ownedBy);
+					const aIsCustom = !aOwnedBy;
+					const bIsCustom = !bOwnedBy;
+
+					if (aIsCustom !== bIsCustom) {
+						return aIsCustom ? -1 : 1;
+					}
+
+					if (aIsCustom && bIsCustom) {
+						return compareText(a?.description, b?.description);
+					}
+
+					const ownedByCmp = compareText(aOwnedBy, bOwnedBy);
+					if (ownedByCmp !== 0) {
+						return ownedByCmp;
+					}
+
+					const subsetCmp = compareText(a?.subset, b?.subset);
+					if (subsetCmp !== 0) {
+						return subsetCmp;
+					}
+
+					return compareText(a?.description, b?.description);
+				});
 			};
 
-			const loadList = async ({ selectPresetId = '' } = {}) => {
+			const loadList = async ({ selectPresetId = '', renderLoading = true, showLoadingToast = false } = {}) => {
+				const spinnerId = showLoadingToast ? showSpinner('msghub-presets-list-load') : null;
 				listLoading = true;
-				render();
-
-				const opts = await ingestStatesDataApi.listPresets();
-				const items = Array.isArray(opts) ? opts : [];
-
-				const next = [];
-				for (const o of items) {
-					const id = typeof o?.value === 'string' ? o.value.trim() : '';
-					if (!isPresetId(id)) {
-						continue;
-					}
-					const label = typeof o?.label === 'string' ? o.label.trim() : '';
-					next.push(
-						defaultPreset({
-							presetId: id,
-							description: label && label !== id ? label : '',
-							ownedBy: '',
-						}),
-					);
+				if (renderLoading) {
+					render();
 				}
 
-				presets = next;
-				sortPresets();
-				selectedId = '';
-				original = null;
-				draft = null;
-				isNew = false;
-				listLoading = false;
+				try {
+					const opts = await ingestStatesDataApi.listPresets();
+					const items = Array.isArray(opts) ? opts : [];
 
-				const desired = typeof selectPresetId === 'string' ? selectPresetId.trim() : '';
-				if (desired && presets.some(p => p?.presetId === desired)) {
-					await setSelected(desired);
-				} else {
-					render();
+					const next = [];
+					for (const o of items) {
+						const id = typeof o?.value === 'string' ? o.value.trim() : '';
+						if (!isPresetId(id)) {
+							continue;
+						}
+						next.push(
+							defaultPreset({
+								presetId: id,
+								description: typeof o.name === 'string' ? o.name.trim() : '',
+								source: typeof o.source === 'string' ? o.source.trim() : 'user',
+								ownedBy: typeof o.ownedBy === 'string' ? o.ownedBy.trim() : '',
+								kind: typeof o.kind === 'string' ? o.kind : 'status',
+								level: typeof o.level === 'number' ? o.level : 20,
+								subset: typeof o.subset === 'string' ? o.subset.trim() || null : null,
+							}),
+						);
+					}
+
+					presets = next;
+					sortPresets();
+					selectedId = '';
+					original = null;
+					draft = null;
+					isNew = false;
+					listLoading = false;
+
+					const desired = typeof selectPresetId === 'string' ? selectPresetId.trim() : '';
+					if (desired && presets.some(p => p?.presetId === desired)) {
+						await setSelected(desired);
+					} else {
+						render();
+					}
+				} finally {
+					hideSpinner(spinnerId);
 				}
 			};
 
@@ -195,6 +237,30 @@
 				}
 			};
 
+			const showSpinner = spinnerId => {
+				try {
+					return (
+						ui?.spinner?.show?.({
+							id: spinnerId,
+							message: t('msghub.i18n.core.admin.ui.loading.text'),
+						}) ?? null
+					);
+				} catch {
+					return null;
+				}
+			};
+
+			const hideSpinner = spinnerId => {
+				if (!spinnerId) {
+					return;
+				}
+				try {
+					ui?.spinner?.hide?.(spinnerId);
+				} catch {
+					// ignore
+				}
+			};
+
 			const setError = msg => {
 				lastError = typeof msg === 'string' ? msg : msg == null ? '' : String(msg);
 			};
@@ -213,6 +279,9 @@
 			};
 
 			const setSelected = async presetId => {
+				if (presetLoading) {
+					return;
+				}
 				if (!(await confirmDiscardIfNeeded())) {
 					return;
 				}
@@ -222,7 +291,7 @@
 				}
 				setError('');
 				presetLoading = true;
-				render();
+				const spinnerId = showSpinner('msghub-presets-item-load');
 				try {
 					const preset = await loadPreset(nextId);
 					if (!preset) {
@@ -241,6 +310,7 @@
 					toast(msg, 'danger');
 				} finally {
 					presetLoading = false;
+					hideSpinner(spinnerId);
 					render();
 				}
 			};
@@ -251,7 +321,14 @@
 				}
 				setError('');
 				original = null;
-				draft = defaultPreset({ presetId: '', description: '', ownedBy: '', kind: 'status', level: 20 });
+				draft = defaultPreset({
+					presetId: '',
+					description: '',
+					source: 'user',
+					ownedBy: '',
+					kind: 'status',
+					level: 20,
+				});
 				isNew = true;
 				render();
 			};
@@ -268,7 +345,7 @@
 				original = null;
 				draft = cloneJson(draft);
 				draft.presetId = '';
-				draft.ownedBy = null;
+				draft.source = 'user';
 				isNew = true;
 				render();
 			};
@@ -296,7 +373,7 @@
 					.then(() => {
 						return ingestStatesDataApi.deletePreset({ presetId: id });
 					})
-					.then(() => loadList())
+					.then(() => loadList({ renderLoading: false, showLoadingToast: true }))
 					.catch(e => {
 						const msg = String(e?.message || e);
 						setError(msg);
@@ -323,6 +400,9 @@
 				}
 				if (typeof draft?.message?.level !== 'number' || !Number.isFinite(draft.message.level)) {
 					return 'Missing/invalid required field: message.level';
+				}
+				if (draft?.source !== 'user' && draft?.source !== 'builtin') {
+					return 'Missing/invalid required field: source';
 				}
 				const title = typeof draft?.message?.title === 'string' ? draft.message.title.trim() : '';
 				const text = typeof draft?.message?.text === 'string' ? draft.message.text.trim() : '';
@@ -366,7 +446,9 @@
 						}
 						return ingestStatesDataApi.upsertPreset({ preset });
 					})
-					.then(() => loadList({ selectPresetId: draft.presetId }))
+					.then(() =>
+						loadList({ selectPresetId: draft.presetId, renderLoading: false, showLoadingToast: true }),
+					)
 					.then(() => {
 						try {
 							console.debug('Msghub presets: upsert ok', { presetId: draft?.presetId });
@@ -433,6 +515,171 @@
 			const resolveOptions = src =>
 				formApi.resolveDynamicOptions(src).map(o => ({ value: o.value, label: pickText(o.label) }));
 
+			const getBindingEntries = () => Object.values(presetBindingCatalog || {}).filter(Boolean);
+			const normalizeBindingValue = value => {
+				const text = typeof value === 'string' ? value.trim() : String(value ?? '').trim();
+				return text === BINDING_NONE_VALUE ? '' : text;
+			};
+
+			const getBindingEntryByOwnedBy = ownedByValue => {
+				const ownedByText =
+					typeof ownedByValue === 'string'
+						? ownedByValue.trim().toLowerCase()
+						: String(ownedByValue ?? '')
+								.trim()
+								.toLowerCase();
+				if (!ownedByText) {
+					return null;
+				}
+				return (
+					getBindingEntries().find(entry => {
+						const candidate = typeof entry?.ownedBy === 'string' ? entry.ownedBy.trim().toLowerCase() : '';
+						return candidate === ownedByText;
+					}) || null
+				);
+			};
+
+			const getBindingCatalogEntry = ownedByValue => {
+				const ownedByText = normalizeBindingValue(ownedByValue).toLowerCase();
+				if (!ownedByText) {
+					return null;
+				}
+				return (
+					Object.entries(presetBindingCatalog || {}).find(([, entry]) => {
+						const candidate = typeof entry?.ownedBy === 'string' ? entry.ownedBy.trim().toLowerCase() : '';
+						return candidate === ownedByText;
+					}) || null
+				);
+			};
+
+			const getOwnedByOptions = () => {
+				const opts = [
+					{
+						value: BINDING_NONE_VALUE,
+						label: '(keine spezifische Regel)',
+					},
+				];
+				for (const entry of getBindingEntries()) {
+					const value = typeof entry?.ownedBy === 'string' ? entry.ownedBy.trim() : '';
+					if (!value) {
+						continue;
+					}
+					const labelKey = typeof entry?.headerKey === 'string' ? entry.headerKey : '';
+					opts.push({
+						value,
+						label: labelKey ? t(labelKey) : value,
+					});
+				}
+				return opts;
+			};
+
+			const getSubsetOptions = ownedByValue => {
+				const entry = getBindingEntryByOwnedBy(ownedByValue);
+				const opts = [
+					{
+						value: BINDING_NONE_VALUE,
+						label: '(keine weitere Eingrenzung)',
+					},
+				];
+				if (!entry || !Array.isArray(entry.subsets) || entry.subsets.length === 0) {
+					return opts;
+				}
+				for (const subset of entry.subsets) {
+					const value = typeof subset?.value === 'string' ? subset.value : '';
+					if (!value) {
+						continue;
+					}
+					const labelKey = typeof subset?.labelKey === 'string' ? subset.labelKey : '';
+					opts.push({
+						value,
+						label: labelKey ? t(labelKey) : value,
+					});
+				}
+				return opts;
+			};
+
+			const getSubsetText = (ownedByValue, subsetValue) => {
+				const subsetText = typeof subsetValue === 'string' ? subsetValue.trim() : '';
+				if (!subsetText) {
+					return '';
+				}
+				const entry = getBindingEntryByOwnedBy(ownedByValue);
+				if (!entry || !Array.isArray(entry.subsets)) {
+					return subsetText;
+				}
+				const match =
+					entry.subsets.find(option => {
+						const value = typeof option?.value === 'string' ? option.value.trim() : '';
+						return value === subsetText;
+					}) || null;
+				if (!match) {
+					return subsetText;
+				}
+				return typeof match?.labelKey === 'string' && match.labelKey ? t(match.labelKey) : subsetText;
+			};
+
+			const getAllowedTemplateEntries = (ownedByValue, subsetValue) => {
+				const bindingEntry = getBindingCatalogEntry(ownedByValue);
+				if (!bindingEntry) {
+					return [];
+				}
+				const [ruleId] = bindingEntry;
+				const ruleEntry =
+					ruleTemplateCatalog && typeof ruleTemplateCatalog === 'object' ? ruleTemplateCatalog[ruleId] : null;
+				const metrics =
+					ruleEntry && ruleEntry.metrics && typeof ruleEntry.metrics === 'object' ? ruleEntry.metrics : null;
+				if (!metrics) {
+					return [];
+				}
+				const subsetText = normalizeBindingValue(subsetValue);
+				const out = [];
+				for (const [metricKey, metricEntry] of Object.entries(metrics)) {
+					if (!metricEntry || typeof metricEntry !== 'object') {
+						continue;
+					}
+					const metricSubsets = Array.isArray(metricEntry.subset) ? metricEntry.subset : null;
+					if (!subsetText && metricSubsets) {
+						continue;
+					}
+					if (subsetText && metricSubsets && !metricSubsets.includes(subsetText)) {
+						continue;
+					}
+					out.push({
+						metricKey,
+						template: `{{m.${metricKey}}}`,
+						label:
+							typeof metricEntry.labelKey === 'string' && metricEntry.labelKey
+								? t(metricEntry.labelKey)
+								: metricKey,
+						help:
+							typeof metricEntry.helpKey === 'string' && metricEntry.helpKey
+								? t(metricEntry.helpKey)
+								: '',
+					});
+				}
+				return out;
+			};
+
+			const syncSelectOptions = (input, options, selectedValue, { disabled: isDisabled = false } = {}) => {
+				if (!input || input.tagName !== 'SELECT') {
+					return;
+				}
+				const nextOptions = Array.isArray(options) ? options : [];
+				input.replaceChildren(
+					...nextOptions.map(option =>
+						h('option', {
+							value: String(option?.value ?? ''),
+							text: String(option?.label ?? option?.value ?? ''),
+						}),
+					),
+				);
+				const normalizedSelected =
+					selectedValue === undefined || selectedValue === null ? BINDING_NONE_VALUE : String(selectedValue);
+				const allowedValues = new Set(nextOptions.map(option => String(option?.value ?? '')));
+				input.value = allowedValues.has(normalizedSelected) ? normalizedSelected : BINDING_NONE_VALUE;
+				input.disabled = isDisabled;
+			};
+
 			const renderList = () => {
 				sortPresets();
 
@@ -448,7 +695,7 @@
 					class: 'msghub-uibutton-text',
 					title: 'Reload',
 					onclick: _e => {
-						void loadList().catch(err => {
+						void loadList({ renderLoading: false, showLoadingToast: true }).catch(err => {
 							const msg = String(err?.message || err);
 							setError(msg);
 							toast(msg, 'danger');
@@ -481,28 +728,118 @@
 				} else if (presets.length === 0) {
 					items = h('div', { class: 'msghub-muted', text: 'No presets yet. Click + to create one.' });
 				} else {
-					items = h(
-						'div',
-						{ class: 'msghub-tools-presets-list-items', style: 'max-height: 60vh; overflow: auto;' },
-						presets.map(p =>
-							h('button', {
-								type: 'button',
-								class: `msghub-tools-presets-item${p?.presetId === selectedId && !isNew ? ' active' : ''}`,
-								onclick: () => void setSelected(p.presetId),
-								text: presetLabel(p),
-							}),
-						),
-					);
+					const constants = getMsgConstants();
+					const levelMap = constants?.level && typeof constants.level === 'object' ? constants.level : null;
+					const levelKeyMap = levelMap
+						? Object.keys(levelMap).reduce((acc, key) => {
+								const val = levelMap[key];
+								if (typeof val === 'number') {
+									acc[val] = key;
+								}
+								return acc;
+							}, {})
+						: {};
+
+					const rows = presets.map(p => {
+						const ownedBy = p?.ownedBy;
+						const entry = getBindingEntryByOwnedBy(ownedBy);
+						const ownedByText = ownedBy
+							? typeof entry?.headerKey === 'string' && entry.headerKey
+								? t(entry.headerKey)
+								: ownedBy
+							: t('msghub.i18n.IngestStates.admin.jsonCustom.preset.global.label');
+						const subsetRaw = typeof p?.subset === 'string' ? p.subset : '';
+						const subsetText = getSubsetText(ownedBy, subsetRaw);
+						const kindKey = String(p?.message?.kind || '').trim();
+						const kindText = kindKey
+							? t(`msghub.i18n.core.admin.common.MsgConstants.kind.${kindKey}.label`)
+							: kindKey;
+						const level = p?.message?.level;
+						const levelKey = typeof level === 'number' ? levelKeyMap[level] : undefined;
+						const levelText = levelKey
+							? t(`msghub.i18n.core.admin.common.MsgConstants.level.${levelKey}.label`)
+							: String(level ?? '');
+						const isSelected = p?.presetId === selectedId && !isNew;
+						return h(
+							'tr',
+							{ class: isSelected ? 'is-selected' : '', onclick: () => void setSelected(p.presetId) },
+							[
+								h('td', {
+									class: 'msghub-colCell msghub-col--preset-ownedBy',
+									text: ownedByText,
+									title: ownedByText,
+								}),
+								h('td', {
+									class: 'msghub-colCell msghub-col--preset-subset',
+									text: subsetText,
+									title: subsetText,
+								}),
+								h('td', {
+									class: 'msghub-colCell msghub-col--preset-kind',
+									text: kindText,
+									title: kindText,
+								}),
+								h('td', {
+									class: 'msghub-colCell msghub-col--preset-level',
+									text: levelText,
+									title: levelText,
+								}),
+								h('td', {
+									class: 'msghub-colCell msghub-col--preset-name',
+									text: p?.description || '',
+									title: p?.description || '',
+								}),
+							],
+						);
+					});
+
+					items = h('div', { class: 'msghub-tools-presets-list-items' }, [
+						h('table', { class: 'msghub-table msghub-presets-table' }, [
+							h('colgroup', null, [
+								h('col', { class: 'msghub-col--preset-ownedBy' }),
+								h('col', { class: 'msghub-col--preset-subset' }),
+								h('col', { class: 'msghub-col--preset-kind' }),
+								h('col', { class: 'msghub-col--preset-level' }),
+								h('col', { class: 'msghub-col--preset-name' }),
+							]),
+							h('thead', null, [
+								h('tr', null, [
+									h('th', {
+										class: 'msghub-th msghub-colCell msghub-col--preset-ownedBy',
+										text: t('msghub.i18n.IngestStates.admin.presets.ownedBy.label'),
+										title: t('msghub.i18n.IngestStates.admin.presets.ownedBy.label'),
+									}),
+									h('th', {
+										class: 'msghub-th msghub-colCell msghub-col--preset-subset',
+										text: t('msghub.i18n.IngestStates.admin.presets.subset.label'),
+										title: t('msghub.i18n.IngestStates.admin.presets.subset.label'),
+									}),
+									h('th', {
+										class: 'msghub-th msghub-colCell msghub-col--preset-kind',
+										text: t('msghub.i18n.core.admin.common.MsgConstants.field.kind.label'),
+										title: t('msghub.i18n.core.admin.common.MsgConstants.field.kind.label'),
+									}),
+									h('th', {
+										class: 'msghub-th msghub-colCell msghub-col--preset-level',
+										text: t('msghub.i18n.core.admin.common.MsgConstants.field.level.label'),
+										title: t('msghub.i18n.core.admin.common.MsgConstants.field.level.label'),
+									}),
+									h('th', {
+										class: 'msghub-th msghub-colCell msghub-col--preset-name',
+										text: t('msghub.i18n.IngestStates.admin.presets.name.label'),
+										title: t('msghub.i18n.IngestStates.admin.presets.name.label'),
+									}),
+								]),
+							]),
+							h('tbody', null, rows),
+						]),
+					]);
 				}
 
 				elList.replaceChildren(listHeader, items);
 			};
 
 			const renderEditor = () => {
-				if (presetLoading) {
-					elEditor.replaceChildren(h('p', { class: 'msghub-muted', text: 'Loading preset…' }));
-					return;
-				}
 				if (!draft) {
 					elEditor.replaceChildren(
 						h('p', { class: 'msghub-muted', text: 'Select a preset or create a new one.' }),
@@ -512,7 +849,8 @@
 
 				const ownedBy =
 					typeof draft?.ownedBy === 'string' && draft.ownedBy.trim() ? draft.ownedBy.trim() : null;
-				const disabled = !!ownedBy || saving === true;
+				const source = draft?.source === 'builtin' ? 'builtin' : 'user';
+				const disabled = source !== 'user' || saving === true;
 
 				const fields = [];
 
@@ -555,24 +893,26 @@
 				const fOwnedBy = formApi.buildFieldInput({
 					type: 'string',
 					key: 'ownedBy',
-					label: 'Owned by (default preset)',
-					value: ownedBy || '',
+					label: t('msghub.i18n.IngestStates.admin.presets.ownedBy.label'),
+					value: ownedBy || BINDING_NONE_VALUE,
+					options: getOwnedByOptions(),
 					help: '',
 				});
 				if (fOwnedBy?.input) {
-					fOwnedBy.input.disabled = true;
+					fOwnedBy.input.disabled = disabled;
 				}
 				fields.push(fOwnedBy);
 
 				const fSubset = formApi.buildFieldInput({
 					type: 'string',
 					key: 'subset',
-					label: 'Subset',
-					value: typeof draft?.subset === 'string' ? draft.subset : '',
+					label: t('msghub.i18n.IngestStates.admin.presets.subset.label'),
+					value: typeof draft?.subset === 'string' && draft.subset ? draft.subset : BINDING_NONE_VALUE,
+					options: getSubsetOptions(ownedBy),
 					help: '',
 				});
 				if (fSubset?.input) {
-					fSubset.input.disabled = true;
+					fSubset.input.disabled = disabled;
 				}
 				fields.push(fSubset);
 
@@ -647,13 +987,47 @@
 					return {
 						textarea,
 						getValue: () => textarea.value,
+						wrapper: h('div', { class: 'msghub-field' }, [textarea, h('label', { for: id, text: 'Text' })]),
+					};
+				})();
+
+				const allowedTemplatesField = (() => {
+					const content = h('div', { class: 'msghub-muted' });
+					return {
+						content,
+						update(nextOwnedBy, nextSubset) {
+							const entries = getAllowedTemplateEntries(nextOwnedBy, nextSubset);
+							if (!entries.length) {
+								content.replaceChildren(
+									h('div', {
+										class: 'msghub-muted',
+										text: t('msghub.i18n.IngestStates.admin.presets.allowedTemplates.empty.text'),
+									}),
+								);
+								return;
+							}
+							content.replaceChildren(
+								...entries.map(entry =>
+									h('div', { class: 'msghub-muted' }, [
+										h('div', {
+											text: `${entry.template} - ${entry.label}`,
+										}),
+										entry.help
+											? h('div', {
+													text: entry.help,
+												})
+											: null,
+										h('br'),
+									]),
+								),
+							);
+						},
 						wrapper: h('div', { class: 'msghub-field' }, [
-							textarea,
-							h('label', { for: id, text: 'Text' }),
 							h('div', {
-								class: 'msghub-muted',
-								text: 'Templates (placeholder): {{m.state-value}}, {{m.lastSeenAt|datetime}}',
+								class: 'msghub-field-header-label',
+								text: t('msghub.i18n.IngestStates.admin.presets.allowedTemplates.label'),
 							}),
+							content,
 						]),
 					};
 				})();
@@ -685,6 +1059,7 @@
 				fields.push(titleField);
 				fields.push(iconField);
 				fields.push(textField);
+				fields.push(allowedTemplatesField);
 				fields.push(textRecoveredField);
 
 				fields.push(formApi.buildFieldInput({ type: 'header', key: '_h_timing', label: 'Timing' }));
@@ -958,10 +1333,10 @@
 
 				const wrapper = h('div', null, [
 					h('div', null, [
-						ownedBy
+						source === 'builtin'
 							? h('div', {
 									class: 'msghub-muted',
-									text: `This is a default preset owned by '${ownedBy}' (view-only in this editor).`,
+									text: `This is a built-in preset${ownedBy ? ` for '${ownedBy}'` : ''} (view-only in this editor).`,
 								})
 							: null,
 						elError,
@@ -972,11 +1347,27 @@
 
 				// Wire field changes into draft
 				const apply = () => {
+					const nextOwnedBy = normalizeBindingValue(fOwnedBy?.getValue ? fOwnedBy.getValue() : '');
+					let nextSubset = normalizeBindingValue(fSubset?.getValue ? fSubset.getValue() : '');
+					const allowedSubsetOptions = getSubsetOptions(nextOwnedBy);
+					const allowedSubsetValues = new Set(
+						allowedSubsetOptions.map(option => String(option?.value ?? '')),
+					);
+					const nextSubsetSelectValue = nextSubset || BINDING_NONE_VALUE;
+					if (!allowedSubsetValues.has(nextSubsetSelectValue)) {
+						nextSubset = '';
+					}
+					syncSelectOptions(fSubset?.input, allowedSubsetOptions, nextSubset || BINDING_NONE_VALUE, {
+						disabled: disabled,
+					});
+
 					updateDraft({
 						presetId: String(fPresetId?.getValue ? fPresetId.getValue() : '').trim(),
 						description: String(fDescription?.getValue ? fDescription.getValue() : ''),
 						schema: String(fSchema?.getValue ? fSchema.getValue() : ''),
-						ownedBy: ownedBy,
+						source: source,
+						ownedBy: nextOwnedBy || null,
+						subset: nextSubset || null,
 					});
 					updateMessage({
 						kind: fKind?.getValue ? fKind.getValue() : undefined,
@@ -1008,12 +1399,13 @@
 					updatePolicy({
 						resetOnNormal: fResetOnNormal?.getValue ? fResetOnNormal.getValue() === true : false,
 					});
+					allowedTemplatesField.update(nextOwnedBy, nextSubset);
 
 					const kind = String(draft?.message?.kind || '');
 					const isTask = kind === 'task';
-					fTimeBudget.wrapper.style.display = isTask ? '' : 'none';
-					fDueIn.wrapper.style.display = isTask ? '' : 'none';
-					fDetailsTask.wrapper.style.display = isTask ? '' : 'none';
+					fTimeBudget.wrapper.classList.toggle('is-hidden', !isTask);
+					fDueIn.wrapper.classList.toggle('is-hidden', !isTask);
+					fDetailsTask.wrapper.classList.toggle('is-hidden', !isTask);
 				};
 
 				const watch = input => {
@@ -1027,6 +1419,8 @@
 				// Basic fields
 				watch(fPresetId.input);
 				watch(fDescription.input);
+				watch(fOwnedBy.input);
+				watch(fSubset.input);
 				watch(fKind.input);
 				watch(fLevel.input);
 				watch(titleField.input);
@@ -1066,15 +1460,11 @@
 				renderEditor();
 			};
 
-			el.appendChild(
-				h(
-					'div',
-					{ class: 'msghub-tools-presets-grid', style: 'display: flex; gap: 16px; align-items: flex-start;' },
-					[elList, elEditor],
-				),
-			);
+			el.appendChild(h('div', { class: 'msghub-tools-presets-grid' }, [elList, elEditor]));
 			render();
-			void loadList().catch(e => {
+			const initialReady = loadList();
+			el.__msghubReady = initialReady;
+			void initialReady.catch(e => {
 				const msg = String(e?.message || e);
 				setError(msg);
 				toast(msg, 'danger');

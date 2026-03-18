@@ -32,7 +32,7 @@
 			titleKey: 'msghub.i18n.core.admin.ui.tabs.messages.label',
 			initGlobal: 'MsghubAdminTabMessages',
 			assets: Object.freeze({
-				css: Object.freeze(['tab/panels/messages/styles.css']),
+				css: Object.freeze(['tab/table.css', 'tab/panels/messages/styles.css']),
 				js: Object.freeze([
 					'tab/panels/messages/state.js',
 					'tab/panels/messages/data.messages.js',
@@ -55,7 +55,12 @@
 			titleKey: 'msghub.i18n.core.admin.ui.tabs.plugins.label',
 			initGlobal: 'MsghubAdminTabPlugins',
 			assets: Object.freeze({
-				css: Object.freeze(['tab/panels/plugins/styles.css', 'tab/panels/plugins/ingeststates.css']),
+				css: Object.freeze([
+					'tab/table.css',
+					'tab/panels/plugins/styles.css',
+					'tab/panels/plugins/overlay.bulkapply.css',
+					'tab/panels/plugins/overlay.presets.css',
+				]),
 				js: Object.freeze([
 					'tab/panels/plugins/state.js',
 					'tab/panels/plugins/data.plugins.js',

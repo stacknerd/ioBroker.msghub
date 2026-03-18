@@ -473,8 +473,10 @@
 
 .msghub-root .msghub-overlay,
 .msghub-root .msghub-dialog {
-	width: min(980px, 100%);
-	max-height: min(86vh, 100%);
+	width: auto;
+	height: auto;
+	max-width: 94vw;
+	max-height: 90vh;
 	background: var(--msghub-bg-overlay);
 	color: var(--msghub-text);
 	border: 1px solid var(--msghub-border);
@@ -525,9 +527,10 @@
 }
 
 .msghub-root .msghub-overlay-body {
-	flex: 1 1 auto;
-	min-height: 0;
+	flex: 0 1 auto;
 	overflow: auto;
+	min-width: 0;
+	min-height: 0;
 	padding: var(--msghub-space-3);
 }
 

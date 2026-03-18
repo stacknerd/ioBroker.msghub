@@ -1,0 +1,53 @@
+/* ========================================================================== */
+/* Layout: Presets tool — list + editor split                                 */
+/* ========================================================================== */
+
+.msghub-root .msghub-tools-presets-grid {
+	display: flex;
+	gap: var(--msghub-space-3);
+	align-items: flex-start;
+}
+
+.msghub-root .msghub-tools-presets-list {
+	height: 80vh;
+	flex: 0 0 50%;
+	min-width: 260px;
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+}
+
+.msghub-root .msghub-tools-presets-editor {
+	height: 80vh;
+	flex: 1 1 auto;
+	overflow: auto;
+}
+
+.msghub-root .msghub-tools-presets-list-items {
+	overflow: auto;
+}
+
+/* ========================================================================== */
+/* Preset table column widths                                                 */
+/* ========================================================================== */
+
+.msghub-root .msghub-col--preset-ownedBy {
+	width: 20ch;
+}
+
+.msghub-root .msghub-col--preset-subset {
+	display: none;
+}
+
+.msghub-root .msghub-col--preset-kind {
+	width: 10ch;
+}
+
+.msghub-root .msghub-col--preset-level {
+	width: 10ch;
+}
+
+.msghub-root .msghub-col--preset-name {
+	width: auto;
+	min-width: 20ch;
+}

@@ -1,7 +1,7 @@
 /// <reference lib="dom" />
 /// <reference lib="dom.iterable" />
 
-/* global window */
+/* global HTMLElement, window */
 (function () {
 	'use strict';
 
@@ -90,6 +90,73 @@
 				}
 
 				const openIngestStatesTool = toolId => {
+					if (toolId === 'bulk') {
+						const spinnerId =
+							ui?.spinner?.show?.({
+								id: 'msghub-bulk-tool-open',
+								message: t(
+									'msghub.i18n.core.admin.ui.loadingWithSubject.text',
+									t('msghub.i18n.core.admin.ui.plugins.tools.ingestStates.bulk.label'),
+								),
+							}) ?? null;
+						Promise.resolve()
+							.then(async () => {
+								await pluginsDataApi?.ensureConstantsLoaded?.();
+								const ingestConstants =
+									await ingestStatesDataApi?.ensureIngestStatesConstantsLoaded?.();
+								const schema = await ingestStatesDataApi?.ensureIngestStatesSchema?.();
+								const bodyEl = renderBulkApply({ instances: instList, schema, ingestConstants });
+								catalogApi?.openViewer?.({
+									title: `${plugin.type} · Tools`,
+									bodyEl,
+								});
+							})
+							.catch(err => {
+								toast(String(err?.message || err), 'danger');
+							})
+							.finally(() => {
+								ui?.spinner?.hide?.(spinnerId);
+							});
+						return;
+					}
+
+					if (toolId === 'presets') {
+						const spinnerId =
+							ui?.spinner?.show?.({
+								id: 'msghub-presets-tool-open',
+								message: t(
+									'msghub.i18n.core.admin.ui.loadingWithSubject.text',
+									t('msghub.i18n.core.admin.ui.plugins.tools.ingestStates.presets.label'),
+								),
+							}) ?? null;
+						Promise.resolve()
+							.then(async () => {
+								await pluginsDataApi?.ensureConstantsLoaded?.();
+								const ingestConstants =
+									await ingestStatesDataApi?.ensureIngestStatesConstantsLoaded?.();
+								const bodyEl = renderPresets({ ingestConstants });
+								const ready = bodyEl?.__msghubReady;
+								if (ready && typeof ready.then === 'function') {
+									try {
+										await ready;
+									} catch {
+										return;
+									}
+								}
+								catalogApi?.openViewer?.({
+									title: `${plugin.type} · Tools`,
+									bodyEl,
+								});
+							})
+							.catch(err => {
+								toast(String(err?.message || err), 'danger');
+							})
+							.finally(() => {
+								ui?.spinner?.hide?.(spinnerId);
+							});
+						return;
+					}
+
 					const body = h('div', null, [
 						h('p', {
 							class: 'msghub-muted',
@@ -107,11 +174,6 @@
 						.then(async () => {
 							await pluginsDataApi?.ensureConstantsLoaded?.();
 							const ingestConstants = await ingestStatesDataApi?.ensureIngestStatesConstantsLoaded?.();
-							if (toolId === 'bulk') {
-								const schema = await ingestStatesDataApi?.ensureIngestStatesSchema?.();
-								body.replaceChildren(renderBulkApply({ instances: instList, schema, ingestConstants }));
-								return;
-							}
 							if (toolId === 'presets') {
 								body.replaceChildren(renderPresets({ ingestConstants }));
 								return;
@@ -156,10 +218,9 @@
 				if (!ui?.contextMenu?.open) {
 					return;
 				}
-				const menuAnchor = anchorEl && typeof anchorEl === 'object' ? anchorEl : null;
 				ui.contextMenu.open({
-					anchorEl: menuAnchor,
-					anchorPoint: !menuAnchor && e ? { x: e.clientX, y: e.clientY } : null,
+					anchorEl: anchorEl instanceof HTMLElement ? anchorEl : null,
+					anchorPoint: !anchorEl && e ? { x: e.clientX, y: e.clientY } : null,
 					ariaLabel: 'Plugin context menu',
 					placement: 'bottom-start',
 					items: cfg.items,
@@ -243,11 +304,6 @@
 				'aria-label': t('msghub.i18n.core.admin.ui.plugins.instance.tools.button'),
 				text: t('msghub.i18n.core.admin.ui.plugins.instance.tools.button'),
 				onclick: e => openToolsMenu(toolsBtn, e),
-				oncontextmenu: e => {
-					e?.preventDefault?.();
-					e?.stopPropagation?.();
-					openToolsMenu(toolsBtn, e);
-				},
 			});
 
 			const channelId = `ch_${plugin.type}_${inst.instanceId}_${adapterInstance}`;

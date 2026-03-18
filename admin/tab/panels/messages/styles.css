@@ -35,6 +35,7 @@
 	font-family: var(--msghub-font-mono);
 	font-size: var(--msghub-fs-sm);
 	line-height: var(--msghub-lh-normal);
+	min-width: 66vw;
 	max-width: 100%;
 	overflow-x: hidden;
 }
@@ -93,15 +94,7 @@
 	--msghub-uibutton-icon: var(--msghub-icon-link);
 }
 
-/* Messages table (SharePoint-like list) */
-.msghub-root .msghub-messages .msghub-table {
-	width: 100%;
-	border-collapse: separate;
-	border-spacing: 0;
-	font: var(--msghub-font-body);
-	background: var(--msghub-bg-table);
-	table-layout: fixed;
-}
+/* Messages table */
 
 .msghub-root .msghub-messages .msghub-col--select {
 	width: 34px;
@@ -153,55 +146,6 @@
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
-}
-
-.msghub-root .msghub-messages .msghub-table thead th {
-	position: sticky;
-	top: 0;
-	z-index: 2;
-	background: var(--msghub-bg-tableHeader);
-	color: var(--msghub-muted);
-	font: var(--msghub-font-body);
-	text-align: left;
-	white-space: nowrap;
-	padding: var(--msghub-space-2) var(--msghub-space-2);
-	border-bottom: 1px solid var(--msghub-border);
-}
-
-.msghub-root .msghub-messages .msghub-table thead th:first-child {
-	padding-left: calc(var(--msghub-space-2) + var(--msghub-row-edge-indent));
-}
-
-.msghub-root .msghub-messages .msghub-th {
-	cursor: pointer;
-	isolation: isolate;
-}
-
-.msghub-root .msghub-messages .msghub-th:not(.msghub-messages-select)::before {
-	content: '';
-	position: absolute;
-	inset: 0;
-	background: var(--msghub-surface-hover);
-	opacity: 0;
-	pointer-events: none;
-	z-index: 0;
-}
-
-.msghub-root .msghub-messages .msghub-th:not(.msghub-messages-select):hover::before {
-	opacity: 1;
-}
-
-.msghub-root .msghub-messages .msghub-th:hover {
-	color: var(--msghub-text);
-}
-
-.msghub-root .msghub-messages th.msghub-messages-select {
-	cursor: default;
-}
-
-.msghub-root .msghub-messages .msghub-th > * {
-	position: relative;
-	z-index: 1;
 }
 
 .msghub-root .msghub-messages .msghub-thBtn {
@@ -317,34 +261,13 @@
 	mask-image: var(--msghub-icon-sort-desc);
 }
 
-.msghub-root .msghub-messages .msghub-table tbody td {
-	padding: var(--msghub-space-1) var(--msghub-space-2);
-	border-bottom: 1px solid var(--msghub-border-light);
-	vertical-align: top;
+/* Checkbox-header override: disable pointer cursor and hover overlay */
+.msghub-root .msghub-messages th.msghub-messages-select {
+	cursor: default;
 }
 
-.msghub-root .msghub-messages .msghub-table tbody td:first-child {
-	padding-left: calc(var(--msghub-space-2) + var(--msghub-row-edge-indent));
-}
-
-.msghub-root .msghub-messages .msghub-table tbody tr:last-child td {
-	border-bottom: 0;
-}
-
-.msghub-root .msghub-messages .msghub-table tbody tr:hover td {
-	background: var(--msghub-surface-hover);
-}
-
-.msghub-root .msghub-messages .msghub-table tbody tr.is-selected td {
-	background: var(--msghub-surface-selected);
-}
-
-.msghub-root .msghub-messages .msghub-table tbody tr.is-selected td:first-child {
-	box-shadow: inset 3px 0 0 var(--msghub-accent);
-}
-
-.msghub-root .msghub-messages .msghub-table tbody tr {
-	cursor: pointer;
+.msghub-root .msghub-messages th.msghub-messages-select::before {
+	display: none;
 }
 
 .msghub-root .msghub-messages .msghub-messages-select {

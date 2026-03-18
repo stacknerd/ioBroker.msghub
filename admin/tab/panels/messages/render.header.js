@@ -82,6 +82,9 @@
 					menusApi.openHeaderSortMenu(anchor, { field, title });
 				},
 				oncontextmenu: e => {
+					if (e?.ctrlKey === true) {
+						return;
+					}
 					e?.preventDefault?.();
 					const anchor = e?.currentTarget?.closest?.('th') || e?.currentTarget || e?.target;
 					menusApi.openHeaderSortMenu(anchor, { field, title });
@@ -118,6 +121,9 @@
 					menusApi.openHeaderFilterMenu(anchor, { key, title, options: optionsList });
 				},
 				oncontextmenu: e => {
+					if (e?.ctrlKey === true) {
+						return;
+					}
 					e?.preventDefault?.();
 					const optionsList = typeof getOptions === 'function' ? getOptions() : [];
 					const anchor = e?.currentTarget?.closest?.('th') || e?.currentTarget || e?.target;

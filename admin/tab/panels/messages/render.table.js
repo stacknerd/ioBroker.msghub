@@ -170,6 +170,9 @@
 							onSelectionChanged();
 						},
 						oncontextmenu: e => {
+							if (e?.ctrlKey === true) {
+								return;
+							}
 							if (!ref) {
 								return;
 							}

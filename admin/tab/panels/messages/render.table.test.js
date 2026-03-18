@@ -118,6 +118,30 @@ describe('admin/tab/panels/messages/render.table.js', function () {
 		assert.equal(fixture.openContextArgs[0].message.ref, 'ref.1');
 	});
 
+	it('bypasses row context menu on ctrl+right click', async function () {
+		const sandbox = await loadPanelModule('admin/tab/panels/messages/render.table.js');
+		const moduleApi = sandbox.window.MsghubAdminTabMessagesRenderTable;
+		const fixture = createFixture();
+		const renderer = moduleApi.createTableRenderer(fixture.options);
+		const row = renderer.renderRows([buildMessage()])[0];
+		let prevented = false;
+
+		row.dispatchEvent({
+			type: 'contextmenu',
+			ctrlKey: true,
+			target: createElement('span'),
+			clientX: 11,
+			clientY: 22,
+			preventDefault() {
+				prevented = true;
+			},
+		});
+
+		assert.equal(prevented, false);
+		assert.equal(fixture.openContextCalls, 0);
+		assert.deepEqual(Array.from(fixture.state.selectedRefs), []);
+	});
+
 	it('supports expert checkbox selection and double click open json', async function () {
 		const sandbox = await loadPanelModule('admin/tab/panels/messages/render.table.js');
 		const moduleApi = sandbox.window.MsghubAdminTabMessagesRenderTable;

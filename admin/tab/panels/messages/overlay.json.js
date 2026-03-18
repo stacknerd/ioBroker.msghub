@@ -166,12 +166,12 @@
 				if (!parsed) {
 					return '';
 				}
-				const utc = parsed.date.toISOString();
 				const serverTimeZone = String(getServerTimeZone() || '').trim() || 'UTC';
 				const server = formatInTimeZone(parsed.date, serverTimeZone) || formatDate(parsed.date);
 				if (server) {
-					return `${server} (${serverTimeZone}) | ${utc} (UTC)`;
+					return `${server} (${serverTimeZone})`;
 				}
+				const utc = parsed.date.toISOString();
 				return `${utc} (UTC)`;
 			}
 

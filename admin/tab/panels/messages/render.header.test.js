@@ -134,6 +134,48 @@ describe('admin/tab/panels/messages/render.header.js', function () {
 		assert.equal(fixture.filterCalls[0].payload.key, 'details.location');
 	});
 
+	it('bypasses header context menus on ctrl+right click', async function () {
+		const sandbox = await loadPanelModule('admin/tab/panels/messages/render.header.js');
+		const moduleApi = sandbox.window.MsghubAdminTabMessagesRenderHeader;
+		const fixture = setup();
+		const renderer = moduleApi.createHeaderRenderer(fixture.rendererOptions);
+		renderer.renderThead();
+		const sortButton = findAll(
+			fixture.theadEl,
+			node => node.tagName === 'BUTTON' && String(node.className).includes('msghub-thBtn--sort'),
+		)[0];
+		const filterButton = findAll(
+			fixture.theadEl,
+			node => node.tagName === 'BUTTON' && String(node.className).includes('msghub-thBtn--filter'),
+		)[0];
+		let sortPrevented = false;
+		let filterPrevented = false;
+
+		sortButton.dispatchEvent({
+			type: 'contextmenu',
+			ctrlKey: true,
+			preventDefault() {
+				sortPrevented = true;
+			},
+			currentTarget: sortButton,
+			target: sortButton,
+		});
+		filterButton.dispatchEvent({
+			type: 'contextmenu',
+			ctrlKey: true,
+			preventDefault() {
+				filterPrevented = true;
+			},
+			currentTarget: filterButton,
+			target: filterButton,
+		});
+
+		assert.equal(sortPrevented, false);
+		assert.equal(filterPrevented, false);
+		assert.equal(fixture.sortCalls.length, 0);
+		assert.equal(fixture.filterCalls.length, 0);
+	});
+
 	it('updates filter badges and sort direction markers', async function () {
 		const sandbox = await loadPanelModule('admin/tab/panels/messages/render.header.js');
 		const moduleApi = sandbox.window.MsghubAdminTabMessagesRenderHeader;
