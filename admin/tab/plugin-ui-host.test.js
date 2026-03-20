@@ -1,0 +1,376 @@
+/* eslint-env mocha */
+'use strict';
+
+const assert = require('node:assert/strict');
+const vm = require('node:vm');
+const { readRepoFile } = require('./_test.utils');
+
+// Creates a minimal DOM element mock with attribute and child support.
+function createElement(tag) {
+	const attrs = new Map();
+	return {
+		tagName: String(tag).toUpperCase(),
+		textContent: '',
+		children: [],
+		setAttribute(k, v) {
+			attrs.set(String(k), String(v));
+		},
+		getAttribute(k) {
+			return attrs.has(String(k)) ? attrs.get(String(k)) : null;
+		},
+		appendChild(child) {
+			this.children.push(child);
+			return child;
+		},
+		replaceChildren(...nodes) {
+			this.children = [...nodes];
+		},
+	};
+}
+
+// Creates a container mock with Shadow DOM lifecycle support.
+function createContainer() {
+	let shadowRoot = null;
+	const container = createElement('div');
+	Object.defineProperty(container, 'shadowRoot', { get: () => shadowRoot });
+	container.attachShadow = () => {
+		shadowRoot = createElement('shadow-root');
+		return shadowRoot;
+	};
+	return container;
+}
+
+// Loads plugin-ui-host.js in an isolated VM context and returns the factory.
+async function loadHostSandbox() {
+	const source = await readRepoFile('admin/tab/plugin-ui-host.js');
+	const windowObject = {};
+	const documentObject = {
+		createElement: tag => createElement(tag),
+	};
+	const sandbox = {
+		window: windowObject,
+		document: documentObject,
+		lang: 'en',
+		Blob: class {
+			constructor(parts, opts) {
+				this.parts = parts;
+				this.type = opts?.type;
+			}
+		},
+		URL: {
+			createObjectURL: () => 'blob:test-url',
+			revokeObjectURL: () => {},
+		},
+	};
+	vm.runInNewContext(source, sandbox, { filename: 'admin/tab/plugin-ui-host.js' });
+	const createHost = sandbox.window.createMsghubPluginUiHost;
+	return { createHost };
+}
+
+// Builds a request stub that serves bundle.get and optionally rpc.
+function makeRequest({ hash = 'test-hash', js = '', css = null, rpcResponse = null } = {}) {
+	const calls = [];
+	const fn = async (cmd, payload) => {
+		calls.push({ cmd, payload });
+		if (cmd === 'admin.pluginUi.bundle.get') {
+			return { ok: true, data: { hash, js, css } };
+		}
+		if (cmd === 'admin.pluginUi.rpc') {
+			return rpcResponse ?? { ok: true, data: {} };
+		}
+		return { ok: false, error: { message: 'unexpected command' } };
+	};
+	fn.calls = calls;
+	return fn;
+}
+
+describe('admin/tab/plugin-ui-host.js', function () {
+	it('exposes createMsghubPluginUiHost on window', async function () {
+		const { createHost } = await loadHostSandbox();
+		assert.equal(typeof createHost, 'function');
+	});
+
+	it('factory returns mount, unmount, and retry', async function () {
+		const { createHost } = await loadHostSandbox();
+		const host = createHost({ request: makeRequest(), api: {}, _importFn: async () => ({}) });
+		assert.equal(typeof host.mount, 'function');
+		assert.equal(typeof host.unmount, 'function');
+		assert.equal(typeof host.retry, 'function');
+	});
+
+	describe('mount()', function () {
+		it('fetches bundle, mounts module, returns mounted handle', async function () {
+			const { createHost } = await loadHostSandbox();
+			const container = createContainer();
+			const request = makeRequest({ hash: 'h1' });
+			const mountArgs = [];
+			const mockModule = { mount: async ctx => { mountArgs.push(ctx); } };
+
+			const host = createHost({
+				request,
+				api: { host: { adapterInstance: 'msghub.0' }, i18n: { t: k => k }, ui: {} },
+				_importFn: async () => mockModule,
+			});
+
+			const handle = await host.mount({
+				container,
+				pluginType: 'IngestStates',
+				instanceId: '0',
+				panelId: 'presets',
+				hash: '',
+			});
+
+			assert.equal(request.calls.length, 1);
+			assert.equal(request.calls[0].cmd, 'admin.pluginUi.bundle.get');
+			// JSON round-trip strips VM-realm prototype so deepEqual works across realms.
+			assert.deepEqual(JSON.parse(JSON.stringify(request.calls[0].payload)), {
+				pluginType: 'IngestStates',
+				instanceId: '0',
+				panelId: 'presets',
+			});
+
+			assert.equal(mountArgs.length, 1);
+			assert.equal(mountArgs[0].plugin.type, 'IngestStates');
+			assert.equal(mountArgs[0].plugin.instanceId, '0');
+			assert.equal(mountArgs[0].panel.id, 'presets');
+			assert.equal(mountArgs[0].host.adapterInstance, 'msghub.0');
+			assert.equal(mountArgs[0].host.uiTextLanguage, 'en');
+			assert.equal(typeof mountArgs[0].api.request, 'function');
+
+			assert.equal(handle._mounted, true);
+		});
+
+		it('injects CSS style and root div into shadow root', async function () {
+			const { createHost } = await loadHostSandbox();
+			const container = createContainer();
+			const request = makeRequest({ css: '.x { color: red; }' });
+			const host = createHost({
+				request,
+				api: {},
+				_importFn: async () => ({ mount: async () => {} }),
+			});
+
+			await host.mount({ container, pluginType: 'T', instanceId: '0', panelId: 'p', hash: '' });
+
+			const sr = container.shadowRoot;
+			assert.ok(sr, 'shadow root should be attached');
+			assert.equal(sr.children.length, 2, 'style + root div');
+			assert.equal(sr.children[0].tagName, 'STYLE');
+			assert.equal(sr.children[0].textContent, '.x { color: red; }');
+			assert.equal(sr.children[1].getAttribute('class'), 'msghub-plugin-panel-root');
+		});
+
+		it('skips style tag when bundle has no css', async function () {
+			const { createHost } = await loadHostSandbox();
+			const container = createContainer();
+			const host = createHost({
+				request: makeRequest({ css: null }),
+				api: {},
+				_importFn: async () => ({ mount: async () => {} }),
+			});
+
+			await host.mount({ container, pluginType: 'T', instanceId: '0', panelId: 'p', hash: '' });
+
+			const sr = container.shadowRoot;
+			assert.equal(sr.children.length, 1, 'only root div — no style tag');
+			assert.equal(sr.children[0].getAttribute('class'), 'msghub-plugin-panel-root');
+		});
+
+		it('skips bundle.get when hash already in cache (fast path)', async function () {
+			const { createHost } = await loadHostSandbox();
+			const request = makeRequest({ hash: 'known-hash' });
+			const host = createHost({
+				request,
+				api: {},
+				_importFn: async () => ({ mount: async () => {} }),
+			});
+
+			// First mount — hash not yet in cache, bundle.get is called and response caches as 'known-hash'.
+			await host.mount({
+				container: createContainer(),
+				pluginType: 'T',
+				instanceId: '1',
+				panelId: 'p',
+				hash: 'known-hash',
+			});
+			assert.equal(request.calls.length, 1);
+
+			// Second mount — passes the same hash; cache hit must skip bundle.get.
+			await host.mount({
+				container: createContainer(),
+				pluginType: 'T',
+				instanceId: '1',
+				panelId: 'p',
+				hash: 'known-hash',
+			});
+			assert.equal(request.calls.length, 1, 'bundle.get must not be called again on cache hit');
+		});
+
+		it('renders error in shadow root when module.mount() throws', async function () {
+			const { createHost } = await loadHostSandbox();
+			const container = createContainer();
+			const host = createHost({
+				request: makeRequest(),
+				api: {},
+				_importFn: async () => ({
+					mount: async () => {
+						throw new Error('kaboom');
+					},
+				}),
+			});
+
+			// Must not throw.
+			const handle = await host.mount({ container, pluginType: 'T', instanceId: '0', panelId: 'p', hash: '' });
+
+			assert.ok(handle, 'handle returned after mount error');
+			assert.equal(handle._mounted, false);
+
+			// Error element is written to shadow root (not light DOM) — shadow root exists at this point.
+			const sr = container.shadowRoot;
+			assert.ok(sr, 'shadow root should exist');
+			assert.equal(sr.children.length, 1);
+			const errorEl = sr.children[0];
+			assert.equal(errorEl.getAttribute('class'), 'msghub-plugin-panel-error');
+			assert.equal(errorEl.getAttribute('role'), 'alert');
+		});
+
+		it('renders error in container light DOM when bundle fetch fails', async function () {
+			const { createHost } = await loadHostSandbox();
+			const container = createContainer();
+			const host = createHost({
+				request: async () => ({ ok: false, error: { message: 'not found' } }),
+				api: {},
+				_importFn: async () => {
+					throw new Error('should not reach _importFn');
+				},
+			});
+
+			const handle = await host.mount({ container, pluginType: 'T', instanceId: '0', panelId: 'p', hash: '' });
+
+			assert.ok(handle, 'handle returned after load error');
+			assert.equal(handle._mounted, false);
+			// No shadow root attached yet — error falls back to container.
+			assert.equal(container.shadowRoot, null);
+			const errorEl = container.children[0];
+			assert.equal(errorEl?.getAttribute('class'), 'msghub-plugin-panel-error');
+			assert.equal(errorEl?.getAttribute('role'), 'alert');
+		});
+	});
+
+	describe('unmount()', function () {
+		it('calls module.unmount() and clears shadow root', async function () {
+			const { createHost } = await loadHostSandbox();
+			const container = createContainer();
+			const unmountArgs = [];
+			const mockModule = {
+				mount: async () => {},
+				unmount: async ctx => {
+					unmountArgs.push(ctx);
+				},
+			};
+			const host = createHost({
+				request: makeRequest(),
+				api: {},
+				_importFn: async () => mockModule,
+			});
+
+			const handle = await host.mount({ container, pluginType: 'T', instanceId: '0', panelId: 'p', hash: '' });
+			assert.equal(handle._mounted, true);
+			const sr = container.shadowRoot;
+
+			await host.unmount(handle);
+
+			assert.equal(unmountArgs.length, 1, 'module.unmount() should be called');
+			assert.equal(handle._mounted, false);
+			assert.equal(handle._module, null);
+			assert.equal(handle._ctx, null);
+			assert.equal(sr.children.length, 0, 'shadow root cleared');
+		});
+
+		it('is a no-op when module has no unmount export', async function () {
+			const { createHost } = await loadHostSandbox();
+			const container = createContainer();
+			const host = createHost({
+				request: makeRequest(),
+				api: {},
+				_importFn: async () => ({ mount: async () => {} }),
+			});
+
+			const handle = await host.mount({ container, pluginType: 'T', instanceId: '0', panelId: 'p', hash: '' });
+			// Should not throw.
+			await host.unmount(handle);
+			assert.equal(handle._mounted, false);
+		});
+
+		it('is a no-op for null handle', async function () {
+			const { createHost } = await loadHostSandbox();
+			const host = createHost({ request: makeRequest(), api: {}, _importFn: async () => ({}) });
+			// Should not throw.
+			await host.unmount(null);
+		});
+	});
+
+	describe('retry()', function () {
+		it('clears cache for the panel, re-fetches bundle, re-mounts', async function () {
+			const { createHost } = await loadHostSandbox();
+			const container = createContainer();
+			let mountCount = 0;
+			const mockModule = { mount: async () => { mountCount++; } };
+			const request = makeRequest({ hash: 'r-hash' });
+			const host = createHost({ request, api: {}, _importFn: async () => mockModule });
+
+			const handle = await host.mount({ container, pluginType: 'T', instanceId: '0', panelId: 'p', hash: '' });
+			assert.equal(request.calls.length, 1);
+			assert.equal(mountCount, 1);
+
+			const handle2 = await host.retry(handle);
+			assert.equal(request.calls.length, 2, 'retry must re-fetch after cache clear');
+			assert.equal(mountCount, 2, 'retry must re-mount');
+			assert.ok(handle2, 'retry returns new handle');
+		});
+
+		it('returns null for null handle without crashing', async function () {
+			const { createHost } = await loadHostSandbox();
+			const host = createHost({ request: makeRequest(), api: {}, _importFn: async () => ({}) });
+			const result = await host.retry(null);
+			assert.equal(result, null);
+		});
+	});
+
+	describe('ctx.api.request()', function () {
+		it('routes through admin.pluginUi.rpc with correct envelope', async function () {
+			const { createHost } = await loadHostSandbox();
+			const container = createContainer();
+			let capturedCtx = null;
+			const mockModule = {
+				mount: async ctx => {
+					capturedCtx = ctx;
+				},
+			};
+			const request = makeRequest({ rpcResponse: { ok: true, data: { result: 42 } } });
+			const host = createHost({ request, api: {}, _importFn: async () => mockModule });
+
+			await host.mount({
+				container,
+				pluginType: 'IngestStates',
+				instanceId: '0',
+				panelId: 'presets',
+				hash: '',
+			});
+
+			const rpcResult = await capturedCtx.api.request('presets.list', { filter: 'all' });
+
+			const rpcCall = request.calls.find(c => c.cmd === 'admin.pluginUi.rpc');
+			assert.ok(rpcCall, 'rpc call must be made');
+			// JSON round-trip strips VM-realm prototype so deepEqual works across realms.
+			assert.deepEqual(JSON.parse(JSON.stringify(rpcCall.payload)), {
+				pluginType: 'IngestStates',
+				instanceId: '0',
+				panelId: 'presets',
+				command: 'presets.list',
+				payload: { filter: 'all' },
+			});
+			assert.deepEqual(rpcResult, { ok: true, data: { result: 42 } });
+		});
+	});
+});
