@@ -62,58 +62,57 @@
 			const cloneJson = value => JSON.parse(JSON.stringify(value ?? null));
 
 			const buildPresetBase = () => cloneJson(presetTemplate);
+			const isObject = value => !!value && typeof value === 'object' && !Array.isArray(value);
 			const BINDING_NONE_VALUE = '__msghub_none__';
 
-			const defaultPreset = ({
-				presetId = '',
-				description = '',
-				source = 'user',
-				ownedBy = '',
-				kind = 'status',
-				level = 20,
-				subset = null,
-				usageCount = null,
-			} = {}) => {
+			const createDraftPreset = patch => {
 				const preset = buildPresetBase();
 				preset.schema = presetSchema;
-				preset.presetId = String(presetId || '').trim();
-				preset.description = typeof description === 'string' ? description : '';
-				preset.source = source === 'builtin' ? 'builtin' : 'user';
-				preset.ownedBy = typeof ownedBy === 'string' && ownedBy.trim() ? ownedBy.trim() : null;
-				preset.subset = String(subset ?? '').trim() || null;
-				if (!preset.message || typeof preset.message !== 'object') {
-					preset.message = {};
-				}
-				preset.message.kind = kind;
-				preset.message.level = level;
-				preset.message.icon = typeof preset.message.icon === 'string' ? preset.message.icon : '';
-				preset.message.title = typeof preset.message.title === 'string' ? preset.message.title : '';
-				preset.message.text = typeof preset.message.text === 'string' ? preset.message.text : '';
-				preset.message.textRecovered =
-					typeof preset.message.textRecovered === 'string' ? preset.message.textRecovered : '';
-				if (!preset.message.timing || typeof preset.message.timing !== 'object') {
-					preset.message.timing = { timeBudget: 0, dueInMs: 0, expiresInMs: 0, cooldown: 0, remindEvery: 0 };
-				}
-				if (!preset.message.details || typeof preset.message.details !== 'object') {
-					preset.message.details = { task: '', reason: '', tools: [], consumables: [] };
-				}
-				if (!preset.message.audience || typeof preset.message.audience !== 'object') {
-					preset.message.audience = { tags: [], channels: { include: [], exclude: [] } };
-				}
-				if (!Array.isArray(preset.message.actions)) {
-					preset.message.actions = [];
-				}
-				if (!preset.policy || typeof preset.policy !== 'object') {
-					preset.policy = { resetOnNormal: true };
-				}
-				preset.usageCount =
-					typeof usageCount === 'number' && Number.isFinite(usageCount)
-						? Math.max(0, Math.trunc(usageCount))
-						: null;
+				preset.presetId = '';
+				preset.source = 'user';
+				preset.ownedBy = null;
+				preset.subset = null;
 				if (Object.prototype.hasOwnProperty.call(preset, 'ui')) {
 					delete preset.ui;
 				}
-				return preset;
+				if (!isObject(patch)) {
+					return preset;
+				}
+				const next = { ...preset, ...cloneJson(patch) };
+				if (isObject(preset.message) || isObject(patch.message)) {
+					next.message = {
+						...(isObject(preset.message) ? preset.message : {}),
+						...(isObject(patch.message) ? patch.message : {}),
+					};
+				}
+				if (isObject(preset.policy) || isObject(patch.policy)) {
+					next.policy = {
+						...(isObject(preset.policy) ? preset.policy : {}),
+						...(isObject(patch.policy) ? patch.policy : {}),
+					};
+				}
+				return next;
+			};
+
+			const toPresetRow = value => {
+				const row = value && typeof value === 'object' ? value : {};
+				const presetId = typeof row.value === 'string' ? row.value.trim() : '';
+				if (!isPresetId(presetId)) {
+					return null;
+				}
+				return {
+					presetId,
+					source: row.source === 'builtin' ? 'builtin' : 'user',
+					ownedBy: typeof row.ownedBy === 'string' && row.ownedBy.trim() ? row.ownedBy.trim() : null,
+					subset: typeof row.subset === 'string' && row.subset.trim() ? row.subset.trim() : null,
+					kind: typeof row.kind === 'string' && row.kind.trim() ? row.kind.trim() : '',
+					level: typeof row.level === 'number' && Number.isFinite(row.level) ? row.level : null,
+					name: typeof row.name === 'string' ? row.name.trim() : '',
+					usageCount:
+						typeof row.usageCount === 'number' && Number.isFinite(row.usageCount)
+							? Math.max(0, Math.trunc(row.usageCount))
+							: 0,
+				};
 			};
 
 			const normalizePresetForDirtyCheck = preset => {
@@ -129,7 +128,7 @@
 				return next;
 			};
 
-			let presets = [];
+			let presetRows = [];
 
 			let selectedId = '';
 			let original = null;
@@ -148,13 +147,13 @@
 				JSON.stringify(normalizePresetForDirtyCheck(original)) !==
 				JSON.stringify(normalizePresetForDirtyCheck(draft));
 
-			const sortPresets = () => {
+			const sortPresetRows = () => {
 				const sortText = value =>
 					typeof value === 'string' ? value.trim() : value == null ? '' : String(value).trim();
 				const compareText = (a, b) =>
 					sortText(a).localeCompare(sortText(b), undefined, { sensitivity: 'base' });
 
-				presets.sort((a, b) => {
+				presetRows.sort((a, b) => {
 					const aOwnedBy = sortText(a?.ownedBy);
 					const bOwnedBy = sortText(b?.ownedBy);
 					const aIsCustom = !aOwnedBy;
@@ -165,7 +164,7 @@
 					}
 
 					if (aIsCustom && bIsCustom) {
-						return compareText(a?.description, b?.description);
+						return compareText(a?.name, b?.name);
 					}
 
 					const ownedByCmp = compareText(aOwnedBy, bOwnedBy);
@@ -178,7 +177,7 @@
 						return subsetCmp;
 					}
 
-					return compareText(a?.description, b?.description);
+					return compareText(a?.name, b?.name);
 				});
 			};
 
@@ -193,31 +192,8 @@
 					const opts = await ingestStatesDataApi.listPresets({ includeUsage: true });
 					const items = Array.isArray(opts) ? opts : [];
 
-					const next = [];
-					for (const o of items) {
-						const id = typeof o?.value === 'string' ? o.value.trim() : '';
-						if (!isPresetId(id)) {
-							continue;
-						}
-						next.push(
-							defaultPreset({
-								presetId: id,
-								description: typeof o.name === 'string' ? o.name.trim() : '',
-								source: typeof o.source === 'string' ? o.source.trim() : 'user',
-								ownedBy: typeof o.ownedBy === 'string' ? o.ownedBy.trim() : '',
-								kind: typeof o.kind === 'string' ? o.kind : 'status',
-								level: typeof o.level === 'number' ? o.level : 20,
-								subset: typeof o.subset === 'string' ? o.subset.trim() || null : null,
-								usageCount:
-									typeof o.usageCount === 'number' && Number.isFinite(o.usageCount)
-										? o.usageCount
-										: null,
-							}),
-						);
-					}
-
-					presets = next;
-					sortPresets();
+					presetRows = items.map(toPresetRow).filter(Boolean);
+					sortPresetRows();
 					selectedId = '';
 					original = null;
 					draft = null;
@@ -225,7 +201,7 @@
 					listLoading = false;
 
 					const desired = typeof selectPresetId === 'string' ? selectPresetId.trim() : '';
-					if (desired && presets.some(p => p?.presetId === desired)) {
+					if (desired && presetRows.some(p => p?.presetId === desired)) {
 						await setSelected(desired);
 					} else {
 						render();
@@ -345,14 +321,7 @@
 				}
 				setError('');
 				original = null;
-				draft = defaultPreset({
-					presetId: '',
-					description: '',
-					source: 'user',
-					ownedBy: '',
-					kind: 'status',
-					level: 20,
-				});
+				draft = createDraftPreset();
 				isNew = true;
 				render();
 			};
@@ -745,7 +714,7 @@
 			};
 
 			const renderList = () => {
-				sortPresets();
+				sortPresetRows();
 
 				const btnNew = h('button', {
 					type: 'button',
@@ -789,7 +758,7 @@
 				let items = null;
 				if (listLoading) {
 					items = h('div', { class: 'msghub-muted', text: 'Loading…' });
-				} else if (presets.length === 0) {
+				} else if (presetRows.length === 0) {
 					items = h('div', { class: 'msghub-muted', text: 'No presets yet. Click + to create one.' });
 				} else {
 					const constants = getMsgConstants();
@@ -804,7 +773,7 @@
 							}, {})
 						: {};
 
-					const rows = presets.map(p => {
+					const rows = presetRows.map(p => {
 						const ownedBy = p?.ownedBy;
 						const entry = getBindingEntryByOwnedBy(ownedBy);
 						const ownedByText = ownedBy
@@ -814,19 +783,16 @@
 							: t('msghub.i18n.IngestStates.admin.jsonCustom.preset.global.label');
 						const subsetRaw = typeof p?.subset === 'string' ? p.subset : '';
 						const subsetText = getSubsetText(ownedBy, subsetRaw);
-						const kindKey = String(p?.message?.kind || '').trim();
+						const kindKey = String(p?.kind || '').trim();
 						const kindText = kindKey
 							? t(`msghub.i18n.core.admin.common.MsgConstants.kind.${kindKey}.label`)
 							: kindKey;
-						const level = p?.message?.level;
+						const level = p?.level;
 						const levelKey = typeof level === 'number' ? levelKeyMap[level] : undefined;
 						const levelText = levelKey
 							? t(`msghub.i18n.core.admin.common.MsgConstants.level.${levelKey}.label`)
 							: String(level ?? '');
-						const usageCount =
-							typeof p?.usageCount === 'number' && Number.isFinite(p.usageCount)
-								? Math.max(0, Math.trunc(p.usageCount))
-								: 0;
+						const usageCount = typeof p?.usageCount === 'number' ? p.usageCount : 0;
 						const usageText = usageCount > 0 ? String(usageCount) : '';
 						const isSelected = p?.presetId === selectedId && !isNew;
 						return h(
@@ -860,8 +826,8 @@
 								}),
 								h('td', {
 									class: 'msghub-colCell msghub-col--preset-name',
-									text: p?.description || '',
-									title: p?.description || '',
+									text: p?.name || p?.presetId || '',
+									title: p?.name || p?.presetId || '',
 								}),
 							],
 						);

@@ -92,7 +92,7 @@ The following commands are compatible and active:
 - `admin.ingestStates.constants.get`
 - `admin.ingestStates.bulkApply.preview`
 - `admin.ingestStates.bulkApply.apply`
-- `admin.ingestStates.presets.list` (`{ rule?, subset?, includeUsage? }`; optional `usageCount` in items when requested)
+- `admin.ingestStates.presets.list` (`{ rule?, subset?, includeUsage? }`; optional `usageCount` from active IngestStates runtime bindings when requested)
 - `admin.ingestStates.presets.selectOptions*` (read-only option extraction)
 - `admin.ingestStates.presets.get`
 - `admin.ingestStates.presets.create`
