@@ -308,6 +308,123 @@ describe('admin/tab/panels/plugins/index.js', function () {
 		assert.ok(spinnerCalls.includes('hide'), 'spinner.hide must be called even on error');
 	});
 
+	it('onConnect() collapses overlapping refreshes into a single in-flight refresh', async function () {
+		const sandbox = await loadIndexModule();
+		const spinnerCalls = [];
+		let resolveConstants;
+		let constantsCalls = 0;
+		const ui = {
+			spinner: {
+				show: () => {
+					spinnerCalls.push('show');
+					return 'sid';
+				},
+				hide: () => {
+					spinnerCalls.push('hide');
+				},
+			},
+		};
+
+		const baseStubs = makeStubModules();
+		const stubs = {
+			...baseStubs,
+			MsghubAdminTabPluginsData: {
+				createPluginsDataApi: () => ({
+					ensureConstantsLoaded: async () => {
+						constantsCalls += 1;
+						await new Promise(resolve => {
+							resolveConstants = resolve;
+						});
+					},
+					ensurePluginReadmesLoaded: async () => new Map(),
+					getCatalog: async () => ({ plugins: [] }),
+					listInstances: async () => ({ instances: [] }),
+					createInstance: async () => ({}),
+					updateInstance: async () => ({}),
+					setEnabled: async () => undefined,
+					deleteInstance: async () => undefined,
+				}),
+			},
+		};
+		Object.assign(sandbox.window, stubs);
+
+		const panel = sandbox.window.MsghubAdminTabPlugins.init(
+			makeCtx({
+				api: {
+					i18n: { t: k => k, tOr: (k, fb) => fb, pickText: v => v },
+					constants: null,
+					plugins: null,
+					ingestStates: null,
+					ui,
+				},
+			}),
+		);
+
+		const p1 = panel.onConnect();
+		const p2 = panel.onConnect();
+		await new Promise(resolve => setImmediate(resolve));
+		assert.equal(constantsCalls, 1, 'connect refresh must only start once while in flight');
+		resolveConstants();
+		await Promise.all([p1, p2]);
+
+		assert.deepEqual(spinnerCalls, ['show', 'hide']);
+	});
+
+	it('onConnect() suppresses immediate follow-up connect refreshes after a successful refresh', async function () {
+		const sandbox = await loadIndexModule();
+		const spinnerCalls = [];
+		let constantsCalls = 0;
+		const ui = {
+			spinner: {
+				show: () => {
+					spinnerCalls.push('show');
+					return 'sid';
+				},
+				hide: () => {
+					spinnerCalls.push('hide');
+				},
+			},
+		};
+
+		const baseStubs = makeStubModules();
+		const stubs = {
+			...baseStubs,
+			MsghubAdminTabPluginsData: {
+				createPluginsDataApi: () => ({
+					ensureConstantsLoaded: async () => {
+						constantsCalls += 1;
+					},
+					ensurePluginReadmesLoaded: async () => new Map(),
+					getCatalog: async () => ({ plugins: [] }),
+					listInstances: async () => ({ instances: [] }),
+					createInstance: async () => ({}),
+					updateInstance: async () => ({}),
+					setEnabled: async () => undefined,
+					deleteInstance: async () => undefined,
+				}),
+			},
+		};
+		Object.assign(sandbox.window, stubs);
+
+		const panel = sandbox.window.MsghubAdminTabPlugins.init(
+			makeCtx({
+				api: {
+					i18n: { t: k => k, tOr: (k, fb) => fb, pickText: v => v },
+					constants: null,
+					plugins: null,
+					ingestStates: null,
+					ui,
+				},
+			}),
+		);
+
+		await panel.onConnect();
+		await panel.onConnect();
+
+		assert.equal(constantsCalls, 1, 'immediate follow-up connect refresh must be suppressed');
+		assert.deepEqual(spinnerCalls, ['show', 'hide']);
+	});
+
 	// --- refreshPlugin ---
 
 	it('refreshPlugin() resolves without throwing', async function () {

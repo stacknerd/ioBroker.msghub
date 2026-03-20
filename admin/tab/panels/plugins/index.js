@@ -228,41 +228,72 @@
 			}
 		});
 
+		let refreshAllPromise = null;
+		let lastConnectRefreshAt = 0;
+		const CONNECT_REFRESH_DEDUP_MS = 1500;
+
 		/**
 		 * Reloads and re-renders the full plugin catalog.
 		 *
 		 * Shows a non-blocking spinner for the duration of the reload. Renders an
 		 * inline error element on failure; always hides the spinner in the finally block.
+		 *
+		 * `onConnect()` may fire multiple times during boot/reconnect. We intentionally
+		 * collapse overlapping connect-triggered refreshes and suppress immediate
+		 * follow-up reconnect refreshes for a short cooldown window.
+		 *
+		 * @param {{ source?: 'connect'|'manual' }} [options] Refresh trigger metadata.
+		 * @returns {Promise<void>} Completion promise.
 		 */
-		async function refreshAll() {
-			const spinnerId =
-				ui?.spinner?.show({ message: t('msghub.i18n.core.admin.panels.plugins.loading.text') }) ?? null;
-			try {
-				await pluginsDataApi.ensureConstantsLoaded();
-				const expandedById = catalogApi.captureAccordionState();
-				const { plugins } = await pluginsDataApi.getCatalog();
-				const { instances } = await pluginsDataApi.listInstances();
-				const readmesByType = await pluginsDataApi.ensurePluginReadmesLoaded();
-				const vm = catalogApi.buildPluginsViewModel({ plugins, instances, readmesByType });
-				const fragment = catalogApi.renderCatalog({
-					vm,
-					expandedById,
-					readmesByType,
-					renderInstanceRow: instanceApi.renderInstanceRow,
-				});
-				elRoot.replaceChildren(fragment);
-			} catch (e) {
-				elRoot.replaceChildren(
-					h('div', {
-						class: 'msghub-error',
-						text: t('msghub.i18n.core.admin.ui.plugins.loadFailed.text', String(e?.message || e)),
-					}),
-				);
-			} finally {
-				if (spinnerId != null) {
-					ui?.spinner?.hide(spinnerId);
-				}
+		async function refreshAll(options) {
+			const source = options?.source === 'connect' ? 'connect' : 'manual';
+			const now = Date.now();
+			if (refreshAllPromise) {
+				return refreshAllPromise;
 			}
+			if (source === 'connect' && now - lastConnectRefreshAt < CONNECT_REFRESH_DEDUP_MS) {
+				return;
+			}
+
+			refreshAllPromise = Promise.resolve()
+				.then(async () => {
+					const spinnerId =
+						ui?.spinner?.show({ message: t('msghub.i18n.core.admin.panels.plugins.loading.text') }) ?? null;
+					try {
+						await pluginsDataApi.ensureConstantsLoaded();
+						const expandedById = catalogApi.captureAccordionState();
+						const { plugins } = await pluginsDataApi.getCatalog();
+						const { instances } = await pluginsDataApi.listInstances();
+						const readmesByType = await pluginsDataApi.ensurePluginReadmesLoaded();
+						const vm = catalogApi.buildPluginsViewModel({ plugins, instances, readmesByType });
+						const fragment = catalogApi.renderCatalog({
+							vm,
+							expandedById,
+							readmesByType,
+							renderInstanceRow: instanceApi.renderInstanceRow,
+						});
+						elRoot.replaceChildren(fragment);
+					} catch (e) {
+						elRoot.replaceChildren(
+							h('div', {
+								class: 'msghub-error',
+								text: t('msghub.i18n.core.admin.ui.plugins.loadFailed.text', String(e?.message || e)),
+							}),
+						);
+					} finally {
+						if (spinnerId != null) {
+							ui?.spinner?.hide(spinnerId);
+						}
+					}
+				})
+				.finally(() => {
+					if (source === 'connect') {
+						lastConnectRefreshAt = Date.now();
+					}
+					refreshAllPromise = null;
+				});
+
+			return refreshAllPromise;
 		}
 
 		/**
@@ -274,11 +305,11 @@
 		 * @returns {Promise<void>} Completion promise.
 		 */
 		async function refreshPlugin(_type) {
-			return refreshAll();
+			return refreshAll({ source: 'manual' });
 		}
 
 		return {
-			onConnect: () => refreshAll().catch(() => undefined),
+			onConnect: () => refreshAll({ source: 'connect' }).catch(() => undefined),
 			refreshPlugin: type => refreshPlugin(type).catch(() => undefined),
 		};
 	}

@@ -204,26 +204,65 @@ async function settle() {
 }
 
 /**
- * Returns all preset table row elements from the rendered tool.
+ * Returns the rendered preset table element.
  *
  * DOM path: el > .msghub-tools-presets-grid > elList > [listHeader, items]
- *         > table > tbody > tr x N
+ *         > table
  *
  * @param {object} el - Root element returned by renderTool.
- * @returns {object[]} Preset row elements.
+ * @returns {object|null} Preset table element.
+ */
+function getPresetTable(el) {
+	const grid = el.children[0];
+	if (!grid) return null;
+	const elList = grid.children[0];
+	if (!elList || elList.children.length < 2) return null;
+	const items = elList.children[1];
+	if (!items || !items.children || !items.children[0]) return null;
+	const table = items.children[0];
+	return Array.isArray(table?.children) ? table : null;
+}
+
+/**
+ * Returns all grouped tbody elements from the rendered presets table.
+ *
+ * @param {object} el - Root element returned by renderTool.
+ * @returns {object[]} Group tbody elements.
+ */
+function getPresetGroups(el) {
+	const table = getPresetTable(el);
+	if (!table) return [];
+	return table.children.filter(
+		c => c && c.tagName === 'TBODY' && String(c.className || '').includes('msghub-table-group'),
+	);
+}
+
+/**
+ * Returns all actual preset data rows across all groups.
+ *
+ * @param {object} el - Root element returned by renderTool.
+ * @returns {object[]} Preset data row elements.
  */
 function getPresetRows(el) {
-	const grid = el.children[0];
-	if (!grid) return [];
-	const elList = grid.children[0];
-	if (!elList || elList.children.length < 2) return [];
-	const items = elList.children[1];
-	if (!items || !items.children || !items.children[0]) return [];
-	const table = items.children[0];
-	if (!Array.isArray(table.children)) return [];
-	const tbody = table.children.find(c => c && c.tagName === 'TBODY');
-	if (!tbody || !Array.isArray(tbody.children)) return [];
-	return tbody.children.filter(c => c && c.tagName === 'TR');
+	return getPresetGroups(el).flatMap(group =>
+		(Array.isArray(group.children) ? group.children : []).filter(
+			c => c && c.tagName === 'TR' && String(c.className || '').includes('msghub-table-data-row'),
+		),
+	);
+}
+
+/**
+ * Returns a flattened text snapshot of all group labels.
+ *
+ * @param {object} el - Root element returned by renderTool.
+ * @returns {string[]} Group titles.
+ */
+function getPresetGroupTitles(el) {
+	return getPresetGroups(el).map(group => {
+		const row = Array.isArray(group.children) ? group.children[0] : null;
+		const cell = row?.children?.[0];
+		return cell?.textContent || '';
+	});
 }
 
 /**
@@ -345,7 +384,7 @@ describe('admin/tab/panels/plugins/overlay.presets.js', function () {
 		const table = items.children[0];
 		const colgroup = table.children.find(c => c && c.tagName === 'COLGROUP');
 		const thead = table.children.find(c => c && c.tagName === 'THEAD');
-		const tbody = table.children.find(c => c && c.tagName === 'TBODY');
+		const firstDataRow = getPresetRows(el)[0];
 		const columnClasses = [
 			'msghub-col--preset-usage',
 			'msghub-col--preset-ownedBy',
@@ -356,12 +395,12 @@ describe('admin/tab/panels/plugins/overlay.presets.js', function () {
 		];
 		assert.equal(colgroup.children.length, columnClasses.length);
 		assert.equal(thead.children[0].children.length, columnClasses.length);
-		assert.equal(tbody.children[0].children.length, columnClasses.length);
+		assert.equal(firstDataRow.children.length, columnClasses.length);
 		for (let i = 0; i < columnClasses.length; i += 1) {
 			const className = columnClasses[i];
 			assert.ok(colgroup.children[i].className.includes(className));
 			assert.ok(thead.children[0].children[i].className.includes(className));
-			assert.ok(tbody.children[0].children[i].className.includes(className));
+			assert.ok(firstDataRow.children[i].className.includes(className));
 		}
 	});
 
@@ -480,73 +519,115 @@ describe('admin/tab/panels/plugins/overlay.presets.js', function () {
 
 	// --- sort order ---
 
-	it('custom presets appear before owned presets regardless of alphabetical order', async function () {
+	it('renders fixed user and builtin groups with translated headings', async function () {
 		const sandbox = await loadPresetsModule();
 		const api = makePresetsApi(sandbox, {
+			t: key => {
+				const map = {
+					'msghub.i18n.IngestStates.admin.presets.group.user.label': 'Benutzerdefinierte Presets',
+					'msghub.i18n.IngestStates.admin.presets.group.builtin.label': 'MessageHub Standard-Presets',
+					'msghub.i18n.IngestStates.admin.presets.group.empty.text': 'keine entsprechenden Presets vorhanden',
+				};
+				return map[key] || key;
+			},
 			ingestStatesDataApi: {
 				listPresets: async () => [
-					{ value: 'pFree', name: 'AAA Free', ownedBy: null, kind: 'status', level: 20, subset: null },
-					{ value: 'pOwned', name: 'ZZZ Owned', ownedBy: 'Session', kind: 'status', level: 20, subset: null },
+					{ value: 'pFree', name: 'AAA Free', source: 'user', ownedBy: null, kind: 'status', level: 20, subset: null },
+					{ value: 'pOwned', name: 'ZZZ Owned', source: 'builtin', ownedBy: 'Session', kind: 'status', level: 20, subset: null },
 				],
 				getPreset: async () => ({ preset: null }),
 			},
 		});
 		const el = renderTool(api);
 		await settle();
+		assert.deepEqual(getPresetGroupTitles(el), ['Benutzerdefinierte Presets', 'MessageHub Standard-Presets']);
 		const rows = getPresetRows(el);
 		assert.equal(rows.length, 2);
-		assert.equal(
-			rows[0].children[5].textContent,
-			'AAA Free',
-			`Expected custom preset first, got: ${rows[0].children[5].textContent}`,
-		);
-		assert.equal(
-			rows[1].children[5].textContent,
-			'ZZZ Owned',
-			`Expected owned preset second, got: ${rows[1].children[5].textContent}`,
-		);
+		assert.equal(rows[0].children[5].textContent, 'AAA Free');
+		assert.equal(rows[1].children[5].textContent, 'ZZZ Owned');
 	});
 
-	it('within custom group presets sort alphabetically by description', async function () {
+	it('renders empty group rows when one source block has no presets', async function () {
 		const sandbox = await loadPresetsModule();
 		const api = makePresetsApi(sandbox, {
+			t: key => {
+				const map = {
+					'msghub.i18n.IngestStates.admin.presets.group.user.label': 'Benutzerdefinierte Presets',
+					'msghub.i18n.IngestStates.admin.presets.group.builtin.label': 'MessageHub Standard-Presets',
+					'msghub.i18n.IngestStates.admin.presets.group.empty.text': 'keine entsprechenden Presets vorhanden',
+				};
+				return map[key] || key;
+			},
 			ingestStatesDataApi: {
 				listPresets: async () => [
-					{ value: 'pBeta', name: 'Beta', ownedBy: null, kind: 'status', level: 20, subset: null },
-					{ value: 'pAlpha', name: 'Alpha', ownedBy: null, kind: 'status', level: 20, subset: null },
+					{ value: 'pAlpha', name: 'Alpha', source: 'user', ownedBy: null, kind: 'status', level: 20, subset: null },
 				],
 				getPreset: async () => ({ preset: null }),
 			},
 		});
 		const el = renderTool(api);
 		await settle();
-		const rows = getPresetRows(el);
-		assert.equal(rows.length, 2);
-		assert.equal(rows[0].children[5].textContent, 'Alpha', `Expected Alpha first, got: ${rows[0].children[5].textContent}`);
-		assert.equal(rows[1].children[5].textContent, 'Beta', `Expected Beta second, got: ${rows[1].children[5].textContent}`);
+		const groups = getPresetGroups(el);
+		assert.equal(groups.length, 2);
+		const builtinRows = groups[1].children;
+		assert.equal(builtinRows[0].children[0].textContent, 'MessageHub Standard-Presets');
+		assert.equal(builtinRows[1].children[0].textContent, 'keine entsprechenden Presets vorhanden');
 	});
 
-	it('within owned presets sorting uses ownedBy then subset then description', async function () {
+	it('within user group presets keep the existing semantic sort order', async function () {
 		const sandbox = await loadPresetsModule();
 		const api = makePresetsApi(sandbox, {
 			ingestStatesDataApi: {
 				listPresets: async () => [
-					{ value: 'p3', name: 'Beta', ownedBy: 'Session', kind: 'status', level: 20, subset: 'end' },
-					{ value: 'p1', name: 'Zulu', ownedBy: 'Alert', kind: 'status', level: 20, subset: 'core' },
-					{ value: 'p4', name: 'Alpha', ownedBy: 'Session', kind: 'status', level: 20, subset: 'end' },
-					{ value: 'p2', name: 'Alpha', ownedBy: 'Session', kind: 'status', level: 20, subset: 'begin' },
+					{ value: 'p3', name: 'Beta', source: 'user', ownedBy: 'Session', kind: 'status', level: 20, subset: 'end' },
+					{ value: 'p1', name: 'Zulu', source: 'user', ownedBy: 'Alert', kind: 'status', level: 20, subset: 'core' },
+					{ value: 'p4', name: 'Alpha', source: 'user', ownedBy: 'Session', kind: 'status', level: 20, subset: 'end' },
+					{ value: 'p2', name: 'Alpha', source: 'user', ownedBy: 'Session', kind: 'status', level: 20, subset: 'begin' },
+					{ value: 'p0', name: 'Custom', source: 'user', ownedBy: null, kind: 'status', level: 20, subset: null },
 				],
 				getPreset: async () => ({ preset: null }),
 			},
 		});
 		const el = renderTool(api);
 		await settle();
-		const rows = getPresetRows(el);
-		assert.equal(rows.length, 4);
-		assert.equal(rows[0].children[5].textContent, 'Zulu');
-		assert.equal(rows[1].children[5].textContent, 'Alpha');
+		const firstGroup = getPresetGroups(el)[0];
+		const rows = firstGroup.children.filter(
+			child => child?.tagName === 'TR' && String(child.className || '').includes('msghub-table-data-row'),
+		);
+		assert.equal(rows.length, 5);
+		assert.equal(rows[0].children[5].textContent, 'Custom');
+		assert.equal(rows[1].children[5].textContent, 'Zulu');
 		assert.equal(rows[2].children[5].textContent, 'Alpha');
-		assert.equal(rows[3].children[5].textContent, 'Beta');
+		assert.equal(rows[3].children[5].textContent, 'Alpha');
+		assert.equal(rows[4].children[5].textContent, 'Beta');
+	});
+
+	it('within builtin group presets keep the existing semantic sort order', async function () {
+		const sandbox = await loadPresetsModule();
+		const api = makePresetsApi(sandbox, {
+			ingestStatesDataApi: {
+				listPresets: async () => [
+					{ value: 'p3', name: 'Beta', source: 'builtin', ownedBy: 'Session', kind: 'status', level: 20, subset: 'end' },
+					{ value: 'p1', name: 'Zulu', source: 'builtin', ownedBy: 'Alert', kind: 'status', level: 20, subset: 'core' },
+					{ value: 'p4', name: 'Alpha', source: 'builtin', ownedBy: 'Session', kind: 'status', level: 20, subset: 'end' },
+					{ value: 'p2', name: 'Alpha', source: 'builtin', ownedBy: 'Session', kind: 'status', level: 20, subset: 'begin' },
+					{ value: 'p0', name: 'Custom', source: 'builtin', ownedBy: null, kind: 'status', level: 20, subset: null },
+				],
+				getPreset: async () => ({ preset: null }),
+			},
+		});
+		const el = renderTool(api);
+		await settle();
+		const secondGroup = getPresetGroups(el)[1];
+		const rows = secondGroup.children.filter(
+			child => child?.tagName === 'TR' && String(child.className || '').includes('msghub-table-data-row'),
+		);
+		assert.equal(rows.length, 5);
+		assert.equal(rows[0].children[5].textContent, 'Custom');
+		assert.equal(rows[1].children[5].textContent, 'Zulu');
+		assert.equal(rows[2].children[5].textContent, 'Alpha');
+		assert.equal(rows[3].children[5].textContent, 'Alpha');
+		assert.equal(rows[4].children[5].textContent, 'Beta');
 	});
 
 	// --- null subset handling ---

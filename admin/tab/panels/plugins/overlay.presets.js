@@ -181,8 +181,29 @@
 				});
 			};
 
+			const splitPresetRowsBySource = () => {
+				const userRows = [];
+				const builtinRows = [];
+				for (const row of presetRows) {
+					if (!row || typeof row !== 'object') {
+						continue;
+					}
+					if (row.source === 'builtin') {
+						builtinRows.push(row);
+						continue;
+					}
+					userRows.push(row);
+				}
+				return { userRows, builtinRows };
+			};
+
 			const loadList = async ({ selectPresetId = '', renderLoading = true, showLoadingToast = false } = {}) => {
-				const spinnerId = showLoadingToast ? showSpinner('msghub-presets-list-load') : null;
+				const spinnerId = showLoadingToast
+					? showSpinner(
+							'msghub-presets-list-load',
+							t('msghub.i18n.core.admin.ui.plugins.tools.ingestStates.presets.label'),
+						)
+					: null;
 				listLoading = true;
 				if (renderLoading) {
 					render();
@@ -237,12 +258,12 @@
 				}
 			};
 
-			const showSpinner = spinnerId => {
+			const showSpinner = (spinnerId, subject) => {
 				try {
 					return (
 						ui?.spinner?.show?.({
 							id: spinnerId,
-							message: t('msghub.i18n.core.admin.ui.loading.text'),
+							message: t('msghub.i18n.core.admin.ui.loadingWithSubject.text', String(subject || '')),
 						}) ?? null
 					);
 				} catch {
@@ -291,7 +312,8 @@
 				}
 				setError('');
 				presetLoading = true;
-				const spinnerId = showSpinner('msghub-presets-item-load');
+				const selectedRow = presetRows.find(row => row?.presetId === nextId) || null;
+				const spinnerId = showSpinner('msghub-presets-item-load', selectedRow?.name || nextId);
 				try {
 					const preset = await loadPreset(nextId);
 					if (!preset) {
@@ -773,7 +795,7 @@
 							}, {})
 						: {};
 
-					const rows = presetRows.map(p => {
+					const renderPresetRow = p => {
 						const ownedBy = p?.ownedBy;
 						const entry = getBindingEntryByOwnedBy(ownedBy);
 						const ownedByText = ownedBy
@@ -797,7 +819,10 @@
 						const isSelected = p?.presetId === selectedId && !isNew;
 						return h(
 							'tr',
-							{ class: isSelected ? 'is-selected' : '', onclick: () => void setSelected(p.presetId) },
+							{
+								class: `msghub-table-data-row${isSelected ? ' is-selected' : ''}`.trim(),
+								onclick: () => void setSelected(p.presetId),
+							},
 							[
 								h('td', {
 									class: 'msghub-colCell msghub-col--preset-usage',
@@ -831,7 +856,33 @@
 								}),
 							],
 						);
-					});
+					};
+
+					const renderPresetGroup = (label, rows) => {
+						const groupRows = Array.isArray(rows) ? rows : [];
+						return h('tbody', { class: 'msghub-table-group' }, [
+							h('tr', { class: 'msghub-table-group-row' }, [
+								h('th', {
+									class: 'msghub-colCell msghub-table-group-title',
+									colspan: 6,
+									text: label,
+								}),
+							]),
+							...(groupRows.length
+								? groupRows.map(renderPresetRow)
+								: [
+										h('tr', { class: 'msghub-table-empty-row' }, [
+											h('td', {
+												class: 'msghub-colCell msghub-muted',
+												colspan: 6,
+												text: t('msghub.i18n.IngestStates.admin.presets.group.empty.text'),
+											}),
+										]),
+									]),
+						]);
+					};
+
+					const { userRows, builtinRows } = splitPresetRowsBySource();
 
 					items = h('div', { class: 'msghub-tools-presets-list-items' }, [
 						h('table', { class: 'msghub-table msghub-presets-table' }, [
@@ -877,7 +928,11 @@
 									}),
 								]),
 							]),
-							h('tbody', null, rows),
+							renderPresetGroup(t('msghub.i18n.IngestStates.admin.presets.group.user.label'), userRows),
+							renderPresetGroup(
+								t('msghub.i18n.IngestStates.admin.presets.group.builtin.label'),
+								builtinRows,
+							),
 						]),
 					]);
 				}

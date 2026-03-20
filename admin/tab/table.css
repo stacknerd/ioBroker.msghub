@@ -28,17 +28,33 @@
 	padding-left: calc(var(--msghub-space-2) + var(--msghub-row-edge-indent));
 }
 
-.msghub-root .msghub-table tbody td {
+.msghub-root .msghub-table tbody :is(td, th) {
 	padding: var(--msghub-space-1) var(--msghub-space-2);
 	border-bottom: 1px solid var(--msghub-border-light);
 	vertical-align: top;
 }
 
-.msghub-root .msghub-table tbody td:first-child {
+.msghub-root .msghub-table tbody td:first-child,
+.msghub-root .msghub-table tbody th:first-child {
 	padding-left: calc(var(--msghub-space-2) + var(--msghub-row-edge-indent));
 }
 
-.msghub-root .msghub-table tbody tr:last-child td {
+.msghub-root .msghub-table tbody th {
+	font: inherit;
+	text-align: left;
+}
+
+.msghub-root .msghub-table tbody.msghub-table-group .msghub-table-group-row th {
+	font: var(--msghub-font-body-meta);
+	background: var(--msghub-bg-tableHeader);
+	color: var(--msghub-muted);
+	/* Dock group headers directly below the sticky thead while their section remains visible. */
+	position: sticky;
+	top: calc(var(--msghub-space-2) * 2 + 1lh + 1px);
+	z-index: 2;
+}
+
+.msghub-root .msghub-table tbody:last-of-type tr:last-child :is(td, th) {
 	border-bottom: 0;
 }
 
@@ -56,6 +72,35 @@
 
 .msghub-root .msghub-table tbody tr.is-selected td:first-child {
 	box-shadow: inset 3px 0 0 var(--msghub-accent);
+}
+
+.msghub-root .msghub-table tbody.msghub-table-group tr {
+	cursor: default;
+}
+
+.msghub-root .msghub-table tbody.msghub-table-group tr:hover td,
+.msghub-root .msghub-table tbody.msghub-table-group tr:hover th {
+	background: inherit;
+}
+
+.msghub-root .msghub-table tbody.msghub-table-group tr.msghub-table-data-row {
+	cursor: pointer;
+}
+
+.msghub-root .msghub-table tbody.msghub-table-group tr.msghub-table-data-row:hover td {
+	background: var(--msghub-surface-hover);
+}
+
+.msghub-root .msghub-table tbody.msghub-table-group tr.msghub-table-data-row.is-selected td {
+	background: var(--msghub-surface-selected);
+}
+
+.msghub-root .msghub-table tbody.msghub-table-group tr.msghub-table-data-row.is-selected td:first-child {
+	box-shadow: inset 3px 0 0 var(--msghub-accent);
+}
+
+.msghub-root .msghub-table tbody.msghub-table-group .msghub-table-empty-row td {
+	font-style: italic;
 }
 
 .msghub-root .msghub-colCell {
