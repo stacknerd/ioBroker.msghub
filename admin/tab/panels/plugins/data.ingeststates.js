@@ -84,13 +84,14 @@
 		/**
 		 * Lists all saved presets.
 		 *
+		 * @param {object} [params] Optional list params.
 		 * @returns {Promise<object>} Presets list response.
 		 */
-		async function listPresets() {
+		async function listPresets(params) {
 			if (!ingestStatesApi?.presets?.list) {
 				throw new Error('IngestStates presets API is not available');
 			}
-			return ingestStatesApi.presets.list();
+			return ingestStatesApi.presets.list(params || {});
 		}
 
 		/**

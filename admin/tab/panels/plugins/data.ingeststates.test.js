@@ -193,11 +193,20 @@ describe('admin/tab/panels/plugins/data.ingeststates.js', function () {
 		const { createIngestStatesDataApi } = sandbox.window.MsghubAdminTabPluginsIngestStatesData;
 		const state = makeState(sandbox);
 		const presets = [{ id: 'p1' }];
-		const ingestStatesApi = { presets: { list: async () => presets } };
+		let received;
+		const ingestStatesApi = {
+			presets: {
+				list: async params => {
+					received = params;
+					return presets;
+				},
+			},
+		};
 		const data = createIngestStatesDataApi({ state, ingestStatesApi });
 
-		const result = await data.listPresets();
+		const result = await data.listPresets({ includeUsage: true });
 		assert.equal(result, presets);
+		assert.deepEqual(received, { includeUsage: true });
 	});
 
 	it('listPresets() throws when presets API is unavailable', async function () {

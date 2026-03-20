@@ -460,7 +460,7 @@ function createAdminApi({ msghubRequest, msghubSocket, adapterInstance, lang, t,
 			apply: params => msghubRequest('admin.ingestStates.bulkApply.apply', params || {}),
 		}),
 		presets: Object.freeze({
-			list: () => msghubRequest('admin.ingestStates.presets.list', {}),
+			list: params => msghubRequest('admin.ingestStates.presets.list', params || {}),
 			get: params => msghubRequest('admin.ingestStates.presets.get', params || {}),
 			delete: params => msghubRequest('admin.ingestStates.presets.delete', params || {}),
 			create: params => msghubRequest('admin.ingestStates.presets.create', params || {}),
