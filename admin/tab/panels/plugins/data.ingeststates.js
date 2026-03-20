@@ -12,7 +12,7 @@
 	 * - IngestStates constants cache loader.
 	 * - IngestStates schema cache loader (promise-based, single-flight).
 	 * - Thin wrappers for ctx.api.ingestStates operations:
-	 *   presets (list/get/delete/upsert), bulkApply (preview/apply), custom.read.
+	 *   presets (list/get/delete/create/update), bulkApply (preview/apply), custom.read.
 	 *
 	 * Integration:
 	 * - Uses shared state from `state.js`.
@@ -120,16 +120,29 @@
 		}
 
 		/**
-		 * Creates or updates a preset.
+		 * Creates a preset.
 		 *
 		 * @param {object} params - Params: preset.
-		 * @returns {Promise<object>} Upserted preset response.
+		 * @returns {Promise<object>} Created preset response.
 		 */
-		async function upsertPreset(params) {
-			if (!ingestStatesApi?.presets?.upsert) {
+		async function createPreset(params) {
+			if (!ingestStatesApi?.presets?.create) {
 				throw new Error('IngestStates presets API is not available');
 			}
-			return ingestStatesApi.presets.upsert(params);
+			return ingestStatesApi.presets.create(params);
+		}
+
+		/**
+		 * Updates an existing preset.
+		 *
+		 * @param {object} params - Params: presetId, preset.
+		 * @returns {Promise<object>} Updated preset response.
+		 */
+		async function updatePreset(params) {
+			if (!ingestStatesApi?.presets?.update) {
+				throw new Error('IngestStates presets API is not available');
+			}
+			return ingestStatesApi.presets.update(params);
 		}
 
 		/**
@@ -177,7 +190,8 @@
 			listPresets,
 			getPreset,
 			deletePreset,
-			upsertPreset,
+			createPreset,
+			updatePreset,
 			bulkApplyPreview,
 			bulkApplyApply,
 			customRead,

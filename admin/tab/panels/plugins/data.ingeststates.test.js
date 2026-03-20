@@ -50,7 +50,8 @@ describe('admin/tab/panels/plugins/data.ingeststates.js', function () {
 		assert.equal(typeof data.listPresets, 'function');
 		assert.equal(typeof data.getPreset, 'function');
 		assert.equal(typeof data.deletePreset, 'function');
-		assert.equal(typeof data.upsertPreset, 'function');
+		assert.equal(typeof data.createPreset, 'function');
+		assert.equal(typeof data.updatePreset, 'function');
 		assert.equal(typeof data.bulkApplyPreview, 'function');
 		assert.equal(typeof data.bulkApplyApply, 'function');
 		assert.equal(typeof data.customRead, 'function');
@@ -236,7 +237,7 @@ describe('admin/tab/panels/plugins/data.ingeststates.js', function () {
 		await assert.rejects(() => data.deletePreset({ presetId: 'p1' }), /IngestStates presets API/);
 	});
 
-	it('upsertPreset() passes preset to ingestStatesApi.presets.upsert', async function () {
+	it('createPreset() passes preset to ingestStatesApi.presets.create', async function () {
 		const sandbox = await loadDataIngestStatesModule();
 		const { createIngestStatesDataApi } = sandbox.window.MsghubAdminTabPluginsIngestStatesData;
 		const state = makeState(sandbox);
@@ -244,7 +245,7 @@ describe('admin/tab/panels/plugins/data.ingeststates.js', function () {
 		let received;
 		const ingestStatesApi = {
 			presets: {
-				upsert: async params => {
+				create: async params => {
 					received = params;
 					return preset;
 				},
@@ -252,7 +253,28 @@ describe('admin/tab/panels/plugins/data.ingeststates.js', function () {
 		};
 		const data = createIngestStatesDataApi({ state, ingestStatesApi });
 
-		await data.upsertPreset({ preset });
+		await data.createPreset({ preset });
+		assert.equal(received.preset, preset);
+	});
+
+	it('updatePreset() passes presetId and preset to ingestStatesApi.presets.update', async function () {
+		const sandbox = await loadDataIngestStatesModule();
+		const { createIngestStatesDataApi } = sandbox.window.MsghubAdminTabPluginsIngestStatesData;
+		const state = makeState(sandbox);
+		const preset = { name: 'Updated Preset' };
+		let received;
+		const ingestStatesApi = {
+			presets: {
+				update: async params => {
+					received = params;
+					return { ok: true };
+				},
+			},
+		};
+		const data = createIngestStatesDataApi({ state, ingestStatesApi });
+
+		await data.updatePreset({ presetId: 'p1', preset });
+		assert.equal(received.presetId, 'p1');
 		assert.equal(received.preset, preset);
 	});
 

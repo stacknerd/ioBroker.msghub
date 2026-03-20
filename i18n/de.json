@@ -604,6 +604,8 @@
 	"msghub.i18n.IngestStates.admin.presets.allowedTemplates.label": "Erlaubte Templates",
 	"msghub.i18n.IngestStates.admin.presets.name.label": "Name",
 	"msghub.i18n.IngestStates.admin.presets.ownedBy.label": "Regel",
+	"msghub.i18n.IngestStates.admin.presets.presetId.label": "Preset-ID",
+	"msghub.i18n.IngestStates.admin.presets.presetId.pending.text": "Wird beim ersten Speichern automatisch erzeugt.",
 	"msghub.i18n.IngestStates.admin.presets.subset.label": "Subset",
 	"msghub.i18n.IngestStates.admin.templateCatalog.common.metric.stateName.help": "Name oder Alias des ioBroker-Datenpunkts, den diese Regel überwacht. Wird als konfigurierter Anzeigename ausgegeben. Beispiel: `Wohnzimmer · Temperatur`.",
 	"msghub.i18n.IngestStates.admin.templateCatalog.common.metric.stateName.label": "Überwachter Datenpunkt",

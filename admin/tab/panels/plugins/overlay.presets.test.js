@@ -124,7 +124,8 @@ function makePresetsApi(sandbox, overrides = {}) {
 		ingestStatesDataApi: {
 			listPresets: async () => [],
 			getPreset: async () => ({ preset: null }),
-			upsertPreset: async () => ({ ok: false }),
+			createPreset: async () => ({ ok: false }),
+			updatePreset: async () => ({ ok: false }),
 			deletePreset: async () => ({ ok: false }),
 		},
 		...overrides,
@@ -748,7 +749,7 @@ describe('admin/tab/panels/plugins/overlay.presets.js', function () {
 						message: { ...MINIMAL_PRESET_TEMPLATE.message, kind: 'status', level: 20, title: 'T', text: 'X' },
 					},
 				}),
-				upsertPreset: async () => ({ ok: true }),
+				updatePreset: async () => ({ ok: true }),
 			},
 		});
 		const el = renderTool(api);
@@ -896,5 +897,188 @@ describe('admin/tab/panels/plugins/overlay.presets.js', function () {
 		assert.equal(texts.includes('Available for lt.'), false);
 		assert.equal(texts.includes('{{m.state-max}} - Upper limit'), false);
 		assert.equal(texts.includes('Available for gt.'), false);
+	});
+
+	it('duplicate save creates a preset without frontend presetId input', async function () {
+		const sandbox = await loadPresetsModule();
+		let listCalls = 0;
+		let createParams = null;
+		const translations = {
+			'msghub.i18n.IngestStates.admin.presets.presetId.label': 'Preset ID',
+			'msghub.i18n.IngestStates.admin.presets.presetId.pending.text':
+				'Generated automatically on first save.',
+		};
+		const api = makePresetsApi(sandbox, {
+			formApi: makeFormApiStub(),
+			t: key => translations[key] || key,
+			ingestStatesDataApi: {
+				listPresets: async () => {
+					listCalls += 1;
+					return listCalls === 1
+						? [{ value: 'p1', name: 'Preset', source: 'user', ownedBy: null, kind: 'status', level: 20, subset: null }]
+						: [
+								{ value: 'p1', name: 'Preset', source: 'user', ownedBy: null, kind: 'status', level: 20, subset: null },
+								{
+									value: 'preset-2',
+									name: 'Preset',
+									source: 'user',
+									ownedBy: null,
+									kind: 'status',
+									level: 20,
+									subset: null,
+								},
+							];
+				},
+				getPreset: async ({ presetId }) => ({
+					preset: {
+						...MINIMAL_PRESET_TEMPLATE,
+						schema: PRESET_SCHEMA,
+						presetId,
+						description: 'Preset',
+						source: 'user',
+						ownedBy: null,
+						subset: null,
+						message: {
+							...MINIMAL_PRESET_TEMPLATE.message,
+							kind: 'status',
+							level: 20,
+							title: 'T',
+							text: 'X',
+						},
+					},
+				}),
+				createPreset: async params => {
+					createParams = params;
+					return { presetId: 'preset-2' };
+				},
+			},
+		});
+		const el = renderTool(api);
+		await el.__msghubReady;
+		getPresetRows(el)[0].dispatchEvent({ type: 'click' });
+		await settle();
+
+		const list = el.children[0].children[0];
+		const duplicateButton = findNode(list, node => node?.tagName === 'BUTTON' && node?.textContent === '⧉');
+		duplicateButton.dispatchEvent({ type: 'click' });
+		await settle();
+		await settle();
+
+		const editor = el.children[0].children[1];
+		assert.equal(findNode(editor, node => node?.getAttribute?.('data-key') === 'presetId'), null);
+
+		const saveButton = findNode(editor, node => node?.tagName === 'BUTTON' && node?.textContent === 'Save');
+		saveButton.dispatchEvent({ type: 'click' });
+		await settle();
+		await settle();
+
+		assert.deepEqual(JSON.parse(JSON.stringify(createParams)), {
+			preset: {
+				schema: PRESET_SCHEMA,
+				description: 'Preset',
+				source: 'user',
+				ownedBy: null,
+				subset: null,
+				message: {
+					kind: 'status',
+					level: 20,
+					icon: '',
+					title: 'T',
+					text: 'X',
+					textRecovered: '',
+					timing: { timeBudget: 0, dueInMs: 0, expiresInMs: 0, cooldown: 0, remindEvery: 0 },
+					details: { task: '', reason: '', tools: [], consumables: [] },
+					audience: { tags: [], channels: { include: [], exclude: [] } },
+					actions: [],
+				},
+				policy: { resetOnNormal: true },
+			},
+		});
+	});
+
+	it('editing an existing preset saves via updatePreset with payload presetId only', async function () {
+		const sandbox = await loadPresetsModule();
+		let listCalls = 0;
+		let updateParams = null;
+		const api = makePresetsApi(sandbox, {
+			formApi: makeFormApiStub(),
+			ingestStatesDataApi: {
+				listPresets: async () => {
+					listCalls += 1;
+					return [
+						{
+							value: 'p1',
+							name: listCalls === 1 ? 'Preset' : 'Renamed Preset',
+							source: 'user',
+							ownedBy: 'Session',
+							kind: 'status',
+							level: 20,
+							subset: 'start',
+						},
+					];
+				},
+				getPreset: async () => ({
+					preset: {
+						...MINIMAL_PRESET_TEMPLATE,
+						schema: PRESET_SCHEMA,
+						presetId: 'p1',
+						description: listCalls === 1 ? 'Preset' : 'Renamed Preset',
+						source: 'user',
+						ownedBy: 'Session',
+						subset: 'start',
+						message: {
+							...MINIMAL_PRESET_TEMPLATE.message,
+							kind: 'status',
+							level: 20,
+							title: 'T',
+							text: 'X',
+						},
+					},
+				}),
+				updatePreset: async params => {
+					updateParams = params;
+					return { presetId: 'p1' };
+				},
+			},
+		});
+		const el = renderTool(api);
+		await el.__msghubReady;
+		getPresetRows(el)[0].dispatchEvent({ type: 'click' });
+		await settle();
+
+		const editor = el.children[0].children[1];
+		const descriptionInput = findNode(editor, node => node?.getAttribute?.('data-key') === 'description');
+		descriptionInput.value = 'Renamed Preset';
+		descriptionInput.dispatchEvent({ type: 'input' });
+		await settle();
+
+		const saveButton = findNode(editor, node => node?.tagName === 'BUTTON' && node?.textContent === 'Save');
+		saveButton.dispatchEvent({ type: 'click' });
+		await settle();
+		await settle();
+
+		assert.deepEqual(JSON.parse(JSON.stringify(updateParams)), {
+			presetId: 'p1',
+			preset: {
+				schema: PRESET_SCHEMA,
+				description: 'Renamed Preset',
+				source: 'user',
+				ownedBy: 'Session',
+				subset: 'start',
+				message: {
+					kind: 'status',
+					level: 20,
+					icon: '',
+					title: 'T',
+					text: 'X',
+					textRecovered: '',
+					timing: { timeBudget: 0, dueInMs: 0, expiresInMs: 0, cooldown: 0, remindEvery: 0 },
+					details: { task: '', reason: '', tools: [], consumables: [] },
+					audience: { tags: [], channels: { include: [], exclude: [] } },
+					actions: [],
+				},
+				policy: { resetOnNormal: true },
+			},
+		});
 	});
 });

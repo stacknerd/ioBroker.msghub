@@ -392,7 +392,11 @@
 				if (draft.schema !== presetSchema) {
 					return `Invalid schema (expected '${presetSchema}')`;
 				}
-				if (!isPresetId(draft.presetId)) {
+				const description = typeof draft.description === 'string' ? draft.description.trim() : '';
+				if (!description) {
+					return 'Missing required field: description';
+				}
+				if (!isNew && !isPresetId(draft.presetId)) {
 					return 'Invalid presetId (allowed: A-Z a-z 0-9 _ -)';
 				}
 				if (!draft?.message?.kind) {
@@ -427,10 +431,14 @@
 				setError('');
 				saving = true;
 				render();
+				let nextPresetId = '';
 				Promise.resolve()
 					.then(() => {
 						try {
-							console.debug('Msghub presets: upsert start', { presetId: draft?.presetId });
+							console.debug('Msghub presets: save start', {
+								mode: isNew ? 'create' : 'update',
+								presetId: draft?.presetId,
+							});
 						} catch {
 							// ignore
 						}
@@ -444,14 +452,46 @@
 						) {
 							delete preset.ui;
 						}
-						return ingestStatesDataApi.upsertPreset({ preset });
+						if (
+							preset &&
+							typeof preset === 'object' &&
+							Object.prototype.hasOwnProperty.call(preset, 'presetId')
+						) {
+							delete preset.presetId;
+						}
+						if (isNew) {
+							return ingestStatesDataApi.createPreset({ preset }).then(result => {
+								nextPresetId =
+									typeof result?.presetId === 'string'
+										? result.presetId.trim()
+										: typeof result?.data?.presetId === 'string'
+											? result.data.presetId.trim()
+											: '';
+								if (!isPresetId(nextPresetId)) {
+									throw new Error('Created preset did not return a valid presetId');
+								}
+								return null;
+							});
+						}
+						nextPresetId = String(draft?.presetId || '').trim();
+						if (!isPresetId(nextPresetId)) {
+							throw new Error('Invalid presetId');
+						}
+						return ingestStatesDataApi.updatePreset({ presetId: nextPresetId, preset });
 					})
 					.then(() =>
-						loadList({ selectPresetId: draft.presetId, renderLoading: false, showLoadingToast: true }),
+						loadList({
+							selectPresetId: nextPresetId,
+							renderLoading: false,
+							showLoadingToast: true,
+						}),
 					)
 					.then(() => {
 						try {
-							console.debug('Msghub presets: upsert ok', { presetId: draft?.presetId });
+							console.debug('Msghub presets: save ok', {
+								mode: isNew ? 'create' : 'update',
+								presetId: nextPresetId,
+							});
 						} catch {
 							// ignore
 						}
@@ -854,17 +894,19 @@
 
 				const fields = [];
 
-				const fPresetId = formApi.buildFieldInput({
-					type: 'string',
-					key: 'presetId',
-					label: 'Preset ID',
-					value: draft.presetId,
-					help: 'Storage id (A-Z a-z 0-9 _ -).',
+				const presetIdText = String(draft?.presetId || '').trim();
+				fields.push({
+					wrapper: h('div', { class: 'msghub-field' }, [
+						h('div', {
+							class: 'msghub-field-header-label',
+							text: t('msghub.i18n.IngestStates.admin.presets.presetId.label'),
+						}),
+						h('div', {
+							class: presetIdText ? '' : 'msghub-muted',
+							text: presetIdText || t('msghub.i18n.IngestStates.admin.presets.presetId.pending.text'),
+						}),
+					]),
 				});
-				if (fPresetId?.input) {
-					fPresetId.input.disabled = disabled || isNew !== true;
-				}
-				fields.push(fPresetId);
 
 				const fDescription = formApi.buildFieldInput({
 					type: 'string',
@@ -947,6 +989,7 @@
 				const titleField = (() => {
 					const id = `f_title_${Math.random().toString(36).slice(2, 8)}`;
 					const input = h('input', { type: 'text', id, value: draft?.message?.title ?? '' });
+					input.value = draft?.message?.title ?? '';
 					if (disabled) {
 						input.disabled = true;
 					}
@@ -960,6 +1003,7 @@
 				const iconField = (() => {
 					const id = `f_icon_${Math.random().toString(36).slice(2, 8)}`;
 					const input = h('input', { type: 'text', id, value: draft?.message?.icon ?? '' });
+					input.value = draft?.message?.icon ?? '';
 					if (disabled) {
 						input.disabled = true;
 					}
@@ -981,6 +1025,7 @@
 						class: '',
 						text: draft?.message?.text ?? '',
 					});
+					textarea.value = draft?.message?.text ?? '';
 					if (disabled) {
 						textarea.disabled = true;
 					}
@@ -1039,6 +1084,7 @@
 						class: '',
 						text: draft?.message?.textRecovered ?? '',
 					});
+					textarea.value = draft?.message?.textRecovered ?? '';
 					if (disabled) {
 						textarea.disabled = true;
 					}
@@ -1168,6 +1214,7 @@
 						id,
 						value: formatCsvList(draft?.message?.details?.tools),
 					});
+					input.value = formatCsvList(draft?.message?.details?.tools);
 					if (disabled) {
 						input.disabled = true;
 					}
@@ -1187,6 +1234,7 @@
 						id,
 						value: formatCsvList(draft?.message?.details?.consumables),
 					});
+					input.value = formatCsvList(draft?.message?.details?.consumables);
 					if (disabled) {
 						input.disabled = true;
 					}
@@ -1210,6 +1258,7 @@
 						id,
 						value: formatCsvList(draft?.message?.audience?.tags),
 					});
+					input.value = formatCsvList(draft?.message?.audience?.tags);
 					if (disabled) {
 						input.disabled = true;
 					}
@@ -1229,6 +1278,7 @@
 						id,
 						value: formatCsvList(draft?.message?.audience?.channels?.include),
 					});
+					input.value = formatCsvList(draft?.message?.audience?.channels?.include);
 					if (disabled) {
 						input.disabled = true;
 					}
@@ -1248,6 +1298,7 @@
 						id,
 						value: formatCsvList(draft?.message?.audience?.channels?.exclude),
 					});
+					input.value = formatCsvList(draft?.message?.audience?.channels?.exclude);
 					if (disabled) {
 						input.disabled = true;
 					}
@@ -1272,6 +1323,7 @@
 						class: '',
 						text: JSON.stringify(draft?.message?.actions || [], null, 2),
 					});
+					textarea.value = JSON.stringify(draft?.message?.actions || [], null, 2);
 					if (disabled) {
 						textarea.disabled = true;
 					}
@@ -1347,6 +1399,26 @@
 
 				// Wire field changes into draft
 				const apply = () => {
+					const readTextValue = (field, fallback = '') => {
+						const raw = field?.getValue ? field.getValue() : fallback;
+						if (raw === undefined) {
+							return String(fallback ?? '');
+						}
+						return raw == null ? '' : String(raw);
+					};
+					const readNumberValue = (field, fallback = 0) => {
+						const raw = field?.getValue ? field.getValue() : fallback;
+						if (raw === undefined || raw === null || raw === '') {
+							return fallback;
+						}
+						const n = Number(raw);
+						return Number.isFinite(n) ? n : fallback;
+					};
+					const readBooleanValue = (field, fallback = false) => {
+						const raw = field?.getValue ? field.getValue() : fallback;
+						return raw === undefined ? fallback : raw === true;
+					};
+
 					const nextOwnedBy = normalizeBindingValue(fOwnedBy?.getValue ? fOwnedBy.getValue() : '');
 					let nextSubset = normalizeBindingValue(fSubset?.getValue ? fSubset.getValue() : '');
 					const allowedSubsetOptions = getSubsetOptions(nextOwnedBy);
@@ -1362,31 +1434,62 @@
 					});
 
 					updateDraft({
-						presetId: String(fPresetId?.getValue ? fPresetId.getValue() : '').trim(),
-						description: String(fDescription?.getValue ? fDescription.getValue() : ''),
-						schema: String(fSchema?.getValue ? fSchema.getValue() : ''),
+						description: readTextValue(fDescription, draft?.description || ''),
+						schema: String(draft?.schema || presetSchema || ''),
 						source: source,
 						ownedBy: nextOwnedBy || null,
 						subset: nextSubset || null,
 					});
+					const nextKindRaw = fKind?.getValue ? fKind.getValue() : undefined;
+					const nextLevelRaw = fLevel?.getValue ? fLevel.getValue() : undefined;
+					const nextKind =
+						typeof nextKindRaw === 'string' && nextKindRaw.trim()
+							? nextKindRaw
+							: String(draft?.message?.kind || '');
+					const nextLevel =
+						typeof nextLevelRaw === 'number' && Number.isFinite(nextLevelRaw)
+							? nextLevelRaw
+							: typeof nextLevelRaw === 'string' &&
+								  nextLevelRaw.trim() !== '' &&
+								  Number.isFinite(Number(nextLevelRaw))
+								? Number(nextLevelRaw)
+								: draft?.message?.level;
 					updateMessage({
-						kind: fKind?.getValue ? fKind.getValue() : undefined,
-						level: fLevel?.getValue ? fLevel.getValue() : undefined,
+						kind: nextKind,
+						level: nextLevel,
 					});
 					updateMessageNested('title', titleField.getValue());
 					updateMessageNested('icon', iconField.getValue());
 					updateMessageNested('text', textField.getValue());
 					updateMessageNested('textRecovered', textRecoveredField.getValue());
-					updateMessageNested('timing.timeBudget', fTimeBudget?.getValue ? fTimeBudget.getValue() || 0 : 0);
-					updateMessageNested('timing.dueInMs', fDueIn?.getValue ? fDueIn.getValue() || 0 : 0);
-					updateMessageNested('timing.expiresInMs', fExpiresIn?.getValue ? fExpiresIn.getValue() || 0 : 0);
-					updateMessageNested('timing.cooldown', fCooldown?.getValue ? fCooldown.getValue() || 0 : 0);
+					updateMessageNested(
+						'timing.timeBudget',
+						readNumberValue(fTimeBudget, draft?.message?.timing?.timeBudget || 0),
+					);
+					updateMessageNested(
+						'timing.dueInMs',
+						readNumberValue(fDueIn, draft?.message?.timing?.dueInMs || 0),
+					);
+					updateMessageNested(
+						'timing.expiresInMs',
+						readNumberValue(fExpiresIn, draft?.message?.timing?.expiresInMs || 0),
+					);
+					updateMessageNested(
+						'timing.cooldown',
+						readNumberValue(fCooldown, draft?.message?.timing?.cooldown || 0),
+					);
 					updateMessageNested(
 						'timing.remindEvery',
-						fRemindEvery?.getValue ? fRemindEvery.getValue() || 0 : 0,
+						readNumberValue(fRemindEvery, draft?.message?.timing?.remindEvery || 0),
 					);
-					updateMessageNested('details.task', fDetailsTask?.getValue ? fDetailsTask.getValue() : '');
-					updateMessageNested('details.reason', fDetailsReason?.getValue ? fDetailsReason.getValue() : '');
+					updateMessageNested(
+						'details.task',
+						readTextValue(fDetailsTask, draft?.message?.details?.task || ''),
+					);
+					updateMessageNested(
+						'details.reason',
+						readTextValue(fDetailsReason, draft?.message?.details?.reason || ''),
+					);
 					updateMessageNested('details.tools', toolsField.getValue());
 					updateMessageNested('details.consumables', consumablesField.getValue());
 					updateMessageNested('audience.tags', tagsField.getValue());
@@ -1397,7 +1500,7 @@
 						updateMessageNested('actions', actions);
 					}
 					updatePolicy({
-						resetOnNormal: fResetOnNormal?.getValue ? fResetOnNormal.getValue() === true : false,
+						resetOnNormal: readBooleanValue(fResetOnNormal, draft?.policy?.resetOnNormal === true),
 					});
 					allowedTemplatesField.update(nextOwnedBy, nextSubset);
 
@@ -1417,7 +1520,6 @@
 				};
 
 				// Basic fields
-				watch(fPresetId.input);
 				watch(fDescription.input);
 				watch(fOwnedBy.input);
 				watch(fSubset.input);

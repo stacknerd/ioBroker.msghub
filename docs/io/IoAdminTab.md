@@ -95,7 +95,8 @@ The following commands are compatible and active:
 - `admin.ingestStates.presets.list`
 - `admin.ingestStates.presets.selectOptions*` (read-only option extraction)
 - `admin.ingestStates.presets.get`
-- `admin.ingestStates.presets.upsert`
+- `admin.ingestStates.presets.create`
+- `admin.ingestStates.presets.update`
 - `admin.ingestStates.presets.delete`
 
 Intentionally incompatible:
