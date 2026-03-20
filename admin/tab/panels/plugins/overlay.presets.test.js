@@ -796,6 +796,83 @@ describe('admin/tab/panels/plugins/overlay.presets.js', function () {
 		assert.equal(saveButton?.getAttribute?.('disabled'), 'true');
 	});
 
+	it('organizes the editor into semantic sections with toggle buttons and row help slots', async function () {
+		const sandbox = await loadPresetsModule();
+		const api = makePresetsApi(sandbox, {
+			formApi: makeFormApiStub(),
+			ingestStatesDataApi: {
+				listPresets: async () => [
+					{ value: 'p1', name: 'Preset', source: 'user', ownedBy: null, kind: 'status', level: 20, subset: null },
+				],
+				getPreset: async () => ({
+					preset: {
+						...MINIMAL_PRESET_TEMPLATE,
+						schema: PRESET_SCHEMA,
+						presetId: 'p1',
+						description: 'Preset',
+						source: 'user',
+						ownedBy: null,
+						subset: null,
+						message: { ...MINIMAL_PRESET_TEMPLATE.message, kind: 'status', level: 20, title: 'T', text: 'X' },
+					},
+				}),
+			},
+		});
+		const el = renderTool(api);
+		await el.__msghubReady;
+		getPresetRows(el)[0].dispatchEvent({ type: 'click' });
+		await settle();
+
+		const editor = el.children[0].children[1];
+		const sectionButtons = findNodes(
+			editor,
+			node => node?.tagName === 'BUTTON' && node?.getAttribute?.('data-section-toggle'),
+		);
+		assert.deepEqual(
+			sectionButtons.map(node => node.textContent),
+			['General', 'Message', 'Timing', 'Details', 'Audience', 'Policy', 'Actions'],
+		);
+		const generalSection = findNode(editor, node => node?.getAttribute?.('data-section-key') === 'general');
+		assert.equal(generalSection?.getAttribute?.('data-default-open'), 'always');
+		const helpSlots = findNodes(editor, node => String(node?.className || '').includes('msghub-preset-editor-helpSlot'));
+		assert.ok(helpSlots.length > 0, 'editor rows should reserve a help slot');
+	});
+
+	it('marks required editor rows for description, kind, level, title and text', async function () {
+		const sandbox = await loadPresetsModule();
+		const api = makePresetsApi(sandbox, {
+			formApi: makeFormApiStub(),
+			ingestStatesDataApi: {
+				listPresets: async () => [
+					{ value: 'p1', name: 'Preset', source: 'user', ownedBy: null, kind: 'status', level: 20, subset: null },
+				],
+				getPreset: async () => ({
+					preset: {
+						...MINIMAL_PRESET_TEMPLATE,
+						schema: PRESET_SCHEMA,
+						presetId: 'p1',
+						description: 'Preset',
+						source: 'user',
+						ownedBy: null,
+						subset: null,
+						message: { ...MINIMAL_PRESET_TEMPLATE.message, kind: 'status', level: 20, title: 'T', text: 'X' },
+					},
+				}),
+			},
+		});
+		const el = renderTool(api);
+		await el.__msghubReady;
+		getPresetRows(el)[0].dispatchEvent({ type: 'click' });
+		await settle();
+
+		const editor = el.children[0].children[1];
+		const requiredMarkers = findNodes(
+			editor,
+			node => String(node?.className || '').includes('msghub-preset-editor-rowRequired'),
+		);
+		assert.equal(requiredMarkers.length, 5);
+	});
+
 	it('ownedBy and subset dropdowns expose null options first', async function () {
 		const sandbox = await loadPresetsModule();
 		const api = makePresetsApi(sandbox, {

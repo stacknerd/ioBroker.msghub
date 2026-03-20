@@ -952,150 +952,328 @@
 					typeof draft?.ownedBy === 'string' && draft.ownedBy.trim() ? draft.ownedBy.trim() : null;
 				const source = draft?.source === 'builtin' ? 'builtin' : 'user';
 				const disabled = source !== 'user' || saving === true;
+				const buildHelpSlot = helpText => {
+					const text = typeof helpText === 'string' ? helpText.trim() : '';
+					const attrs = { class: 'msghub-preset-editor-helpSlot' };
+					if (text) {
+						attrs['data-help-text'] = text;
+					}
+					return h('div', attrs);
+				};
 
-				const fields = [];
+				const buildEditorRow = ({ key, label, labelFor = '', required = false, help = '', control }) => {
+					const labelAttrs = { class: 'msghub-preset-editor-rowLabelText', text: String(label || '') };
+					if (labelFor) {
+						labelAttrs.for = labelFor;
+					}
+					const labelNode = h(labelFor ? 'label' : 'div', labelAttrs);
+					return h('div', { class: 'msghub-preset-editor-row', 'data-row-key': String(key || '') }, [
+						h('div', { class: 'msghub-preset-editor-rowLabel' }, [
+							labelNode,
+							required ? h('span', { class: 'msghub-preset-editor-rowRequired', text: ' *' }) : null,
+						]),
+						h(
+							'div',
+							{ class: 'msghub-preset-editor-rowField' },
+							Array.isArray(control) ? control.filter(Boolean) : [control].filter(Boolean),
+						),
+						buildHelpSlot(help),
+					]);
+				};
+
+				const adoptBuiltField = (field, { key, label, help = '', required = false, control = null }) => {
+					const controlNodes = Array.isArray(control)
+						? control
+						: control
+							? [control]
+							: field?.select
+								? [
+										h('div', { class: 'msghub-preset-editor-controlGroup' }, [
+											field.input,
+											field.select,
+										]),
+									]
+								: field?.input
+									? [field.input]
+									: [];
+					const labelFor = field?.input?.id || field?.textarea?.id || field?.select?.id || '';
+					field.wrapper = buildEditorRow({ key, label, labelFor, required, help, control: controlNodes });
+					return field;
+				};
+
+				const createTextField = ({ key, label, value = '', help = '', required = false }) => {
+					const id = `f_${String(key || 'field')}_${Math.random().toString(36).slice(2, 8)}`;
+					const input = h('input', { type: 'text', id, value: value ?? '' });
+					input.value = value ?? '';
+					if (disabled) {
+						input.disabled = true;
+					}
+					const field = {
+						input,
+						getValue: () => input.value,
+					};
+					field.wrapper = buildEditorRow({
+						key,
+						label,
+						labelFor: id,
+						required,
+						help,
+						control: input,
+					});
+					return field;
+				};
+
+				const createTextareaField = ({ key, label, value = '', help = '', required = false }) => {
+					const id = `f_${String(key || 'field')}_${Math.random().toString(36).slice(2, 8)}`;
+					const textarea = h('textarea', { id, class: '', text: value ?? '' });
+					textarea.value = value ?? '';
+					if (disabled) {
+						textarea.disabled = true;
+					}
+					const field = {
+						textarea,
+						getValue: () => textarea.value,
+					};
+					field.wrapper = buildEditorRow({
+						key,
+						label,
+						labelFor: id,
+						required,
+						help,
+						control: textarea,
+					});
+					return field;
+				};
+
+				const createCsvField = ({ key, label, value, help = '' }) => {
+					const field = createTextField({
+						key,
+						label,
+						value: formatCsvList(value),
+						help,
+					});
+					field.getValue = () => parseCsvList(field.input.value);
+					return field;
+				};
+
+				const createActionsJsonField = ({ key, label, value, help = '' }) => {
+					const field = createTextareaField({
+						key,
+						label,
+						value: JSON.stringify(value || [], null, 2),
+						help,
+					});
+					field.getValue = () => {
+						const raw = typeof field.textarea.value === 'string' ? field.textarea.value.trim() : '';
+						if (!raw) {
+							return [];
+						}
+						try {
+							const parsed = JSON.parse(raw);
+							return Array.isArray(parsed) ? parsed : [];
+						} catch {
+							return null;
+						}
+					};
+					return field;
+				};
+
+				const createStaticValueRow = ({ key, label, value, muted = false, help = '' }) => ({
+					wrapper: buildEditorRow({
+						key,
+						label,
+						help,
+						control: h('div', {
+							class: muted ? 'msghub-muted' : '',
+							text: String(value || ''),
+						}),
+					}),
+				});
+
+				const buildSection = ({ key, label, rows, defaultOpen = 'auto' }) =>
+					h(
+						'section',
+						{
+							class: 'msghub-preset-editor-section',
+							'data-section-key': key,
+							'data-default-open': defaultOpen,
+						},
+						[
+							h('div', { class: 'msghub-preset-editor-sectionHeader' }, [
+								h('button', {
+									type: 'button',
+									class: 'msghub-preset-editor-sectionToggle',
+									'data-section-toggle': key,
+									'aria-expanded': 'true',
+									text: label,
+								}),
+							]),
+							h(
+								'div',
+								{
+									class: 'msghub-preset-editor-sectionBody',
+									'data-section-body': key,
+								},
+								rows.map(row => row?.wrapper).filter(Boolean),
+							),
+						],
+					);
+
+				const generalRows = [];
+				const messageRows = [];
+				const timingRows = [];
+				const detailsRows = [];
+				const audienceRows = [];
+				const actionsRows = [];
+				const policyRows = [];
 
 				const presetIdText = String(draft?.presetId || '').trim();
-				fields.push({
-					wrapper: h('div', { class: 'msghub-field' }, [
-						h('div', {
-							class: 'msghub-field-header-label',
-							text: t('msghub.i18n.IngestStates.admin.presets.presetId.label'),
-						}),
-						h('div', {
-							class: presetIdText ? '' : 'msghub-muted',
-							text: presetIdText || t('msghub.i18n.IngestStates.admin.presets.presetId.pending.text'),
-						}),
-					]),
-				});
+				generalRows.push(
+					createStaticValueRow({
+						key: 'presetId',
+						label: t('msghub.i18n.IngestStates.admin.presets.presetId.label'),
+						value: presetIdText || t('msghub.i18n.IngestStates.admin.presets.presetId.pending.text'),
+						muted: !presetIdText,
+					}),
+				);
 
-				const fDescription = formApi.buildFieldInput({
-					type: 'string',
-					key: 'description',
-					label: 'Display name',
-					value: draft.description,
-					help: 'Shown as common.name later.',
-				});
+				const fDescription = adoptBuiltField(
+					formApi.buildFieldInput({
+						type: 'string',
+						key: 'description',
+						label: 'Display name',
+						value: draft.description,
+						help: '',
+					}),
+					{
+						key: 'description',
+						label: 'Display name',
+						help: 'Shown as common.name later.',
+						required: true,
+					},
+				);
 				if (fDescription?.input) {
 					fDescription.input.disabled = disabled;
 				}
-				fields.push(fDescription);
+				generalRows.push(fDescription);
 
-				const fSchema = formApi.buildFieldInput({
-					type: 'string',
-					key: 'schema',
-					label: 'Schema',
-					value: draft.schema,
-					help: '',
-				});
+				const fSchema = adoptBuiltField(
+					formApi.buildFieldInput({
+						type: 'string',
+						key: 'schema',
+						label: 'Schema',
+						value: draft.schema,
+						help: '',
+					}),
+					{
+						key: 'schema',
+						label: 'Schema',
+					},
+				);
 				if (fSchema?.input) {
 					fSchema.input.disabled = true;
 				}
-				fields.push(fSchema);
+				generalRows.push(fSchema);
 
-				const fOwnedBy = formApi.buildFieldInput({
-					type: 'string',
-					key: 'ownedBy',
-					label: t('msghub.i18n.IngestStates.admin.presets.ownedBy.label'),
-					value: ownedBy || BINDING_NONE_VALUE,
-					options: getOwnedByOptions(),
-					help: '',
-				});
+				const fOwnedBy = adoptBuiltField(
+					formApi.buildFieldInput({
+						type: 'string',
+						key: 'ownedBy',
+						label: t('msghub.i18n.IngestStates.admin.presets.ownedBy.label'),
+						value: ownedBy || BINDING_NONE_VALUE,
+						options: getOwnedByOptions(),
+						help: '',
+					}),
+					{
+						key: 'ownedBy',
+						label: t('msghub.i18n.IngestStates.admin.presets.ownedBy.label'),
+					},
+				);
 				if (fOwnedBy?.input) {
 					fOwnedBy.input.disabled = disabled;
 				}
-				fields.push(fOwnedBy);
+				generalRows.push(fOwnedBy);
 
-				const fSubset = formApi.buildFieldInput({
-					type: 'string',
-					key: 'subset',
-					label: t('msghub.i18n.IngestStates.admin.presets.subset.label'),
-					value: typeof draft?.subset === 'string' && draft.subset ? draft.subset : BINDING_NONE_VALUE,
-					options: getSubsetOptions(ownedBy),
-					help: '',
-				});
+				const fSubset = adoptBuiltField(
+					formApi.buildFieldInput({
+						type: 'string',
+						key: 'subset',
+						label: t('msghub.i18n.IngestStates.admin.presets.subset.label'),
+						value: typeof draft?.subset === 'string' && draft.subset ? draft.subset : BINDING_NONE_VALUE,
+						options: getSubsetOptions(ownedBy),
+						help: '',
+					}),
+					{
+						key: 'subset',
+						label: t('msghub.i18n.IngestStates.admin.presets.subset.label'),
+					},
+				);
 				if (fSubset?.input) {
 					fSubset.input.disabled = disabled;
 				}
-				fields.push(fSubset);
+				generalRows.push(fSubset);
 
 				const kindOptions = resolveOptions('MsgConstants.kind');
 				const levelOptions = resolveOptions('MsgConstants.level');
 
-				fields.push(formApi.buildFieldInput({ type: 'header', key: '_h_msg', label: 'Message' }));
-				const fKind = formApi.buildFieldInput({
-					type: 'string',
-					key: 'message_kind',
-					label: 'Kind',
-					value: draft?.message?.kind,
-					options: kindOptions.length ? kindOptions : undefined,
-				});
+				const fKind = adoptBuiltField(
+					formApi.buildFieldInput({
+						type: 'string',
+						key: 'message_kind',
+						label: 'Kind',
+						value: draft?.message?.kind,
+						options: kindOptions.length ? kindOptions : undefined,
+					}),
+					{
+						key: 'message_kind',
+						label: 'Kind',
+						required: true,
+					},
+				);
 				if (fKind?.input) {
 					fKind.input.disabled = disabled;
 				}
-				fields.push(fKind);
+				messageRows.push(fKind);
 
-				const fLevel = formApi.buildFieldInput({
-					type: 'number',
-					key: 'message_level',
-					label: 'Level',
-					value: draft?.message?.level,
-					options: levelOptions.length ? levelOptions : undefined,
-				});
+				const fLevel = adoptBuiltField(
+					formApi.buildFieldInput({
+						type: 'number',
+						key: 'message_level',
+						label: 'Level',
+						value: draft?.message?.level,
+						options: levelOptions.length ? levelOptions : undefined,
+					}),
+					{
+						key: 'message_level',
+						label: 'Level',
+						required: true,
+					},
+				);
 				if (fLevel?.input) {
 					fLevel.input.disabled = disabled;
 				}
-				fields.push(fLevel);
+				messageRows.push(fLevel);
 
-				const titleField = (() => {
-					const id = `f_title_${Math.random().toString(36).slice(2, 8)}`;
-					const input = h('input', { type: 'text', id, value: draft?.message?.title ?? '' });
-					input.value = draft?.message?.title ?? '';
-					if (disabled) {
-						input.disabled = true;
-					}
-					return {
-						input,
-						getValue: () => input.value,
-						wrapper: h('div', { class: 'msghub-field' }, [input, h('label', { for: id, text: 'Title' })]),
-					};
-				})();
+				const titleField = createTextField({
+					key: 'message_title',
+					label: 'Title',
+					value: draft?.message?.title ?? '',
+					required: true,
+				});
 
-				const iconField = (() => {
-					const id = `f_icon_${Math.random().toString(36).slice(2, 8)}`;
-					const input = h('input', { type: 'text', id, value: draft?.message?.icon ?? '' });
-					input.value = draft?.message?.icon ?? '';
-					if (disabled) {
-						input.disabled = true;
-					}
-					return {
-						input,
-						getValue: () => input.value,
-						wrapper: h('div', { class: 'msghub-field' }, [
-							input,
-							h('label', { for: id, text: 'Icon' }),
-							h('div', { class: 'msghub-muted', text: 'Optional. Usually an emoji.' }),
-						]),
-					};
-				})();
+				const iconField = createTextField({
+					key: 'message_icon',
+					label: 'Icon',
+					value: draft?.message?.icon ?? '',
+					help: 'Optional. Usually an emoji.',
+				});
 
-				const textField = (() => {
-					const id = `f_text_${Math.random().toString(36).slice(2, 8)}`;
-					const textarea = h('textarea', {
-						id,
-						class: '',
-						text: draft?.message?.text ?? '',
-					});
-					textarea.value = draft?.message?.text ?? '';
-					if (disabled) {
-						textarea.disabled = true;
-					}
-					return {
-						textarea,
-						getValue: () => textarea.value,
-						wrapper: h('div', { class: 'msghub-field' }, [textarea, h('label', { for: id, text: 'Text' })]),
-					};
-				})();
+				const textField = createTextareaField({
+					key: 'message_text',
+					label: 'Text',
+					value: draft?.message?.text ?? '',
+					required: true,
+				});
 
 				const allowedTemplatesField = (() => {
 					const content = h('div', { class: 'msghub-muted' });
@@ -1128,300 +1306,222 @@
 								),
 							);
 						},
-						wrapper: h('div', { class: 'msghub-field' }, [
-							h('div', {
-								class: 'msghub-field-header-label',
-								text: t('msghub.i18n.IngestStates.admin.presets.allowedTemplates.label'),
-							}),
-							content,
-						]),
+						wrapper: buildEditorRow({
+							key: 'message_allowedTemplates',
+							label: t('msghub.i18n.IngestStates.admin.presets.allowedTemplates.label'),
+							control: content,
+						}),
 					};
 				})();
 
-				const textRecoveredField = (() => {
-					const id = `f_textRecovered_${Math.random().toString(36).slice(2, 8)}`;
-					const textarea = h('textarea', {
-						id,
-						class: '',
-						text: draft?.message?.textRecovered ?? '',
-					});
-					textarea.value = draft?.message?.textRecovered ?? '';
-					if (disabled) {
-						textarea.disabled = true;
-					}
-					return {
-						textarea,
-						getValue: () => textarea.value,
-						wrapper: h('div', { class: 'msghub-field' }, [
-							textarea,
-							h('label', { for: id, text: 'Text (recovered)' }),
-							h('div', {
-								class: 'msghub-muted',
-								text: 'Optional. Shown when the condition that triggered this message has been resolved.',
-							}),
-						]),
-					};
-				})();
-
-				fields.push(titleField);
-				fields.push(iconField);
-				fields.push(textField);
-				fields.push(allowedTemplatesField);
-				fields.push(textRecoveredField);
-
-				fields.push(formApi.buildFieldInput({ type: 'header', key: '_h_timing', label: 'Timing' }));
-				const fTimeBudget = formApi.buildFieldInput({
-					type: 'number',
-					key: 'timing_timeBudget',
-					label: 'Time budget',
-					value: draft?.message?.timing?.timeBudget,
-					unit: 'ms',
+				const textRecoveredField = createTextareaField({
+					key: 'message_textRecovered',
+					label: 'Text (recovered)',
+					value: draft?.message?.textRecovered ?? '',
+					help: 'Optional. Shown when the condition that triggered this message has been resolved.',
 				});
+
+				messageRows.push(titleField);
+				messageRows.push(iconField);
+				messageRows.push(textField);
+				messageRows.push(allowedTemplatesField);
+				messageRows.push(textRecoveredField);
+
+				const fTimeBudget = adoptBuiltField(
+					formApi.buildFieldInput({
+						type: 'number',
+						key: 'timing_timeBudget',
+						label: 'Time budget',
+						value: draft?.message?.timing?.timeBudget,
+						unit: 'ms',
+					}),
+					{
+						key: 'timing_timeBudget',
+						label: 'Time budget',
+					},
+				);
 				if (fTimeBudget?.input) {
 					fTimeBudget.input.disabled = disabled;
 				}
 				if (fTimeBudget?.select) {
 					fTimeBudget.select.disabled = disabled;
 				}
-				fields.push(fTimeBudget);
+				timingRows.push(fTimeBudget);
 
-				const fDueIn = formApi.buildFieldInput({
-					type: 'number',
-					key: 'timing_dueInMs',
-					label: 'Due in',
-					value: draft?.message?.timing?.dueInMs,
-					unit: 'ms',
-				});
+				const fDueIn = adoptBuiltField(
+					formApi.buildFieldInput({
+						type: 'number',
+						key: 'timing_dueInMs',
+						label: 'Due in',
+						value: draft?.message?.timing?.dueInMs,
+						unit: 'ms',
+					}),
+					{
+						key: 'timing_dueInMs',
+						label: 'Due in',
+					},
+				);
 				if (fDueIn?.input) {
 					fDueIn.input.disabled = disabled;
 				}
 				if (fDueIn?.select) {
 					fDueIn.select.disabled = disabled;
 				}
-				fields.push(fDueIn);
+				timingRows.push(fDueIn);
 
-				const fExpiresIn = formApi.buildFieldInput({
-					type: 'number',
-					key: 'timing_expiresInMs',
-					label: 'Expires in',
-					value: draft?.message?.timing?.expiresInMs,
-					unit: 'ms',
-				});
+				const fExpiresIn = adoptBuiltField(
+					formApi.buildFieldInput({
+						type: 'number',
+						key: 'timing_expiresInMs',
+						label: 'Expires in',
+						value: draft?.message?.timing?.expiresInMs,
+						unit: 'ms',
+					}),
+					{
+						key: 'timing_expiresInMs',
+						label: 'Expires in',
+					},
+				);
 				if (fExpiresIn?.input) {
 					fExpiresIn.input.disabled = disabled;
 				}
 				if (fExpiresIn?.select) {
 					fExpiresIn.select.disabled = disabled;
 				}
-				fields.push(fExpiresIn);
+				timingRows.push(fExpiresIn);
 
-				const fCooldown = formApi.buildFieldInput({
-					type: 'number',
-					key: 'timing_cooldown',
-					label: 'Cooldown',
-					value: draft?.message?.timing?.cooldown,
-					unit: 'ms',
-				});
+				const fCooldown = adoptBuiltField(
+					formApi.buildFieldInput({
+						type: 'number',
+						key: 'timing_cooldown',
+						label: 'Cooldown',
+						value: draft?.message?.timing?.cooldown,
+						unit: 'ms',
+					}),
+					{
+						key: 'timing_cooldown',
+						label: 'Cooldown',
+					},
+				);
 				if (fCooldown?.input) {
 					fCooldown.input.disabled = disabled;
 				}
 				if (fCooldown?.select) {
 					fCooldown.select.disabled = disabled;
 				}
-				fields.push(fCooldown);
+				timingRows.push(fCooldown);
 
-				const fRemindEvery = formApi.buildFieldInput({
-					type: 'number',
-					key: 'timing_remindEvery',
-					label: 'Reminder',
-					value: draft?.message?.timing?.remindEvery,
-					unit: 'ms',
-				});
+				const fRemindEvery = adoptBuiltField(
+					formApi.buildFieldInput({
+						type: 'number',
+						key: 'timing_remindEvery',
+						label: 'Reminder',
+						value: draft?.message?.timing?.remindEvery,
+						unit: 'ms',
+					}),
+					{
+						key: 'timing_remindEvery',
+						label: 'Reminder',
+					},
+				);
 				if (fRemindEvery?.input) {
 					fRemindEvery.input.disabled = disabled;
 				}
 				if (fRemindEvery?.select) {
 					fRemindEvery.select.disabled = disabled;
 				}
-				fields.push(fRemindEvery);
+				timingRows.push(fRemindEvery);
 
-				fields.push(formApi.buildFieldInput({ type: 'header', key: '_h_details', label: 'Details' }));
-				const fDetailsTask = formApi.buildFieldInput({
-					type: 'string',
-					key: 'details_task',
-					label: 'Task',
-					value: draft?.message?.details?.task ?? '',
-				});
+				const fDetailsTask = adoptBuiltField(
+					formApi.buildFieldInput({
+						type: 'string',
+						key: 'details_task',
+						label: 'Task',
+						value: draft?.message?.details?.task ?? '',
+					}),
+					{
+						key: 'details_task',
+						label: 'Task',
+					},
+				);
 				if (fDetailsTask?.input) {
 					fDetailsTask.input.disabled = disabled;
 				}
-				fields.push(fDetailsTask);
+				detailsRows.push(fDetailsTask);
 
-				const fDetailsReason = formApi.buildFieldInput({
-					type: 'string',
-					key: 'details_reason',
-					label: 'Reason',
-					value: draft?.message?.details?.reason ?? '',
-				});
+				const fDetailsReason = adoptBuiltField(
+					formApi.buildFieldInput({
+						type: 'string',
+						key: 'details_reason',
+						label: 'Reason',
+						value: draft?.message?.details?.reason ?? '',
+					}),
+					{
+						key: 'details_reason',
+						label: 'Reason',
+					},
+				);
 				if (fDetailsReason?.input) {
 					fDetailsReason.input.disabled = disabled;
 				}
-				fields.push(fDetailsReason);
+				detailsRows.push(fDetailsReason);
 
-				const toolsField = (() => {
-					const id = `f_tools_${Math.random().toString(36).slice(2, 8)}`;
-					const input = h('input', {
-						type: 'text',
-						id,
-						value: formatCsvList(draft?.message?.details?.tools),
-					});
-					input.value = formatCsvList(draft?.message?.details?.tools);
-					if (disabled) {
-						input.disabled = true;
-					}
-					return {
-						input,
-						getValue: () => parseCsvList(input.value),
-						wrapper: h('div', { class: 'msghub-field' }, [
-							input,
-							h('label', { for: id, text: 'Tools (CSV)' }),
-						]),
-					};
-				})();
-				const consumablesField = (() => {
-					const id = `f_consumables_${Math.random().toString(36).slice(2, 8)}`;
-					const input = h('input', {
-						type: 'text',
-						id,
-						value: formatCsvList(draft?.message?.details?.consumables),
-					});
-					input.value = formatCsvList(draft?.message?.details?.consumables);
-					if (disabled) {
-						input.disabled = true;
-					}
-					return {
-						input,
-						getValue: () => parseCsvList(input.value),
-						wrapper: h('div', { class: 'msghub-field' }, [
-							input,
-							h('label', { for: id, text: 'Consumables (CSV)' }),
-						]),
-					};
-				})();
-				fields.push(toolsField);
-				fields.push(consumablesField);
-
-				fields.push(formApi.buildFieldInput({ type: 'header', key: '_h_audience', label: 'Audience' }));
-				const tagsField = (() => {
-					const id = `f_tags_${Math.random().toString(36).slice(2, 8)}`;
-					const input = h('input', {
-						type: 'text',
-						id,
-						value: formatCsvList(draft?.message?.audience?.tags),
-					});
-					input.value = formatCsvList(draft?.message?.audience?.tags);
-					if (disabled) {
-						input.disabled = true;
-					}
-					return {
-						input,
-						getValue: () => parseCsvList(input.value),
-						wrapper: h('div', { class: 'msghub-field' }, [
-							input,
-							h('label', { for: id, text: 'Tags (CSV)' }),
-						]),
-					};
-				})();
-				const channelsIncludeField = (() => {
-					const id = `f_chinc_${Math.random().toString(36).slice(2, 8)}`;
-					const input = h('input', {
-						type: 'text',
-						id,
-						value: formatCsvList(draft?.message?.audience?.channels?.include),
-					});
-					input.value = formatCsvList(draft?.message?.audience?.channels?.include);
-					if (disabled) {
-						input.disabled = true;
-					}
-					return {
-						input,
-						getValue: () => parseCsvList(input.value),
-						wrapper: h('div', { class: 'msghub-field' }, [
-							input,
-							h('label', { for: id, text: 'Channels include (CSV)' }),
-						]),
-					};
-				})();
-				const channelsExcludeField = (() => {
-					const id = `f_chexc_${Math.random().toString(36).slice(2, 8)}`;
-					const input = h('input', {
-						type: 'text',
-						id,
-						value: formatCsvList(draft?.message?.audience?.channels?.exclude),
-					});
-					input.value = formatCsvList(draft?.message?.audience?.channels?.exclude);
-					if (disabled) {
-						input.disabled = true;
-					}
-					return {
-						input,
-						getValue: () => parseCsvList(input.value),
-						wrapper: h('div', { class: 'msghub-field' }, [
-							input,
-							h('label', { for: id, text: 'Channels exclude (CSV)' }),
-						]),
-					};
-				})();
-				fields.push(tagsField);
-				fields.push(channelsIncludeField);
-				fields.push(channelsExcludeField);
-
-				fields.push(formApi.buildFieldInput({ type: 'header', key: '_h_actions', label: 'Actions (JSON)' }));
-				const actionsField = (() => {
-					const id = `f_actions_${Math.random().toString(36).slice(2, 8)}`;
-					const textarea = h('textarea', {
-						id,
-						class: '',
-						text: JSON.stringify(draft?.message?.actions || [], null, 2),
-					});
-					textarea.value = JSON.stringify(draft?.message?.actions || [], null, 2);
-					if (disabled) {
-						textarea.disabled = true;
-					}
-					return {
-						textarea,
-						getValue: () => {
-							const raw = typeof textarea.value === 'string' ? textarea.value.trim() : '';
-							if (!raw) {
-								return [];
-							}
-							try {
-								const parsed = JSON.parse(raw);
-								return Array.isArray(parsed) ? parsed : [];
-							} catch {
-								return null;
-							}
-						},
-						wrapper: h('div', { class: 'msghub-field' }, [
-							textarea,
-							h('label', { for: id, text: 'Actions array' }),
-							h('div', { class: 'msghub-muted', text: 'Optional; must be valid JSON array.' }),
-						]),
-					};
-				})();
-				fields.push(actionsField);
-
-				fields.push(formApi.buildFieldInput({ type: 'header', key: '_h_policy', label: 'Policy' }));
-				const fResetOnNormal = formApi.buildFieldInput({
-					type: 'boolean',
-					key: 'policy_resetOnNormal',
-					label: 'Reset on normal (auto-close)',
-					value: draft?.policy?.resetOnNormal === true,
+				const toolsField = createCsvField({
+					key: 'details_tools',
+					label: 'Tools (CSV)',
+					value: draft?.message?.details?.tools,
 				});
+				const consumablesField = createCsvField({
+					key: 'details_consumables',
+					label: 'Consumables (CSV)',
+					value: draft?.message?.details?.consumables,
+				});
+				detailsRows.push(toolsField);
+				detailsRows.push(consumablesField);
+
+				const tagsField = createCsvField({
+					key: 'audience_tags',
+					label: 'Tags (CSV)',
+					value: draft?.message?.audience?.tags,
+				});
+				const channelsIncludeField = createCsvField({
+					key: 'audience_channelsInclude',
+					label: 'Channels include (CSV)',
+					value: draft?.message?.audience?.channels?.include,
+				});
+				const channelsExcludeField = createCsvField({
+					key: 'audience_channelsExclude',
+					label: 'Channels exclude (CSV)',
+					value: draft?.message?.audience?.channels?.exclude,
+				});
+				audienceRows.push(tagsField);
+				audienceRows.push(channelsIncludeField);
+				audienceRows.push(channelsExcludeField);
+
+				const actionsField = createActionsJsonField({
+					key: 'actions_json',
+					label: 'Actions array',
+					value: draft?.message?.actions || [],
+					help: 'Optional; must be valid JSON array.',
+				});
+				actionsRows.push(actionsField);
+
+				const fResetOnNormal = adoptBuiltField(
+					formApi.buildFieldInput({
+						type: 'boolean',
+						key: 'policy_resetOnNormal',
+						label: 'Reset on normal (auto-close)',
+						value: draft?.policy?.resetOnNormal === true,
+					}),
+					{
+						key: 'policy_resetOnNormal',
+						label: 'Reset on normal (auto-close)',
+					},
+				);
 				if (fResetOnNormal?.input) {
 					fResetOnNormal.input.disabled = disabled;
 				}
-				fields.push(fResetOnNormal);
+				policyRows.push(fResetOnNormal);
 
 				const btnSave = h('button', {
 					type: 'button',
@@ -1444,8 +1544,18 @@
 						? h('div', { class: 'msghub-muted', text: 'Saving…' })
 						: null;
 
-				const wrapper = h('div', null, [
-					h('div', null, [
+				const sections = [
+					buildSection({ key: 'general', label: 'General', rows: generalRows, defaultOpen: 'always' }),
+					buildSection({ key: 'message', label: 'Message', rows: messageRows }),
+					buildSection({ key: 'timing', label: 'Timing', rows: timingRows }),
+					buildSection({ key: 'details', label: 'Details', rows: detailsRows }),
+					buildSection({ key: 'audience', label: 'Audience', rows: audienceRows }),
+					buildSection({ key: 'policy', label: 'Policy', rows: policyRows }),
+					buildSection({ key: 'actions', label: 'Actions', rows: actionsRows }),
+				];
+
+				const wrapper = h('div', { class: 'msghub-preset-editor' }, [
+					h('div', { class: 'msghub-preset-editor-content' }, [
 						source === 'builtin'
 							? h('div', {
 									class: 'msghub-muted',
@@ -1453,8 +1563,8 @@
 								})
 							: null,
 						elError,
-						...fields.map(f => f.wrapper),
-						h('div', { class: 'msghub-toolbar__group' }, [btnSave, btnAbort]),
+						...sections,
+						h('div', { class: 'msghub-preset-editor-actions msghub-toolbar__group' }, [btnSave, btnAbort]),
 					]),
 				]);
 
