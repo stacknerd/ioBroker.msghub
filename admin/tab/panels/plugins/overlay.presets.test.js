@@ -305,7 +305,7 @@ describe('admin/tab/panels/plugins/overlay.presets.js', function () {
 
 	// --- table structure ---
 
-	it('renderList builds a table with 5 header columns after presets load', async function () {
+	it('renderList builds a table with 6 header columns after presets load', async function () {
 		const sandbox = await loadPresetsModule();
 		const api = makePresetsApi(sandbox, {
 			ingestStatesDataApi: {
@@ -324,7 +324,7 @@ describe('admin/tab/panels/plugins/overlay.presets.js', function () {
 		assert.equal(table.tagName, 'TABLE', 'list items container should hold a TABLE');
 		const thead = table.children.find(c => c && c.tagName === 'THEAD');
 		assert.ok(thead, 'table should have a thead');
-		assert.equal(thead.children[0].children.length, 5, 'header row should have 5 th elements');
+		assert.equal(thead.children[0].children.length, 6, 'header row should have 6 th elements');
 	});
 
 	it('renderList adds consistent column classes to colgroup, header and body cells', async function () {
@@ -347,6 +347,7 @@ describe('admin/tab/panels/plugins/overlay.presets.js', function () {
 		const thead = table.children.find(c => c && c.tagName === 'THEAD');
 		const tbody = table.children.find(c => c && c.tagName === 'TBODY');
 		const columnClasses = [
+			'msghub-col--preset-usage',
 			'msghub-col--preset-ownedBy',
 			'msghub-col--preset-subset',
 			'msghub-col--preset-kind',
@@ -380,11 +381,11 @@ describe('admin/tab/panels/plugins/overlay.presets.js', function () {
 		await settle();
 		const rows = getPresetRows(el);
 		assert.equal(rows.length, 1);
-		// Name is in column 4 (ownedBy | subset | kind | level | name)
+		// Name is in column 5 (usage | ownedBy | subset | kind | level | name)
 		assert.equal(
-			rows[0].children[4].textContent,
+			rows[0].children[5].textContent,
 			'My Preset Name',
-			`Expected name in name column, got: ${rows[0].children[4].textContent}`,
+			`Expected name in name column, got: ${rows[0].children[5].textContent}`,
 		);
 	});
 
@@ -402,10 +403,10 @@ describe('admin/tab/panels/plugins/overlay.presets.js', function () {
 		await settle();
 		const rows = getPresetRows(el);
 		assert.equal(rows.length, 1);
-		// Kind column (index 2): t() falls back to key, which contains the kind name
+		// Kind column (index 3): t() falls back to key, which contains the kind name
 		assert.ok(
-			rows[0].children[2].textContent.includes('task'),
-			`Expected kind 'task' in kind column, got: ${rows[0].children[2].textContent}`,
+			rows[0].children[3].textContent.includes('task'),
+			`Expected kind 'task' in kind column, got: ${rows[0].children[3].textContent}`,
 		);
 	});
 
@@ -425,9 +426,9 @@ describe('admin/tab/panels/plugins/overlay.presets.js', function () {
 		assert.equal(rows.length, 1);
 		// No getMsgConstants provided → levelKeyMap empty → level shown as numeric string
 		assert.equal(
-			rows[0].children[3].textContent,
+			rows[0].children[4].textContent,
 			'30',
-			`Expected numeric level '30' in level column, got: ${rows[0].children[3].textContent}`,
+			`Expected numeric level '30' in level column, got: ${rows[0].children[4].textContent}`,
 		);
 	});
 
@@ -449,10 +450,32 @@ describe('admin/tab/panels/plugins/overlay.presets.js', function () {
 		assert.equal(rows.length, 1);
 		// level 20 → key 'notice' → t('...notice.label') → 'notice' (via test t)
 		assert.equal(
-			rows[0].children[3].textContent,
+			rows[0].children[4].textContent,
 			'notice',
-			`Expected 'notice' in level column, got: ${rows[0].children[3].textContent}`,
+			`Expected 'notice' in level column, got: ${rows[0].children[4].textContent}`,
 		);
+	});
+
+	it('usage column renders count values and keeps 0 or missing values empty', async function () {
+		const sandbox = await loadPresetsModule();
+		const api = makePresetsApi(sandbox, {
+			ingestStatesDataApi: {
+				listPresets: async () => [
+					{ value: 'p1', name: 'Used', ownedBy: null, kind: 'status', level: 20, subset: null, usageCount: 3 },
+					{ value: 'p2', name: 'Unused', ownedBy: null, kind: 'status', level: 20, subset: null, usageCount: 0 },
+					{ value: 'p3', name: 'Unknown', ownedBy: null, kind: 'status', level: 20, subset: null, usageCount: null },
+				],
+				getPreset: async () => ({ preset: null }),
+			},
+		});
+		const el = renderTool(api);
+		await settle();
+		const rows = getPresetRows(el);
+		assert.equal(rows.length, 3);
+		const usageByName = Object.fromEntries(rows.map(row => [row.children[5].textContent, row.children[0].textContent]));
+		assert.equal(usageByName.Used, '3');
+		assert.equal(usageByName.Unused, '');
+		assert.equal(usageByName.Unknown, '');
 	});
 
 	// --- sort order ---
@@ -473,14 +496,14 @@ describe('admin/tab/panels/plugins/overlay.presets.js', function () {
 		const rows = getPresetRows(el);
 		assert.equal(rows.length, 2);
 		assert.equal(
-			rows[0].children[4].textContent,
+			rows[0].children[5].textContent,
 			'AAA Free',
-			`Expected custom preset first, got: ${rows[0].children[4].textContent}`,
+			`Expected custom preset first, got: ${rows[0].children[5].textContent}`,
 		);
 		assert.equal(
-			rows[1].children[4].textContent,
+			rows[1].children[5].textContent,
 			'ZZZ Owned',
-			`Expected owned preset second, got: ${rows[1].children[4].textContent}`,
+			`Expected owned preset second, got: ${rows[1].children[5].textContent}`,
 		);
 	});
 
@@ -499,8 +522,8 @@ describe('admin/tab/panels/plugins/overlay.presets.js', function () {
 		await settle();
 		const rows = getPresetRows(el);
 		assert.equal(rows.length, 2);
-		assert.equal(rows[0].children[4].textContent, 'Alpha', `Expected Alpha first, got: ${rows[0].children[4].textContent}`);
-		assert.equal(rows[1].children[4].textContent, 'Beta', `Expected Beta second, got: ${rows[1].children[4].textContent}`);
+		assert.equal(rows[0].children[5].textContent, 'Alpha', `Expected Alpha first, got: ${rows[0].children[5].textContent}`);
+		assert.equal(rows[1].children[5].textContent, 'Beta', `Expected Beta second, got: ${rows[1].children[5].textContent}`);
 	});
 
 	it('within owned presets sorting uses ownedBy then subset then description', async function () {
@@ -520,10 +543,10 @@ describe('admin/tab/panels/plugins/overlay.presets.js', function () {
 		await settle();
 		const rows = getPresetRows(el);
 		assert.equal(rows.length, 4);
-		assert.equal(rows[0].children[4].textContent, 'Zulu');
-		assert.equal(rows[1].children[4].textContent, 'Alpha');
-		assert.equal(rows[2].children[4].textContent, 'Alpha');
-		assert.equal(rows[3].children[4].textContent, 'Beta');
+		assert.equal(rows[0].children[5].textContent, 'Zulu');
+		assert.equal(rows[1].children[5].textContent, 'Alpha');
+		assert.equal(rows[2].children[5].textContent, 'Alpha');
+		assert.equal(rows[3].children[5].textContent, 'Beta');
 	});
 
 	// --- null subset handling ---
@@ -545,7 +568,7 @@ describe('admin/tab/panels/plugins/overlay.presets.js', function () {
 			const rows = getPresetRows(el);
 			assert.equal(rows.length, 1);
 			// null subset → subset column shows empty string
-			assert.equal(rows[0].children[1].textContent, '');
+			assert.equal(rows[0].children[2].textContent, '');
 		} catch (err) {
 			thrown = err;
 		}
@@ -567,7 +590,7 @@ describe('admin/tab/panels/plugins/overlay.presets.js', function () {
 		await settle();
 		const rows = getPresetRows(el);
 		assert.equal(rows.length, 1, 'Preset with subset should be rendered');
-		assert.equal(rows[0].children[1].textContent, 'Session end', 'subset column should show i18n-resolved option label');
+		assert.equal(rows[0].children[2].textContent, 'Session end', 'subset column should show i18n-resolved option label');
 	});
 
 	it('setSelected uses spinner toast instead of inline loading text while preset details load', async function () {
@@ -1080,5 +1103,57 @@ describe('admin/tab/panels/plugins/overlay.presets.js', function () {
 				policy: { resetOnNormal: true },
 			},
 		});
+	});
+
+	it('does not mark presets with empty ownedBy/subset as dirty on unchanged input events', async function () {
+		const sandbox = await loadPresetsModule();
+		let confirmCalls = 0;
+		const api = makePresetsApi(sandbox, {
+			formApi: makeFormApiStub(),
+			confirmDialog: async () => {
+				confirmCalls += 1;
+				return false;
+			},
+			ingestStatesDataApi: {
+				listPresets: async () => [
+					{ value: 'p1', name: 'Preset One', source: 'user', ownedBy: null, kind: 'status', level: 20, subset: null },
+					{ value: 'p2', name: 'Preset Two', source: 'user', ownedBy: null, kind: 'status', level: 20, subset: null },
+				],
+				getPreset: async ({ presetId }) => ({
+					preset: {
+						...MINIMAL_PRESET_TEMPLATE,
+						schema: PRESET_SCHEMA,
+						presetId,
+						description: presetId === 'p1' ? 'Preset One' : 'Preset Two',
+						source: 'user',
+						ownedBy: '',
+						subset: '',
+						message: {
+							...MINIMAL_PRESET_TEMPLATE.message,
+							kind: 'status',
+							level: 20,
+							title: 'T',
+							text: 'X',
+						},
+					},
+				}),
+			},
+		});
+		const el = renderTool(api);
+		await el.__msghubReady;
+		const rows = getPresetRows(el);
+		rows[0].dispatchEvent({ type: 'click' });
+		await settle();
+
+		const editor = el.children[0].children[1];
+		const descriptionInput = findNode(editor, node => node?.getAttribute?.('data-key') === 'description');
+		assert.ok(descriptionInput, 'description input should exist');
+		descriptionInput.dispatchEvent({ type: 'input' });
+		await settle();
+
+		getPresetRows(el)[1].dispatchEvent({ type: 'click' });
+		await settle();
+
+		assert.equal(confirmCalls, 0, 'unchanged empty bindings must not trigger discard confirmation');
 	});
 });

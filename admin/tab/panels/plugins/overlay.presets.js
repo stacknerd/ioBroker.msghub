@@ -72,6 +72,7 @@
 				kind = 'status',
 				level = 20,
 				subset = null,
+				usageCount = null,
 			} = {}) => {
 				const preset = buildPresetBase();
 				preset.schema = presetSchema;
@@ -105,10 +106,27 @@
 				if (!preset.policy || typeof preset.policy !== 'object') {
 					preset.policy = { resetOnNormal: true };
 				}
+				preset.usageCount =
+					typeof usageCount === 'number' && Number.isFinite(usageCount)
+						? Math.max(0, Math.trunc(usageCount))
+						: null;
 				if (Object.prototype.hasOwnProperty.call(preset, 'ui')) {
 					delete preset.ui;
 				}
 				return preset;
+			};
+
+			const normalizePresetForDirtyCheck = preset => {
+				if (!preset || typeof preset !== 'object') {
+					return preset ?? null;
+				}
+				const next = cloneJson(preset);
+				next.presetId = typeof next.presetId === 'string' ? next.presetId.trim() : '';
+				next.description = typeof next.description === 'string' ? next.description : '';
+				next.source = next.source === 'builtin' ? 'builtin' : 'user';
+				next.ownedBy = typeof next.ownedBy === 'string' && next.ownedBy.trim() ? next.ownedBy.trim() : null;
+				next.subset = typeof next.subset === 'string' && next.subset.trim() ? next.subset.trim() : null;
+				return next;
 			};
 
 			let presets = [];
@@ -126,7 +144,9 @@
 			const elList = h('div', { class: 'msghub-tools-presets-list' });
 			const elEditor = h('div', { class: 'msghub-tools-presets-editor' });
 
-			const isDirty = () => JSON.stringify(original) !== JSON.stringify(draft);
+			const isDirty = () =>
+				JSON.stringify(normalizePresetForDirtyCheck(original)) !==
+				JSON.stringify(normalizePresetForDirtyCheck(draft));
 
 			const sortPresets = () => {
 				const sortText = value =>
@@ -170,7 +190,7 @@
 				}
 
 				try {
-					const opts = await ingestStatesDataApi.listPresets();
+					const opts = await ingestStatesDataApi.listPresets({ includeUsage: true });
 					const items = Array.isArray(opts) ? opts : [];
 
 					const next = [];
@@ -188,6 +208,10 @@
 								kind: typeof o.kind === 'string' ? o.kind : 'status',
 								level: typeof o.level === 'number' ? o.level : 20,
 								subset: typeof o.subset === 'string' ? o.subset.trim() || null : null,
+								usageCount:
+									typeof o.usageCount === 'number' && Number.isFinite(o.usageCount)
+										? o.usageCount
+										: null,
 							}),
 						);
 					}
@@ -799,11 +823,21 @@
 						const levelText = levelKey
 							? t(`msghub.i18n.core.admin.common.MsgConstants.level.${levelKey}.label`)
 							: String(level ?? '');
+						const usageCount =
+							typeof p?.usageCount === 'number' && Number.isFinite(p.usageCount)
+								? Math.max(0, Math.trunc(p.usageCount))
+								: 0;
+						const usageText = usageCount > 0 ? String(usageCount) : '';
 						const isSelected = p?.presetId === selectedId && !isNew;
 						return h(
 							'tr',
 							{ class: isSelected ? 'is-selected' : '', onclick: () => void setSelected(p.presetId) },
 							[
+								h('td', {
+									class: 'msghub-colCell msghub-col--preset-usage',
+									text: usageText,
+									title: usageText,
+								}),
 								h('td', {
 									class: 'msghub-colCell msghub-col--preset-ownedBy',
 									text: ownedByText,
@@ -836,6 +870,7 @@
 					items = h('div', { class: 'msghub-tools-presets-list-items' }, [
 						h('table', { class: 'msghub-table msghub-presets-table' }, [
 							h('colgroup', null, [
+								h('col', { class: 'msghub-col--preset-usage' }),
 								h('col', { class: 'msghub-col--preset-ownedBy' }),
 								h('col', { class: 'msghub-col--preset-subset' }),
 								h('col', { class: 'msghub-col--preset-kind' }),
@@ -844,6 +879,11 @@
 							]),
 							h('thead', null, [
 								h('tr', null, [
+									h('th', {
+										class: 'msghub-th msghub-colCell msghub-col--preset-usage',
+										text: t('msghub.i18n.IngestStates.admin.presets.usageCount.label'),
+										title: t('msghub.i18n.IngestStates.admin.presets.usageCount.label'),
+									}),
 									h('th', {
 										class: 'msghub-th msghub-colCell msghub-col--preset-ownedBy',
 										text: t('msghub.i18n.IngestStates.admin.presets.ownedBy.label'),

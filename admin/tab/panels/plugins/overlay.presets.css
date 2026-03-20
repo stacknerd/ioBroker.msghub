@@ -15,11 +15,14 @@
 	overflow: hidden;
 	display: flex;
 	flex-direction: column;
+	border-right: 1px solid var(--msghub-border);
+	padding-right: var(--msghub-space-3);
 }
 
 .msghub-root .msghub-tools-presets-editor {
 	height: 80vh;
 	flex: 1 1 auto;
+	min-width: 500px;
 	overflow: auto;
 }
 
@@ -34,17 +37,41 @@
 .msghub-root .msghub-col--preset-ownedBy {
 	width: 20ch;
 }
+@media (max-width: 900px) {
+	.msghub-root .msghub-presets-table .msghub-col--preset-ownedBy {
+		display: none;
+	}
+}
+
+.msghub-root .msghub-col--preset-usage {
+	width: 5ch;
+}
 
 .msghub-root .msghub-col--preset-subset {
-	display: none;
+	width: 20ch;
+}
+@media (max-width: 1600px) {
+	.msghub-root .msghub-presets-table .msghub-col--preset-subset {
+		display: none;
+	}
 }
 
 .msghub-root .msghub-col--preset-kind {
 	width: 10ch;
 }
+@media (max-width: 1000px) {
+	.msghub-root .msghub-presets-table .msghub-col--preset-kind {
+		display: none;
+	}
+}
 
 .msghub-root .msghub-col--preset-level {
 	width: 10ch;
+}
+@media (max-width: 1200px) {
+	.msghub-root .msghub-presets-table .msghub-col--preset-level {
+		display: none;
+	}
 }
 
 .msghub-root .msghub-col--preset-name {

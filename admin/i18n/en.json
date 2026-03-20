@@ -483,6 +483,7 @@
 	"msghub.i18n.IngestStates.admin.presets.ownedBy.label": "Rule",
 	"msghub.i18n.IngestStates.admin.presets.presetId.label": "Preset ID",
 	"msghub.i18n.IngestStates.admin.presets.presetId.pending.text": "Generated automatically on first save.",
+	"msghub.i18n.IngestStates.admin.presets.usageCount.label": "Use",
 	"msghub.i18n.IngestStates.admin.presets.subset.label": "Subset",
 	"msghub.i18n.IngestStates.admin.templateCatalog.common.metric.stateName.help": "Name or alias of the ioBroker state this rule monitors. Renders as the configured display name. Example: `Living room · Temperature`.",
 	"msghub.i18n.IngestStates.admin.templateCatalog.common.metric.stateName.label": "Monitored state",
