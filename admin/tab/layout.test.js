@@ -178,6 +178,7 @@ window.__layoutFns = {
 		document: documentObject,
 		location: { hash: '' },
 		history: { replaceState() {} },
+		t: key => key,
 		MutationObserver: class {
 			observe() {}
 		},

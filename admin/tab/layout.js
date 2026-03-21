@@ -1,4 +1,4 @@
-/* global window, document, location, history, MutationObserver, win, applyTheme, detectTheme, readThemeFromTopWindow */
+/* global window, document, location, history, MutationObserver, win, applyTheme, detectTheme, readThemeFromTopWindow, t */
 'use strict';
 
 /**
@@ -408,7 +408,7 @@ function buildLayoutFromRegistry({ contributions = [] } = {}) {
 						role: 'tab',
 						'aria-controls': tabId,
 						'aria-disabled': 'true',
-						text: ref.panelId,
+						text: t('msghub.i18n.core.admin.ui.panel.loading.text'),
 					}),
 				);
 			}

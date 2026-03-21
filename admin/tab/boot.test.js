@@ -638,17 +638,15 @@ globalThis.__map = pluginPanelTabMap;
 `,
 			{
 				msghubRequest: () =>
-					Promise.resolve({
-						data: [
-							{
-								pluginType: 'IngestStates',
-								instanceId: 0,
-								panelId: 'presets',
-								title: { en: 'Presets', de: 'Vorlagen' },
-								bundle: { hash: 'abc123' },
-							},
-						],
-					}),
+					Promise.resolve([
+						{
+							pluginType: 'IngestStates',
+							instanceId: 0,
+							panelId: 'presets',
+							title: { en: 'Presets', de: 'Vorlagen' },
+							bundle: { hash: 'abc123' },
+						},
+					]),
 				document: {
 					getElementById: id => (id === 'plugin-IngestStates-0-presets' ? container : null),
 					querySelector: () => tabEl,
@@ -686,12 +684,10 @@ globalThis.__map = pluginPanelTabMap;
 `,
 			{
 				msghubRequest: () =>
-					Promise.resolve({
-						data: [
-							// instanceId: 99 does not match ref.instanceId: 0
-							{ pluginType: 'IngestStates', instanceId: 99, panelId: 'presets', title: { en: 'Presets' }, bundle: { hash: 'x' } },
-						],
-					}),
+					Promise.resolve([
+						// instanceId: 99 does not match ref.instanceId: 0
+						{ pluginType: 'IngestStates', instanceId: 99, panelId: 'presets', title: { en: 'Presets' }, bundle: { hash: 'x' } },
+					]),
 				document: { getElementById: () => ({}), querySelector: () => null },
 				api: { i18n: { pickText: v => String(v || '') } },
 				Promise,
@@ -718,7 +714,7 @@ ${fnSource}
 globalThis.__fn = hydratePluginPanels;
 `,
 			{
-				msghubRequest: () => Promise.resolve({ data: [] }),
+				msghubRequest: () => Promise.resolve([]),
 				document: { getElementById: () => null, querySelector: () => null },
 				api: { i18n: { pickText: () => '' } },
 				Promise,
@@ -841,17 +837,15 @@ globalThis.__test = async function() {
 };`,
 			{
 				msghubRequest: () =>
-					Promise.resolve({
-						data: [
-							{
-								pluginType: 'IngestStates',
-								instanceId: 0,
-								panelId: 'presets',
-								title: { en: 'Presets' },
-								bundle: { hash: 'h1' },
-							},
-						],
-					}),
+					Promise.resolve([
+						{
+							pluginType: 'IngestStates',
+							instanceId: 0,
+							panelId: 'presets',
+							title: { en: 'Presets' },
+							bundle: { hash: 'h1' },
+						},
+					]),
 				document: {
 					getElementById: id => (id === 'plugin-IngestStates-0-presets' ? container : null),
 					querySelector: () => tabEl,

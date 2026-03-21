@@ -51,6 +51,7 @@ async function loadHostSandbox() {
 		window: windowObject,
 		document: documentObject,
 		lang: 'en',
+		t: key => key,
 		Blob: class {
 			constructor(parts, opts) {
 				this.parts = parts;
@@ -67,16 +68,22 @@ async function loadHostSandbox() {
 	return { createHost };
 }
 
+// Sentinel: distinguishes "rpcResponse not provided" from an explicit response object.
+// Using an object default lets TypeScript infer rpcResponse as {} (accepts any object).
+const _noRpcResponse = {};
+
 // Builds a request stub that serves bundle.get and optionally rpc.
-function makeRequest({ hash = 'test-hash', js = '', css = null, rpcResponse = null } = {}) {
+function makeRequest({ hash = 'test-hash', js = 'export function mount(){}', css = null, rpcResponse = _noRpcResponse } = {}) {
 	const calls = [];
 	const fn = async (cmd, payload) => {
 		calls.push({ cmd, payload });
 		if (cmd === 'admin.pluginUi.bundle.get') {
-			return { ok: true, data: { hash, js, css } };
+			// msghubRequest resolves with res.data directly — return raw payload, not {ok,data} envelope.
+			return { hash, js, css };
 		}
 		if (cmd === 'admin.pluginUi.rpc') {
-			return rpcResponse ?? { ok: true, data: {} };
+			// Same transport convention: return raw data; ctx.api.request wraps it into {ok,data}.
+			return rpcResponse !== _noRpcResponse ? rpcResponse : {};
 		}
 		return { ok: false, error: { message: 'unexpected command' } };
 	};
@@ -347,7 +354,8 @@ describe('admin/tab/plugin-ui-host.js', function () {
 					capturedCtx = ctx;
 				},
 			};
-			const request = makeRequest({ rpcResponse: { ok: true, data: { result: 42 } } });
+			// rpcResponse is raw data (transport resolves res.data directly); ctx.api.request wraps it.
+		const request = makeRequest({ rpcResponse: { result: 42 } });
 			const host = createHost({ request, api: {}, _importFn: async () => mockModule });
 
 			await host.mount({
@@ -370,7 +378,7 @@ describe('admin/tab/plugin-ui-host.js', function () {
 				command: 'presets.list',
 				payload: { filter: 'all' },
 			});
-			assert.deepEqual(rpcResult, { ok: true, data: { result: 42 } });
+			assert.deepEqual(JSON.parse(JSON.stringify(rpcResult)), { ok: true, data: { result: 42 } });
 		});
 	});
 });

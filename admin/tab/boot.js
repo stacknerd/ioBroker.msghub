@@ -747,7 +747,7 @@ async function hydratePluginPanels(refs, host, knownContributions = null) {
 		contributions = knownContributions;
 	} else {
 		const r = await msghubRequest('admin.pluginUi.discover', {}).catch(() => null);
-		contributions = Array.isArray(r?.data) ? r.data : [];
+		contributions = Array.isArray(r) ? r : [];
 	}
 
 	const enabledTabIds = [];
@@ -814,7 +814,7 @@ function ensureBooted() {
 			let prefetchedContributions = null;
 			if (isWildcard) {
 				const r = await msghubRequest('admin.pluginUi.discover', {}).catch(() => null);
-				prefetchedContributions = Array.isArray(r?.data) ? r.data : [];
+				prefetchedContributions = Array.isArray(r) ? r : [];
 			}
 
 			const { layout, panelIds, pluginPanelRefs, defaultPanelId } = buildLayoutFromRegistry({

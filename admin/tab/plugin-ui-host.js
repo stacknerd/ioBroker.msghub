@@ -1,4 +1,4 @@
-/* global window, document, lang */
+/* global window, document, lang, t */
 'use strict';
 
 /**
@@ -70,11 +70,12 @@ function createMsghubPluginUiHost({ request, api, _importFn = undefined }) {
 		}
 
 		// Fetch bundle metadata and source from backend.
-		const result = await request('admin.pluginUi.bundle.get', { pluginType, instanceId, panelId });
-		if (!result?.ok || !result.data) {
-			throw new Error(result?.error?.message || 'bundle.get failed');
+		// msghubRequest resolves with res.data directly — bundleData is the payload, not an {ok,data} envelope.
+		const bundleData = await request('admin.pluginUi.bundle.get', { pluginType, instanceId, panelId });
+		if (!bundleData?.js) {
+			throw new Error('bundle.get returned no JS content');
 		}
-		const { hash: responseHash, js, css = null } = result.data;
+		const { hash: responseHash, js, css = null } = bundleData;
 
 		// Check cache again using the authoritative hash from the response.
 		const cacheKey = `${pluginType}:${instanceId}:${panelId}:${responseHash}`;
@@ -101,7 +102,7 @@ function createMsghubPluginUiHost({ request, api, _importFn = undefined }) {
 		const el = document.createElement('div');
 		el.setAttribute('class', 'msghub-plugin-panel-error');
 		el.setAttribute('role', 'alert');
-		el.textContent = message || 'Failed to load plugin panel.';
+		el.textContent = message || t('msghub.i18n.core.admin.ui.pluginPanel.loadError.text');
 		target.replaceChildren(el);
 	}
 
@@ -125,10 +126,12 @@ function createMsghubPluginUiHost({ request, api, _importFn = undefined }) {
 			api: Object.freeze({
 				/**
 				 * Sends an RPC command to the plugin panel backend.
+				 * Returns a normalized { ok, data } / { ok, error } envelope to the bundle,
+				 * insulating it from the msghubRequest transport (which resolves with res.data directly).
 				 *
 				 * @param {string} command - Panel-scoped RPC command name.
 				 * @param {any} [payload] - Optional command payload.
-				 * @returns {Promise<{ ok: boolean, data?: any, error?: object }>} Backend response envelope.
+				 * @returns {Promise<{ ok: boolean, data?: any, error?: object }>} Normalized response envelope.
 				 */
 				request(command, payload) {
 					return request('admin.pluginUi.rpc', {
@@ -137,7 +140,10 @@ function createMsghubPluginUiHost({ request, api, _importFn = undefined }) {
 						panelId,
 						command,
 						payload,
-					});
+					}).then(
+						data => ({ ok: true, data }),
+						err => ({ ok: false, error: { message: err?.message || String(err) } }),
+					);
 				},
 				i18n: Object.freeze({ t: key => (api?.i18n?.t ? api.i18n.t(key) : key) }),
 				ui: Object.freeze({
@@ -200,11 +206,11 @@ function createMsghubPluginUiHost({ request, api, _importFn = undefined }) {
 				handle._shadowRoot = shadowRoot;
 			} catch {
 				// module.mount() threw — render error inside shadow DOM so it is visible.
-				renderErrorState(container, 'Plugin panel failed to mount.');
+				renderErrorState(container, t('msghub.i18n.core.admin.ui.pluginPanel.mountError.text'));
 			}
 		} catch {
 			// Bundle fetch or import failed — render error (shadow root may not exist yet).
-			renderErrorState(container, 'Failed to load plugin panel.');
+			renderErrorState(container, t('msghub.i18n.core.admin.ui.pluginPanel.loadError.text'));
 		}
 
 		return handle;
