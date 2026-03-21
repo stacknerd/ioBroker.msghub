@@ -264,7 +264,10 @@ function createAdminApi({ msghubRequest, msghubSocket, adapterInstance, lang, t,
 		registry && registry.compositions && typeof registry.compositions === 'object'
 			? registry.compositions[viewId]
 			: null;
-	const panelIds = Array.isArray(composition?.panels) ? composition.panels.filter(Boolean).map(v => String(v)) : [];
+	// Filter to string entries only — structured plugin panel refs are not native panels.
+	const panelIds = Array.isArray(composition?.panels)
+		? composition.panels.filter(v => typeof v === 'string' && v)
+		: [];
 	const defaultPanelId = typeof composition?.defaultPanel === 'string' ? composition.defaultPanel : '';
 
 	const logPrefix = `msghub:${viewId}`;

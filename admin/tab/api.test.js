@@ -223,7 +223,46 @@ describe('admin/tab/api.js', function () {
 				assert.throws(() => api.notSupported('x'), err => err && err.code === 'NOT_SUPPORTED');
 			});
 
-		it('context menu wrapper does not emit generic error toasts when handlers reject', async function () {
+		it('api.host.panels filters out structured plugin panel refs — returns only string IDs', async function () {
+		const sandbox = await loadApiSandbox({
+			window: {
+				MsghubAdminTabRegistry: {
+					compositions: {
+						adminTab: {
+							id: 'adminTab',
+							layout: 'tabs',
+							panels: [
+								'messages',
+								'plugins',
+								{ type: 'pluginPanel', pluginType: 'IngestStates', instanceId: 0, panelId: 'presets' },
+							],
+							defaultPanel: 'messages',
+							deviceMode: 'pc',
+						},
+					},
+				},
+			},
+		});
+		const createAdminApi = sandbox.window.__apiFns.createAdminApi;
+		const api = createAdminApi({
+			msghubRequest: async () => ({}),
+			msghubSocket: { connected: true },
+			adapterInstance: 'msghub.0',
+			lang: 'en',
+			t: key => String(key),
+			pickText: v => String(v || ''),
+			ui: {},
+		});
+
+		const panels = JSON.parse(JSON.stringify(api.host.panels));
+		// Only string entries must appear — the structured plugin panel ref must be filtered out.
+		assert.deepEqual(panels, ['messages', 'plugins']);
+		for (const id of panels) {
+			assert.equal(typeof id, 'string', `api.host.panels must only contain strings, got: ${JSON.stringify(id)}`);
+		}
+	});
+
+	it('context menu wrapper does not emit generic error toasts when handlers reject', async function () {
 			let openPayload = null;
 			const toastCalls = [];
 			const sandbox = await loadApiSandbox();

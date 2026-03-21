@@ -609,6 +609,269 @@ globalThis.__getLatency = () => lastPingLatencyMs;
 		assert.match(fnSource, /updateConnectionPanel\s*\(/);
 	});
 
+	it('hydratePluginPanels enables tab for matching contribution and registers entry in tabMap', async function () {
+		const source = await readRepoFile('admin/tab/boot.js');
+		// extractFunctionSource starts at 'function', stripping 'async' — prepend it back.
+		const fnSource = 'async ' + extractFunctionSource(source, 'hydratePluginPanels');
+
+		const removedAttrs = [];
+		const removedClasses = [];
+		let tabLabel = '';
+		const tabEl = {
+			removeAttribute: attr => removedAttrs.push(attr),
+			classList: { remove: cls => removedClasses.push(cls) },
+			get textContent() {
+				return tabLabel;
+			},
+			set textContent(v) {
+				tabLabel = v;
+			},
+		};
+		const container = { id: 'plugin-IngestStates-0-presets' };
+
+		const sandbox = runInSandbox(
+			`
+const pluginPanelTabMap = new Map();
+${fnSource}
+globalThis.__fn = hydratePluginPanels;
+globalThis.__map = pluginPanelTabMap;
+`,
+			{
+				msghubRequest: () =>
+					Promise.resolve({
+						data: [
+							{
+								pluginType: 'IngestStates',
+								instanceId: 0,
+								panelId: 'presets',
+								title: { en: 'Presets', de: 'Vorlagen' },
+								bundle: { hash: 'abc123' },
+							},
+						],
+					}),
+				document: {
+					getElementById: id => (id === 'plugin-IngestStates-0-presets' ? container : null),
+					querySelector: () => tabEl,
+				},
+				api: { i18n: { pickText: v => (v && typeof v === 'object' ? v.en || '' : String(v || '')) } },
+				Promise,
+			},
+			'boot-hydrate-happy.js',
+		);
+
+		const ref = { pluginType: 'IngestStates', instanceId: 0, panelId: 'presets' };
+		const enabledTabIds = await sandbox.__fn([ref], {}, null);
+
+		assert.deepEqual(JSON.parse(JSON.stringify(enabledTabIds)), ['tab-plugin-IngestStates-0-presets']);
+		assert.ok(removedAttrs.includes('aria-disabled'), 'aria-disabled must be removed from enabled tab');
+		assert.ok(removedClasses.includes('is-disabled'), 'is-disabled class must be removed from enabled tab');
+		assert.equal(tabLabel, 'Presets', 'tab text must be updated from contribution title');
+		assert.ok(sandbox.__map.has('tab-plugin-IngestStates-0-presets'), 'entry must be registered in pluginPanelTabMap');
+		const entry = sandbox.__map.get('tab-plugin-IngestStates-0-presets');
+		assert.equal(entry.hash, 'abc123');
+		assert.equal(entry.mountHandle, null);
+	});
+
+	it('hydratePluginPanels: wrong instanceId — no match, slot stays disabled, enabledTabIds empty', async function () {
+		const source = await readRepoFile('admin/tab/boot.js');
+		// extractFunctionSource starts at 'function', stripping 'async' — prepend it back.
+		const fnSource = 'async ' + extractFunctionSource(source, 'hydratePluginPanels');
+
+		const sandbox = runInSandbox(
+			`
+const pluginPanelTabMap = new Map();
+${fnSource}
+globalThis.__fn = hydratePluginPanels;
+globalThis.__map = pluginPanelTabMap;
+`,
+			{
+				msghubRequest: () =>
+					Promise.resolve({
+						data: [
+							// instanceId: 99 does not match ref.instanceId: 0
+							{ pluginType: 'IngestStates', instanceId: 99, panelId: 'presets', title: { en: 'Presets' }, bundle: { hash: 'x' } },
+						],
+					}),
+				document: { getElementById: () => ({}), querySelector: () => null },
+				api: { i18n: { pickText: v => String(v || '') } },
+				Promise,
+			},
+			'boot-hydrate-wrong-id.js',
+		);
+
+		const ref = { pluginType: 'IngestStates', instanceId: 0, panelId: 'presets' };
+		const enabledTabIds = await sandbox.__fn([ref], {}, null);
+
+		assert.deepEqual(JSON.parse(JSON.stringify(enabledTabIds)), [], 'wrong instanceId must produce no match');
+		assert.equal(sandbox.__map.size, 0, 'tabMap must remain empty on no match');
+	});
+
+	it('hydratePluginPanels: empty discover response — all slots disabled, no crash', async function () {
+		const source = await readRepoFile('admin/tab/boot.js');
+		// extractFunctionSource starts at 'function', stripping 'async' — prepend it back.
+		const fnSource = 'async ' + extractFunctionSource(source, 'hydratePluginPanels');
+
+		const sandbox = runInSandbox(
+			`
+const pluginPanelTabMap = new Map();
+${fnSource}
+globalThis.__fn = hydratePluginPanels;
+`,
+			{
+				msghubRequest: () => Promise.resolve({ data: [] }),
+				document: { getElementById: () => null, querySelector: () => null },
+				api: { i18n: { pickText: () => '' } },
+				Promise,
+			},
+			'boot-hydrate-empty.js',
+		);
+
+		const ref = { pluginType: 'IngestStates', instanceId: 0, panelId: 'presets' };
+		const enabledTabIds = await sandbox.__fn([ref], {}, null);
+
+		assert.deepEqual(JSON.parse(JSON.stringify(enabledTabIds)), [], 'empty discover must leave all slots disabled');
+	});
+
+	it('hydratePluginPanels: discover failure — all slots disabled, no crash', async function () {
+		const source = await readRepoFile('admin/tab/boot.js');
+		// extractFunctionSource starts at 'function', stripping 'async' — prepend it back.
+		const fnSource = 'async ' + extractFunctionSource(source, 'hydratePluginPanels');
+
+		const sandbox = runInSandbox(
+			`
+const pluginPanelTabMap = new Map();
+${fnSource}
+globalThis.__fn = hydratePluginPanels;
+`,
+			{
+				msghubRequest: () => Promise.reject(new Error('network error')),
+				document: { getElementById: () => null, querySelector: () => null },
+				api: { i18n: { pickText: () => '' } },
+				Promise,
+			},
+			'boot-hydrate-fail.js',
+		);
+
+		const ref = { pluginType: 'IngestStates', instanceId: 0, panelId: 'presets' };
+		// Must not throw even on network failure.
+		const enabledTabIds = await sandbox.__fn([ref], {}, null);
+
+		assert.deepEqual(JSON.parse(JSON.stringify(enabledTabIds)), [], 'discover failure must leave all slots disabled without crashing');
+	});
+
+	it('boot.js wires plugin panel lifecycle: discover hydration, spinner, activation, lazy-load', async function () {
+		const source = await readRepoFile('admin/tab/boot.js');
+
+		// Discover hydration is wired.
+		assert.match(source, /\bhydratePluginPanels\s*\(/, 'hydratePluginPanels must be called');
+		assert.match(source, /['"]admin\.pluginUi\.discover['"]/, 'admin.pluginUi.discover must be used');
+
+		// Spinner is shown only for plugin-only compositions (initial === null).
+		assert.match(source, /const needsSpinner = initialTabId === null/, 'spinner condition must be initialTabId === null');
+		assert.match(source, /ui\?\.spinner\?\.show\?\./, 'blocking spinner must be shown in plugin-only path');
+		assert.match(source, /ui\?\.spinner\?\.hide\?\./, 'spinner must be hidden after activation');
+
+		// Post-hydration activation logic present for both paths.
+		assert.match(source, /enabledTabIds\.includes\(wantedTabId\)/, 'defaultPanel activation must check enabledTabIds');
+
+		// Persistent toast when all plugin panels unavailable.
+		assert.match(source, /persist:\s*true/, 'persistent toast must be shown when no panels available');
+
+		// Lazy-load wired via msghub:tabSwitch.
+		assert.match(source, /['"]msghub:tabSwitch['"]/, 'lazy-load must listen to msghub:tabSwitch');
+		assert.match(source, /pluginPanelTabMap\.get\(/, 'lazy-load must look up entry in pluginPanelTabMap');
+		assert.match(source, /pluginUiHost\.mount\s*\(/, 'lazy-load must call pluginUiHost.mount');
+
+		// ingestStates warmup must be gone.
+		assert.doesNotMatch(source, /ingestStates\s*\?\s*\.constants/, 'ingestStates warmup must be removed from boot');
+	});
+
+	it('mixed composition defaultPanel: tabSetActive called when defaultPanel is a hydrated plugin tab', async function () {
+		const source = await readRepoFile('admin/tab/boot.js');
+		const fnSource = 'async ' + extractFunctionSource(source, 'hydratePluginPanels');
+
+		// Extract the else-branch (mixed-composition activation) from production source.
+		// The anchor `tabSetActive(wantedTabId)` is unique to this branch (the spinner branch uses chosenTabId).
+		const anchor = 'tabSetActive(wantedTabId)';
+		const anchorPos = source.indexOf(anchor);
+		assert.ok(anchorPos >= 0, 'mixed-composition else-branch must exist in boot.js');
+		const beforeAnchor = source.slice(0, anchorPos);
+		const elseStart = source.indexOf('{', beforeAnchor.lastIndexOf('} else {'));
+		assert.ok(elseStart >= 0, 'else-branch opening brace must be found');
+
+		// Simple brace counter — all braces in this block are balanced (including ${...} in template literals).
+		let depth = 0;
+		let elseEnd = -1;
+		for (let i = elseStart; i < source.length; i++) {
+			if (source[i] === '{') depth++;
+			else if (source[i] === '}') {
+				depth--;
+				if (depth === 0) {
+					elseEnd = i;
+					break;
+				}
+			}
+		}
+		assert.ok(elseEnd > elseStart, 'else-branch closing brace must be found');
+		const elseBody = source.slice(elseStart + 1, elseEnd);
+
+		// Behavioral: run hydratePluginPanels from source, then run the extracted else-branch.
+		// This covers the full mixed-composition path: native panel active pre-hydration,
+		// defaultPanel points to the plugin tab, post-hydration switch activates it.
+		const activatedIds = [];
+		const container = {};
+		const tabEl = {
+			removeAttribute: () => {},
+			classList: { remove: () => {} },
+			querySelector: () => null,
+		};
+		const sandbox = runInSandbox(
+			`
+const pluginPanelTabMap = new Map();
+${fnSource}
+globalThis.__test = async function() {
+	const enabledTabIds = await hydratePluginPanels(
+		[{ pluginType: 'IngestStates', instanceId: 0, panelId: 'presets' }],
+		{},
+		null,
+	);
+	const defaultPanelId = 'plugin-IngestStates-0-presets';
+	${elseBody}
+	return enabledTabIds;
+};`,
+			{
+				msghubRequest: () =>
+					Promise.resolve({
+						data: [
+							{
+								pluginType: 'IngestStates',
+								instanceId: 0,
+								panelId: 'presets',
+								title: { en: 'Presets' },
+								bundle: { hash: 'h1' },
+							},
+						],
+					}),
+				document: {
+					getElementById: id => (id === 'plugin-IngestStates-0-presets' ? container : null),
+					querySelector: () => tabEl,
+				},
+				api: { i18n: { pickText: v => (v && typeof v === 'object' ? v.en || '' : String(v || '')) } },
+				tabSetActive: id => activatedIds.push(id),
+				Promise,
+			},
+			'boot-mixed-defaultPanel.js',
+		);
+
+		await sandbox.__test();
+
+		assert.deepEqual(
+			activatedIds,
+			['tab-plugin-IngestStates-0-presets'],
+			'tabSetActive must be called with the plugin defaultPanel tab ID in mixed composition',
+		);
+	});
+
 	it('does not override lang when not embedded in admin', async function () {
 		const source = await readRepoFile('admin/tab/boot.js');
 		const applyRuntimeAboutPayloadSource = extractFunctionSource(source, 'applyRuntimeAboutPayload');

@@ -81,7 +81,11 @@
 		adminTab: Object.freeze({
 			id: 'adminTab',
 			layout: 'tabs',
-			panels: Object.freeze(['messages', 'plugins']),
+			panels: Object.freeze([
+				'messages',
+				'plugins',
+				Object.freeze({ type: 'pluginPanel', pluginType: 'IngestStates', instanceId: 0, panelId: 'presets' }),
+			]),
 			defaultPanel: 'messages',
 			deviceMode: 'pc',
 		}),

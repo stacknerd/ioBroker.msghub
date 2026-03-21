@@ -1,4 +1,4 @@
-/* global window, document, HTMLElement, HTMLInputElement, HTMLTextAreaElement, hasAdminKey, t, lang, createUi, createAdminApi, msghubRequest, msghubSocket, adapterInstance, args, h, getPanelDefinition, win, loadJsFilesSequential, renderPanelBootError, buildLayoutFromRegistry, getActiveComposition, computeAssetsForComposition, ensureAdminI18nLoaded, loadCssFiles, initTabs, isEmbeddedInAdmin, overrideLang */
+/* global window, document, HTMLElement, HTMLInputElement, HTMLTextAreaElement, hasAdminKey, t, lang, createUi, createAdminApi, msghubRequest, msghubSocket, adapterInstance, args, h, getPanelDefinition, win, loadJsFilesSequential, renderPanelBootError, buildLayoutFromRegistry, getActiveComposition, computeAssetsForComposition, ensureAdminI18nLoaded, loadCssFiles, initTabs, isEmbeddedInAdmin, overrideLang, createMsghubPluginUiHost */
 'use strict';
 
 /**
@@ -728,6 +728,73 @@ async function initPanelsForComposition(panelIds) {
 	}
 }
 
+/** Tracks enabled plugin panel tabs for lazy-load mounting. Map<tabDomId, entry>. */
+const pluginPanelTabMap = new Map();
+
+/**
+ * Discovers available plugin panel contributions and enables matching tab slots.
+ * Enables tabs, updates their text labels, and registers entries in `pluginPanelTabMap`.
+ * Per-slot failures are isolated so other slots continue unaffected.
+ *
+ * @param {object[]} refs - Structured plugin panel references from buildLayoutFromRegistry.
+ * @param {object} host - Plugin UI host instance (from createMsghubPluginUiHost).
+ * @param {object[]|null} knownContributions - Pre-fetched discover contributions, or null to fetch now.
+ * @returns {Promise<string[]>} DOM tab IDs of successfully enabled plugin panel tabs.
+ */
+async function hydratePluginPanels(refs, host, knownContributions = null) {
+	let contributions;
+	if (knownContributions !== null) {
+		contributions = knownContributions;
+	} else {
+		const r = await msghubRequest('admin.pluginUi.discover', {}).catch(() => null);
+		contributions = Array.isArray(r?.data) ? r.data : [];
+	}
+
+	const enabledTabIds = [];
+	for (const ref of refs) {
+		try {
+			const key = `plugin-${ref.pluginType}-${ref.instanceId}-${ref.panelId}`;
+			const tabId = `tab-${key}`;
+			const container = document.getElementById(key);
+			const contrib = Array.isArray(contributions)
+				? contributions.find(
+						c =>
+							c.pluginType === ref.pluginType &&
+							c.instanceId === ref.instanceId &&
+							c.panelId === ref.panelId,
+					)
+				: null;
+			if (!container || !contrib) {
+				continue;
+			}
+
+			// Enable tab: remove disabled state and update label.
+			const tabEl = document.querySelector(`a.msghub-tab[href="#${tabId}"]`);
+			if (tabEl) {
+				tabEl.removeAttribute('aria-disabled');
+				tabEl.classList.remove('is-disabled');
+				const label = api.i18n.pickText(contrib.title);
+				if (label) {
+					tabEl.textContent = label;
+				}
+			}
+
+			pluginPanelTabMap.set(tabId, {
+				ref,
+				hash: String(contrib.bundle?.hash ?? ''),
+				container,
+				host,
+				mountHandle: null,
+			});
+			enabledTabIds.push(tabId);
+		} catch {
+			// Isolate per-slot failures — other slots continue.
+		}
+	}
+
+	return enabledTabIds;
+}
+
 let bootPromise = null;
 
 /**
@@ -741,8 +808,18 @@ function ensureBooted() {
 	}
 	bootPromise = Promise.resolve()
 		.then(async () => {
-			const { layout, panelIds, defaultPanelId } = buildLayoutFromRegistry();
+			// Wildcard: discover must run before buildLayoutFromRegistry so tab list is known.
 			const comp = getActiveComposition();
+			const isWildcard = Array.isArray(comp?.panels) && comp.panels.length === 1 && comp.panels[0] === '*';
+			let prefetchedContributions = null;
+			if (isWildcard) {
+				const r = await msghubRequest('admin.pluginUi.discover', {}).catch(() => null);
+				prefetchedContributions = Array.isArray(r?.data) ? r.data : [];
+			}
+
+			const { layout, panelIds, pluginPanelRefs, defaultPanelId } = buildLayoutFromRegistry({
+				contributions: prefetchedContributions ?? [],
+			});
 			setConnLayout(layout, comp?.deviceMode);
 			const assets = computeAssetsForComposition(panelIds);
 
@@ -756,11 +833,69 @@ function ensureBooted() {
 			updateConnectionPanel();
 			initConnectionPanelInteraction();
 
+			let tabSetActive = null;
+			let initialTabId = null;
 			if (layout === 'tabs') {
-				initTabs({ defaultPanelId });
+				const tabs = initTabs({ defaultPanelId });
+				tabSetActive = tabs?.setActive ?? null;
+				initialTabId = tabs?.initial ?? null;
 			}
 
 			await initPanelsForComposition(panelIds);
+
+			if (pluginPanelRefs.length > 0) {
+				const pluginUiHost = createMsghubPluginUiHost({ request: msghubRequest, api });
+
+				// Show blocking spinner only when no panel was activated (plugin-only composition).
+				const needsSpinner = initialTabId === null;
+				if (needsSpinner) {
+					ui?.spinner?.show?.({ blocking: true });
+				}
+
+				const enabledTabIds = await hydratePluginPanels(pluginPanelRefs, pluginUiHost, prefetchedContributions);
+
+				if (needsSpinner) {
+					// Plugin-only composition: no tab was active pre-hydration.
+					// Prefer defaultPanel tab if available; fall back to first enabled tab.
+					const wantedTabId = defaultPanelId ? `tab-${defaultPanelId}` : null;
+					const chosenTabId =
+						wantedTabId && enabledTabIds.includes(wantedTabId) ? wantedTabId : (enabledTabIds[0] ?? null);
+
+					if (chosenTabId && tabSetActive) {
+						tabSetActive(chosenTabId);
+						ui?.spinner?.hide?.();
+					} else {
+						// All plugin panels unavailable — keep spinner; show persistent toast.
+						ui?.toast?.({
+							text: t('msghub.i18n.core.admin.ui.panel.unavailable.text'),
+							variant: 'danger',
+							persist: true,
+						});
+					}
+				} else {
+					// Mixed composition: a native panel is already active.
+					// If defaultPanel is a plugin panel that was just hydrated, switch to it now.
+					const wantedTabId = defaultPanelId ? `tab-${defaultPanelId}` : null;
+					if (wantedTabId && enabledTabIds.includes(wantedTabId) && tabSetActive) {
+						tabSetActive(wantedTabId);
+					}
+				}
+
+				// Lazy-load: mount plugin bundle on first tab activation.
+				document.addEventListener('msghub:tabSwitch', ({ detail }) => {
+					const entry = pluginPanelTabMap.get(detail?.to);
+					if (!entry || entry.mountHandle) {
+						return; // Not a plugin panel tab, or already mounted.
+					}
+					entry.mountHandle = pluginUiHost.mount({
+						container: entry.container,
+						pluginType: entry.ref.pluginType,
+						instanceId: String(entry.ref.instanceId),
+						panelId: entry.ref.panelId,
+						hash: entry.hash,
+					});
+				});
+			}
 		})
 		.catch(err => {
 			try {
@@ -802,7 +937,6 @@ async function warmupAdminApis() {
 	while (msghubSocket?.connected && connectWarmupToken === token && Date.now() - startedAt <= maxWaitMs) {
 		try {
 			await api.constants.get();
-			await api.ingestStates?.constants?.get?.();
 			return true;
 		} catch {
 			await sleepMs(delayMs + Math.trunc(Math.random() * 250));

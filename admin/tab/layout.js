@@ -28,7 +28,7 @@
 function initTabs({ defaultPanelId = '' } = {}) {
 	const tabs = Array.from(document.querySelectorAll('.msghub-tab'));
 	if (!tabs.length) {
-		return;
+		return { setActive: () => {} };
 	}
 
 	/**
@@ -82,27 +82,52 @@ function initTabs({ defaultPanelId = '' } = {}) {
 		activeId = id;
 	};
 
-	// Initiales Tab wird aus URL, Markup oder Default ermittelt.
+	// Returns true if a tab link is marked disabled (e.g. an unhydrated plugin panel tab).
+	const isDisabled = tab => tab.getAttribute('aria-disabled') === 'true';
+
+	// Determine initial panel: all levels of the fallback chain skip disabled tabs.
 	const initial = (() => {
 		const h = String(location.hash || '');
 		const candidate = h.startsWith('#') ? h.slice(1) : '';
 		if (candidate && panels.has(candidate)) {
-			return candidate;
+			const candidateTab = tabs.find(t => getTargetId(t) === candidate);
+			if (!candidateTab || !isDisabled(candidateTab)) {
+				return candidate;
+			}
 		}
-		const fromMarkup = tabs.find(t => t.classList.contains('is-active')) || null;
+		const fromMarkup = tabs.find(t => t.classList.contains('is-active') && !isDisabled(t)) || null;
 		const fromMarkupId = fromMarkup ? getTargetId(fromMarkup) : '';
 		if (fromMarkupId && panels.has(fromMarkupId)) {
 			return fromMarkupId;
 		}
 		const fallback = defaultPanelId ? `tab-${String(defaultPanelId)}` : 'tab-plugins';
-		return panels.has(fallback) ? fallback : panels.keys().next().value;
+		if (panels.has(fallback)) {
+			const fallbackTab = tabs.find(t => getTargetId(t) === fallback);
+			if (!fallbackTab || !isDisabled(fallbackTab)) {
+				return fallback;
+			}
+		}
+		// Last resort: first non-disabled panel in DOM order.
+		for (const id of panels.keys()) {
+			const t = tabs.find(tab => getTargetId(tab) === id);
+			if (!t || !isDisabled(t)) {
+				return id;
+			}
+		}
+		return null; // All tabs disabled — boot.js activates after hydration.
 	})();
 
-	setActive(initial);
+	if (initial) {
+		setActive(initial);
+	}
 
 	for (const tab of tabs) {
 		tab.addEventListener('click', e => {
 			e.preventDefault();
+			// Disabled tabs (e.g. unhydrated plugin panels) must not be activated.
+			if (isDisabled(tab)) {
+				return;
+			}
 			const id = getTargetId(tab);
 			if (!id || !panels.has(id)) {
 				return;
@@ -115,6 +140,8 @@ function initTabs({ defaultPanelId = '' } = {}) {
 			setActive(id);
 		});
 	}
+
+	return { setActive, initial };
 }
 
 /**
@@ -268,28 +295,32 @@ function getActiveComposition() {
 }
 
 /**
- * Baut das sichtbare Layout (Tabs/Panel-Container) vollständig aus der Registry.
+ * Builds the visible layout (tabs/panel containers) from the registry.
+ * Handles mixed composition panels: native string IDs and structured plugin panel references.
+ * For wildcard compositions (`panels: ['*']`), pass discover contributions via opts.
  *
- * @returns {{layout:string,panelIds:string[],defaultPanelId:string}} Layout-Metadaten.
+ * @param {{ contributions?: object[] }} [opts] - Optional settings for wildcard mode.
+ *   contributions: discover contributions array; required when composition declares `panels:['*']`.
+ * @returns {{ layout: string, panelIds: string[], pluginPanelRefs: object[], defaultPanelId: string }}
+ *   layout: 'tabs' or 'single'.
+ *   panelIds: native panel string IDs only (for asset loading and panel init).
+ *   pluginPanelRefs: structured plugin panel references (for discover hydration in boot.js).
+ *   defaultPanelId: default active panel ID.
  */
-function buildLayoutFromRegistry() {
+function buildLayoutFromRegistry({ contributions = [] } = {}) {
 	const registry = getRegistry();
 	const comp = getActiveComposition() || { layout: 'tabs', panels: [], defaultPanel: '' };
 	const layout = comp.layout === 'single' ? 'single' : 'tabs';
-	const panelIds = Array.isArray(comp.panels) ? comp.panels.map(v => String(v)) : [];
 	const defaultPanelId = typeof comp.defaultPanel === 'string' ? comp.defaultPanel : '';
 
-	const root = document.querySelector('.msghub-root');
-	const layoutHost = document.getElementById('msghub-layout') || root;
-	if (!layoutHost) {
-		return { layout, panelIds, defaultPanelId };
-	}
+	// Wildcard: show all registry native panels first, then all contributions as plugin panels.
+	const isWildcard = Array.isArray(comp.panels) && comp.panels.length === 1 && comp.panels[0] === '*';
 
 	/**
-	 * Interner Guard für Paneldefinitionen der aktuellen Registry.
+	 * Returns the native panel definition for a given ID, or null if not found.
 	 *
-	 * @param {string} id - Panel-ID.
-	 * @returns {object|null} Panel-Definition oder `null`.
+	 * @param {string} id - Panel ID.
+	 * @returns {object|null} Panel definition or null.
 	 */
 	const getPanelDef = id => {
 		const panels = registry?.panels && typeof registry.panels === 'object' ? registry.panels : null;
@@ -297,50 +328,130 @@ function buildLayoutFromRegistry() {
 		return p && typeof p === 'object' ? p : null;
 	};
 
+	// Build ordered entry list for tab + panel container rendering.
+	const panelIds = [];
+	const pluginPanelRefs = [];
+	const allEntries = [];
+
+	if (isWildcard) {
+		const regPanels = registry?.panels && typeof registry.panels === 'object' ? registry.panels : {};
+		for (const pid of Object.keys(regPanels)) {
+			const def = regPanels[pid];
+			if (def && typeof def === 'object') {
+				panelIds.push(pid);
+				allEntries.push({ kind: 'native', id: pid, def });
+			}
+		}
+		const contribs = Array.isArray(contributions) ? contributions : [];
+		for (const c of contribs) {
+			if (!c || typeof c !== 'object') {
+				continue;
+			}
+			const ref = Object.freeze({
+				type: 'pluginPanel',
+				pluginType: c.pluginType,
+				instanceId: c.instanceId,
+				panelId: c.panelId,
+			});
+			pluginPanelRefs.push(ref);
+			allEntries.push({ kind: 'plugin', ref });
+		}
+	} else {
+		const panels = Array.isArray(comp.panels) ? comp.panels : [];
+		for (const entry of panels) {
+			if (typeof entry === 'string' && entry) {
+				const def = getPanelDef(entry);
+				if (def) {
+					panelIds.push(entry);
+					allEntries.push({ kind: 'native', id: entry, def });
+				}
+			} else if (entry && typeof entry === 'object' && entry.type === 'pluginPanel') {
+				pluginPanelRefs.push(entry);
+				allEntries.push({ kind: 'plugin', ref: entry });
+			}
+		}
+	}
+
+	const root = document.querySelector('.msghub-root');
+	const layoutHost = document.getElementById('msghub-layout') || root;
+	if (!layoutHost) {
+		return { layout, panelIds, pluginPanelRefs, defaultPanelId };
+	}
+
 	const fragment = document.createDocumentFragment();
 
 	if (layout === 'tabs') {
 		const nav = h('nav', { class: 'msghub-tabs', role: 'tablist', 'aria-label': 'MsgHub' });
-		for (const pid of panelIds) {
-			const def = getPanelDef(pid);
-			if (!def) {
-				continue;
+		for (const entry of allEntries) {
+			if (entry.kind === 'native') {
+				const { id, def } = entry;
+				const tabId = `tab-${id}`;
+				nav.appendChild(
+					h('a', {
+						class: `msghub-tab${id === defaultPanelId ? ' is-active' : ''}`,
+						href: `#${tabId}`,
+						role: 'tab',
+						'aria-controls': tabId,
+						'data-i18n': def.titleKey || '',
+						text: id,
+					}),
+				);
+			} else {
+				// Plugin panel: starts disabled until discover confirms availability.
+				const { ref } = entry;
+				const key = `plugin-${ref.pluginType}-${ref.instanceId}-${ref.panelId}`;
+				const tabId = `tab-${key}`;
+				nav.appendChild(
+					h('a', {
+						class: 'msghub-tab is-disabled',
+						href: `#${tabId}`,
+						role: 'tab',
+						'aria-controls': tabId,
+						'aria-disabled': 'true',
+						text: ref.panelId,
+					}),
+				);
 			}
-			const tabId = `tab-${pid}`;
-			nav.appendChild(
-				h('a', {
-					class: `msghub-tab${pid === defaultPanelId ? ' is-active' : ''}`,
-					href: `#${tabId}`,
-					role: 'tab',
-					'aria-controls': tabId,
-					'data-i18n': def.titleKey || '',
-					text: pid,
-				}),
-			);
 		}
 		fragment.appendChild(nav);
 	}
 
-	for (const pid of panelIds) {
-		const def = getPanelDef(pid);
-		if (!def) {
-			continue;
+	for (const entry of allEntries) {
+		if (entry.kind === 'native') {
+			const { id, def } = entry;
+			const tabId = `tab-${id}`;
+			const mountId = String(def.mountId || '').trim();
+			const panel = h('div', {
+				id: tabId,
+				class: `msghub-panel msghub-${id}`,
+				role: 'tabpanel',
+			});
+			if (mountId) {
+				panel.appendChild(h('div', { id: mountId }));
+			}
+			fragment.appendChild(panel);
+		} else {
+			// Plugin panel: container with data attributes for boot.js discover wiring.
+			const { ref } = entry;
+			const key = `plugin-${ref.pluginType}-${ref.instanceId}-${ref.panelId}`;
+			const tabId = `tab-${key}`;
+			const panel = h('div', {
+				id: tabId,
+				class: 'msghub-panel',
+				role: 'tabpanel',
+				'data-plugin-panel': 'true',
+				'data-plugin-type': ref.pluginType,
+				'data-plugin-instance-id': String(ref.instanceId),
+				'data-panel-id': ref.panelId,
+			});
+			// Mount container: this element is passed to pluginUiHost.mount().
+			panel.appendChild(h('div', { id: key }));
+			fragment.appendChild(panel);
 		}
-		const tabId = `tab-${pid}`;
-		const mountId = String(def.mountId || '').trim();
-		const panel = h('div', {
-			id: tabId,
-			class: `msghub-panel msghub-${pid}`,
-			role: 'tabpanel',
-		});
-		if (mountId) {
-			panel.appendChild(h('div', { id: mountId }));
-		}
-		fragment.appendChild(panel);
 	}
 
 	layoutHost.replaceChildren(fragment);
-	return { layout, panelIds, defaultPanelId };
+	return { layout, panelIds, pluginPanelRefs, defaultPanelId };
 }
 
 /**

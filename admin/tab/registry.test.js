@@ -56,13 +56,49 @@ describe('admin/tab/registry.js', function () {
 			assert.ok(composition.layout === 'tabs' || composition.layout === 'single');
 			assert.ok(Array.isArray(composition.panels) && composition.panels.length > 0);
 			assert.ok(typeof composition.defaultPanel === 'string' && composition.defaultPanel.trim());
-			assert.ok(composition.panels.includes(composition.defaultPanel));
 
-			for (const panelId of composition.panels) {
-				assert.ok(registry.panels[panelId], `unknown panel '${panelId}' in composition '${compositionId}'`);
+			// defaultPanel is a plain string — either a native panel ID or a plugin panel DOM key.
+			const defaultResolvable =
+				composition.panels.some(p => typeof p === 'string' && p === composition.defaultPanel) ||
+				String(composition.defaultPanel).startsWith('plugin-');
+			assert.ok(defaultResolvable, `defaultPanel '${composition.defaultPanel}' not resolvable in '${compositionId}'`);
+
+			for (const panelEntry of composition.panels) {
+				if (typeof panelEntry === 'string') {
+					assert.ok(registry.panels[panelEntry], `unknown native panel '${panelEntry}' in composition '${compositionId}'`);
+				} else if (panelEntry && typeof panelEntry === 'object') {
+					// Structured plugin panel reference — must have required shape fields.
+					assert.equal(panelEntry.type, 'pluginPanel', `non-string panel entry must be a pluginPanel ref`);
+					assert.ok(typeof panelEntry.pluginType === 'string' && panelEntry.pluginType, 'pluginPanel ref requires pluginType');
+					assert.ok(typeof panelEntry.panelId === 'string' && panelEntry.panelId, 'pluginPanel ref requires panelId');
+				}
 			}
 		}
 		assert.equal(registry.compositions.dashboardStats, undefined, 'legacy stats composition should be removed');
+	});
+
+	it('adminTab composition includes a structured pluginPanel ref; registry.panels stays native-only', async function () {
+		const source = await readRepoFile('admin/tab/registry.js');
+		const sandbox = { window: {} };
+		sandbox.win = sandbox.window;
+		vm.runInNewContext(source, sandbox, { filename: 'admin/tab/registry.js' });
+		const registry = sandbox.window.MsghubAdminTabRegistry;
+
+		const adminTab = registry.compositions.adminTab;
+		assert.ok(Array.isArray(adminTab.panels), 'adminTab.panels must be an array');
+
+		// Locate the structured plugin panel ref entry.
+		const pluginEntry = adminTab.panels.find(p => p && typeof p === 'object' && p.type === 'pluginPanel');
+		assert.ok(pluginEntry, 'adminTab composition must contain at least one structured pluginPanel ref');
+		assert.equal(pluginEntry.pluginType, 'IngestStates');
+		assert.equal(pluginEntry.instanceId, 0);
+		assert.equal(pluginEntry.panelId, 'presets');
+		assert.ok(Object.isFrozen(pluginEntry), 'pluginPanel ref must be frozen');
+
+		// registry.panels must not contain any plugin panel entries.
+		for (const [id, panel] of Object.entries(registry.panels)) {
+			assert.ok(typeof id === 'string' && panel.mountId, `registry.panels entry '${id}' must be a native panel definition`);
+		}
 	});
 
 	it('is idempotent when loaded multiple times', async function () {

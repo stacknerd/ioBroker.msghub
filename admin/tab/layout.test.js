@@ -269,6 +269,178 @@ describe('admin/tab/layout.js', function () {
 		assert.equal(getActiveComposition().defaultPanel, 'messages');
 	});
 
+	it('buildLayoutFromRegistry() separates native panelIds from plugin panel refs', async function () {
+		const { sandbox, layoutHost } = await loadLayoutSandbox();
+
+		// Override registry with a mixed composition: one native panel + one plugin panel ref.
+		sandbox.win.MsghubAdminTabRegistry = {
+			panels: {
+				messages: { mountId: 'messages-root', titleKey: 'messages.key', assets: { css: [], js: [] } },
+			},
+			compositions: {
+				adminTab: {
+					id: 'adminTab',
+					layout: 'tabs',
+					panels: [
+						'messages',
+						{ type: 'pluginPanel', pluginType: 'IngestStates', instanceId: 0, panelId: 'presets' },
+					],
+					defaultPanel: 'messages',
+				},
+			},
+		};
+
+		const { buildLayoutFromRegistry } = sandbox.window.__layoutFns;
+		const result = buildLayoutFromRegistry();
+
+		// panelIds must contain only string IDs.
+		assert.deepEqual(JSON.parse(JSON.stringify(result.panelIds)), ['messages']);
+
+		// pluginPanelRefs must contain the structured ref.
+		assert.equal(result.pluginPanelRefs.length, 1);
+		const ref = result.pluginPanelRefs[0];
+		assert.equal(ref.type, 'pluginPanel');
+		assert.equal(ref.pluginType, 'IngestStates');
+		assert.equal(ref.instanceId, 0);
+		assert.equal(ref.panelId, 'presets');
+
+		// DOM: plugin tab must be rendered with aria-disabled and is-disabled.
+		const fragment = layoutHost.children[0];
+		const nav = fragment.children[0];
+		const pluginTab = nav.children[1]; // native tab is [0], plugin tab is [1]
+		assert.equal(pluginTab.getAttribute('aria-disabled'), 'true');
+		assert.ok(pluginTab.className.includes('is-disabled'));
+		assert.equal(pluginTab.getAttribute('href'), '#tab-plugin-IngestStates-0-presets');
+
+		// DOM: plugin panel container has required data attributes.
+		const pluginPanel = fragment.children[2]; // nav[0], nativePanel[1], pluginPanel[2]
+		assert.equal(pluginPanel.getAttribute('data-plugin-panel'), 'true');
+		assert.equal(pluginPanel.getAttribute('data-plugin-type'), 'IngestStates');
+		assert.equal(pluginPanel.getAttribute('data-plugin-instance-id'), '0');
+		assert.equal(pluginPanel.getAttribute('data-panel-id'), 'presets');
+	});
+
+	it('buildLayoutFromRegistry() returns empty pluginPanelRefs for string-only panels', async function () {
+		const { sandbox } = await loadLayoutSandbox();
+		const { buildLayoutFromRegistry } = sandbox.window.__layoutFns;
+
+		// Default sandbox has a string-only composition.
+		const result = buildLayoutFromRegistry();
+
+		assert.deepEqual(JSON.parse(JSON.stringify(result.pluginPanelRefs)), []);
+		assert.ok(result.panelIds.length > 0);
+		for (const id of result.panelIds) {
+			assert.equal(typeof id, 'string');
+		}
+	});
+
+	it('buildLayoutFromRegistry() with wildcard panels renders native + contribution plugin tabs', async function () {
+		const { sandbox, layoutHost } = await loadLayoutSandbox();
+
+		sandbox.win.MsghubAdminTabRegistry = {
+			panels: {
+				messages: { mountId: 'messages-root', titleKey: 'messages.key', assets: { css: [], js: [] } },
+			},
+			compositions: {
+				adminTab: {
+					id: 'adminTab',
+					layout: 'tabs',
+					panels: ['*'],
+					defaultPanel: 'messages',
+				},
+			},
+		};
+
+		const contributions = [
+			{ pluginType: 'IngestStates', instanceId: 0, panelId: 'presets', title: { en: 'Presets' } },
+		];
+
+		const { buildLayoutFromRegistry } = sandbox.window.__layoutFns;
+		const result = buildLayoutFromRegistry({ contributions });
+
+		// Native panel IDs come from registry.panels.
+		assert.deepEqual(JSON.parse(JSON.stringify(result.panelIds)), ['messages']);
+
+		// pluginPanelRefs derived from contributions.
+		assert.equal(result.pluginPanelRefs.length, 1);
+		assert.equal(result.pluginPanelRefs[0].pluginType, 'IngestStates');
+		assert.equal(result.pluginPanelRefs[0].instanceId, 0);
+
+		// DOM: both a native tab and a plugin tab rendered.
+		const fragment = layoutHost.children[0];
+		const nav = fragment.children[0];
+		assert.equal(nav.children.length, 2);
+		const pluginTab = nav.children[1];
+		assert.equal(pluginTab.getAttribute('aria-disabled'), 'true');
+	});
+
+	it('initTabs() returns null initial when all tabs are disabled', async function () {
+		const { sandbox } = await loadLayoutSandbox();
+
+		const tab1 = createElement('a');
+		tab1.setAttribute('href', '#tab-messages');
+		tab1.setAttribute('aria-disabled', 'true');
+		tab1.classList = createClassList('msghub-tab is-disabled');
+
+		const tab2 = createElement('a');
+		tab2.setAttribute('href', '#tab-plugins');
+		tab2.setAttribute('aria-disabled', 'true');
+		tab2.classList = createClassList('msghub-tab is-disabled');
+
+		const panel1 = createElement('div');
+		const panel2 = createElement('div');
+
+		sandbox.document.querySelectorAll = selector =>
+			selector === '.msghub-tab' ? [tab1, tab2] : [];
+		sandbox.document.getElementById = id => {
+			if (id === 'tab-messages') return panel1;
+			if (id === 'tab-plugins') return panel2;
+			return null;
+		};
+		sandbox.location.hash = '';
+
+		const result = sandbox.window.__layoutFns.initTabs({ defaultPanelId: 'messages' });
+
+		assert.equal(result.initial, null, 'initial must be null when all tabs are disabled');
+		assert.ok(typeof result.setActive === 'function', 'setActive must be returned even when no tab was activated');
+		// Calling setActive must not throw.
+		assert.doesNotThrow(() => result.setActive('tab-messages'));
+	});
+
+	it('initTabs() skips disabled hash candidate and activates first non-disabled tab', async function () {
+		const { sandbox } = await loadLayoutSandbox();
+
+		// tab1 is disabled; tab2 is enabled.
+		const tab1 = createElement('a');
+		tab1.setAttribute('href', '#tab-messages');
+		tab1.setAttribute('aria-disabled', 'true');
+		tab1.classList = createClassList('msghub-tab is-disabled');
+
+		const tab2 = createElement('a');
+		tab2.setAttribute('href', '#tab-plugins');
+		tab2.classList = createClassList('msghub-tab');
+
+		const panel1 = createElement('div');
+		const panel2 = createElement('div');
+
+		sandbox.document.querySelectorAll = selector =>
+			selector === '.msghub-tab' ? [tab1, tab2] : [];
+		sandbox.document.getElementById = id => {
+			if (id === 'tab-messages') return panel1;
+			if (id === 'tab-plugins') return panel2;
+			return null;
+		};
+		// Hash points to the disabled tab.
+		sandbox.location.hash = '#tab-messages';
+
+		const result = sandbox.window.__layoutFns.initTabs({ defaultPanelId: 'messages' });
+
+		// disabled hash candidate must be skipped; last-resort selects tab2.
+		assert.notEqual(result.initial, 'tab-messages', 'disabled tab must not be chosen as initial');
+		assert.equal(result.initial, 'tab-plugins', 'first non-disabled tab must be the initial selection');
+		assert.ok(tab2.classList.contains('is-active'), 'non-disabled tab must be marked is-active');
+	});
+
 	it('loads CSS/JS assets and keeps ordering stable', async function () {
 		const { sandbox, headElement } = await loadLayoutSandbox();
 		const loadCssFiles = sandbox.window.__layoutFns.loadCssFiles;

@@ -1,6 +1,10 @@
 export {};
 
 declare global {
+	interface DocumentEventMap {
+		'msghub:tabSwitch': CustomEvent<{ from?: string; to?: string }>;
+	}
+
 	interface Window {
 		__msghubAdminTabEntryLoaded?: boolean;
 		__msghubAdminTabTheme?: 'dark' | 'light';
@@ -38,12 +42,14 @@ declare global {
 
 	function createUi(): any;
 
-	function initTabs(options?: any): void;
-	function buildLayoutFromRegistry(): {
+	function initTabs(options?: any): { initial: string | null; setActive: (tabId: string) => void };
+	function buildLayoutFromRegistry(opts?: { contributions?: any[] }): {
 		layout: 'tabs' | 'single';
 		panelIds: string[];
 		defaultPanelId: string;
+		pluginPanelRefs: any[];
 	};
+	function createMsghubPluginUiHost(opts: { request: any; api: any }): any;
 	function getActiveComposition(): any;
 	function computeAssetsForComposition(panelIds: string[]): { css: string[]; js: string[] };
 	function loadCssFiles(files: string[]): Promise<{ failed: string[] }>;
