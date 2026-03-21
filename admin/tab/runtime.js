@@ -181,6 +181,38 @@ function hasAdminKey(key) {
 }
 
 /**
+ * Host-internal: merges plugin-owned i18n translations into the runtime dictionary.
+ * This is the actual mutation boundary. Both rules are enforced here, not in the caller:
+ * 1. Namespace filter — only keys beginning with `msghub.i18n.<pluginType>.ui.` are admitted.
+ * 2. No-overwrite — keys already present in the dictionary are never replaced.
+ * Called exclusively by plugin-ui-host.js; not exposed via ctx.api.
+ *
+ * @param {string} pluginType - Plugin type identifier (e.g. 'IngestStates').
+ * @param {Record<string, unknown>} translations - Raw key-value pairs from the bundle response.
+ */
+function mergePluginI18n(pluginType, translations) {
+	if (!translations || typeof translations !== 'object' || Array.isArray(translations)) {
+		return;
+	}
+	const prefix = `msghub.i18n.${pluginType}.ui.`;
+	const additions = {};
+	for (const [k, v] of Object.entries(translations)) {
+		const ks = String(k ?? '');
+		// Namespace filter: only keys in the plugin's own ui namespace are admitted.
+		if (!ks.startsWith(prefix)) {
+			continue;
+		}
+		// No-overwrite: existing core/plugin keys are never replaced.
+		if (!hasAdminKey(ks)) {
+			additions[ks] = String(v ?? '');
+		}
+	}
+	if (Object.keys(additions).length > 0) {
+		adminDict = Object.freeze({ ...adminDict, ...additions });
+	}
+}
+
+/**
  * Übersetzt einen i18n-Key mit einfacher `%s`-Platzhalterersetzung.
  *
  * @param {string} key - i18n-Key.
@@ -362,6 +394,7 @@ void msghubRequest;
 void isEmbeddedInAdmin;
 void overrideLang;
 void ensureAdminI18nLoaded;
+void mergePluginI18n;
 void t;
 
 // Theme so früh wie möglich setzen, um visuelles Flackern zu reduzieren.

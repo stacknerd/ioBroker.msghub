@@ -31,6 +31,7 @@ declare global {
 
 	function ensureAdminI18nLoaded(): Promise<void>;
 	function hasAdminKey(key: string): boolean;
+	function mergePluginI18n(pluginType: string, translations: Record<string, unknown>): void;
 	function t(key: string, ...args: any[]): string;
 	function readThemeFromTopWindow(): 'dark' | 'light' | null;
 	function applyTheme(nextTheme: 'dark' | 'light'): void;

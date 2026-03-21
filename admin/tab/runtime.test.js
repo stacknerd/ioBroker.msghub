@@ -16,6 +16,7 @@ window.__runtime = {
 	loadAdminI18nDictionary,
 	ensureAdminI18nLoaded,
 	hasAdminKey,
+	mergePluginI18n,
 	t,
 	resolveTheme,
 	readThemeFromLocalStorage,
@@ -219,5 +220,88 @@ describe('admin/tab/runtime.js', function () {
 		runtime.applyTheme('light');
 		assert.equal(sandbox.__meta.attrs.get('data-msghub-theme'), 'light');
 		assert.equal(sandbox.window.__msghubAdminTabTheme, 'light');
+	});
+
+	describe('mergePluginI18n()', function () {
+		it('admits keys in the plugin ui namespace and makes them accessible via t()', async function () {
+			const sandbox = await loadRuntimeSandbox();
+			const runtime = sandbox.window.__runtime;
+
+			runtime.mergePluginI18n('IngestStates', {
+				'msghub.i18n.IngestStates.ui.foo': 'Foo label',
+				'msghub.i18n.IngestStates.ui.bar': 'Bar label',
+			});
+
+			assert.equal(runtime.hasAdminKey('msghub.i18n.IngestStates.ui.foo'), true);
+			assert.equal(runtime.t('msghub.i18n.IngestStates.ui.foo'), 'Foo label');
+			assert.equal(runtime.hasAdminKey('msghub.i18n.IngestStates.ui.bar'), true);
+			assert.equal(runtime.t('msghub.i18n.IngestStates.ui.bar'), 'Bar label');
+		});
+
+		it('drops keys outside the plugin ui namespace', async function () {
+			const sandbox = await loadRuntimeSandbox();
+			const runtime = sandbox.window.__runtime;
+
+			runtime.mergePluginI18n('IngestStates', {
+				// correct pluginType but missing .ui. segment
+				'msghub.i18n.IngestStates.foo': 'should be dropped',
+				// different pluginType
+				'msghub.i18n.OtherPlugin.ui.key': 'should be dropped',
+				// core namespace
+				'msghub.i18n.core.admin.bad': 'should be dropped',
+				// unrelated
+				'unrelated.key': 'should be dropped',
+			});
+
+			assert.equal(runtime.hasAdminKey('msghub.i18n.IngestStates.foo'), false);
+			assert.equal(runtime.hasAdminKey('msghub.i18n.OtherPlugin.ui.key'), false);
+			assert.equal(runtime.hasAdminKey('msghub.i18n.core.admin.bad'), false);
+			assert.equal(runtime.hasAdminKey('unrelated.key'), false);
+		});
+
+		it('does not overwrite a key already merged from a prior call', async function () {
+			const sandbox = await loadRuntimeSandbox();
+			const runtime = sandbox.window.__runtime;
+
+			runtime.mergePluginI18n('IngestStates', { 'msghub.i18n.IngestStates.ui.label': 'original' });
+			assert.equal(runtime.t('msghub.i18n.IngestStates.ui.label'), 'original');
+
+			runtime.mergePluginI18n('IngestStates', { 'msghub.i18n.IngestStates.ui.label': 'overwrite attempt' });
+			assert.equal(runtime.t('msghub.i18n.IngestStates.ui.label'), 'original', 'existing key must not be overwritten');
+		});
+
+		it('does not overwrite a key already present in the core dictionary', async function () {
+			// Key must be in the .ui. namespace so the namespace filter admits it and
+			// the no-overwrite rule is the actual guard under test.
+			const sandbox = await loadRuntimeSandbox({
+				fetchMap: { 'i18n/en.json': { 'msghub.i18n.IngestStates.ui.preloaded': 'core value' } },
+			});
+			const runtime = sandbox.window.__runtime;
+			await runtime.ensureAdminI18nLoaded();
+
+			runtime.mergePluginI18n('IngestStates', { 'msghub.i18n.IngestStates.ui.preloaded': 'plugin overwrite attempt' });
+
+			assert.equal(runtime.t('msghub.i18n.IngestStates.ui.preloaded'), 'core value', 'core dict key must not be overwritten');
+		});
+
+		it('is a no-op and does not throw for null payload', async function () {
+			const sandbox = await loadRuntimeSandbox();
+			const runtime = sandbox.window.__runtime;
+			// Must not throw.
+			runtime.mergePluginI18n('P', null);
+		});
+
+		it('is a no-op and does not throw for array payload', async function () {
+			const sandbox = await loadRuntimeSandbox();
+			const runtime = sandbox.window.__runtime;
+			runtime.mergePluginI18n('P', ['a', 'b']);
+		});
+
+		it('is a no-op and does not throw for non-object payload', async function () {
+			const sandbox = await loadRuntimeSandbox();
+			const runtime = sandbox.window.__runtime;
+			runtime.mergePluginI18n('P', 'a string');
+			runtime.mergePluginI18n('P', 42);
+		});
 	});
 });

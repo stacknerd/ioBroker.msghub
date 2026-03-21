@@ -1,4 +1,4 @@
-/* global window, document, lang, t */
+/* global window, document, lang, t, mergePluginI18n */
 'use strict';
 
 /**
@@ -51,19 +51,21 @@ function createMsghubPluginUiHost({ request, api, _importFn = undefined }) {
 
 	/**
 	 * Fetches and caches a plugin bundle.
-	 * Cache is keyed by (pluginType, instanceId, panelId, hash).
-	 * If a matching cache entry exists (by hash), bundle.get is skipped entirely.
+	 * Cache is keyed by (pluginType, instanceId, panelId, hash, lang).
+	 * Lang is part of the key because the i18n payload is language-dependent.
+	 * If a matching cache entry exists, bundle.get is skipped entirely.
 	 *
 	 * @param {string} pluginType - Plugin type identifier (e.g. 'IngestStates').
 	 * @param {string} instanceId - Plugin instance id (e.g. '0').
 	 * @param {string} panelId - Panel id within the plugin's adminUi declaration.
 	 * @param {string} [hash] - Known hash from discover/registry; used for cache lookup.
-	 * @returns {Promise<{ module: object, css: string|null, hash: string }>} Cached or freshly loaded bundle entry.
+	 * @param {string} [activeLang] - Active UI language; included in cache key and forwarded to backend.
+	 * @returns {Promise<{ module: object, css: string|null, hash: string, i18n: object|null }>} Cached or freshly loaded bundle entry.
 	 */
-	async function loadBundle(pluginType, instanceId, panelId, hash) {
+	async function loadBundle(pluginType, instanceId, panelId, hash, activeLang) {
 		// Fast path: known hash already in cache — skip bundle.get entirely.
 		if (hash) {
-			const cachedKey = `${pluginType}:${instanceId}:${panelId}:${hash}`;
+			const cachedKey = `${pluginType}:${instanceId}:${panelId}:${hash}:${activeLang}`;
 			if (bundleCache.has(cachedKey)) {
 				return bundleCache.get(cachedKey);
 			}
@@ -71,20 +73,25 @@ function createMsghubPluginUiHost({ request, api, _importFn = undefined }) {
 
 		// Fetch bundle metadata and source from backend.
 		// msghubRequest resolves with res.data directly — bundleData is the payload, not an {ok,data} envelope.
-		const bundleData = await request('admin.pluginUi.bundle.get', { pluginType, instanceId, panelId });
+		const bundleData = await request('admin.pluginUi.bundle.get', {
+			pluginType,
+			instanceId,
+			panelId,
+			lang: activeLang,
+		});
 		if (!bundleData?.js) {
 			throw new Error('bundle.get returned no JS content');
 		}
-		const { hash: responseHash, js, css = null } = bundleData;
+		const { hash: responseHash, js, css = null, i18n: i18nPayload = null } = bundleData;
 
 		// Check cache again using the authoritative hash from the response.
-		const cacheKey = `${pluginType}:${instanceId}:${panelId}:${responseHash}`;
+		const cacheKey = `${pluginType}:${instanceId}:${panelId}:${responseHash}:${activeLang}`;
 		if (bundleCache.has(cacheKey)) {
 			return bundleCache.get(cacheKey);
 		}
 
 		const module = await importFromSource(js);
-		const entry = { module, css, hash: responseHash };
+		const entry = { module, css, hash: responseHash, i18n: i18nPayload };
 		bundleCache.set(cacheKey, entry);
 		return entry;
 	}
@@ -180,7 +187,14 @@ function createMsghubPluginUiHost({ request, api, _importFn = undefined }) {
 		};
 
 		try {
-			const { module, css } = await loadBundle(pluginType, instanceId, panelId, hash);
+			const { module, css, i18n: i18nData } = await loadBundle(pluginType, instanceId, panelId, hash, lang);
+
+			// Step 7a: Merge plugin-owned translations into the runtime i18n dictionary before mount.
+			// Namespace filter and no-overwrite rule are enforced inside mergePluginI18n (runtime.js),
+			// not here — this call is intentionally unconditional on i18nData presence check.
+			if (i18nData?.translations) {
+				mergePluginI18n(pluginType, i18nData.translations);
+			}
 
 			// Create the Light DOM mount wrapper — this is ctx.root and the CSS scope root.
 			// Plugin companion CSS scopes to .msghub-plugin-ui-mount[data-plugin-type=...][data-panel-id=...].

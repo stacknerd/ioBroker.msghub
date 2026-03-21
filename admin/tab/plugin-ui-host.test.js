@@ -33,18 +33,27 @@ function createContainer() {
 	return createElement('div');
 }
 
-// Loads plugin-ui-host.js in an isolated VM context and returns the factory.
-async function loadHostSandbox() {
+/**
+ * Loads plugin-ui-host.js in an isolated VM context and returns the factory.
+ * mergeI18nCalls records every mergePluginI18n(pluginType, translations) invocation.
+ * sandbox is exposed so tests can mutate sandbox.lang between mount() calls.
+ *
+ * @param {{ lang?: string }} [opts]
+ * @returns {Promise<{ createHost: Function, mergeI18nCalls: Array, sandbox: object }>}
+ */
+async function loadHostSandbox({ lang: sandboxLang = 'en' } = {}) {
 	const source = await readRepoFile('admin/tab/plugin-ui-host.js');
 	const windowObject = {};
 	const documentObject = {
 		createElement: tag => createElement(tag),
 	};
+	const mergeI18nCalls = [];
 	const sandbox = {
 		window: windowObject,
 		document: documentObject,
-		lang: 'en',
+		lang: sandboxLang,
 		t: key => key,
+		mergePluginI18n: (pluginType, translations) => mergeI18nCalls.push({ pluginType, translations }),
 		Blob: class {
 			constructor(parts, opts) {
 				this.parts = parts;
@@ -58,7 +67,7 @@ async function loadHostSandbox() {
 	};
 	vm.runInNewContext(source, sandbox, { filename: 'admin/tab/plugin-ui-host.js' });
 	const createHost = sandbox.window.createMsghubPluginUiHost;
-	return { createHost };
+	return { createHost, mergeI18nCalls, sandbox };
 }
 
 // Sentinel: distinguishes "rpcResponse not provided" from an explicit response object.
@@ -66,13 +75,14 @@ async function loadHostSandbox() {
 const _noRpcResponse = {};
 
 // Builds a request stub that serves bundle.get and optionally rpc.
-function makeRequest({ hash = 'test-hash', js = 'export function mount(){}', css = null, rpcResponse = _noRpcResponse } = {}) {
+// i18n defaults to null (not present) to reflect the common no-i18n case.
+function makeRequest({ hash = 'test-hash', js = 'export function mount(){}', css = null, i18n = null, rpcResponse = _noRpcResponse } = {}) {
 	const calls = [];
 	const fn = async (cmd, payload) => {
 		calls.push({ cmd, payload });
 		if (cmd === 'admin.pluginUi.bundle.get') {
 			// msghubRequest resolves with res.data directly — return raw payload, not {ok,data} envelope.
-			return { hash, js, css };
+			return { hash, js, css, i18n };
 		}
 		if (cmd === 'admin.pluginUi.rpc') {
 			// Same transport convention: return raw data; ctx.api.request wraps it into {ok,data}.
@@ -127,6 +137,7 @@ describe('admin/tab/plugin-ui-host.js', function () {
 				pluginType: 'IngestStates',
 				instanceId: '0',
 				panelId: 'presets',
+				lang: 'en',
 			});
 
 			assert.equal(mountArgs.length, 1);
@@ -260,6 +271,75 @@ describe('admin/tab/plugin-ui-host.js', function () {
 			const errorEl = container.children[0];
 			assert.equal(errorEl?.getAttribute('class'), 'msghub-plugin-panel-error');
 			assert.equal(errorEl?.getAttribute('role'), 'alert');
+		});
+
+		it('sends sandbox lang in bundle.get request', async function () {
+			const { createHost, sandbox } = await loadHostSandbox({ lang: 'de' });
+			const container = createContainer();
+			const request = makeRequest();
+			const host = createHost({ request, api: {}, _importFn: async () => ({ mount: async () => {} }) });
+
+			sandbox.lang = 'de';
+			await host.mount({ container, pluginType: 'T', instanceId: '0', panelId: 'p', hash: '' });
+
+			assert.equal(request.calls[0].cmd, 'admin.pluginUi.bundle.get');
+			assert.equal(JSON.parse(JSON.stringify(request.calls[0].payload)).lang, 'de');
+		});
+
+		it('calls mergePluginI18n with pluginType and translations when i18n is present', async function () {
+			const { createHost, mergeI18nCalls } = await loadHostSandbox();
+			const container = createContainer();
+			const translations = { 'msghub.i18n.IngestStates.ui.foo': 'Foo' };
+			const request = makeRequest({ i18n: { lang: 'en', translations } });
+			const host = createHost({ request, api: {}, _importFn: async () => ({ mount: async () => {} }) });
+
+			await host.mount({ container, pluginType: 'IngestStates', instanceId: '0', panelId: 'presets', hash: '' });
+
+			assert.equal(mergeI18nCalls.length, 1);
+			assert.equal(mergeI18nCalls[0].pluginType, 'IngestStates');
+			assert.deepEqual(JSON.parse(JSON.stringify(mergeI18nCalls[0].translations)), translations);
+		});
+
+		it('does not call mergePluginI18n when i18n is null', async function () {
+			const { createHost, mergeI18nCalls } = await loadHostSandbox();
+			const host = createHost({
+				request: makeRequest({ i18n: null }),
+				api: {},
+				_importFn: async () => ({ mount: async () => {} }),
+			});
+
+			await host.mount({ container: createContainer(), pluginType: 'T', instanceId: '0', panelId: 'p', hash: '' });
+
+			assert.equal(mergeI18nCalls.length, 0, 'mergePluginI18n must not be called when i18n is null');
+		});
+
+		it('does not call mergePluginI18n when i18n.translations is absent', async function () {
+			const { createHost, mergeI18nCalls } = await loadHostSandbox();
+			const host = createHost({
+				// i18n present but no translations field
+				request: makeRequest({ i18n: { lang: 'en' } }),
+				api: {},
+				_importFn: async () => ({ mount: async () => {} }),
+			});
+
+			await host.mount({ container: createContainer(), pluginType: 'T', instanceId: '0', panelId: 'p', hash: '' });
+
+			assert.equal(mergeI18nCalls.length, 0, 'mergePluginI18n must not be called without translations');
+		});
+
+		it('cache key includes lang: different lang triggers new bundle.get call', async function () {
+			const { createHost, sandbox } = await loadHostSandbox({ lang: 'de' });
+			const request = makeRequest({ hash: 'same-hash' });
+			const host = createHost({ request, api: {}, _importFn: async () => ({ mount: async () => {} }) });
+
+			// First mount — lang='de'; cache miss → bundle.get called; cached as ...same-hash:de
+			await host.mount({ container: createContainer(), pluginType: 'T', instanceId: '0', panelId: 'p', hash: 'same-hash' });
+			assert.equal(request.calls.length, 1);
+
+			// Change lang to 'en' — different cache key → cache miss → bundle.get called again
+			sandbox.lang = 'en';
+			await host.mount({ container: createContainer(), pluginType: 'T', instanceId: '0', panelId: 'p', hash: 'same-hash' });
+			assert.equal(request.calls.length, 2, 'different lang must produce a separate cache entry');
 		});
 	});
 
