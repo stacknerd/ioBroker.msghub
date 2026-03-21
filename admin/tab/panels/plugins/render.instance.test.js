@@ -376,6 +376,7 @@ describe('admin/tab/panels/plugins/render.instance.js', function () {
 		const viewerCalls = [];
 		const spinnerCalls = [];
 		const renderedBulk = createElement('section');
+		const renderBulkCalls = [];
 		let resolveConstants;
 		const constantsReady = new Promise(resolve => {
 			resolveConstants = resolve;
@@ -394,9 +395,14 @@ describe('admin/tab/panels/plugins/render.instance.js', function () {
 			},
 			ingestStatesDataApi: {
 				ensureIngestStatesConstantsLoaded: async () => ({ presetSchema: 'schema' }),
-				ensureIngestStatesSchema: async () => ({ fields: {} }),
+				ensureIngestStatesSchema: async () => {
+					throw new Error('schema must not be loaded for bulk overlay');
+				},
 			},
-			renderBulkApply: () => renderedBulk,
+			renderBulkApply: args => {
+				renderBulkCalls.push(args);
+				return renderedBulk;
+			},
 			ui: {
 				spinner: {
 					show: opts => {
@@ -432,6 +438,9 @@ describe('admin/tab/panels/plugins/render.instance.js', function () {
 
 		assert.equal(viewerCalls.length, 1);
 		assert.equal(viewerCalls[0].bodyEl, renderedBulk);
+		assert.equal(renderBulkCalls.length, 1);
+		assert.equal(Object.prototype.hasOwnProperty.call(renderBulkCalls[0], 'schema'), false);
+		assert.deepEqual(renderBulkCalls[0].ingestConstants, { presetSchema: 'schema' });
 		assert.deepEqual(spinnerCalls.map(call => call.kind), ['show', 'hide']);
 		assert.equal(spinnerCalls[1].id, 'msghub-bulk-tool-open');
 	});

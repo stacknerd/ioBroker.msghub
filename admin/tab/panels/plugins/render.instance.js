@@ -104,8 +104,7 @@
 								await pluginsDataApi?.ensureConstantsLoaded?.();
 								const ingestConstants =
 									await ingestStatesDataApi?.ensureIngestStatesConstantsLoaded?.();
-								const schema = await ingestStatesDataApi?.ensureIngestStatesSchema?.();
-								const bodyEl = renderBulkApply({ instances: instList, schema, ingestConstants });
+								const bodyEl = renderBulkApply({ instances: instList, ingestConstants });
 								catalogApi?.openViewer?.({
 									title: `${plugin.type} · Tools`,
 									bodyEl,

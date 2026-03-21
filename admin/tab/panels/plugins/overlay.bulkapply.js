@@ -15,13 +15,14 @@
 		const ingestStatesDataApi = opts.ingestStatesDataApi || null;
 		const adapterNamespace = typeof opts.adapterNamespace === 'string' ? opts.adapterNamespace : 'msghub.0';
 
-		function renderIngestStatesBulkApply({ instances, schema, ingestConstants }) {
+		function renderIngestStatesBulkApply({ instances, ingestConstants }) {
 			const inst = Array.isArray(instances) ? instances.find(x => x?.instanceId === 0) : null;
 			const enabled = inst?.enabled === true;
 			const fallbackDefaults =
 				ingestConstants && typeof ingestConstants.jsonCustomDefaults === 'object'
 					? ingestConstants.jsonCustomDefaults
 					: null;
+			const knownModes = ['threshold', 'cycle', 'freshness', 'triggered', 'nonSettling', 'session'];
 
 			const lsKey = `msghub.bulkApply.${adapterNamespace}`;
 			const loadState = () => {
@@ -72,27 +73,15 @@
 				return out;
 			}
 
-			function joinOptions(list) {
-				return (Array.isArray(list) ? list : []).map(v => String(v)).join('|');
-			}
-
 			function collectWarnings(cfg) {
 				const warnings = [];
-
-				const fields = schema?.fields && typeof schema.fields === 'object' ? schema.fields : {};
 				const mode = readCfg(cfg, 'mode');
-				const modeInfo = fields?.mode && typeof fields.mode === 'object' ? fields.mode : null;
-				const modeOptions = Array.isArray(modeInfo?.options) ? modeInfo.options : [];
-				const allowedModes = modeOptions.filter(v => typeof v === 'string' && v.trim()).map(v => v.trim());
-				if (allowedModes.length === 0) {
-					allowedModes.push('threshold', 'cycle', 'freshness', 'triggered', 'nonSettling', 'session');
-				}
 				const modeStr = typeof mode === 'string' ? mode.trim() : '';
 				if (!modeStr) {
-					warnings.push(`WARNING: missing mode detected. valid options are: ${allowedModes.join('|')}`);
-				} else if (!allowedModes.includes(modeStr)) {
+					warnings.push(`WARNING: missing mode detected. valid options are: ${knownModes.join('|')}`);
+				} else if (!knownModes.includes(modeStr)) {
 					warnings.push(
-						`WARNING: invalid mode detected ('${modeStr}'). valid options are: ${allowedModes.join('|')}`,
+						`WARNING: invalid mode detected ('${modeStr}'). valid options are: ${knownModes.join('|')}`,
 					);
 				}
 
@@ -100,48 +89,6 @@
 					const trgId = String(readCfg(cfg, 'trg-id') || '').trim();
 					if (!trgId) {
 						warnings.push('WARNING: missing trg-id detected. This field is required for triggered rules.');
-					}
-				}
-
-				for (const [key, info] of Object.entries(fields)) {
-					if (!info || typeof info !== 'object') {
-						continue;
-					}
-					const val = readCfg(cfg, key);
-					if (val === undefined) {
-						continue;
-					}
-					const type = typeof info.type === 'string' ? info.type : '';
-
-					if (type === 'select') {
-						const opts = Array.isArray(info.options) ? info.options : [];
-						if (opts.length && !opts.includes(val)) {
-							warnings.push(
-								`WARNING: invalid ${key} detected ('${String(val)}'). valid options are: ${joinOptions(opts)}`,
-							);
-						}
-						continue;
-					}
-					if (type === 'checkbox') {
-						if (typeof val !== 'boolean') {
-							warnings.push(`WARNING: invalid ${key} detected. expected a boolean.`);
-						}
-						continue;
-					}
-					if (type === 'number') {
-						if (typeof val !== 'number' || !Number.isFinite(val)) {
-							warnings.push(`WARNING: invalid ${key} detected. expected a number.`);
-							continue;
-						}
-						const min = typeof info.min === 'number' && Number.isFinite(info.min) ? info.min : null;
-						const max = typeof info.max === 'number' && Number.isFinite(info.max) ? info.max : null;
-						if (min !== null && val < min) {
-							warnings.push(`WARNING: invalid ${key} detected. expected >= ${min}.`);
-						}
-						if (max !== null && val > max) {
-							warnings.push(`WARNING: invalid ${key} detected. expected <= ${max}.`);
-						}
-						continue;
 					}
 				}
 
@@ -333,9 +280,9 @@
 			});
 
 			const defaultCustom =
-				schema?.defaults && typeof schema.defaults === 'object'
-					? schema.defaults
-					: fallbackDefaults || { enabled: true, mode: 'threshold' };
+				fallbackDefaults && typeof fallbackDefaults === 'object'
+					? { enabled: true, ...fallbackDefaults }
+					: { enabled: true, mode: '' };
 
 			const elCustom = h('textarea', {
 				class: 'msghub-bulk-apply-textarea',
