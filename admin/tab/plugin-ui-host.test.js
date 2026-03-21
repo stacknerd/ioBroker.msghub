@@ -28,16 +28,9 @@ function createElement(tag) {
 	};
 }
 
-// Creates a container mock with Shadow DOM lifecycle support.
+// Creates a plain container div mock — no Shadow DOM; plugin panels use Light DOM.
 function createContainer() {
-	let shadowRoot = null;
-	const container = createElement('div');
-	Object.defineProperty(container, 'shadowRoot', { get: () => shadowRoot });
-	container.attachShadow = () => {
-		shadowRoot = createElement('shadow-root');
-		return shadowRoot;
-	};
-	return container;
+	return createElement('div');
 }
 
 // Loads plugin-ui-host.js in an isolated VM context and returns the factory.
@@ -143,11 +136,14 @@ describe('admin/tab/plugin-ui-host.js', function () {
 			assert.equal(mountArgs[0].host.adapterInstance, 'msghub.0');
 			assert.equal(mountArgs[0].host.uiTextLanguage, 'en');
 			assert.equal(typeof mountArgs[0].api.request, 'function');
+			// Light DOM: ctx.root is the mount wrapper div in container; no shadowRoot in ctx.
+			assert.equal(mountArgs[0].root, container.children[0], 'ctx.root is the mount wrapper in container');
+			assert.equal(mountArgs[0].shadowRoot, undefined, 'no shadowRoot in Light DOM ctx');
 
 			assert.equal(handle._mounted, true);
 		});
 
-		it('injects CSS style and root div into shadow root', async function () {
+		it('injects companion CSS into mount wrapper', async function () {
 			const { createHost } = await loadHostSandbox();
 			const container = createContainer();
 			const request = makeRequest({ css: '.x { color: red; }' });
@@ -159,12 +155,16 @@ describe('admin/tab/plugin-ui-host.js', function () {
 
 			await host.mount({ container, pluginType: 'T', instanceId: '0', panelId: 'p', hash: '' });
 
-			const sr = container.shadowRoot;
-			assert.ok(sr, 'shadow root should be attached');
-			assert.equal(sr.children.length, 2, 'style + root div');
-			assert.equal(sr.children[0].tagName, 'STYLE');
-			assert.equal(sr.children[0].textContent, '.x { color: red; }');
-			assert.equal(sr.children[1].getAttribute('class'), 'msghub-plugin-panel-root');
+			// Light DOM: mount wrapper is a child of container, not a shadow root.
+			const mountWrapper = container.children[0];
+			assert.ok(mountWrapper, 'mount wrapper should be in container');
+			assert.equal(mountWrapper.getAttribute('class'), 'msghub-plugin-ui-mount');
+			assert.equal(mountWrapper.getAttribute('data-plugin-type'), 'T');
+			assert.equal(mountWrapper.getAttribute('data-plugin-instance-id'), '0');
+			assert.equal(mountWrapper.getAttribute('data-panel-id'), 'p');
+			// Companion CSS injected as first child of mount wrapper.
+			assert.equal(mountWrapper.children[0].tagName, 'STYLE');
+			assert.equal(mountWrapper.children[0].textContent, '.x { color: red; }');
 		});
 
 		it('skips style tag when bundle has no css', async function () {
@@ -178,9 +178,10 @@ describe('admin/tab/plugin-ui-host.js', function () {
 
 			await host.mount({ container, pluginType: 'T', instanceId: '0', panelId: 'p', hash: '' });
 
-			const sr = container.shadowRoot;
-			assert.equal(sr.children.length, 1, 'only root div — no style tag');
-			assert.equal(sr.children[0].getAttribute('class'), 'msghub-plugin-panel-root');
+			// Mount wrapper exists but has no style child (mock module adds no content either).
+			const mountWrapper = container.children[0];
+			assert.ok(mountWrapper, 'mount wrapper should be in container');
+			assert.equal(mountWrapper.children.length, 0, 'no style tag when no CSS');
 		});
 
 		it('skips bundle.get when hash already in cache (fast path)', async function () {
@@ -213,7 +214,7 @@ describe('admin/tab/plugin-ui-host.js', function () {
 			assert.equal(request.calls.length, 1, 'bundle.get must not be called again on cache hit');
 		});
 
-		it('renders error in shadow root when module.mount() throws', async function () {
+		it('renders error in mount wrapper when module.mount() throws', async function () {
 			const { createHost } = await loadHostSandbox();
 			const container = createContainer();
 			const host = createHost({
@@ -232,16 +233,15 @@ describe('admin/tab/plugin-ui-host.js', function () {
 			assert.ok(handle, 'handle returned after mount error');
 			assert.equal(handle._mounted, false);
 
-			// Error element is written to shadow root (not light DOM) — shadow root exists at this point.
-			const sr = container.shadowRoot;
-			assert.ok(sr, 'shadow root should exist');
-			assert.equal(sr.children.length, 1);
-			const errorEl = sr.children[0];
+			// Error element is written to the mount wrapper (bundle loaded, wrapper was created).
+			const mountWrapper = container.children[0];
+			assert.ok(mountWrapper, 'mount wrapper should exist after mount error');
+			const errorEl = mountWrapper.children[0];
 			assert.equal(errorEl.getAttribute('class'), 'msghub-plugin-panel-error');
 			assert.equal(errorEl.getAttribute('role'), 'alert');
 		});
 
-		it('renders error in container light DOM when bundle fetch fails', async function () {
+		it('renders error in container when bundle fetch fails', async function () {
 			const { createHost } = await loadHostSandbox();
 			const container = createContainer();
 			const host = createHost({
@@ -256,8 +256,7 @@ describe('admin/tab/plugin-ui-host.js', function () {
 
 			assert.ok(handle, 'handle returned after load error');
 			assert.equal(handle._mounted, false);
-			// No shadow root attached yet — error falls back to container.
-			assert.equal(container.shadowRoot, null);
+			// Bundle fetch failed before any mount wrapper was created — error goes directly into container.
 			const errorEl = container.children[0];
 			assert.equal(errorEl?.getAttribute('class'), 'msghub-plugin-panel-error');
 			assert.equal(errorEl?.getAttribute('role'), 'alert');
@@ -265,7 +264,7 @@ describe('admin/tab/plugin-ui-host.js', function () {
 	});
 
 	describe('unmount()', function () {
-		it('calls module.unmount() and clears shadow root', async function () {
+		it('calls module.unmount() and removes mount wrapper from container', async function () {
 			const { createHost } = await loadHostSandbox();
 			const container = createContainer();
 			const unmountArgs = [];
@@ -283,7 +282,7 @@ describe('admin/tab/plugin-ui-host.js', function () {
 
 			const handle = await host.mount({ container, pluginType: 'T', instanceId: '0', panelId: 'p', hash: '' });
 			assert.equal(handle._mounted, true);
-			const sr = container.shadowRoot;
+			assert.equal(container.children.length, 1, 'mount wrapper present before unmount');
 
 			await host.unmount(handle);
 
@@ -291,7 +290,7 @@ describe('admin/tab/plugin-ui-host.js', function () {
 			assert.equal(handle._mounted, false);
 			assert.equal(handle._module, null);
 			assert.equal(handle._ctx, null);
-			assert.equal(sr.children.length, 0, 'shadow root cleared');
+			assert.equal(container.children.length, 0, 'mount wrapper removed from container');
 		});
 
 		it('is a no-op when module has no unmount export', async function () {

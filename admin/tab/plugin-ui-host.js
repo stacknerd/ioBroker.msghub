@@ -4,7 +4,7 @@
 /**
  * MsgHub Admin Tab: Plugin Admin UI Host.
  *
- * Loads, caches, and mounts plugin ESM bundles into Shadow DOM containers
+ * Loads, caches, and mounts plugin ESM bundles into Light DOM containers
  * within plugin panel tab content areas.
  *
  * Integration:
@@ -17,7 +17,7 @@
 
 /**
  * Creates a plugin UI host that manages bundle loading, caching,
- * and Shadow DOM mounting for plugin panel tabs.
+ * and Light DOM mounting for plugin panel tabs.
  *
  * @param {{ request: Function, api: object, _importFn?: Function }} opts
  *   _importFn: optional test seam — receives JS source string, returns module.
@@ -90,15 +90,14 @@ function createMsghubPluginUiHost({ request, api, _importFn = undefined }) {
 	}
 
 	/**
-	 * Renders an isolated error state.
-	 * Targets the shadow root if one is attached to the container (so the error
-	 * is visible even when shadow DOM is active); falls back to light DOM.
+	 * Renders an isolated error state into the given target element.
+	 * Called with the mount wrapper on module.mount() failure, or with the
+	 * container directly when bundle fetch/import fails before a mount wrapper exists.
 	 *
-	 * @param {Element} container - The plugin panel host element.
+	 * @param {Element} target - Element to render the error into.
 	 * @param {string} [message] - Human-readable error text; defaults to a generic failure message.
 	 */
-	function renderErrorState(container, message) {
-		const target = container.shadowRoot || container;
+	function renderErrorState(target, message) {
 		const el = document.createElement('div');
 		el.setAttribute('class', 'msghub-plugin-panel-error');
 		el.setAttribute('role', 'alert');
@@ -108,14 +107,15 @@ function createMsghubPluginUiHost({ request, api, _importFn = undefined }) {
 
 	/**
 	 * Builds the bundle context object passed to module.mount().
+	 * ctx.root is the mount wrapper div — the plugin's rendering target and CSS scope root.
+	 * AdminTab base CSS (admin/tab.css, admin/tab/*.css) is available in Light DOM naturally.
 	 *
-	 * @param {{ root: Element, shadowRoot: ShadowRoot, pluginType: string, instanceId: string, panelId: string }} params - Mount targets and plugin identity.
+	 * @param {{ root: Element, pluginType: string, instanceId: string, panelId: string }} params - Mount target and plugin identity.
 	 * @returns {object} Frozen bundle context passed to module.mount().
 	 */
-	function buildCtx({ root, shadowRoot, pluginType, instanceId, panelId }) {
+	function buildCtx({ root, pluginType, instanceId, panelId }) {
 		return Object.freeze({
 			root,
-			shadowRoot,
 			plugin: Object.freeze({ type: pluginType, instanceId }),
 			panel: Object.freeze({ id: panelId }),
 			host: Object.freeze({
@@ -161,16 +161,16 @@ function createMsghubPluginUiHost({ request, api, _importFn = undefined }) {
 	}
 
 	/**
-	 * Mounts a plugin ESM bundle into a Shadow DOM inside the given container.
-	 * If the container already has a shadow root (from a previous mount), it is
-	 * reused and cleared rather than recreated.
+	 * Mounts a plugin ESM bundle into a Light DOM wrapper inside the given container.
+	 * Creates a scoped mount wrapper div (ctx.root), injects companion CSS as a <style>
+	 * tag inside the wrapper, then calls module.mount(ctx).
 	 *
 	 * @param {{ container: Element, pluginType: string, instanceId: string, panelId: string, hash?: string }} opts
 	 *   hash: known bundle hash (from discover/registry); used for cache fast-path.
 	 * @returns {Promise<object>} Handle for unmount/retry.
 	 */
 	async function mount({ container, pluginType, instanceId, panelId, hash = '' }) {
-		// Handle tracks mount state; _module/_ctx/_shadowRoot are set on success.
+		// Handle tracks mount state; _module/_ctx are set on success.
 		const handle = {
 			_container: container,
 			_pluginType: pluginType,
@@ -182,34 +182,35 @@ function createMsghubPluginUiHost({ request, api, _importFn = undefined }) {
 		try {
 			const { module, css } = await loadBundle(pluginType, instanceId, panelId, hash);
 
-			// Reuse an existing shadow root (open mode) rather than calling attachShadow
-			// again — re-attaching fails when a shadow root already exists on the container.
-			const shadowRoot = container.shadowRoot || container.attachShadow({ mode: 'open' });
-			shadowRoot.replaceChildren();
+			// Create the Light DOM mount wrapper — this is ctx.root and the CSS scope root.
+			// Plugin companion CSS scopes to .msghub-plugin-ui-mount[data-plugin-type=...][data-panel-id=...].
+			const mountWrapper = document.createElement('div');
+			mountWrapper.setAttribute('class', 'msghub-plugin-ui-mount');
+			mountWrapper.setAttribute('data-plugin-type', pluginType);
+			mountWrapper.setAttribute('data-plugin-instance-id', instanceId);
+			mountWrapper.setAttribute('data-panel-id', panelId);
+			container.appendChild(mountWrapper);
 
 			if (css) {
+				// Inject companion CSS as a <style> tag inside the mount wrapper so it is
+				// automatically removed when the wrapper is cleared on unmount/retry.
 				const styleEl = document.createElement('style');
 				styleEl.textContent = css;
-				shadowRoot.appendChild(styleEl);
+				mountWrapper.appendChild(styleEl);
 			}
 
-			const root = document.createElement('div');
-			root.setAttribute('class', 'msghub-plugin-panel-root');
-			shadowRoot.appendChild(root);
-
-			const ctx = buildCtx({ root, shadowRoot, pluginType, instanceId, panelId });
+			const ctx = buildCtx({ root: mountWrapper, pluginType, instanceId, panelId });
 			try {
 				await module.mount(ctx);
 				handle._mounted = true;
 				handle._module = module;
 				handle._ctx = ctx;
-				handle._shadowRoot = shadowRoot;
 			} catch {
-				// module.mount() threw — render error inside shadow DOM so it is visible.
-				renderErrorState(container, t('msghub.i18n.core.admin.ui.pluginPanel.mountError.text'));
+				// module.mount() threw — render error inside the mount wrapper.
+				renderErrorState(mountWrapper, t('msghub.i18n.core.admin.ui.pluginPanel.mountError.text'));
 			}
 		} catch {
-			// Bundle fetch or import failed — render error (shadow root may not exist yet).
+			// Bundle fetch or import failed — no mount wrapper exists yet; render error in container.
 			renderErrorState(container, t('msghub.i18n.core.admin.ui.pluginPanel.loadError.text'));
 		}
 
@@ -218,7 +219,8 @@ function createMsghubPluginUiHost({ request, api, _importFn = undefined }) {
 
 	/**
 	 * Unmounts a previously mounted plugin panel.
-	 * Calls module.unmount() if exported, then clears the shadow root content.
+	 * Calls module.unmount() if exported, then clears the container,
+	 * removing the mount wrapper and all plugin-owned DOM.
 	 *
 	 * @param {object} handle - Handle returned by mount().
 	 * @returns {Promise<void>}
@@ -234,8 +236,8 @@ function createMsghubPluginUiHost({ request, api, _importFn = undefined }) {
 				// Ignore unmount errors — the panel may already be in a broken state.
 			}
 		}
-		if (handle._shadowRoot) {
-			handle._shadowRoot.replaceChildren();
+		if (handle._container) {
+			handle._container.replaceChildren();
 		}
 		handle._mounted = false;
 		handle._module = null;
