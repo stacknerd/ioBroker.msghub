@@ -1,4 +1,4 @@
-/* global window, document, lang, t, mergePluginI18n */
+/* global window, document, lang, t, h, mergePluginI18n */
 'use strict';
 
 /**
@@ -130,6 +130,9 @@ function createMsghubPluginUiHost({ request, api, _importFn = undefined }) {
 				adapterInstance: api?.host?.adapterInstance || '',
 				uiTextLanguage: lang,
 			}),
+			dom: Object.freeze({
+				h,
+			}),
 			api: Object.freeze({
 				/**
 				 * Sends an RPC command to the plugin panel backend.
@@ -152,14 +155,19 @@ function createMsghubPluginUiHost({ request, api, _importFn = undefined }) {
 						err => ({ ok: false, error: { message: err?.message || String(err) } }),
 					);
 				},
-				i18n: Object.freeze({ t: key => (api?.i18n?.t ? api.i18n.t(key) : key) }),
+				i18n: Object.freeze({ t: (key, ...args) => (api?.i18n?.t ? api.i18n.t(key, ...args) : key) }),
 				ui: Object.freeze({
-					toast: (message, opts) => api?.ui?.toast?.(message, opts),
+					toast: opts => api?.ui?.toast?.(opts),
+					spinner: Object.freeze({
+						show: opts => api?.ui?.spinner?.show?.(opts),
+						hide: id => api?.ui?.spinner?.hide?.(id),
+						isOpen: id => api?.ui?.spinner?.isOpen?.(id) ?? false,
+					}),
 					dialog: Object.freeze({
-						confirm: (message, opts) => api?.ui?.dialog?.confirm?.(message, opts),
+						confirm: opts => api?.ui?.dialog?.confirm?.(opts),
 					}),
 					overlayLarge: Object.freeze({
-						open: (content, opts) => api?.ui?.overlayLarge?.open?.(content, opts),
+						open: opts => api?.ui?.overlayLarge?.open?.(opts),
 						close: () => api?.ui?.overlayLarge?.close?.(),
 					}),
 				}),
@@ -206,11 +214,12 @@ function createMsghubPluginUiHost({ request, api, _importFn = undefined }) {
 			container.appendChild(mountWrapper);
 
 			if (css) {
-				// Inject companion CSS as a <style> tag inside the mount wrapper so it is
-				// automatically removed when the wrapper is cleared on unmount/retry.
+				// Inject companion CSS as a sibling in the host container, not into ctx.root itself.
+				// Bundles are free to call root.replaceChildren(...), so putting <style> into the
+				// render root would make the companion CSS disappear on first render.
 				const styleEl = document.createElement('style');
 				styleEl.textContent = css;
-				mountWrapper.appendChild(styleEl);
+				container.appendChild(styleEl);
 			}
 
 			const ctx = buildCtx({ root: mountWrapper, pluginType, instanceId, panelId });

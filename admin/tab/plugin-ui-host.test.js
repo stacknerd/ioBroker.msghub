@@ -33,6 +33,40 @@ function createContainer() {
 	return createElement('div');
 }
 
+function createH() {
+	return function h(tag, attrs, children) {
+		const el = createElement(tag);
+		if (attrs) {
+			for (const [k, v] of Object.entries(attrs)) {
+				if (v === undefined || v === null) {
+					continue;
+				}
+				if (k === 'class') {
+					el.className = v;
+				} else if (k === 'html') {
+					el.innerHTML = v;
+				} else if (k === 'text') {
+					el.textContent = v;
+				} else if (k.startsWith('on') && typeof v === 'function') {
+					el.addEventListener?.(k.slice(2), v);
+				} else {
+					el.setAttribute(k, String(v));
+				}
+			}
+		}
+		if (children) {
+			const list = Array.isArray(children) ? children : [children];
+			for (const c of list) {
+				if (c === null || c === undefined) {
+					continue;
+				}
+				el.appendChild(typeof c === 'string' ? { nodeType: 3, textContent: c } : c);
+			}
+		}
+		return el;
+	};
+}
+
 /**
  * Loads plugin-ui-host.js in an isolated VM context and returns the factory.
  * mergeI18nCalls records every mergePluginI18n(pluginType, translations) invocation.
@@ -53,6 +87,7 @@ async function loadHostSandbox({ lang: sandboxLang = 'en' } = {}) {
 		document: documentObject,
 		lang: sandboxLang,
 		t: key => key,
+		h: createH(),
 		mergePluginI18n: (pluginType, translations) => mergeI18nCalls.push({ pluginType, translations }),
 		Blob: class {
 			constructor(parts, opts) {
@@ -118,7 +153,11 @@ describe('admin/tab/plugin-ui-host.js', function () {
 
 			const host = createHost({
 				request,
-				api: { host: { adapterInstance: 'msghub.0' }, i18n: { t: k => k }, ui: {} },
+				api: {
+					host: { adapterInstance: 'msghub.0' },
+					i18n: { t: (k, ...args) => [k, ...args].join(':') },
+					ui: {},
+				},
 				_importFn: async () => mockModule,
 			});
 
@@ -146,7 +185,14 @@ describe('admin/tab/plugin-ui-host.js', function () {
 			assert.equal(mountArgs[0].panel.id, 'presets');
 			assert.equal(mountArgs[0].host.adapterInstance, 'msghub.0');
 			assert.equal(mountArgs[0].host.uiTextLanguage, 'en');
+			assert.equal(
+				mountArgs[0].api.i18n.t('msghub.i18n.core.admin.ui.loadingWithSubject.text', 'Vorlagen'),
+				"msghub.i18n.core.admin.ui.loadingWithSubject.text:Vorlagen",
+			);
 			assert.equal(typeof mountArgs[0].api.request, 'function');
+			assert.equal(typeof mountArgs[0].api.ui.spinner.show, 'function');
+			assert.equal(typeof mountArgs[0].api.ui.spinner.hide, 'function');
+			assert.equal(typeof mountArgs[0].dom.h, 'function');
 			// Light DOM: ctx.root is the mount wrapper div in container; no shadowRoot in ctx.
 			assert.equal(mountArgs[0].root, container.children[0], 'ctx.root is the mount wrapper in container');
 			assert.equal(mountArgs[0].shadowRoot, undefined, 'no shadowRoot in Light DOM ctx');
@@ -154,7 +200,7 @@ describe('admin/tab/plugin-ui-host.js', function () {
 			assert.equal(handle._mounted, true);
 		});
 
-		it('injects companion CSS into mount wrapper', async function () {
+		it('injects companion CSS as sibling next to the mount wrapper', async function () {
 			const { createHost } = await loadHostSandbox();
 			const container = createContainer();
 			const request = makeRequest({ css: '.x { color: red; }' });
@@ -166,16 +212,17 @@ describe('admin/tab/plugin-ui-host.js', function () {
 
 			await host.mount({ container, pluginType: 'T', instanceId: '0', panelId: 'p', hash: '' });
 
-			// Light DOM: mount wrapper is a child of container, not a shadow root.
+			// Light DOM: mount wrapper stays the render root; companion CSS lives as sibling
+			// so root.replaceChildren(...) in the bundle cannot wipe it on first render.
 			const mountWrapper = container.children[0];
+			const styleEl = container.children[1];
 			assert.ok(mountWrapper, 'mount wrapper should be in container');
 			assert.equal(mountWrapper.getAttribute('class'), 'msghub-plugin-ui-mount');
 			assert.equal(mountWrapper.getAttribute('data-plugin-type'), 'T');
 			assert.equal(mountWrapper.getAttribute('data-plugin-instance-id'), '0');
 			assert.equal(mountWrapper.getAttribute('data-panel-id'), 'p');
-			// Companion CSS injected as first child of mount wrapper.
-			assert.equal(mountWrapper.children[0].tagName, 'STYLE');
-			assert.equal(mountWrapper.children[0].textContent, '.x { color: red; }');
+			assert.equal(styleEl.tagName, 'STYLE');
+			assert.equal(styleEl.textContent, '.x { color: red; }');
 		});
 
 		it('skips style tag when bundle has no css', async function () {
@@ -189,10 +236,10 @@ describe('admin/tab/plugin-ui-host.js', function () {
 
 			await host.mount({ container, pluginType: 'T', instanceId: '0', panelId: 'p', hash: '' });
 
-			// Mount wrapper exists but has no style child (mock module adds no content either).
+			// Mount wrapper exists; no sibling style tag when companion CSS is absent.
 			const mountWrapper = container.children[0];
 			assert.ok(mountWrapper, 'mount wrapper should be in container');
-			assert.equal(mountWrapper.children.length, 0, 'no style tag when no CSS');
+			assert.equal(container.children.length, 1, 'no sibling style tag when no CSS');
 		});
 
 		it('skips bundle.get when hash already in cache (fast path)', async function () {

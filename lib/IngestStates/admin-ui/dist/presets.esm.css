@@ -1,0 +1,80 @@
+/* ========================================================================== */
+/* Layout: Presets tool — list + editor split                                 */
+/* ========================================================================== */
+
+.msghub-plugin-ui-mount .msghub-tools-presets-grid {
+	display: flex;
+	gap: var(--msghub-space-3);
+	align-items: flex-start;
+}
+
+.msghub-plugin-ui-mount .msghub-tools-presets-list {
+	height: 80vh;
+	flex: 0 0 50%;
+	min-width: 260px;
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+	border-right: 1px solid var(--msghub-border);
+	padding-right: var(--msghub-space-3);
+}
+
+.msghub-plugin-ui-mount .msghub-tools-presets-editor {
+	height: 80vh;
+	flex: 1 1 auto;
+	min-width: 500px;
+	overflow: auto;
+}
+
+.msghub-plugin-ui-mount .msghub-tools-presets-list-items {
+	overflow: auto;
+}
+
+/* ========================================================================== */
+/* Preset table column widths                                                 */
+/* ========================================================================== */
+
+.msghub-plugin-ui-mount .msghub-col--preset-ownedBy {
+	width: 20ch;
+}
+@media (max-width: 900px) {
+	.msghub-plugin-ui-mount .msghub-presets-table .msghub-col--preset-ownedBy {
+		display: none;
+	}
+}
+
+.msghub-plugin-ui-mount .msghub-col--preset-usage {
+	width: 5ch;
+}
+
+.msghub-plugin-ui-mount .msghub-col--preset-subset {
+	width: 20ch;
+}
+@media (max-width: 1600px) {
+	.msghub-plugin-ui-mount .msghub-presets-table .msghub-col--preset-subset {
+		display: none;
+	}
+}
+
+.msghub-plugin-ui-mount .msghub-col--preset-kind {
+	width: 10ch;
+}
+@media (max-width: 1000px) {
+	.msghub-plugin-ui-mount .msghub-presets-table .msghub-col--preset-kind {
+		display: none;
+	}
+}
+
+.msghub-plugin-ui-mount .msghub-col--preset-level {
+	width: 10ch;
+}
+@media (max-width: 1200px) {
+	.msghub-plugin-ui-mount .msghub-presets-table .msghub-col--preset-level {
+		display: none;
+	}
+}
+
+.msghub-plugin-ui-mount .msghub-col--preset-name {
+	width: 100%;
+	min-width: 20ch;
+}
