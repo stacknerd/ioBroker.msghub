@@ -85,17 +85,28 @@ function mergeObjects(a, b) {
 
 function buildNextRuntimeJson({ runtimeRead, keyRe, desiredSubset }) {
 	const out = Object.create(null);
+	const seen = new Set();
 
-	// Keep non-mirrored keys in their original order for minimal diffs.
+	// Preserve the current runtime order and only update/remove mirrored keys in place.
 	for (const key of runtimeRead.keys) {
-		if (keyRe.test(key)) {
+		if (!keyRe.test(key)) {
+			out[key] = runtimeRead.json[key];
 			continue;
 		}
-		out[key] = runtimeRead.json[key];
+
+		if (!Object.prototype.hasOwnProperty.call(desiredSubset, key)) {
+			continue;
+		}
+
+		out[key] = desiredSubset[key];
+		seen.add(key);
 	}
 
-	// Append mirrored keys in deterministic order.
+	// Append new mirrored keys deterministically when they do not yet exist in runtime.
 	for (const key of Object.keys(desiredSubset).sort()) {
+		if (seen.has(key)) {
+			continue;
+		}
 		out[key] = desiredSubset[key];
 	}
 
@@ -162,7 +173,9 @@ for (const lang of allLangs) {
 	}
 
 	const adminPath = adminByLang.get(lang) || null;
-	const adminLangSubset = adminPath ? filterKeysByRegex((await readJsonObjectWithStyle(adminPath)).json, keyRe) : null;
+	const adminLangSubset = adminPath
+		? filterKeysByRegex((await readJsonObjectWithStyle(adminPath)).json, keyRe)
+		: null;
 
 	const desiredSubset = mergeObjects(adminEnSubset, adminLangSubset || {});
 	const runtimeRead = await readJsonObjectWithStyle(runtimePath);
@@ -194,4 +207,3 @@ if (check && changedFiles > 0) {
 
 // eslint-disable-next-line no-console
 console.log(`Done. ${changedFiles} file(s) changed.`);
-

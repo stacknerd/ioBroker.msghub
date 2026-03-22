@@ -14,6 +14,26 @@ function normalizeLang(lang) {
 	return String(lang).trim().toLowerCase();
 }
 
+function compareStrings(a, b) {
+	const aa = String(a);
+	const bb = String(b);
+	const al = aa.toLowerCase();
+	const bl = bb.toLowerCase();
+	if (al < bl) {
+		return -1;
+	}
+	if (al > bl) {
+		return 1;
+	}
+	if (aa < bb) {
+		return -1;
+	}
+	if (aa > bb) {
+		return 1;
+	}
+	return 0;
+}
+
 function stableSortStrings(list) {
 	return list.slice().sort((a, b) => compareKeys(a, b));
 }
@@ -23,10 +43,18 @@ function compareKeys(a, b) {
 	const bb = String(b);
 	const al = aa.toLowerCase();
 	const bl = bb.toLowerCase();
-	if (al < bl) return -1;
-	if (al > bl) return 1;
-	if (aa < bb) return -1;
-	if (aa > bb) return 1;
+	if (al < bl) {
+		return -1;
+	}
+	if (al > bl) {
+		return 1;
+	}
+	if (aa < bb) {
+		return -1;
+	}
+	if (aa > bb) {
+		return 1;
+	}
 	return 0;
 }
 
@@ -49,6 +77,39 @@ async function listLangFilesInDir(dirPath) {
 		lang: normalizeLang(path.basename(filePath, '.json')),
 		filePath,
 	}));
+}
+
+function shouldSkipDiscoveryDir(name) {
+	return name === 'node_modules' || name.startsWith('.');
+}
+
+async function discoverI18nDirs(rootDir = '.') {
+	const found = [];
+
+	async function visit(relDir) {
+		const dirPath = relDir ? path.join(rootDir, relDir) : rootDir;
+		const entries = await fs.readdir(dirPath, { withFileTypes: true });
+
+		for (const entry of entries) {
+			if (!entry.isDirectory()) {
+				continue;
+			}
+			if (shouldSkipDiscoveryDir(entry.name)) {
+				continue;
+			}
+
+			const nextRelDir = relDir ? path.join(relDir, entry.name) : entry.name;
+			if (entry.name === 'i18n') {
+				found.push(nextRelDir);
+				continue;
+			}
+
+			await visit(nextRelDir);
+		}
+	}
+
+	await visit('');
+	return Array.from(new Set(found)).sort(compareStrings);
 }
 
 async function readJsonObject(filePath) {
@@ -92,19 +153,21 @@ function isSorted(keys) {
 	return true;
 }
 
-function resolveTargetDirs(scope) {
+async function resolveTargetDirs(scope) {
 	const s = String(scope || 'all').toLowerCase();
 	if (!['all', 'runtime', 'admin'].includes(s)) {
 		throw new Error(`Invalid --scope "${scope}". Use all|runtime|admin.`);
 	}
-	const out = [];
-	if (s === 'all' || s === 'runtime') {
-		out.push('i18n');
+
+	if (s === 'all') {
+		return discoverI18nDirs('.');
 	}
-	if (s === 'all' || s === 'admin') {
-		out.push(path.join('admin', 'i18n'));
+
+	if (s === 'runtime') {
+		return ['i18n'];
 	}
-	return out;
+
+	return [path.join('admin', 'i18n')];
 }
 
 const { values } = parseArgs({
@@ -121,6 +184,7 @@ if (values.help) {
   node i18n-check.mjs [--scope all|runtime|admin] [--sort]
 
 Checks:
+  - With --scope all: auto-discovers all repo-local i18n directories (except hidden dirs and node_modules).
   - All language files have the same keys as base (en).
   - Optional: key order is sorted (alphabetical, shallow) in every file.
 `);
@@ -130,14 +194,21 @@ Checks:
 const scope = values.scope ?? 'all';
 const checkSort = Boolean(values.sort);
 
-const dirs = resolveTargetDirs(scope);
+const dirs = await resolveTargetDirs(scope);
 if (!dirs.length) {
 	throw new Error('No target dirs resolved.');
 }
 
+// eslint-disable-next-line no-console
+console.log(`Dirs (${dirs.length}):`);
+for (const dir of dirs) {
+	// eslint-disable-next-line no-console
+	console.log(`- ${dir}`);
+}
+
 let ok = true;
 for (const dir of dirs) {
-	const name = dir === 'i18n' ? 'runtime' : 'admin';
+	const name = dir === 'i18n' ? 'runtime' : dir === path.join('admin', 'i18n') ? 'admin' : dir;
 	const targets = await listLangFilesInDir(dir);
 	if (!targets.length) {
 		// eslint-disable-next-line no-console
