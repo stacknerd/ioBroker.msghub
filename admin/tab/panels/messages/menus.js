@@ -7,6 +7,8 @@
 	/**
 	 * Messages menu module.
 	 *
+	 * Docs: ../../../../docs/ui/tab-panels-messages-menus.md
+	 *
 	 * Contains:
 	 * - Header sort menu.
 	 * - Header filter menu (with select-all/none/apply flow).

@@ -7,6 +7,8 @@
 	/**
 	 * Messages panel entry/orchestrator.
 	 *
+	 * Docs: ../../../../docs/ui/tab-panels-messages-index.md
+	 *
 	 * Contains:
 	 * - Module wiring for state/data/render/lifecycle overlays.
 	 * - Action handlers (refresh, delete, paging, auto mode).

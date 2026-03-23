@@ -90,6 +90,7 @@ Consumer/UI  --->  MsgStore.queryMessages()/getMessageByRef()  --->  MsgRender  
 ## Modules
 
 <!-- AUTO-GENERATED:MODULE-INDEX:START -->
+- `API`: [`./API.md`](./API.md)
 - `MsgAction`: [`./MsgAction.md`](./MsgAction.md)
 - `MsgAi`: [`./MsgAi.md`](./MsgAi.md)
 - `MsgArchive`: [`./MsgArchive.md`](./MsgArchive.md)

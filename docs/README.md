@@ -9,7 +9,7 @@ Naming note: the adapter is called **Message Hub**. In code and ioBroker object 
 ## Start Here (recommended reading order)
 
 - Getting started (first steps, what you can do today): [`docs/GettingStarted.md`](./GettingStarted.md)
-- Admin Tab (configure plugins and instances): [`docs/ui/AdminTab.md`](./ui/AdminTab.md)
+- Admin UI overview (Admin Tab, browser/runtime split, plugin-owned panels): [`docs/ui/README.md`](./ui/README.md)
 - Statistics snapshot (Admin Tab “Stats”, rollups, I/O diagnostics): [`docs/modules/MsgStats.md`](./modules/MsgStats.md)
 - Message model (what a “message” is, lifecycle, timing, actions): [`docs/MessageModel.md`](./MessageModel.md)
 - Control plane API (create/patch/list via `sendTo`): [`docs/plugins/EngageSendTo.md`](./plugins/EngageSendTo.md)
@@ -17,12 +17,12 @@ Naming note: the adapter is called **Message Hub**. In code and ioBroker object 
 
 ## Developer Docs
 
-- UI docs (Admin tab and future UI surfaces): [`docs/ui/README.md`](./ui/README.md)
-- IO runtime layer (platform adapters/backends/resolver): [`docs/io/README.md`](./io/README.md)
-- Plugin developer guide (interfaces and `ctx.api`): [`docs/plugins/README.md`](./plugins/README.md)
-- Plugin API reference (details for `ctx.api` / `ctx.meta`): [`docs/plugins/API.md`](./plugins/API.md)
-- Plugin runtime wiring (enable switches, options in `native`): [`docs/plugins/IoPlugins.md`](./plugins/IoPlugins.md)
+- API overview (contract map across Core, IO, Plugins, UI): [`docs/API.md`](./API.md)
 - Core modules (store/factory/storage/notify/render): [`docs/modules/README.md`](./modules/README.md)
+- Plugin developer guide (interfaces and `ctx.api`): [`docs/plugins/README.md`](./plugins/README.md)
+- IO runtime layer (platform adapters/backends/resolver): [`docs/io/README.md`](./io/README.md)
+- UI docs (Admin tab and future UI surfaces): [`docs/ui/README.md`](./ui/README.md)
+- Plugin runtime wiring (enable switches, options in `native`): [`docs/plugins/IoPlugins.md`](./plugins/IoPlugins.md)
 
 ## What This Repo Ships Today
 
@@ -90,17 +90,20 @@ Message Hub maintains a deliberate separation between three independent language
 ### Text Language (i18n key resolution)
 
 **ioBroker backend language**
+
 - Source: `system.config.common.language`
 - Resolved once at adapter startup; requires adapter restart after a system language change.
 - Used for: ioBroker state and object names (plugin states, managed-meta watchlist), `jsonCustom` dropdown labels.
 - Runtime access: `adapter.i18nBackend` (internal) — not exposed via `ctx.api`.
 
 **AdminTab UI language**
+
 - When embedded in the ioBroker Admin iFrame: resolved from the `runtime.about` response (`data.lang.backendTextLanguage`) on socket connect. This reflects the ioBroker backend language.
 - When opened standalone (no parent frame): falls back to `navigator.language`.
 - Controls which `admin/i18n/<lang>.json` dictionary the AdminTab loads.
 
 **MsgHub Core text language**
+
 - Source: explicit adapter config field `coreTextLanguage`.
 - Fallback: ioBroker backend language when `coreTextLanguage` is not set.
 - Used for: message translations in Core and plugins (i18n key resolution for message content).
@@ -109,6 +112,7 @@ Message Hub maintains a deliberate separation between three independent language
 ### Format Locale (number and date formatting)
 
 **MsgHub Core format locale**
+
 - Source: explicit adapter config field `coreFormatLocale` (e.g. `de-DE`, `en-US`), default `de-DE`.
 - Independent of text language — a German text output can still use `en-US` number formatting.
 - Stable fallback for plugins that produce output in an unknown rendering context (e.g. notification plugins).

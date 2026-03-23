@@ -4,6 +4,8 @@
 /**
  * MsgHub Admin Tab: Plugin Admin UI Host.
  *
+ * Docs: ../../docs/ui/tab-plugin-ui-host.md
+ *
  * Loads, caches, and mounts plugin ESM bundles into Light DOM containers
  * within plugin panel tab content areas.
  *

@@ -2,6 +2,13 @@
 /// <reference lib="dom.iterable" />
 
 /* global window */
+/**
+ * index
+ * =====
+ * Plugins panel orchestrator.
+ *
+ * Docs: ../../../../docs/ui/tab-panels-plugins-index.md
+ */
 (function () {
 	'use strict';
 

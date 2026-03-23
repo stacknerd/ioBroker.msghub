@@ -1,5 +1,12 @@
 /// <reference lib="dom" />
 /* global window */
+/**
+ * data.plugins
+ * ============
+ * Plugins data access module.
+ *
+ * Docs: ../../../../docs/ui/tab-panels-plugins-data.plugins.md
+ */
 (function () {
 	'use strict';
 

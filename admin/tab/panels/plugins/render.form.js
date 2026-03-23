@@ -1,5 +1,12 @@
 /// <reference lib="dom" />
 /* global window */
+/**
+ * render.form
+ * ===========
+ * Form builder module for the plugins panel.
+ *
+ * Docs: ../../../../docs/ui/tab-panels-plugins-render.form.md
+ */
 (function () {
 	'use strict';
 

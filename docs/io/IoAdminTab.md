@@ -1,7 +1,7 @@
 # IoAdminTab (Message Hub IO): admin runtime command facade (`admin.*`)
 
 `IoAdminTab` is the adapter-side runtime/read facade for admin commands.
-It handles only the `admin.*` namespace and maps those commands to runtime services (plugins, store, preset read APIs).
+It handles only the `admin.*` namespace and maps those commands to runtime services (plugins, store, plugin UI host).
 
 In short:
 
@@ -45,9 +45,9 @@ References:
 
 1. Admin command routing for the `admin.*` namespace.
 2. Runtime read/write calls for plugin instances (`admin.plugins.*`).
-3. Store-backed admin reads (`admin.stats.get`, `admin.messages.query`, `admin.messages.delete`).
-4. IngestStates admin APIs (`custom/schema/constants/bulkApply/presets`).
-5. Read-only preset options for jsonCustom via `admin.ingestStates.presets.selectOptions*`.
+3. Store-backed admin reads and actions (`admin.stats.get`, `admin.messages.query`, `admin.messages.delete`, `admin.messages.action`, `admin.constants.get`).
+4. Plugin Admin UI host commands (`admin.pluginUi.discover`, `admin.pluginUi.bundle.get`, `admin.pluginUi.rpc`).
+5. Thin pass-through for `admin.ingestStates.presets.selectOptions*` (delegated to IngestStates runtime — no domain logic in IoAdminTab).
 6. Consistent response envelopes (`ok/data/error`) for admin runtime commands.
 
 ---
@@ -60,14 +60,13 @@ References:
 2. Archive strategy lock commands (`config.archive.*`).
 3. AI config test command (`config.ai.test`).
 4. Startup archive strategy resolution (`IoArchiveResolver`).
+5. IngestStates-specific domain logic for presets, bulk-apply, schema, custom, or constants — all moved to plugin-owned bundles and the IngestStates runtime.
 
-Those responsibilities belong to `IoAdminConfig` and resolver/startup wiring.
+Those responsibilities belong to `IoAdminConfig`, resolver/startup wiring, and the plugin-owned Admin UI layer.
 
 ---
 
 ## Authoritative command contract (`admin.*`)
-
-The following commands are compatible and active:
 
 ### Plugin runtime
 
@@ -83,21 +82,20 @@ The following commands are compatible and active:
 - `admin.stats.get`
 - `admin.messages.query`
 - `admin.messages.delete`
+- `admin.messages.action`
 - `admin.constants.get`
+- `admin.ping`
 
-### IngestStates runtime/admin APIs
+### Plugin Admin UI host
 
-- `admin.ingestStates.custom.read`
-- `admin.ingestStates.schema.get`
-- `admin.ingestStates.constants.get`
-- `admin.ingestStates.bulkApply.preview`
-- `admin.ingestStates.bulkApply.apply`
-- `admin.ingestStates.presets.list` (`{ rule?, subset?, includeUsage? }`; optional `usageCount` from active IngestStates runtime bindings when requested)
-- `admin.ingestStates.presets.selectOptions*` (read-only option extraction)
-- `admin.ingestStates.presets.get`
-- `admin.ingestStates.presets.create`
-- `admin.ingestStates.presets.update`
-- `admin.ingestStates.presets.delete`
+- `admin.pluginUi.discover` → discovers all Admin UI contributions from running plugins
+- `admin.pluginUi.bundle.get` → `{ pluginType, instanceId, panelId, lang }` → `{ apiVersion, moduleFormat, hash, js, css?, i18n|null }`
+- `admin.pluginUi.rpc` → `{ pluginType, instanceId, panelId, command, payload? }` → dispatches to plugin's `handleAdminUiRpc`
+
+### IngestStates selectOptions pass-through
+
+- `admin.ingestStates.presets.selectOptions*` — thin pass-through only; delegated to `IngestStates.getPresetSelectOptions(...)`.
+  Used by `admin/jsonCustom.json` (selectSendTo fields). No IoAdminTab-owned domain logic.
 
 Intentionally incompatible:
 
@@ -117,24 +115,25 @@ Default responses for runtime commands:
 
 Special case:
 
-- `admin.ingestStates.presets.selectOptions*` returns an array (`[{ value, label }, ...]`) for jsonCustom.
+- `admin.ingestStates.presets.selectOptions*` returns an array (`[{ value, label }, ...]`) without an `ok` envelope — required by `jsonCustom` selectSendTo contract.
 
 Typical error codes:
 
 - `BAD_REQUEST` (missing/invalid input)
 - `NOT_READY` (runtime/plugin wiring unavailable)
-- `PLUGIN_NOT_FOUND` / `PLUGIN_DISABLED`
+- `NOT_FOUND`
+- `INTERNAL`
+- `TIMEOUT`
+- `REJECTED`
 - `UNKNOWN_COMMAND`
-- `FORBIDDEN` (for example owner-protected presets)
+- `FORBIDDEN`
 
 ---
 
 ## Guardrails
 
 1. Scope guardrail: `admin.*` only; no config mutation semantics.
-2. Preset guardrail: owner-protected presets cannot be deleted/overwritten.
-3. Bulk-apply sanitizing: no dot keys or nested object leaks in custom apply paths.
-4. Select options are read-only and never write runtime/native state.
+2. Select options are read-only and never write runtime/native state.
 
 ---
 
@@ -144,11 +143,11 @@ Typical error codes:
 
 Covered areas include:
 
-- bulk-apply sanitizing
+- plugin UI RPC routing (`admin.pluginUi.*` command dispatch)
 - rejection of config-scope commands on admin scope
-- preset list/filter/sort
-- preset CRUD guardrails
-- `admin.ingestStates.presets.selectOptions*` response behavior
+- `admin.ingestStates.presets.selectOptions*` pass-through behavior (delegation to IngestStates runtime)
+- `admin.messages.action`
+- `admin.ping`
 
 ---
 

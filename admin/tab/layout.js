@@ -4,6 +4,8 @@
 /**
  * MsgHub Admin Tab: Layout-, Asset- und DOM-Orchestrierung.
  *
+ * Docs: ../../docs/ui/tab-layout.md
+ *
  * Inhalt:
  * - Tab-Navigation und Panel-Sichtbarkeit.
  * - Dynamischer Layoutaufbau aus der Registry.

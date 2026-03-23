@@ -4,6 +4,8 @@
 /**
  * MsgHub Admin Tab: API-Fassade zwischen UI/Panels und ioBroker-Backend.
  *
+ * Docs: ../../docs/ui/tab-api.md
+ *
  * Inhalt:
  * - Utility-Helfer (`createAsyncCache`, `computeContextMenuPosition`, Icon-Normalisierung).
  * - Aufbau der stabilen `ctx.api`-Oberfläche für Panels.

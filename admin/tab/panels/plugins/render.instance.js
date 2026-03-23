@@ -2,6 +2,13 @@
 /// <reference lib="dom.iterable" />
 
 /* global window */
+/**
+ * render.instance
+ * ===============
+ * Plugins instance renderer module.
+ *
+ * Docs: ../../../../docs/ui/tab-panels-plugins-render.instance.md
+ */
 (function () {
 	'use strict';
 

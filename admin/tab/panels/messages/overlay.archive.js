@@ -7,6 +7,8 @@
 	/**
 	 * Archive timeline overlay module for messages panel.
 	 *
+	 * Docs: ../../../../docs/ui/tab-panels-messages-overlay.archive.md
+	 *
 	 * Contains:
 	 * - Archive overlay shell view.
 	 * - Rendering hooks for timeline data, edges, and mode status.

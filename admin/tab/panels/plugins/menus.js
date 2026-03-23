@@ -1,5 +1,12 @@
 /// <reference lib="dom" />
 /* global window */
+/**
+ * menus
+ * =====
+ * Context-menu and accordion bulk-ops module for the plugins panel.
+ *
+ * Docs: ../../../../docs/ui/tab-panels-plugins-menus.md
+ */
 (function () {
 	'use strict';
 

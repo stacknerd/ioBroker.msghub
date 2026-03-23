@@ -4,6 +4,8 @@
  *
  * Centralized configuration normalization for MsgHub.
  *
+ * Docs: ../docs/modules/MsgConfig.md
+ *
  * Why this exists
  * ---------------
  * `main.js` (ioBroker adapter wiring) consumes raw `adapter.config` and currently performs some

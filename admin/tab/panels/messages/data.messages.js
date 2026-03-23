@@ -7,6 +7,8 @@
 	/**
 	 * Messages data access and query-shaping module.
 	 *
+	 * Docs: ../../../../docs/ui/tab-panels-messages-data.messages.md
+	 *
 	 * Contains:
 	 * - Constants enum resolution.
 	 * - Filter/sort query payload shaping.

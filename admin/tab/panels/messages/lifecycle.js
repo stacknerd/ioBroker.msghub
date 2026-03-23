@@ -7,6 +7,8 @@
 	/**
 	 * Messages lifecycle module.
 	 *
+	 * Docs: ../../../../docs/ui/tab-panels-messages-lifecycle.md
+	 *
 	 * Contains:
 	 * - Auto-refresh timer scheduling and stop logic.
 	 * - Visibility and tab-switch event wiring.

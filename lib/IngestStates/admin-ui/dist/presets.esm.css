@@ -2,13 +2,13 @@
 /* Layout: Presets tool — list + editor split                                 */
 /* ========================================================================== */
 
-.msghub-plugin-ui-mount .msghub-tools-presets-grid {
+.msghub-plugin-ui-mount[data-plugin-type="IngestStates"][data-panel-id="presets"] .msghub-tools-presets-grid {
 	display: flex;
 	gap: var(--msghub-space-3);
 	align-items: flex-start;
 }
 
-.msghub-plugin-ui-mount .msghub-tools-presets-list {
+.msghub-plugin-ui-mount[data-plugin-type="IngestStates"][data-panel-id="presets"] .msghub-tools-presets-list {
 	height: 80vh;
 	flex: 0 0 50%;
 	min-width: 260px;
@@ -19,14 +19,14 @@
 	padding-right: var(--msghub-space-3);
 }
 
-.msghub-plugin-ui-mount .msghub-tools-presets-editor {
+.msghub-plugin-ui-mount[data-plugin-type="IngestStates"][data-panel-id="presets"] .msghub-tools-presets-editor {
 	height: 80vh;
 	flex: 1 1 auto;
 	min-width: 500px;
 	overflow: auto;
 }
 
-.msghub-plugin-ui-mount .msghub-tools-presets-list-items {
+.msghub-plugin-ui-mount[data-plugin-type="IngestStates"][data-panel-id="presets"] .msghub-tools-presets-list-items {
 	overflow: auto;
 }
 
@@ -34,47 +34,47 @@
 /* Preset table column widths                                                 */
 /* ========================================================================== */
 
-.msghub-plugin-ui-mount .msghub-col--preset-ownedBy {
+.msghub-plugin-ui-mount[data-plugin-type="IngestStates"][data-panel-id="presets"] .msghub-col--preset-ownedBy {
 	width: 20ch;
 }
 @media (max-width: 900px) {
-	.msghub-plugin-ui-mount .msghub-presets-table .msghub-col--preset-ownedBy {
+	.msghub-plugin-ui-mount[data-plugin-type="IngestStates"][data-panel-id="presets"] .msghub-presets-table .msghub-col--preset-ownedBy {
 		display: none;
 	}
 }
 
-.msghub-plugin-ui-mount .msghub-col--preset-usage {
+.msghub-plugin-ui-mount[data-plugin-type="IngestStates"][data-panel-id="presets"] .msghub-col--preset-usage {
 	width: 5ch;
 }
 
-.msghub-plugin-ui-mount .msghub-col--preset-subset {
+.msghub-plugin-ui-mount[data-plugin-type="IngestStates"][data-panel-id="presets"] .msghub-col--preset-subset {
 	width: 20ch;
 }
 @media (max-width: 1600px) {
-	.msghub-plugin-ui-mount .msghub-presets-table .msghub-col--preset-subset {
+	.msghub-plugin-ui-mount[data-plugin-type="IngestStates"][data-panel-id="presets"] .msghub-presets-table .msghub-col--preset-subset {
 		display: none;
 	}
 }
 
-.msghub-plugin-ui-mount .msghub-col--preset-kind {
+.msghub-plugin-ui-mount[data-plugin-type="IngestStates"][data-panel-id="presets"] .msghub-col--preset-kind {
 	width: 10ch;
 }
 @media (max-width: 1000px) {
-	.msghub-plugin-ui-mount .msghub-presets-table .msghub-col--preset-kind {
+	.msghub-plugin-ui-mount[data-plugin-type="IngestStates"][data-panel-id="presets"] .msghub-presets-table .msghub-col--preset-kind {
 		display: none;
 	}
 }
 
-.msghub-plugin-ui-mount .msghub-col--preset-level {
+.msghub-plugin-ui-mount[data-plugin-type="IngestStates"][data-panel-id="presets"] .msghub-col--preset-level {
 	width: 10ch;
 }
 @media (max-width: 1200px) {
-	.msghub-plugin-ui-mount .msghub-presets-table .msghub-col--preset-level {
+	.msghub-plugin-ui-mount[data-plugin-type="IngestStates"][data-panel-id="presets"] .msghub-presets-table .msghub-col--preset-level {
 		display: none;
 	}
 }
 
-.msghub-plugin-ui-mount .msghub-col--preset-name {
+.msghub-plugin-ui-mount[data-plugin-type="IngestStates"][data-panel-id="presets"] .msghub-col--preset-name {
 	width: 100%;
 	min-width: 20ch;
 }

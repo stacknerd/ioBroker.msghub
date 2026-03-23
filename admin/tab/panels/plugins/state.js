@@ -1,5 +1,12 @@
 /// <reference lib="dom" />
 /* global window, HTMLInputElement, HTMLTextAreaElement, HTMLElement */
+/**
+ * state
+ * =====
+ * Plugins panel state and utility module.
+ *
+ * Docs: ../../../../docs/ui/tab-panels-plugins-state.md
+ */
 (function () {
 	'use strict';
 

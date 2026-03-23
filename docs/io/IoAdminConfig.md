@@ -58,7 +58,7 @@ References:
 `IoAdminConfig` is explicitly **not** responsible for:
 
 1. Admin runtime commands (`admin.*`).
-2. IngestStates preset read APIs for jsonCustom (`admin.ingestStates.presets.selectOptions*` belongs to admin path).
+2. Thin pass-through for `admin.ingestStates.presets.selectOptions*` (belongs to admin path, not config path).
 3. Startup-time effective archive strategy resolution (`IoArchiveResolver.resolveFor(...)` remains startup behavior).
 4. Plugin lifecycle orchestration.
 

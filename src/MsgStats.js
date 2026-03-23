@@ -1,5 +1,13 @@
 'use strict';
 
+/**
+ * MsgStats
+ * ========
+ * Centralized stats snapshots and persistent rollup handling.
+ *
+ * Docs: ../docs/modules/MsgStats.md
+ */
+
 const { MsgStorage } = require(`${__dirname}/MsgStorage`);
 const { isObject } = require(`${__dirname}/MsgUtils`);
 

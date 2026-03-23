@@ -4,6 +4,8 @@
 /**
  * MsgHub Admin Tab: static registry for panels and compositions.
  *
+ * Docs: ../../docs/ui/tab-registry.md
+ *
  * Contents:
  * - `panels`: technical panel definitions (mount-id, title-key, assets, init-global).
  * - `compositions`: composed views (layout, panel order, default panel).

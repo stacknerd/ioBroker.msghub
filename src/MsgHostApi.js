@@ -3,7 +3,7 @@
  * =========
  * Shared API facade builders for plugin hosts (MsgIngest / MsgNotify).
  *
- * Docs: ../../docs/modules/MsgHostApi.md
+ * Docs: ../docs/modules/MsgHostApi.md
  *
  *
  * Goal: keep the exposed plugin surface stable and capability-based, while avoiding duplicated

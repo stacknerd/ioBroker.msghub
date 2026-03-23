@@ -4,6 +4,8 @@
 /**
  * MsgHub Admin Tab: UI-Primitives und globale Interaktionsschicht.
  *
+ * Docs: ../../docs/ui/tab-ui.md
+ *
  * Inhalt:
  * - Toast-System.
  * - Kontextmenü-Engine mit Untermenüs, Positionierung und globalen Close-Triggern.

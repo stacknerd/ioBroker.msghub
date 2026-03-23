@@ -40,6 +40,33 @@ Examples:
 4. In **Monitoring**, select a rule type and fill out the corresponding rule tab.
 5. In **Message**, decide how the message should look and behave (title/text/audience/reminders/auto-remove…).
 
+### Admin UI Panels (Presets and BulkApply)
+
+IngestStates contributes two dedicated tabs to the Message Hub Admin Tab:
+
+#### Presets tab
+
+The Presets tab lets you manage named preset configurations.
+A preset is a saved set of rule defaults that can be referenced from ioBroker **Objects → Custom** (`jsonCustom`) via the `selectOptions` dropdown.
+
+- Create, edit, and delete presets per rule type (Threshold, Freshness, Cycle, …).
+- Presets are assigned a subset (rule type), a kind, a level, and a name.
+- When a preset is selected in `jsonCustom`, its defaults are applied to the monitoring rule.
+
+The Presets tab is a full tab entry in the Admin Tab — not an overlay or tool menu.
+
+#### BulkApply tab
+
+The BulkApply tab lets you apply custom rule configuration in bulk across many ioBroker objects.
+
+- Specify an object pattern (e.g. all objects of a device type).
+- Preview which objects match and what the applied configuration would look like.
+- Apply the configuration to all matching objects in one step.
+
+The BulkApply tab is a full tab entry in the Admin Tab — not an overlay or tool menu.
+
+---
+
 ### Choosing the right rule type (quick decision help)
 
 - If the problem is “too high/too low / outside a range / wrong boolean”: use **Threshold**.

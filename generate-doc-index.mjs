@@ -7,6 +7,12 @@ const CHECK_MODE = process.argv.includes('--check');
 const SECTION_START = '<!-- AUTO-GENERATED:MODULE-INDEX:START -->';
 const SECTION_END = '<!-- AUTO-GENERATED:MODULE-INDEX:END -->';
 
+const IO_INDEX_SECTION_START = '<!-- AUTO-GENERATED:IO-INDEX:START -->';
+const IO_INDEX_SECTION_END = '<!-- AUTO-GENERATED:IO-INDEX:END -->';
+
+const UI_INDEX_SECTION_START = '<!-- AUTO-GENERATED:UI-INDEX:START -->';
+const UI_INDEX_SECTION_END = '<!-- AUTO-GENERATED:UI-INDEX:END -->';
+
 const PLUGIN_INDEX_SECTION_START = '<!-- AUTO-GENERATED:PLUGIN-INDEX:START -->';
 const PLUGIN_INDEX_SECTION_END = '<!-- AUTO-GENERATED:PLUGIN-INDEX:END -->';
 
@@ -33,8 +39,46 @@ async function listDirNames(dirPath) {
   return entries.filter((e) => e.isDirectory()).map((e) => e.name);
 }
 
+async function listFilesRecursive(dirPath, relDir = '') {
+  const currentDir = relDir ? path.join(dirPath, relDir) : dirPath;
+  const entries = await fs.readdir(currentDir, { withFileTypes: true });
+  const out = [];
+
+  for (const entry of entries) {
+    const entryRel = relDir ? path.join(relDir, entry.name) : entry.name;
+    if (entry.isDirectory()) {
+      out.push(...(await listFilesRecursive(dirPath, entryRel)));
+      continue;
+    }
+    if (entry.isFile()) {
+      out.push(entryRel);
+    }
+  }
+
+  return out;
+}
+
+function toPosix(relPath) {
+  return String(relPath || '').replace(/\\/g, '/');
+}
+
+async function ensureDir(dirPath) {
+  await fs.mkdir(dirPath, { recursive: true });
+}
+
 function normalizeNewlines(text) {
   return text.replace(/\r\n/g, '\n');
+}
+
+function expectedDocsPointerForPaths(jsPath, docPath) {
+  const jsDir = path.posix.dirname(toPosix(jsPath));
+  const rel = path.posix.relative(jsDir, toPosix(docPath));
+  return rel || '.';
+}
+
+function hasDocsPointerInFirstLines(jsText, expectedPointer, maxLines = 10) {
+  const firstLines = normalizeNewlines(String(jsText || '')).split('\n').slice(0, maxLines);
+  return firstLines.some((line) => line.includes(`Docs: ${expectedPointer}`));
 }
 
 function makeModuleStubDoc({ title, implementationPath }) {
@@ -164,11 +208,111 @@ TODO
 `;
 }
 
+function makeIoStubDoc({ title, implementationPath }) {
+  return `# ${title}: TODO short summary
+
+\`${implementationPath}\` is part of the Message Hub IO/runtime layer.
+
+---
+
+## Where it sits in the system
+
+TODO: Describe which runtime boundary, backend bridge, or adapter-facing role this file belongs to.
+
+---
+
+## Responsibilities
+
+TODO:
+
+1. TODO
+2. TODO
+3. TODO
+
+---
+
+## Public API / contract surface
+
+TODO: Document the exported class/functions and the contract this IO module exposes or consumes.
+
+---
+
+## Design notes / invariants
+
+TODO:
+
+- TODO: describe important invariants, constraints, or ownership boundaries.
+
+---
+
+## Related files
+
+- Implementation: \`${implementationPath}\`
+- IO overview: \`docs/io/README.md\`
+`;
+}
+
+function makeAdminStubDoc({ relJsPath, implementationPath, testPath }) {
+  const rel = toPosix(relJsPath);
+  const title = `admin/${rel}`;
+  const relatedTest = testPath ? `- Test: \`${testPath}\`\n` : '';
+
+  return `# ${title}: TODO short summary
+
+\`${implementationPath}\` is part of the browser-side Admin frontend.
+
+---
+
+## Where it sits in the system
+
+TODO: Describe where this file is loaded/called from and which Admin frontend layer it belongs to.
+
+---
+
+## Responsibilities
+
+TODO:
+
+1. TODO
+2. TODO
+3. TODO
+
+---
+
+## Public surface / integration points
+
+TODO: Document the exported/global entry points, important factory APIs, or the runtime contract this file consumes.
+
+---
+
+## Design notes / invariants
+
+TODO:
+
+- TODO: describe the important invariants or constraints.
+
+---
+
+## Related files
+
+- Implementation: \`${implementationPath}\`
+${relatedTest}- Admin frontend overview: \`docs/ui/README.md\`
+`;
+}
+
 function buildIndexLines(mdFiles) {
   const sorted = [...mdFiles].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
   return sorted.map((filename) => {
     const base = path.basename(filename, '.md');
     return `- \`${base}\`: [\`./${filename}\`](./${filename})`;
+  });
+}
+
+function buildRecursiveIndexLines(mdFiles) {
+  const sorted = [...mdFiles].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+  return sorted.map((relPath) => {
+    const base = relPath.replace(/\.md$/, '');
+    return `- \`${base}\`: [\`./${relPath}\`](./${relPath})`;
   });
 }
 
@@ -409,11 +553,21 @@ async function ensureDocsForJsFiles({ jsDir, docsDir }) {
     .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 
   const missingDocs = [];
+  const missingPointers = [];
 
   for (const jsFilename of jsFilenames) {
     const base = path.basename(jsFilename, '.js');
     const docFilename = `${base}.md`;
     const docPath = path.join(docsDir, docFilename);
+    const jsPath = path.join(jsDir, jsFilename);
+
+    if (CHECK_MODE) {
+      const expectedPointer = expectedDocsPointerForPaths(jsPath, docPath);
+      const jsText = await fs.readFile(jsPath, 'utf8');
+      if (!hasDocsPointerInFirstLines(jsText, expectedPointer)) {
+        missingPointers.push({ jsPath: toPosix(jsPath), expectedPointer });
+      }
+    }
 
     if (await exists(docPath)) continue;
 
@@ -430,7 +584,97 @@ async function ensureDocsForJsFiles({ jsDir, docsDir }) {
     await fs.writeFile(docPath, stub, 'utf8');
   }
 
-  return { missingDocs };
+  return { missingDocs, missingPointers };
+}
+
+async function ensureDocsForIoJsFiles({ jsDir, docsDir }) {
+  const jsFilenames = (await listDirFiles(jsDir))
+    .filter((f) => /^Io.*\.js$/.test(f))
+    .filter((f) => !f.endsWith('.test.js'))
+    .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+
+  const missingDocs = [];
+  const missingPointers = [];
+
+  for (const jsFilename of jsFilenames) {
+    const base = path.basename(jsFilename, '.js');
+    const docFilename = `${base}.md`;
+    const docPath = path.join(docsDir, docFilename);
+    const jsPath = path.join(jsDir, jsFilename);
+
+    if (CHECK_MODE) {
+      const expectedPointer = expectedDocsPointerForPaths(jsPath, docPath);
+      const jsText = await fs.readFile(jsPath, 'utf8');
+      if (!hasDocsPointerInFirstLines(jsText, expectedPointer)) {
+        missingPointers.push({ jsPath: toPosix(jsPath), expectedPointer });
+      }
+    }
+
+    if (await exists(docPath)) continue;
+
+    if (CHECK_MODE) {
+      missingDocs.push(docPath);
+      continue;
+    }
+
+    const implementationPath = `${jsDir}/${jsFilename}`;
+    const stub = makeIoStubDoc({ title: base, implementationPath });
+    await fs.writeFile(docPath, stub, 'utf8');
+  }
+
+  return { missingDocs, missingPointers };
+}
+
+function adminDocRelPathForJs(relJsPath) {
+  return toPosix(relJsPath)
+    .replace(/\.js$/, '.md')
+    .replace(/\//g, '-');
+}
+
+async function ensureDocsForAdminJsFiles({ adminDir, docsDir }) {
+  const relFiles = (await listFilesRecursive(adminDir))
+    .map(toPosix)
+    .filter((f) => f.endsWith('.js'))
+    .filter((f) => !f.endsWith('.test.js'))
+    .filter((f) => !f.endsWith('/_test.utils.js') && f !== '_test.utils.js')
+    .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+
+  const missingDocs = [];
+  const missingPointers = [];
+
+  for (const relJsPath of relFiles) {
+    const jsPath = path.join(adminDir, relJsPath);
+    const docRelPath = adminDocRelPathForJs(relJsPath);
+    const docPath = path.join(docsDir, docRelPath);
+
+    if (CHECK_MODE) {
+      const expectedPointer = expectedDocsPointerForPaths(jsPath, docPath);
+      const jsText = await fs.readFile(jsPath, 'utf8');
+      if (!hasDocsPointerInFirstLines(jsText, expectedPointer)) {
+        missingPointers.push({ jsPath: toPosix(jsPath), expectedPointer });
+      }
+    }
+
+    if (await exists(docPath)) {
+      continue;
+    }
+
+    if (CHECK_MODE) {
+      missingDocs.push(docPath);
+      continue;
+    }
+
+    await ensureDir(path.dirname(docPath));
+    const testPath = (await exists(jsPath.replace(/\.js$/, '.test.js'))) ? toPosix(jsPath.replace(/\.js$/, '.test.js')) : '';
+    const stub = makeAdminStubDoc({
+      relJsPath,
+      implementationPath: toPosix(jsPath),
+      testPath,
+    });
+    await fs.writeFile(docPath, stub, 'utf8');
+  }
+
+  return { missingDocs, missingPointers };
 }
 
 async function ensureDocsForPluginEntries({ pluginsDir, docsDir }) {
@@ -441,6 +685,7 @@ async function ensureDocsForPluginEntries({ pluginsDir, docsDir }) {
     .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 
   const missingDocs = [];
+  const missingPointers = [];
 
   for (const dir of pluginDirs) {
     const entryPath = path.join(pluginsDir, dir, 'index.js');
@@ -450,6 +695,14 @@ async function ensureDocsForPluginEntries({ pluginsDir, docsDir }) {
 
     const docFilename = `${dir}.md`;
     const docPath = path.join(docsDir, docFilename);
+
+    if (CHECK_MODE) {
+      const expectedPointer = expectedDocsPointerForPaths(entryPath, docPath);
+      const jsText = await fs.readFile(entryPath, 'utf8');
+      if (!hasDocsPointerInFirstLines(jsText, expectedPointer)) {
+        missingPointers.push({ jsPath: toPosix(entryPath), expectedPointer });
+      }
+    }
 
     if (await exists(docPath)) {
       continue;
@@ -465,10 +718,16 @@ async function ensureDocsForPluginEntries({ pluginsDir, docsDir }) {
     await fs.writeFile(docPath, stub, 'utf8');
   }
 
-  return { missingDocs };
+  return { missingDocs, missingPointers };
 }
 
-async function updateReadmeIndex({ docsDir, readmePath, excludeDocFilenames = [] }) {
+async function updateReadmeIndex({
+  docsDir,
+  readmePath,
+  excludeDocFilenames = [],
+  sectionStart = SECTION_START,
+  sectionEnd = SECTION_END,
+}) {
   const exclude = new Set(excludeDocFilenames.map((f) => f.toLowerCase()));
   const mdFiles = (await listDirFiles(docsDir)).filter((f) => {
     if (!f.endsWith('.md')) return false;
@@ -479,7 +738,47 @@ async function updateReadmeIndex({ docsDir, readmePath, excludeDocFilenames = []
   const indexLines = buildIndexLines(mdFiles);
 
   const current = normalizeNewlines(await fs.readFile(readmePath, 'utf8'));
-  const next = replaceOrAppendModuleSection(current, indexLines);
+  const next = replaceSection({
+    text: current,
+    startMarker: sectionStart,
+    endMarker: sectionEnd,
+    newContent: indexLines.join('\n'),
+  });
+
+  if (current !== next) {
+    if (CHECK_MODE) return { changed: true };
+    await fs.writeFile(readmePath, next, 'utf8');
+  }
+
+  return { changed: false };
+}
+
+async function updateReadmeIndexRecursive({
+  docsDir,
+  readmePath,
+  excludeDocFilenames = [],
+  sectionStart = SECTION_START,
+  sectionEnd = SECTION_END,
+}) {
+  const exclude = new Set(excludeDocFilenames.map((f) => f.toLowerCase()));
+  const mdFiles = (await listFilesRecursive(docsDir))
+    .map(toPosix)
+    .filter((f) => {
+      const name = path.basename(f).toLowerCase();
+      if (!f.endsWith('.md')) return false;
+      if (name === 'readme.md') return false;
+      if (exclude.has(name)) return false;
+      return true;
+    });
+  const indexLines = buildRecursiveIndexLines(mdFiles);
+
+  const current = normalizeNewlines(await fs.readFile(readmePath, 'utf8'));
+  const next = replaceSection({
+    text: current,
+    startMarker: sectionStart,
+    endMarker: sectionEnd,
+    newContent: indexLines.join('\n'),
+  });
 
   if (current !== next) {
     if (CHECK_MODE) return { changed: true };
@@ -490,9 +789,9 @@ async function updateReadmeIndex({ docsDir, readmePath, excludeDocFilenames = []
 }
 
 async function scanTodoPlaceholders({ docsDir }) {
-  const mdFiles = (await listDirFiles(docsDir)).filter(
-    (f) => f.toLowerCase() !== 'readme.md' && f.endsWith('.md'),
-  );
+  const mdFiles = (await listFilesRecursive(docsDir))
+    .map(toPosix)
+    .filter((f) => path.basename(f).toLowerCase() !== 'readme.md' && f.endsWith('.md'));
 
   const todoByFile = [];
   for (const filename of mdFiles) {
@@ -514,11 +813,23 @@ async function main() {
   });
   results.push({ kind: 'modules', ...modules });
 
+  const io = await ensureDocsForIoJsFiles({
+    jsDir: 'lib',
+    docsDir: 'docs/io',
+  });
+  results.push({ kind: 'io', ...io });
+
   const plugins = await ensureDocsForPluginEntries({
     pluginsDir: 'lib',
     docsDir: 'docs/plugins',
   });
   results.push({ kind: 'plugins', ...plugins });
+
+  const admin = await ensureDocsForAdminJsFiles({
+    adminDir: 'admin',
+    docsDir: 'docs/ui',
+  });
+  results.push({ kind: 'admin', ...admin });
 
   const pluginIndex = await updatePluginIndex({
     pluginsDir: 'lib',
@@ -533,11 +844,20 @@ async function main() {
 
   const readmes = [
     { kind: 'modules', docsDir: 'docs/modules', readmePath: 'docs/modules/README.md' },
-    { kind: 'io', docsDir: 'docs/io', readmePath: 'docs/io/README.md' },
+    {
+      kind: 'io',
+      docsDir: 'docs/io',
+      readmePath: 'docs/io/README.md',
+      sectionStart: IO_INDEX_SECTION_START,
+      sectionEnd: IO_INDEX_SECTION_END,
+    },
     {
       kind: 'ui',
       docsDir: 'docs/ui',
       readmePath: 'docs/ui/README.md',
+      recursive: true,
+      sectionStart: UI_INDEX_SECTION_START,
+      sectionEnd: UI_INDEX_SECTION_END,
     },
     {
       kind: 'plugins',
@@ -549,11 +869,12 @@ async function main() {
 
   const changedReadmes = [];
   for (const r of readmes) {
-    const res = await updateReadmeIndex(r);
+    const res = r.recursive ? await updateReadmeIndexRecursive(r) : await updateReadmeIndex(r);
     if (res.changed) changedReadmes.push(r.readmePath);
   }
 
   const missingDocs = results.flatMap((r) => r.missingDocs);
+  const missingPointers = results.flatMap((r) => r.missingPointers || []);
 
   if (CHECK_MODE) {
     const todoWarnings = [
@@ -586,6 +907,13 @@ async function main() {
     if (changedReadmes.length) {
       problems.push(
         `Outdated README indexes:\n${changedReadmes.map((p) => `- ${p}`).join('\n')}`,
+      );
+    }
+    if (missingPointers.length) {
+      problems.push(
+        `Missing or incorrect Docs pointers:\n${missingPointers
+          .map((p) => `- ${p.jsPath} -> Docs: ${p.expectedPointer}`)
+          .join('\n')}`,
       );
     }
     if (pluginIndex.changed) {

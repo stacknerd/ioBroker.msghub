@@ -7,6 +7,8 @@
 	/**
 	 * Archive paging contract module for messages panel.
 	 *
+	 * Docs: ../../../../docs/ui/tab-panels-messages-data.archive.md
+	 *
 	 * Contains:
 	 * - Wrapper for archive page requests.
 	 * - Cursor edge normalization (`ts` + `tie`).

@@ -1,0 +1,198 @@
+# IO API Reference
+
+| Item | Contract |
+| --- | --- |
+| Scope | IO-/runtime-facing contracts only. |
+| In scope | Adapter-side runtime bridges, plugin orchestration, platform-side state surfaces, UI/backend command routers, IO-brokered bundle/RPC paths, and IO-owned helper contracts exposed across layer boundaries. |
+| Out of scope | Browser-only shell contracts (`docs/ui/API.md`), plugin-facing ctx details (`docs/plugins/API.md`), core-internal DTO semantics owned by `src/`, and archive/storage backend implementation APIs except where they surface through IO-owned commands or status payloads. |
+| Source of truth | `main.js`, `lib/index.js`, `lib/IoAdminTab.js`, `lib/IoAdminConfig.js`, `lib/IoCoreConnection.js`, `lib/IoPlugins.js`, `lib/IoPluginResources.js`, `lib/IoManagedMeta.js`, `lib/IngestStates/manifest.js`, `src/MsgStore.js`, `src/MsgStats.js`. |
+
+| Area | Owned by | Use this file for |
+| --- | --- | --- |
+| IO <> Core | `main.js`, `lib/IoCoreConnection.js`, `lib/IoPlugins.js`, `lib/IoAdminTab.js`, `lib/IoAdminConfig.js` | Adapter/runtime bridge entry points and the composition-root routing boundary. |
+| IO <> Plugins | `lib/index.js`, `lib/IoPlugins.js`, `lib/IoPluginResources.js`, `lib/IoManagedMeta.js` | Catalog, instance tree, enable-state orchestration, messagebox ownership, bundle brokering, tracked resources, managed metadata. |
+| IO <> UI | `main.js`, `lib/IoAdminTab.js`, `lib/IoAdminConfig.js` | `admin.*`, `config.*`, and `runtime.about` backend command surfaces plus their IO-owned validations and envelopes. |
+
+## IO <> Core
+
+### Runtime bridge entry points
+
+| Entry | Contract | Counterpart | Owner | Reference |
+| --- | --- | --- | --- | --- |
+| `new IoCoreConnection(adapter)` | Requires `adapter.namespace`. Owns the official platform-side connection state `info.connection`. | Adapter platform state | IO runtime | `lib/IoCoreConnection.js` |
+| `IoCoreConnection.init()` | Ensures the `info.connection` state object exists and seeds it to disconnected. | Adapter startup | IO runtime | `lib/IoCoreConnection.js` |
+| `IoCoreConnection.checkHealthLocal({ msgStore? })` | Returns `{ connected, mode: 'local' }` by checking the in-process core runtime shape. | `MsgStore` runtime | IO runtime | `lib/IoCoreConnection.js` |
+| `IoCoreConnection.markFromHealth(health)` | Updates the cached health flags and writes `info.connection` with `ack: true`. | Adapter state writer | IO runtime | `lib/IoCoreConnection.js` |
+| `IoCoreConnection.markDisconnected()` | Forces `connected = false`, `mode = 'local'`, and writes `info.connection` with `ack: true`. | Adapter state writer | IO runtime | `lib/IoCoreConnection.js` |
+| `IoCoreConnection.getRuntimeAbout()` | Returns the minimal `runtime.about.connection` fragment `{ scope: 'core-link', connected, mode: 'local' }`. | `runtime.about` router | IO runtime | `lib/IoCoreConnection.js`, `main.js` |
+| `IoPlugins.create(adapter, msgStore, options?)` | Convenience startup path: constructs `IoPlugins`, runs `init()`, then `registerEnabled()`. Requires `msgStore.msgIngest` and `msgStore.msgNotify`. | Core plugin hosts | IO runtime | `lib/IoPlugins.js` |
+| `IoPlugins.getIngestMeta()` | Returns the meta bundle passed into `MsgIngest.start(...)`. Current implementation returns `{}`. | `MsgIngest` startup | IO runtime | `lib/IoPlugins.js`, `main.js` |
+| `new IoAdminTab(adapter, ioPlugins, { msgStore? })` | Requires `adapter.namespace`. Binds the Admin runtime facade to optional `IoPlugins` and `MsgStore` services. | Admin command router | IO runtime | `lib/IoAdminTab.js` |
+| `IoAdminTab.handleCommand(cmd, payload)` | Main backend entry point for `admin.*` commands. Returns an `{ ok, data|error }` envelope, except for `admin.ingestStates.presets.selectOptions*`, which returns a bare options array. | Admin UI/backend bridge | IO runtime | `lib/IoAdminTab.js` |
+| `new IoAdminConfig(adapter, { ai?, msgStore?, archiveProbeNative? })` | Requires `adapter.namespace`. Binds the config command facade to optional AI and archive/status services. | Config command router | IO runtime | `lib/IoAdminConfig.js` |
+| `IoAdminConfig.handleCommand(cmd, payload)` | Main backend entry point for `config.*` commands. Returns an `{ ok, data|error }` envelope for most commands, after native-patch allowlist filtering. Exception: `config.ai.test` returns only `{ native: { aiTestLastResult } }` without an `ok`/`data` wrapper. | jsonConfig/jsonCustom bridge | IO runtime | `lib/IoAdminConfig.js` |
+
+### `main.js` composition-root routing boundary
+
+| Entry | Contract | Owner | Reference |
+| --- | --- | --- | --- |
+| `onReady()` IO bootstrap | Creates `IoCoreConnection`, initializes `MsgStore`, marks core health, creates `IoPlugins`, then creates `IoAdminTab` and `IoAdminConfig`. `main.js` is composition root only, not a separate API owner. | Composition root | `main.js` |
+| `onStateChange(id, state)` | Calls `IoPlugins.handleStateChange(...)` first. When that returns `true`, the event is consumed as a plugin enable toggle and is not forwarded to ingest plugins. For non-null states that were not consumed, `main.js` then calls `IoPlugins.handleGateStateChange(...)` and finally forwards the raw event to `msgStore.msgIngest.dispatchStateChange(...)`. | Composition root | `main.js`, `lib/IoPlugins.js` |
+| `onObjectChange(id, obj)` | Forwards object changes directly to `msgStore.msgIngest.dispatchObjectChange(...)`. | Composition root | `main.js` |
+| `onMessage(obj)` routing | `admin.*` routes to `IoAdminTab`; `config.*` routes to `IoAdminConfig`; `runtime.about` is built inline; all other commands are passed to `IoPlugins.dispatchMessagebox(obj)`. | Composition root | `main.js` |
+| Missing router service | `_handleAdminCommand` returns `NOT_READY` when `_adminTab` is absent. `_handleConfigCommand` returns `NOT_READY` when `_adminConfig` is absent. Messagebox dispatch returns `NOT_READY` when no handler is registered. | Composition root | `main.js` |
+| Uncaught message-route exception | `main.js` wraps uncaught `onMessage` errors as `{ ok: false, error: { code: 'INTERNAL', message } }`. | Composition root | `main.js` |
+
+## IO <> Plugins
+
+### Catalog and instance model
+
+| Entry | Contract | Owner | Reference |
+| --- | --- | --- | --- |
+| Runtime catalog source | Available plugins come from `IoPluginsCatalog`, which is built by scanning `lib/<PluginDir>/manifest.js`. | IO runtime | `lib/index.js`, `lib/IoPlugins.js` |
+| Manifest export contract | Each plugin directory must export `{ manifest }` from `manifest.js`, and the module root must export a factory function named exactly like `manifest.type`. | IO runtime | `lib/index.js` |
+| Category resolution | `manifest.category` is used when present; otherwise category is inferred from the `type` prefix (`Ingest*`, `Notify*`, `Bridge*`, `Engage*`). Registration still enforces the category-specific prefix. | IO runtime | `lib/index.js`, `lib/IoPlugins.js` |
+| Discovery exclusion | `manifest.hidden === true` or `manifest.discoverable === false` excludes a plugin from runtime discovery. | IO runtime | `lib/index.js` |
+| Plugin instance base object | Each instance owns a base object `<Type>.<instanceId>` of type `channel`. `object.native` stores raw plugin options. | IO runtime | `lib/IoPlugins.js` |
+| Enable state | Each instance owns `<Type>.<instanceId>.enable` of type `boolean`, role `switch`, read/write. | IO runtime | `lib/IoPlugins.js` |
+| Status state | Each instance owns `<Type>.<instanceId>.status` of type `string`, role `text`, with states `starting`, `running`, `stopping`, `stopped`, `error`. | IO runtime | `lib/IoPlugins.js` |
+| Watchlist state | Instances that use managed metadata may also own `<Type>.<instanceId>.watchlist` of type `string`, role `json`, with JSON array payload. | IO runtime | `lib/IoManagedMeta.js` |
+| Registration id | Runtime registration ids are always `${type}:${instanceId}`. | IO runtime | `lib/IoPlugins.js` |
+| Desired enable source of truth | The persisted enable state value is the source of truth. `IoPlugins` commits the final desired value back as `ack: true` after register/unregister. | IO runtime | `lib/IoPlugins.js` |
+| Reserved native keys | `native.enabled` mirrors desired enable state and is not forwarded into plugin factory options. `native.channel` is runtime-owned channel-routing config and is forwarded into factory options. `native.instances` is reserved and not forwarded into plugin factory options. | IO runtime | `lib/IoPlugins.js` |
+
+### Public `IoPlugins` runtime API
+
+| Entry | Contract | Owner | Reference |
+| --- | --- | --- | --- |
+| `IoPlugins.init()` | Ensures enable states exist for all catalog plugins that either already have an instance object tree or have `defaultEnabled === true`. Seeds those states, subscribes to them, and populates the managed instance list. | IO runtime | `lib/IoPlugins.js` |
+| `IoPlugins.getAdminCatalog()` | Legacy alias for `getCatalog()`. | IO runtime | `lib/IoPlugins.js` |
+| `IoPlugins.registerEnabled()` | Registers every currently enabled plugin instance. Registration is idempotent per category and registration id. Failures are logged and do not stop other registrations. | IO runtime | `lib/IoPlugins.js` |
+| `IoPlugins.getCatalog()` | Returns the JSON-safe catalog DTO array without factory functions. | IO runtime | `lib/IoPlugins.js` |
+| `IoPlugins.adminListInstances()` | Legacy alias for `listInstances()`. | IO runtime | `lib/IoPlugins.js` |
+| `IoPlugins.listInstances()` | Returns current instance DTOs discovered from the object tree: `{ category, type, instanceId, enabled, status: string \| null, native }`. | IO runtime | `lib/IoPlugins.js` |
+| `IoPlugins.adminCreateInstance(info)` | Legacy alias for `createInstance(info)`. | IO runtime | `lib/IoPlugins.js` |
+| `IoPlugins.callPluginRuntime({ type, instanceId?, method, args? })` | Adapter-internal bridge to an already registered plugin handler method. Returns `null` when the plugin or method is unavailable. | IO runtime | `lib/IoPlugins.js` |
+| `IoPlugins.createInstance({ category, type })` | Creates the next numeric instance, seeds its object subtree, registers it immediately when the seeded enable state is true, and returns `{ instanceId }`. | IO runtime | `lib/IoPlugins.js` |
+| `IoPlugins.deleteInstance({ type, instanceId })` | Best-effort unregisters the runtime, deletes the entire instance object subtree recursively, and removes the control-state id from the managed set. | IO runtime | `lib/IoPlugins.js` |
+| `IoPlugins.adminUpdateInstance(info)` | Legacy alias for `updateInstanceNative(info)`. | IO runtime | `lib/IoPlugins.js` |
+| `IoPlugins.updateInstanceNative({ type, instanceId, nativePatch })` | Merges a patch into the instance base object's `native` payload. `undefined`/`null` delete keys. `channel` is normalized to a trimmed string, with "unset" becoming `''`. Running instances are restarted in place. | IO runtime | `lib/IoPlugins.js` |
+| `IoPlugins.adminSetEnabled(info)` | Legacy alias for `setInstanceEnabled(info)`. | IO runtime | `lib/IoPlugins.js` |
+| `IoPlugins.setInstanceEnabled({ type, instanceId, enabled })` | Ensures the instance exists, then applies the desired enable toggle and persists it as `ack: true`. | IO runtime | `lib/IoPlugins.js` |
+| `IoPlugins.isPluginControlStateId(id)` | Returns `true` when `id` belongs to a managed plugin enable switch. Accepts own or full ids. | IO runtime | `lib/IoPlugins.js` |
+| `IoPlugins.handleStateChange(id, state)` | Public state-change hook for `main.js`. Returns `true` when the state was consumed as a plugin enable toggle. Ignores `ack: true` control writes but still marks them as consumed. | IO runtime | `lib/IoPlugins.js`, `main.js` |
+| `IoPlugins.handleGateStateChange(id, state)` | Public gate-dispatch hook for `main.js`. Returns `true` only when at least one registered gate watcher for `id` was notified. | IO runtime | `lib/IoPlugins.js`, `main.js` |
+| `IoPlugins.dispatchMessagebox(obj)` | Dispatches an ioBroker messagebox call to the currently registered Engage-owned handler. Returns `null` when none is registered. | IO runtime | `lib/IoPlugins.js`, `main.js` |
+| `IoPlugins.clearMessageboxHandler()` | Clears the current messagebox owner/handler as best-effort cleanup. | IO runtime | `lib/IoPlugins.js`, `main.js` |
+| `IoPlugins.createOptionsApi(manifest)` | Returns the IO-owned manifest-bound resolver API `{ resolveInt, resolveString, resolveBool }`. | IO runtime | `lib/IoPlugins.js` |
+| `IoPlugins.buildManifestFromCatalogEntry(plugin)` | Returns the manifest-like subset copied into runtime plugin metadata: `schemaVersion`, `type`, `defaultEnabled`, `supportsMultiple`, `supportsChannelRouting`, `title`, `description`, `options`. | IO runtime | `lib/IoPlugins.js` |
+| `IoPlugins.computeAdminUiBundleHash({ type, panelId })` | Returns a cached `sha256-<hex>` bundle hash. Hash input is JS content, optional CSS content, and all `admin-ui/i18n/*.json` files sorted by filename. | IO runtime | `lib/IoPlugins.js` |
+| `IoPlugins.getAdminUiContributions()` | Returns admin-UI contribution DTOs only for currently running plugin instances that declare `manifest.adminUi`. Returned `bundle.hash` is always `''` in this raw contribution list. | IO runtime | `lib/IoPlugins.js` |
+| `IoPlugins.readAdminUiBundle({ type, panelId, lang })` | Reads the plugin-owned Admin UI JS bundle, optional companion CSS, and optional i18n payload with safe-language fallback to `en`. | IO runtime | `lib/IoPlugins.js` |
+
+### IO-owned helper surfaces brokered into plugin runtimes
+
+| Entry | Contract | Owner | Reference |
+| --- | --- | --- | --- |
+| `createOptionsApi(manifest).resolveInt(key, value)` | Finite integer coercion with manifest `default`, `min`, and `max` enforcement. | IO runtime | `lib/IoPlugins.js` |
+| `createOptionsApi(manifest).resolveBool(key, value)` | Only literal booleans are accepted; everything else falls back to `spec.default === true`. | IO runtime | `lib/IoPlugins.js` |
+| `createOptionsApi(manifest).resolveString(key, value)` | Returns the manifest default for `undefined`, `null`, or non-strings. Trims by default unless `spec.trim === false`. | IO runtime | `lib/IoPlugins.js` |
+| Messagebox ownership | Exactly one Engage plugin instance may own the adapter messagebox handler at a time. Ownership is tracked by registration id. | IO runtime | `lib/IoPlugins.js` |
+| Admin UI bundle hash cache | Cached per process as `${type}:${panelId}` and intentionally never invalidated mid-process. | IO runtime | `lib/IoPlugins.js` |
+| Admin UI path traversal guard | Both bundle reading and bundle hashing reject `bundle.entry` or i18n paths that escape the plugin directory with `FORBIDDEN`. | IO runtime | `lib/IoPlugins.js` |
+
+### `IoPluginResources`
+
+| Entry | Contract | Owner | Reference |
+| --- | --- | --- | --- |
+| `new IoPluginResources({ regId?, log?, timers? })` | Creates a per-plugin resource tracker for timers, wrapped subscribe APIs, and generic disposers. | IO runtime | `lib/IoPluginResources.js` |
+| `add(disposer)` | Tracks either `() => void` or `{ dispose() }`. Returns an internal numeric token. If the tracker is already disposed, the disposer is called immediately and `0` is returned. | IO runtime | `lib/IoPluginResources.js` |
+| `disposeAll()` | Best-effort, idempotent disposal. Clears tracked timers first, then runs tracked disposers in LIFO order. | IO runtime | `lib/IoPluginResources.js` |
+| `setTimeout(fn, delayMs, ...args)` | Tracks a one-shot timeout and forgets the handle automatically after the callback fires. | IO runtime | `lib/IoPluginResources.js` |
+| `clearTimeout(handle)` | Clears a tracked timeout and forgets it. | IO runtime | `lib/IoPluginResources.js` |
+| `setInterval(fn, intervalMs, ...args)` | Tracks an interval handle. | IO runtime | `lib/IoPluginResources.js` |
+| `clearInterval(handle)` | Clears a tracked interval and forgets it. | IO runtime | `lib/IoPluginResources.js` |
+| `wrapSubscribeApi(subscribeApi)` | Returns a frozen wrapper around `ctx.api.iobroker.subscribe.*` that auto-tracks subscriptions and forgets them again when manual unsubs happen. Reuses one wrapped object per raw subscribe API object. | IO runtime | `lib/IoPluginResources.js` |
+
+### `IoManagedMeta`
+
+| Entry | Contract | Owner | Reference |
+| --- | --- | --- | --- |
+| `new IoManagedMeta(adapter, { hostName? })` | Requires `adapter.namespace`. Builds an ioBroker API wrapper and starts the best-effort janitor timer. | IO runtime | `lib/IoManagedMeta.js` |
+| `dispose()` | Stops the janitor timer. | IO runtime | `lib/IoManagedMeta.js` |
+| `runJanitorOnce()` | Public one-shot janitor trigger, primarily for tests/manual debugging. | IO runtime | `lib/IoManagedMeta.js` |
+| `createReporter({ category, type, instanceId, pluginBaseObjectId })` | Returns a frozen reporter `{ report, applyReported }` bound to one plugin identity. | IO runtime | `lib/IoManagedMeta.js` |
+| `report(ids, { managedText? })` | Buffers one id or an array of ids for the reporter. Non-string ids are ignored. | IO runtime | `lib/IoManagedMeta.js` |
+| `applyReported()` | Ensures the watchlist state exists, writes the sorted JSON watchlist, and stamps each reported object under `common.custom.<namespace>` with `managedMeta-*` fields and `enabled: true`. Always best-effort. | IO runtime | `lib/IoManagedMeta.js` |
+| `clearWatchlist({ type, instanceId })` | Clears buffered ids, resets the existing watchlist state to `'[]'`, and starts background orphan cleanup for the previously listed ids. Does not create the watchlist state when it does not exist yet. | IO runtime | `lib/IoManagedMeta.js` |
+
+## IO <> UI
+
+### `main.js` message command routing
+
+| Incoming command shape | Routed to | Contract | Owner | Reference |
+| --- | --- | --- | --- | --- |
+| `admin.*` | `IoAdminTab.handleCommand(cmd, payload)` | Requires `_adminTab`; otherwise returns `NOT_READY`. | Composition root / IO runtime | `main.js`, `lib/IoAdminTab.js` |
+| `config.*` | `IoAdminConfig.handleCommand(cmd, payload)` | Requires `_adminConfig`; otherwise returns `NOT_READY`. | Composition root / IO runtime | `main.js`, `lib/IoAdminConfig.js` |
+| `runtime.about` | Inline builder in `main.js` | Returns `{ ok: true, data: { title, version, time, lang, connection } }`. | Composition root / IO runtime | `main.js`, `lib/IoCoreConnection.js` |
+| Any other command | `IoPlugins.dispatchMessagebox(obj)` | Engage/messagebox escape hatch. `null` becomes `NOT_READY`. | Composition root / IO runtime | `main.js`, `lib/IoPlugins.js` |
+
+### `IoAdminTab` command surface
+
+| Command | Runtime dependency | IO-owned validation / behavior | Response family | Reference |
+| --- | --- | --- | --- | --- |
+| `admin.plugins.getCatalog` | `ioPlugins.getCatalog()` | Returns `NOT_READY` when plugin runtime is not wired. | `{ ok, data: { plugins } }` | `lib/IoAdminTab.js` |
+| `admin.plugins.listInstances` | `ioPlugins.getCatalog()`, `ioPlugins.listInstances()` | Returns `NOT_READY` when plugin runtime is not wired. Logs unknown `native.*` keys best-effort. | `{ ok, data: { instances } }` | `lib/IoAdminTab.js` |
+| `admin.plugins.createInstance` | `ioPlugins.createInstance(payload)` | Runtime-owned payload validation lives in `IoPlugins`. | `{ ok, data: { instanceId } }` | `lib/IoAdminTab.js`, `lib/IoPlugins.js` |
+| `admin.plugins.updateInstance` | `ioPlugins.updateInstanceNative(payload)` | Runtime-owned payload validation lives in `IoPlugins`. | `{ ok, data: {} }` | `lib/IoAdminTab.js`, `lib/IoPlugins.js` |
+| `admin.plugins.setEnabled` | `ioPlugins.setInstanceEnabled(payload)` | Runtime-owned payload validation lives in `IoPlugins`. | `{ ok, data: {} }` | `lib/IoAdminTab.js`, `lib/IoPlugins.js` |
+| `admin.plugins.deleteInstance` | `ioPlugins.deleteInstance(payload)` | Runtime-owned payload validation lives in `IoPlugins`. | `{ ok, data: {} }` | `lib/IoAdminTab.js`, `lib/IoPlugins.js` |
+| `admin.pluginUi.discover` | `ioPlugins.getAdminUiContributions()`, `ioPlugins.computeAdminUiBundleHash(...)` | Best-effort per-panel hash computation. Hash failures degrade to `bundle.hash = ''` with a warning log. | `{ ok, data: PluginUiContribution[] }` | `lib/IoAdminTab.js`, `lib/IoPlugins.js` |
+| `admin.pluginUi.bundle.get` | `ioPlugins.getAdminUiContributions()`, `ioPlugins.computeAdminUiBundleHash(...)`, `ioPlugins.readAdminUiBundle(...)` | Validates `pluginType` and `panelId`, normalizes `instanceId` to integer or `0`, normalizes `lang` to a safe base tag or `'en'`, checks that the plugin panel is currently running, caches by `(pluginType, instanceId, panelId, hash, lang)`, enforces JS size `<= 512 KiB` and CSS size `<= 64 KiB`. | `{ ok, data: { apiVersion, moduleFormat: 'esm', hash, js, css?, i18n } }` | `lib/IoAdminTab.js`, `lib/IoPlugins.js` |
+| `admin.pluginUi.rpc` | `ioPlugins.getAdminUiContributions()`, `ioPlugins.callPluginRuntime(...)` | Validates `pluginType`, `panelId`, `command`; validates serialized payload size `<= 64 KiB`; checks that the plugin panel is currently running; binds identity from the host path; applies a 10000 ms timeout; accepts only plugin responses with boolean `ok`. | `{ ok, data|error }` | `lib/IoAdminTab.js` |
+| `admin.stats.get` | `msgStore.getStats({ include })` | Normalizes `include.archiveSize` and non-negative `include.archiveSizeMaxAgeMs`; returns `NOT_READY` when stats runtime is absent. | `{ ok, data: MsgStatsSnapshot }` | `lib/IoAdminTab.js`, `src/MsgStats.js` |
+| `admin.messages.query` | `msgStore.queryMessages(query)` | Passes through only `query.where`, `query.page`, and `query.sort`; serializes maps to JSON-safe objects; attaches `meta.generatedAt` and local `tz`; returns `BAD_REQUEST` on query errors. | `{ ok, data: { meta, items, total?, pages? } }` | `lib/IoAdminTab.js`, `src/MsgStore.js` |
+| `admin.messages.delete` | `msgStore.removeMessage(ref, { actor: 'AdminTab' })` | Trims refs, deduplicates them, rejects zero refs, rejects more than 5000 refs, and returns per-ref misses. | `{ ok, data: { requested, deleted, missing } }` | `lib/IoAdminTab.js` |
+| `admin.messages.action` | `msgStore.msgActions.execute({ ref, actionId, actor: 'AdminTab' })` | Requires `ref` and `actionId`; returns `REJECTED` when the executor returns false. | `{ ok, data: { executed: true } }` or `{ ok: false, error }` | `lib/IoAdminTab.js` |
+| `admin.constants.get` | `msgStore.msgConstants` | Returns only `kind`, `lifecycle.state`, `level`, and `notfication.events`. | `{ ok, data: { kind, lifecycle, level, notfication } }` | `lib/IoAdminTab.js` |
+| `admin.ingestStates.presets.selectOptions*` | `ioPlugins.callPluginRuntime({ type: 'IngestStates', method: 'getPresetSelectOptions', ... })` | Passes command suffix and raw payload through without interpretation. Sanitizes the result to `Array<{ value, label }>` and returns `[]` when the plugin runtime is unavailable. | Bare array, not an `{ ok, data }` envelope | `lib/IoAdminTab.js` |
+| `admin.ping` | none | Fixed health probe command. | `{ ok: true, data: 'pong' }` | `lib/IoAdminTab.js` |
+| empty or non-string `admin.*` command | none | `IoAdminTab.handleCommand(...)` returns `BAD_REQUEST` when `cmd` is blank or not a string. | `{ ok: false, error }` | `lib/IoAdminTab.js` |
+| unknown `admin.*` command | none | `IoAdminTab.handleCommand(...)` returns `UNKNOWN_COMMAND` when no dispatch-table entry matches the command. | `{ ok: false, error }` | `lib/IoAdminTab.js` |
+
+### `IoAdminConfig` command surface
+
+| Command | Runtime dependency | IO-owned validation / behavior | Response family | Reference |
+| --- | --- | --- | --- | --- |
+| `config.archive.status` | `msgStore.msgArchive.getStatus()` | Returns `NOT_READY` when the archive runtime is absent. Otherwise returns runtime transparency only. Mirrors runtime archive fields into `native.*`, then filters them through the native allowlist. | `{ ok, data: { archive }, native? }` | `lib/IoAdminConfig.js` |
+| `config.archive.retryNative` | `msgStore.msgArchive.getStatus()`, `IoArchiveResolver.probeNativeFor(...)` or injected probe hook | Probes native viability against current runtime roots. On success returns a startup-time lock intent for `native` plus `restartRequired: true`. On probe failure returns `NATIVE_PROBE_FAILED`. | `{ ok, data, native? }` | `lib/IoAdminConfig.js` |
+| `config.archive.forceIobroker` | none beyond current archive snapshot | Returns explicit startup-time lock intent for the ioBroker writer strategy plus `restartRequired: true`. | `{ ok, data, native }` | `lib/IoAdminConfig.js` |
+| `config.ai.test` | `ai.createCallerApi(...)` or an isolated temporary `MsgAi` runtime | Diagnostics-only connectivity check. Stores the compact summary in `native.aiTestLastResult`. Optional payload overrides may create an isolated temporary AI runtime instead of mutating the shared one. | `{ native: { aiTestLastResult } }`, then allowlist-filtered | `lib/IoAdminConfig.js` |
+| Unknown `config.*` | none | Returns `UNKNOWN_COMMAND`. | `{ ok: false, error }` | `lib/IoAdminConfig.js` |
+
+### IO-owned native patch allowlist for `config.*`
+
+| Native key | Meaning | Owner | Reference |
+| --- | --- | --- | --- |
+| `archiveEffectiveStrategyLock` | Persisted lock intent for archive strategy selection at next startup. | IO runtime | `lib/IoAdminConfig.js` |
+| `archiveLockReason` | Human/machine-readable reason for the archive strategy lock. | IO runtime | `lib/IoAdminConfig.js` |
+| `archiveLockedAt` | Millisecond timestamp of the current archive strategy lock intent. | IO runtime | `lib/IoAdminConfig.js` |
+| `archiveRuntimeStrategy` | Current runtime archive strategy mirror for config transparency. | IO runtime | `lib/IoAdminConfig.js` |
+| `archiveRuntimeReason` | Current runtime archive strategy reason mirror. | IO runtime | `lib/IoAdminConfig.js` |
+| `archiveRuntimeRoot` | Current runtime archive root mirror. | IO runtime | `lib/IoAdminConfig.js` |
+| `aiTestLastResult` | Latest compact AI test result string for config feedback. | IO runtime | `lib/IoAdminConfig.js` |
+
+## IO Invariants
+
+| Contract | Notes | Owner | Reference |
+| --- | --- | --- | --- |
+| `main.js` is composition root only | It wires IO services together and routes messages/state changes, but it is not a separate IO API domain. | Composition root | `main.js` |
+| Control-state handling short-circuits ingest forwarding | When `IoPlugins.handleStateChange(...)` returns `true`, `main.js` must not forward that state change to ingest plugins. | Composition root / IO runtime | `main.js`, `lib/IoPlugins.js` |
+| Gate watchers are side-channel notifications, not event consumption | `handleGateStateChange(...)` does not stop normal ingest dispatch. `main.js` calls it before forwarding non-null states to ingest plugins. | Composition root / IO runtime | `main.js`, `lib/IoPlugins.js` |
+| `IoAdminTab` owns only `admin.*` | Config commands are explicitly out of scope and belong to `IoAdminConfig`. | IO runtime | `lib/IoAdminTab.js`, `lib/IoAdminConfig.js` |
+| `IoAdminConfig` native writes are hard-scoped | Any `native.*` keys outside `CONFIG_NATIVE_ALLOWLIST` are dropped before the response leaves `IoAdminConfig`. | IO runtime | `lib/IoAdminConfig.js` |
+| `runtime.about` is an IO-owned inline command | The response is assembled in `main.js`, not delegated to `IoAdminTab` or `IoAdminConfig`. | Composition root / IO runtime | `main.js` |
+| Plugin Admin UI contributions are runtime-only | `getAdminUiContributions()` includes only currently registered plugin instances with `manifest.adminUi`. Configured but not started plugins are excluded. | IO runtime | `lib/IoPlugins.js` |
+| `admin.pluginUi.rpc` is host-bound | The backend path owns `pluginType`, `instanceId`, and `panelId`. The bundle cannot override identity once the host chooses the panel. | IO runtime | `lib/IoAdminTab.js` |
+| `admin.ingestStates.presets.selectOptions*` intentionally breaks the normal envelope rule | This pass-through returns a bare select-options array instead of `{ ok, data }` so jsonCustom-style callers can consume it directly. | IO runtime | `lib/IoAdminTab.js` |
+| Resource and managed-metadata cleanup are best-effort | `IoPluginResources` disposal and `IoManagedMeta` stamping/janitor work must never crash the adapter. | IO runtime | `lib/IoPluginResources.js`, `lib/IoManagedMeta.js` |

@@ -4,6 +4,8 @@
 /**
  * MsgHub Admin Tab: Bootstrapping und Runtime-Orchestrierung.
  *
+ * Docs: ../../docs/ui/tab-boot.md
+ *
  * Inhalt:
  * - Aufbau von `ui`, `api`, `ctx` und DOM-Elementzugriffen.
  * - Initialisierung und Lifecycle-Verwaltung der Panels.

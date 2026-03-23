@@ -7,6 +7,8 @@
 	/**
 	 * JSON overlay module for messages panel.
 	 *
+	 * Docs: ../../../../docs/ui/tab-panels-messages-overlay.json.md
+	 *
 	 * Contains:
 	 * - Annotated JSON renderer for message payloads.
 	 * - Timestamp/duration helper comments.

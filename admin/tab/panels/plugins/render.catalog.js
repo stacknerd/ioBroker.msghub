@@ -2,6 +2,13 @@
 /// <reference lib="dom.iterable" />
 
 /* global window, document, HTMLElement */
+/**
+ * render.catalog
+ * ==============
+ * Plugins catalog renderer module.
+ *
+ * Docs: ../../../../docs/ui/tab-panels-plugins-render.catalog.md
+ */
 (function () {
 	'use strict';
 

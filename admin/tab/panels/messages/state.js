@@ -1,4 +1,11 @@
 /* global window */
+/**
+ * state
+ * =====
+ * Messages panel state and utility module.
+ *
+ * Docs: ../../../../docs/ui/tab-panels-messages-state.md
+ */
 (function () {
 	'use strict';
 

@@ -4,6 +4,8 @@
 /**
  * MsgHub Admin Tab: Laufzeitgrundlagen (Query, Socket, i18n, Theme).
  *
+ * Docs: ../../docs/ui/tab-runtime.md
+ *
  * Inhalt:
  * - Parsing der URL-Parameter und Ableitung von Adapter-Instanz/Language.
  * - Aufbau der Socket-Verbindung zum Admin-Backend.

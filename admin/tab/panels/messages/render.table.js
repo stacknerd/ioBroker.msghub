@@ -1,4 +1,11 @@
 /* global window */
+/**
+ * render.table
+ * ============
+ * Messages table renderer module.
+ *
+ * Docs: ../../../../docs/ui/tab-panels-messages-render.table.md
+ */
 (function () {
 	'use strict';
 

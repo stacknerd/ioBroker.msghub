@@ -1,4 +1,11 @@
 /* global window */
+/**
+ * render.header
+ * =============
+ * Messages table header renderer module.
+ *
+ * Docs: ../../../../docs/ui/tab-panels-messages-render.header.md
+ */
 (function () {
 	'use strict';
 

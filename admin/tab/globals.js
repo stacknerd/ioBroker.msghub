@@ -4,8 +4,10 @@
 /* global window */
 'use strict';
 
-/*
+/**
  * MsgHub Admin Tab: globale Laufzeit-Bindings.
+ *
+ * Docs: ../../docs/ui/tab-globals.md
  *
  * Inhalt:
  * - Zentrale Referenz auf das Browser-`window` (`win`) für alle Teilmodule.
@@ -16,6 +18,7 @@
  * - Nachfolgende Module (`registry.js`, `api.js`, `runtime.js`, ...) nutzen diese Variablen.
  *
  * Schnittstellen:
+ */
  * - Exportiert keine ES-Module, sondern legt Dateiscope-Variablen für die sequenziell
  *   geladenen Scripts an.
  */

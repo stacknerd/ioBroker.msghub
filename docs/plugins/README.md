@@ -607,12 +607,100 @@ In both cases, the safe wiring helper is `MsgBridge` (see [`docs/modules/MsgBrid
 - Fail fast on hard misconfiguration: validate required capabilities in `start(ctx)` and throw a clear error when missing.
 - During regular operation (delivery / per-event processing): avoid throwing; log and continue (best-effort).
 
+## Plugin-owned Admin UI
+
+Plugins can contribute dedicated tab panels to the Message Hub Admin Tab.
+This is declared in `manifest.adminUi.panels[]` and implemented via two entry points:
+
+- **Backend hook**: `handleAdminUiRpc(request)` — handles RPC calls from the panel bundle.
+- **Frontend ESM bundle**: `lib/<TypeName>/admin-ui/dist/<panelId>.esm.js` — loaded and mounted by the Admin Tab host.
+
+### Manifest declaration
+
+```js
+// lib/<TypeName>/manifest.js
+manifest.adminUi = {
+  apiVersion: '1',
+  panels: [
+    {
+      id: 'presets', // panel id (unique within the plugin)
+      title: { en: 'Presets', de: 'Presets' },
+      description: { en: 'Manage message presets', de: 'Nachrichten-Vorlagen verwalten' },
+      bundle: { entry: 'admin-ui/dist/presets.esm.js' },
+    },
+  ],
+};
+```
+
+### Backend hook
+
+```js
+// inside the plugin handler object
+async handleAdminUiRpc(request) {
+  const { panelId, command, payload } = request;
+  if (panelId === 'presets' && command === 'presets.list') {
+    return { ok: true, data: await getPresets() };
+  }
+  return { ok: false, error: { code: 'UNKNOWN_COMMAND', message: command } };
+}
+```
+
+### Bundle export contract
+
+```js
+// lib/<TypeName>/admin-ui/src/<panelId>.js (compiled to ESM)
+export async function mount(ctx) {
+  // render UI into ctx.root
+  ctx.root.appendChild(ctx.dom.h('div', { class: 'my-panel' }, 'Hello'));
+}
+
+// optional
+export async function unmount(ctx) {
+  // cleanup (remove listeners, timers, etc.)
+}
+```
+
+### Bundle ctx API (summary)
+
+| Entry | Description |
+|---|---|
+| `ctx.api.request(command, payload)` | RPC call → `admin.pluginUi.rpc` → `handleAdminUiRpc` |
+| `ctx.api.i18n.t(key, ...args)` | Plugin-owned i18n (loaded from `lib/<Type>/admin-ui/i18n/<lang>.json`) |
+| `ctx.api.ui.toast(opts)` | Toast notification |
+| `ctx.api.ui.dialog.confirm(opts)` | Confirmation dialog |
+| `ctx.api.ui.spinner.show/hide` | Blocking spinner |
+| `ctx.root` | Plugin mount root element |
+| `ctx.plugin` / `ctx.panel` / `ctx.host` | Plugin, panel, and host metadata |
+| `ctx.dom.h(tag, attrs?, ...children)` | Light DOM element helper |
+
+For the full reference, see [`docs/plugins/API.md`](./API.md#plugin-owned-admin-ui).
+
+### Plugin-owned i18n
+
+Each bundle loads its own i18n independently of the central Admin-Tab workflow:
+
+- File: `lib/<TypeName>/admin-ui/i18n/<lang>.json`
+- Not part of `admin/i18n/**` or the mirror workflow.
+- Key namespace: `msghub.i18n.<TypeName>.ui.*`
+- Language is determined at `bundle.get` time and does not change during the session.
+
+### Reference implementation
+
+`IngestStates` is the current reference implementation:
+
+- Presets panel: `lib/IngestStates/admin-ui/dist/presets.esm.js`
+- BulkApply panel: `lib/IngestStates/admin-ui/dist/bulkapply.esm.js`
+- Backend hook: `handleAdminUiRpc` in `lib/IngestStates/index.js`
+
+---
+
 ## Built-in plugins in this repo
 
 This repo ships built-in plugin implementations under `lib/*/` (see [`docs/plugins/PLUGIN-INDEX.md`](./PLUGIN-INDEX.md)).
 
-They are designed to run **only** in the Message Hub runtime (wired via `IoPlugins`). As a result, built-in plugins validate required `ctx.api`/`ctx.meta`
-capabilities in `start(ctx)` and throw on missing wiring (no “non-IoPlugins” fallbacks).
+They are designed to run **only** in the Message Hub runtime (wired via `IoPlugins`). Many built-in plugins validate required `ctx.api`/`ctx.meta`
+capabilities early in `start(ctx)` and fail fast on missing wiring; others rely on the runtime contract more implicitly. In both cases, these plugins are
+written for the Message Hub host environment, not as generic standalone modules with alternate non-`IoPlugins` wiring paths.
 
 To keep this validation readable and consistent, the repo provides a small helper:
 

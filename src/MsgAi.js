@@ -1,6 +1,14 @@
 'use strict';
 
 /**
+ * MsgAi
+ * =====
+ * AI helper module for provider-backed text/JSON/status operations.
+ *
+ * Docs: ../docs/modules/MsgAi.md
+ */
+
+/**
  * @param {any} v Value.
  * @returns {boolean} True when v is a plain object-like value.
  */

@@ -1,4 +1,11 @@
 /* global window, document */
+/**
+ * render.meta
+ * ===========
+ * Messages meta/layout renderer module.
+ *
+ * Docs: ../../../../docs/ui/tab-panels-messages-render.meta.md
+ */
 (function () {
 	'use strict';
 
