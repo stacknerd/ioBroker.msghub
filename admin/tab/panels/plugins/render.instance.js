@@ -1,7 +1,7 @@
 /// <reference lib="dom" />
 /// <reference lib="dom.iterable" />
 
-/* global HTMLElement, window */
+/* global window */
 (function () {
 	'use strict';
 
@@ -23,17 +23,12 @@
 		const catalogApi = opts.catalogApi || null;
 		const openContextMenu = typeof opts.openContextMenu === 'function' ? opts.openContextMenu : () => {};
 		const pluginsDataApi = opts.pluginsDataApi || null;
-		const ingestStatesDataApi = opts.ingestStatesDataApi || null;
-		const ui = opts.ui || null;
 		const toast = typeof opts.toast === 'function' ? opts.toast : () => {};
 		const confirmDialog = typeof opts.confirmDialog === 'function' ? opts.confirmDialog : async () => false;
 		const onRefreshAll = typeof opts.onRefreshAll === 'function' ? opts.onRefreshAll : async () => {};
 		const adapterInstance = Number.isFinite(opts.adapterInstance) ? Math.trunc(opts.adapterInstance) : 0;
-		// renderBulkApply and renderPresets are inline stubs until Etappe 7 extracts them.
-		const renderBulkApply = typeof opts.renderBulkApply === 'function' ? opts.renderBulkApply : () => h('div');
-		const renderPresets = typeof opts.renderPresets === 'function' ? opts.renderPresets : () => h('div');
 
-		function renderInstanceRow({ plugin, inst, instList, expandedById, readmesByType }) {
+		function renderInstanceRow({ plugin, inst, _instList, expandedById, readmesByType }) {
 			const statusSafe = cssSafe(inst?.status || 'unknown');
 			const stateClass = `msghub-plugin-state-${statusSafe}`;
 			const categoryRaw = typeof plugin?.category === 'string' ? plugin.category : 'unknown';
@@ -74,156 +69,6 @@
 						bodyEl: body,
 					});
 				}
-			};
-
-			const hasToolsAvailable = (() => {
-				if (plugin?.type !== 'IngestStates') {
-					return false;
-				}
-				const inst0 = Array.isArray(instList) ? instList.find(i => i?.instanceId === 0) : null;
-				return inst0?.enabled === true;
-			})();
-
-			const getToolsMenuConfig = () => {
-				if (plugin?.type !== 'IngestStates' || !hasToolsAvailable) {
-					return { isAvailable: false, items: [] };
-				}
-
-				const openIngestStatesTool = toolId => {
-					if (toolId === 'bulk') {
-						const spinnerId =
-							ui?.spinner?.show?.({
-								id: 'msghub-bulk-tool-open',
-								message: t(
-									'msghub.i18n.core.admin.ui.loadingWithSubject.text',
-									t('msghub.i18n.core.admin.ui.plugins.tools.ingestStates.bulk.label'),
-								),
-							}) ?? null;
-						Promise.resolve()
-							.then(async () => {
-								await pluginsDataApi?.ensureConstantsLoaded?.();
-								const ingestConstants =
-									await ingestStatesDataApi?.ensureIngestStatesConstantsLoaded?.();
-								const bodyEl = renderBulkApply({ instances: instList, ingestConstants });
-								catalogApi?.openViewer?.({
-									title: `${plugin.type} · Tools`,
-									bodyEl,
-								});
-							})
-							.catch(err => {
-								toast(String(err?.message || err), 'danger');
-							})
-							.finally(() => {
-								ui?.spinner?.hide?.(spinnerId);
-							});
-						return;
-					}
-
-					if (toolId === 'presets') {
-						const spinnerId =
-							ui?.spinner?.show?.({
-								id: 'msghub-presets-tool-open',
-								message: t(
-									'msghub.i18n.core.admin.ui.loadingWithSubject.text',
-									t('msghub.i18n.core.admin.ui.plugins.tools.ingestStates.presets.label'),
-								),
-							}) ?? null;
-						Promise.resolve()
-							.then(async () => {
-								await pluginsDataApi?.ensureConstantsLoaded?.();
-								const ingestConstants =
-									await ingestStatesDataApi?.ensureIngestStatesConstantsLoaded?.();
-								const bodyEl = renderPresets({ ingestConstants });
-								const ready = bodyEl?.__msghubReady;
-								if (ready && typeof ready.then === 'function') {
-									try {
-										await ready;
-									} catch {
-										return;
-									}
-								}
-								catalogApi?.openViewer?.({
-									title: `${plugin.type} · Tools`,
-									bodyEl,
-								});
-							})
-							.catch(err => {
-								toast(String(err?.message || err), 'danger');
-							})
-							.finally(() => {
-								ui?.spinner?.hide?.(spinnerId);
-							});
-						return;
-					}
-
-					const body = h('div', null, [
-						h('p', {
-							class: 'msghub-muted',
-							text: t('msghub.i18n.core.admin.ui.plugins.tools.loading.text'),
-						}),
-					]);
-					if (catalogApi) {
-						catalogApi.openViewer({
-							title: `${plugin.type} · Tools`,
-							bodyEl: body,
-						});
-					}
-
-					Promise.resolve()
-						.then(async () => {
-							await pluginsDataApi?.ensureConstantsLoaded?.();
-							const ingestConstants = await ingestStatesDataApi?.ensureIngestStatesConstantsLoaded?.();
-							if (toolId === 'presets') {
-								body.replaceChildren(renderPresets({ ingestConstants }));
-								return;
-							}
-							body.replaceChildren(h('p', { class: 'msghub-muted', text: '' }));
-						})
-						.catch(err => {
-							body.replaceChildren(
-								h('div', {
-									class: 'msghub-error',
-									text: t(
-										'msghub.i18n.core.admin.ui.plugins.tools.loadFailed.text',
-										String(err?.message || err),
-									),
-								}),
-							);
-						});
-				};
-
-				return {
-					isAvailable: true,
-					items: [
-						{
-							id: 'ingeststates_bulk',
-							label: t('msghub.i18n.core.admin.ui.plugins.tools.ingestStates.bulk.label'),
-							onSelect: () => openIngestStatesTool('bulk'),
-						},
-						{
-							id: 'ingeststates_presets',
-							label: t('msghub.i18n.core.admin.ui.plugins.tools.ingestStates.presets.label'),
-							onSelect: () => openIngestStatesTool('presets'),
-						},
-					],
-				};
-			};
-
-			const openToolsMenu = (anchorEl, e) => {
-				const cfg = getToolsMenuConfig();
-				if (!cfg.isAvailable) {
-					return;
-				}
-				if (!ui?.contextMenu?.open) {
-					return;
-				}
-				ui.contextMenu.open({
-					anchorEl: anchorEl instanceof HTMLElement ? anchorEl : null,
-					anchorPoint: !anchorEl && e ? { x: e.clientX, y: e.clientY } : null,
-					ariaLabel: 'Plugin context menu',
-					placement: 'bottom-start',
-					items: cfg.items,
-				});
 			};
 
 			const instWrap = h('div', {
@@ -295,16 +140,6 @@
 				onclick: () => openReadme(),
 			});
 
-			const toolsBtn = h('button', {
-				type: 'button',
-				class: `msghub-instance-tools msghub-uibutton-icon${hasToolsAvailable ? '' : ' is-invisible'}`,
-				disabled: hasToolsAvailable ? undefined : true,
-				title: hasToolsAvailable ? t('msghub.i18n.core.admin.ui.plugins.instance.tools.button') : '',
-				'aria-label': t('msghub.i18n.core.admin.ui.plugins.instance.tools.button'),
-				text: t('msghub.i18n.core.admin.ui.plugins.instance.tools.button'),
-				onclick: e => openToolsMenu(toolsBtn, e),
-			});
-
 			const channelId = `ch_${plugin.type}_${inst.instanceId}_${adapterInstance}`;
 			const channelValue = typeof inst.native?.channel === 'string' ? inst.native.channel : '';
 			const channelEl = wantsChannel
@@ -374,7 +209,6 @@
 				nameEl,
 				toggleBtn,
 				helpBtn,
-				toolsBtn,
 				titleValueEl,
 				channelEl,
 				chevron,
@@ -401,8 +235,6 @@
 				categoryRaw,
 				categorySafe,
 				hasReadme: hasReadme === true,
-				hasToolsAvailable: hasToolsAvailable === true,
-				toolsItems: getToolsMenuConfig().items,
 				openReadme,
 				removeInstance,
 			});

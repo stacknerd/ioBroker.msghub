@@ -64,7 +64,6 @@
 		minmax(160px, max-content) /* name */
 		var(--msghub-size-iconButton) /* play/pause */
 		var(--msghub-size-iconButton) /* help */
-		var(--msghub-size-iconButton) /* tools */
 		minmax(60px, 96px) /* title/value */
 		minmax(0, 1fr) /* spacer */
 		minmax(160px, 1.2fr) /* channel */
@@ -121,10 +120,6 @@
 
 .msghub-root .msghub-plugins .msghub-instance-help {
 	--msghub-uibutton-icon: var(--msghub-icon-help);
-}
-
-.msghub-root .msghub-plugins .msghub-instance-tools {
-	--msghub-uibutton-icon: var(--msghub-icon-tools);
 }
 
 .msghub-root .msghub-plugins .msghub-plugin-instance[data-enabled='1'] .msghub-instance-toggle {

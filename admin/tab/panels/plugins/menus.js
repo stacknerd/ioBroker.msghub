@@ -169,8 +169,6 @@
 		 * @param {string}     [ctx.categoryRaw] - Raw category identifier.
 		 * @param {string}     [ctx.instanceName] - Display name for the instance.
 		 * @param {boolean}    [ctx.hasReadme] - Whether a readme is available.
-		 * @param {boolean}    [ctx.hasToolsAvailable] - Whether tools are available.
-		 * @param {Array}      [ctx.toolsItems] - Tools submenu items.
 		 * @param {Function}   [ctx.openReadme] - Callback to open the readme overlay.
 		 * @param {Function}   [ctx.removeInstance] - Callback to delete the instance.
 		 */
@@ -474,16 +472,6 @@
 						icon: 'help',
 						disabled: context.hasReadme !== true,
 						onSelect: () => context.openReadme?.(),
-					},
-					{
-						id: 'tools',
-						label: t(
-							'msghub.i18n.core.admin.ui.plugins.contextMenu.tools.label',
-							String(context.pluginType || ''),
-						),
-						icon: 'tools',
-						disabled: context.hasToolsAvailable !== true,
-						items: Array.isArray(context.toolsItems) ? context.toolsItems : [],
 					},
 					{ type: 'separator' },
 				);

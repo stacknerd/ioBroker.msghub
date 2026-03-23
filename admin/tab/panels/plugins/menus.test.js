@@ -344,7 +344,7 @@ describe('admin/tab/panels/plugins/menus.js', function () {
 		assert.ok(Array.isArray(menu.items));
 	});
 
-	it('openPluginsContextMenu adds help/tools/remove items for kind=instance', async function () {
+	it('openPluginsContextMenu adds help and remove items for kind=instance', async function () {
 		const sandbox = await loadMenusModule();
 		const { api, openedMenus } = makeMenusApi(sandbox);
 		api.openPluginsContextMenu(
@@ -354,7 +354,6 @@ describe('admin/tab/panels/plugins/menus.js', function () {
 		const menu = openedMenus[0];
 		const ids = menu.items.map(i => i.id).filter(Boolean);
 		assert.ok(ids.includes('help'));
-		assert.ok(ids.includes('tools'));
 		assert.ok(ids.includes('remove'));
 	});
 

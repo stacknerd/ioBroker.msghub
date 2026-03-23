@@ -419,9 +419,6 @@ function createAdminApi({ msghubRequest, msghubSocket, adapterInstance, lang, t,
 
 	// Constants are heavily cached as they rarely change at runtime.
 	const constantsCache = createAsyncCache(() => msghubRequest('admin.constants.get', {}), { maxAgeMs: Infinity });
-	const ingestStatesConstantsCache = createAsyncCache(() => msghubRequest('admin.ingestStates.constants.get', {}), {
-		maxAgeMs: Infinity,
-	});
 
 	const constants = Object.freeze({
 		get: () => constantsCache.get(),
@@ -445,30 +442,6 @@ function createAdminApi({ msghubRequest, msghubSocket, adapterInstance, lang, t,
 		updateInstance: params => msghubRequest('admin.plugins.updateInstance', params || {}),
 		setEnabled: params => msghubRequest('admin.plugins.setEnabled', params || {}),
 		deleteInstance: params => msghubRequest('admin.plugins.deleteInstance', params || {}),
-	});
-
-	const ingestStates = Object.freeze({
-		constants: Object.freeze({
-			get: () => ingestStatesConstantsCache.get(),
-			invalidate: () => ingestStatesConstantsCache.invalidate(),
-		}),
-		schema: Object.freeze({
-			get: () => msghubRequest('admin.ingestStates.schema.get', {}),
-		}),
-		custom: Object.freeze({
-			read: params => msghubRequest('admin.ingestStates.custom.read', params || {}),
-		}),
-		bulkApply: Object.freeze({
-			preview: params => msghubRequest('admin.ingestStates.bulkApply.preview', params || {}),
-			apply: params => msghubRequest('admin.ingestStates.bulkApply.apply', params || {}),
-		}),
-		presets: Object.freeze({
-			list: params => msghubRequest('admin.ingestStates.presets.list', params || {}),
-			get: params => msghubRequest('admin.ingestStates.presets.get', params || {}),
-			delete: params => msghubRequest('admin.ingestStates.presets.delete', params || {}),
-			create: params => msghubRequest('admin.ingestStates.presets.create', params || {}),
-			update: params => msghubRequest('admin.ingestStates.presets.update', params || {}),
-		}),
 	});
 
 	const runtime = Object.freeze({
@@ -515,7 +488,6 @@ function createAdminApi({ msghubRequest, msghubSocket, adapterInstance, lang, t,
 		stats,
 		messages,
 		plugins,
-		ingestStates,
 		notSupported,
 	});
 }

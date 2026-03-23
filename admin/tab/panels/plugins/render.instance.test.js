@@ -88,7 +88,6 @@ function makeInstanceApi(sandbox, overrides = {}) {
 		},
 		openContextMenu: () => {},
 		pluginsDataApi: null,
-		ingestStatesDataApi: null,
 		ui: null,
 		toast: () => {},
 		confirmDialog: async () => false,
@@ -106,12 +105,6 @@ const PLUGIN_WITH_OPTIONS = Object.freeze({
 	type: 'IngestFoo',
 	category: 'ingest',
 	options: { host: { type: 'string', order: 1, default: 'localhost', label: 'Host' } },
-});
-
-/** IngestStates plugin with tools availability. */
-const PLUGIN_INGESTSTATES = Object.freeze({
-	type: 'IngestStates',
-	category: 'ingest',
 });
 
 /** Minimal instance descriptor. */
@@ -287,161 +280,5 @@ describe('admin/tab/panels/plugins/render.instance.js', function () {
 		});
 		const body = el.children.find(c => c?.classList?.contains('msghub-instance-body'));
 		assert.equal(body, undefined);
-	});
-
-	// --- tools availability ---
-
-	it('renderInstanceRow does not show tools button as visible for non-IngestStates plugins', async function () {
-		const sandbox = await loadInstanceModule();
-		const { renderInstanceRow } = makeInstanceApi(sandbox);
-		const el = renderInstanceRow({
-			plugin: PLUGIN_NO_OPTIONS,
-			inst: makeInst(),
-			instList: [],
-			expandedById: new Map(),
-			readmesByType: new Map(),
-		});
-		const head = el.children.find(c => c?.classList?.contains('msghub-instance-head'));
-		const toolsBtn = head?.children?.find(c => c?.classList?.contains('msghub-instance-tools'));
-		assert.ok(toolsBtn?.classList?.contains('is-invisible'));
-	});
-
-	it('renderInstanceRow waits for presets readiness before opening the overlay', async function () {
-		const sandbox = await loadInstanceModule();
-		const viewerCalls = [];
-		const spinnerCalls = [];
-		let resolveReady;
-		const ready = new Promise(resolve => {
-			resolveReady = resolve;
-		});
-		const renderedPresets = createElement('section');
-		renderedPresets.__msghubReady = ready;
-		const { renderInstanceRow } = makeInstanceApi(sandbox, {
-			catalogApi: {
-				toAccKey: ({ kind, type, instanceId }) =>
-					Number.isFinite(instanceId)
-						? `${kind}:msghub.0:${type}:${instanceId}`
-						: `${kind}:msghub.0:${type}`,
-				renderMarkdownLite: () => createElement('div'),
-				openViewer: payload => viewerCalls.push(payload),
-			},
-			pluginsDataApi: {
-				ensureConstantsLoaded: async () => {},
-			},
-			ingestStatesDataApi: {
-				ensureIngestStatesConstantsLoaded: async () => ({ presetSchema: 'schema' }),
-			},
-			renderPresets: () => renderedPresets,
-			ui: {
-				spinner: {
-					show: opts => {
-						spinnerCalls.push({ kind: 'show', opts });
-						return opts.id;
-					},
-					hide: id => spinnerCalls.push({ kind: 'hide', id }),
-				},
-				contextMenu: {
-					open: payload => payload.items.find(item => item.id === 'ingeststates_presets').onSelect(),
-				},
-			},
-		});
-		const el = renderInstanceRow({
-			plugin: PLUGIN_INGESTSTATES,
-			inst: makeInst({ type: 'IngestStates' }),
-			instList: [makeInst({ type: 'IngestStates', instanceId: 0, enabled: true })],
-			expandedById: new Map(),
-			readmesByType: new Map(),
-		});
-		const head = el.children.find(c => c?.classList?.contains('msghub-instance-head'));
-		const toolsBtn = head?.children?.find(c => c?.classList?.contains('msghub-instance-tools'));
-
-		toolsBtn.dispatchEvent({ type: 'click', preventDefault() {}, clientX: 10, clientY: 20 });
-		await settle();
-
-		assert.equal(viewerCalls.length, 0);
-		assert.deepEqual(spinnerCalls.map(call => call.kind), ['show']);
-		assert.equal(spinnerCalls[0].opts.id, 'msghub-presets-tool-open');
-
-		resolveReady();
-		await settle();
-
-		assert.equal(viewerCalls.length, 1);
-		assert.equal(viewerCalls[0].bodyEl, renderedPresets);
-		assert.deepEqual(spinnerCalls.map(call => call.kind), ['show', 'hide']);
-		assert.equal(spinnerCalls[1].id, 'msghub-presets-tool-open');
-	});
-
-	it('renderInstanceRow opens bulk overlay only after async loading completes', async function () {
-		const sandbox = await loadInstanceModule();
-		const viewerCalls = [];
-		const spinnerCalls = [];
-		const renderedBulk = createElement('section');
-		const renderBulkCalls = [];
-		let resolveConstants;
-		const constantsReady = new Promise(resolve => {
-			resolveConstants = resolve;
-		});
-		const { renderInstanceRow } = makeInstanceApi(sandbox, {
-			catalogApi: {
-				toAccKey: ({ kind, type, instanceId }) =>
-					Number.isFinite(instanceId)
-						? `${kind}:msghub.0:${type}:${instanceId}`
-						: `${kind}:msghub.0:${type}`,
-				renderMarkdownLite: () => createElement('div'),
-				openViewer: payload => viewerCalls.push(payload),
-			},
-			pluginsDataApi: {
-				ensureConstantsLoaded: async () => constantsReady,
-			},
-			ingestStatesDataApi: {
-				ensureIngestStatesConstantsLoaded: async () => ({ presetSchema: 'schema' }),
-				ensureIngestStatesSchema: async () => {
-					throw new Error('schema must not be loaded for bulk overlay');
-				},
-			},
-			renderBulkApply: args => {
-				renderBulkCalls.push(args);
-				return renderedBulk;
-			},
-			ui: {
-				spinner: {
-					show: opts => {
-						spinnerCalls.push({ kind: 'show', opts });
-						return opts.id;
-					},
-					hide: id => spinnerCalls.push({ kind: 'hide', id }),
-				},
-				contextMenu: {
-					open: payload => payload.items.find(item => item.id === 'ingeststates_bulk').onSelect(),
-				},
-			},
-		});
-		const el = renderInstanceRow({
-			plugin: PLUGIN_INGESTSTATES,
-			inst: makeInst({ type: 'IngestStates' }),
-			instList: [makeInst({ type: 'IngestStates', instanceId: 0, enabled: true })],
-			expandedById: new Map(),
-			readmesByType: new Map(),
-		});
-		const head = el.children.find(c => c?.classList?.contains('msghub-instance-head'));
-		const toolsBtn = head?.children?.find(c => c?.classList?.contains('msghub-instance-tools'));
-
-		toolsBtn.dispatchEvent({ type: 'click', preventDefault() {}, clientX: 10, clientY: 20 });
-		await settle();
-
-		assert.equal(viewerCalls.length, 0);
-		assert.deepEqual(spinnerCalls.map(call => call.kind), ['show']);
-		assert.equal(spinnerCalls[0].opts.id, 'msghub-bulk-tool-open');
-
-		resolveConstants();
-		await settle();
-
-		assert.equal(viewerCalls.length, 1);
-		assert.equal(viewerCalls[0].bodyEl, renderedBulk);
-		assert.equal(renderBulkCalls.length, 1);
-		assert.equal(Object.prototype.hasOwnProperty.call(renderBulkCalls[0], 'schema'), false);
-		assert.deepEqual(renderBulkCalls[0].ingestConstants, { presetSchema: 'schema' });
-		assert.deepEqual(spinnerCalls.map(call => call.kind), ['show', 'hide']);
-		assert.equal(spinnerCalls[1].id, 'msghub-bulk-tool-open');
 	});
 });

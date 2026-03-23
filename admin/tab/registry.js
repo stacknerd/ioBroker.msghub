@@ -2,24 +2,24 @@
 'use strict';
 
 /**
- * MsgHub Admin Tab: statische Registry für Panels und Compositions.
+ * MsgHub Admin Tab: static registry for panels and compositions.
  *
- * Inhalt:
- * - `panels`: technische Panel-Definitionen (Mount-ID, Titel-Key, Assets, Init-Global).
- * - `compositions`: zusammengesetzte Views (Layout, Panel-Reihenfolge, Default-Panel).
+ * Contents:
+ * - `panels`: technical panel definitions (mount-id, title-key, assets, init-global).
+ * - `compositions`: composed views (layout, panel order, default panel).
  *
- * Systemeinbindung:
- * - Die Boot-Logik (`layout.js`, `boot.js`) liest ausschließlich diese Struktur.
- * - Das minimiert implizite Kopplungen und hält Assets/View-Struktur zentral.
+ * Integration:
+ * - Boot logic (`layout.js`, `boot.js`) reads exclusively from this structure.
+ * - Minimises implicit coupling and keeps assets/view structure central.
  *
- * Schnittstellen:
- * - Schreibt `window.MsghubAdminTabRegistry` als gefrorenes Objekt.
- * - Panels selbst werden nicht hier initialisiert, sondern später über `initGlobal`.
+ * Interfaces:
+ * - Writes `window.MsghubAdminTabRegistry` as a frozen object.
+ * - Panels are not initialised here but later via `initGlobal`.
  *
- * Aufgabe:
- * - Single Source of Truth für die Admin-Tab-Informationsarchitektur.
+ * Purpose:
+ * - Single source of truth for the Admin-Tab information architecture.
  */
-// IIFE verhindert doppelte Initialisierung beim versehentlichen Mehrfach-Load.
+// IIFE prevents double-initialisation on accidental multiple loads.
 (() => {
 	if (win.MsghubAdminTabRegistry) {
 		return;
@@ -55,22 +55,14 @@
 			titleKey: 'msghub.i18n.core.admin.ui.tabs.plugins.label',
 			initGlobal: 'MsghubAdminTabPlugins',
 			assets: Object.freeze({
-				css: Object.freeze([
-					'tab/table.css',
-					'tab/panels/plugins/styles.css',
-					'tab/panels/plugins/overlay.bulkapply.css',
-					'tab/panels/plugins/overlay.presets.css',
-				]),
+				css: Object.freeze(['tab/panels/plugins/styles.css']),
 				js: Object.freeze([
 					'tab/panels/plugins/state.js',
 					'tab/panels/plugins/data.plugins.js',
-					'tab/panels/plugins/data.ingeststates.js',
 					'tab/panels/plugins/render.form.js',
 					'tab/panels/plugins/menus.js',
 					'tab/panels/plugins/render.catalog.js',
 					'tab/panels/plugins/render.instance.js',
-					'tab/panels/plugins/overlay.bulkapply.js',
-					'tab/panels/plugins/overlay.presets.js',
 					'tab/panels/plugins/index.js',
 				]),
 			}),
@@ -85,6 +77,7 @@
 				'messages',
 				'plugins',
 				Object.freeze({ type: 'pluginPanel', pluginType: 'IngestStates', instanceId: 0, panelId: 'presets' }),
+				Object.freeze({ type: 'pluginPanel', pluginType: 'IngestStates', instanceId: 0, panelId: 'bulkapply' }),
 			]),
 			defaultPanel: 'messages',
 			deviceMode: 'pc',

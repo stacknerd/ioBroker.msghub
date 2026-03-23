@@ -11,8 +11,8 @@
 	 * Plugins panel orchestrator.
 	 *
 	 * Contains:
-	 * - Module dependency guards for all nine plugins submodules.
-	 * - Wiring of all submodule factories (state, data, form, menus, catalog, instance, overlays).
+	 * - Module dependency guards for all six plugins submodules.
+	 * - Wiring of all submodule factories (state, data, form, menus, catalog, instance).
 	 * - refreshAll() lifecycle: show non-blocking spinner, fetch data, render, hide spinner.
 	 * - Direct contextmenu listener registration on elRoot at init time.
 	 *
@@ -43,9 +43,6 @@
 		if (!win.MsghubAdminTabPluginsData) {
 			throw new Error('MsghubAdminTabPlugins: missing MsghubAdminTabPluginsData');
 		}
-		if (!win.MsghubAdminTabPluginsIngestStatesData) {
-			throw new Error('MsghubAdminTabPlugins: missing MsghubAdminTabPluginsIngestStatesData');
-		}
 		if (!win.MsghubAdminTabPluginsForm) {
 			throw new Error('MsghubAdminTabPlugins: missing MsghubAdminTabPluginsForm');
 		}
@@ -57,12 +54,6 @@
 		}
 		if (!win.MsghubAdminTabPluginsInstance) {
 			throw new Error('MsghubAdminTabPlugins: missing MsghubAdminTabPluginsInstance');
-		}
-		if (!win.MsghubAdminTabPluginsBulkApply) {
-			throw new Error('MsghubAdminTabPlugins: missing MsghubAdminTabPluginsBulkApply');
-		}
-		if (!win.MsghubAdminTabPluginsPresets) {
-			throw new Error('MsghubAdminTabPlugins: missing MsghubAdminTabPluginsPresets');
 		}
 
 		const {
@@ -79,13 +70,10 @@
 			TIME_UNITS,
 		} = win.MsghubAdminTabPluginsState;
 		const { createPluginsDataApi } = win.MsghubAdminTabPluginsData;
-		const { createIngestStatesDataApi } = win.MsghubAdminTabPluginsIngestStatesData;
 		const { createPluginsFormApi } = win.MsghubAdminTabPluginsForm;
 		const { createPluginsMenusApi } = win.MsghubAdminTabPluginsMenus;
 		const { createPluginsCatalogApi } = win.MsghubAdminTabPluginsCatalog;
 		const { createPluginsInstanceApi } = win.MsghubAdminTabPluginsInstance;
-		const { createPluginsBulkApplyApi } = win.MsghubAdminTabPluginsBulkApply;
-		const { createPluginsPresetsApi } = win.MsghubAdminTabPluginsPresets;
 		const pluginsState = createPluginsState();
 
 		const adapterInstance = Number.isFinite(ctx?.adapterInstance) ? Math.trunc(ctx.adapterInstance) : 0;
@@ -129,15 +117,11 @@
 			return Promise.resolve(window.confirm(text));
 		};
 
-		// Data layer: create plugin and ingest-states data facades.
+		// Data layer: create plugin data facade.
 		const pluginsDataApi = createPluginsDataApi({
 			state: pluginsState,
 			constantsApi: api.constants,
 			pluginsApi: api.plugins,
-		});
-		const ingestStatesDataApi = createIngestStatesDataApi({
-			state: pluginsState,
-			ingestStatesApi: api.ingestStates,
 		});
 		const formApi = createPluginsFormApi({
 			h,
@@ -178,23 +162,6 @@
 			elRoot,
 			adapterNamespace,
 		});
-		const bulkApplyApi = createPluginsBulkApplyApi({
-			h,
-			toast,
-			confirmDialog,
-			ingestStatesDataApi,
-			adapterNamespace,
-		});
-		const presetsApi = createPluginsPresetsApi({
-			h,
-			ui,
-			confirmDialog,
-			formApi,
-			pickText,
-			ingestStatesDataApi,
-			t,
-			getMsgConstants: () => pluginsState.cachedConstants,
-		});
 		// instanceApi.onRefreshAll is also a lazy reference — refreshAll() is defined later.
 		const instanceApi = createPluginsInstanceApi({
 			h,
@@ -205,14 +172,11 @@
 			catalogApi,
 			openContextMenu: (e, scope) => menusApi.openPluginsContextMenu(e, scope),
 			pluginsDataApi,
-			ingestStatesDataApi,
 			ui,
 			toast,
 			confirmDialog,
 			onRefreshAll: () => refreshAll(),
 			adapterInstance,
-			renderBulkApply: args => bulkApplyApi.renderIngestStatesBulkApply(args),
-			renderPresets: args => presetsApi.renderIngestStatesMessagePresetsTool(args),
 		});
 
 		// Register contextmenu listener directly at init time (architectural fix: previously

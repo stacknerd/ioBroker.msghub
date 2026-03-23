@@ -170,9 +170,7 @@ describe('admin/tab/panels/plugins/state.js', function () {
 		const state = createPluginsState();
 
 		assert.equal(state.cachedConstants, null);
-		assert.equal(state.cachedIngestStatesConstants, null);
 		assert.equal(state.pluginReadmesLoadPromise, null);
-		assert.equal(state.ingestStatesSchemaPromise, null);
 		// Use duck-type check: VM-context Map and test-context Map are different realms,
 		// so instanceof would fail even for a genuine Map instance.
 		assert.equal(typeof state.pluginReadmesByType.set, 'function');

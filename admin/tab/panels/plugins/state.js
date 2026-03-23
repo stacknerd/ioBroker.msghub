@@ -264,14 +264,10 @@
 		return {
 			/** Cached MsgConstants from the constants API. */
 			cachedConstants: null,
-			/** Cached IngestStates constants from the ingestStates API. */
-			cachedIngestStatesConstants: null,
 			/** Readme data keyed by plugin type. */
 			pluginReadmesByType: new Map(),
 			/** In-flight or resolved readme load promise. */
 			pluginReadmesLoadPromise: null,
-			/** In-flight or resolved IngestStates schema promise. */
-			ingestStatesSchemaPromise: null,
 		};
 	}
 

@@ -22,15 +22,13 @@ describe('admin/tab/panels/plugins/index.js', function () {
 	function makePluginsState() {
 		return {
 			cachedConstants: null,
-			cachedIngestStatesConstants: null,
 			pluginReadmesLoadPromise: null,
 			pluginReadmesByType: new Map(),
-			ingestStatesSchemaPromise: null,
 		};
 	}
 
 	/**
-	 * Returns stub globals for all nine plugins submodules.
+	 * Returns stub globals for all six plugins submodules.
 	 * Each factory ignores its options and returns a minimal stub API.
 	 *
 	 * @returns {object} Map of window global name → stub module object.
@@ -47,11 +45,6 @@ describe('admin/tab/panels/plugins/index.js', function () {
 			updateInstance: async () => ({}),
 			setEnabled: async () => undefined,
 			deleteInstance: async () => undefined,
-		};
-
-		const ingestStatesDataApiStub = {
-			getConstants: async () => null,
-			getSchema: async () => null,
 		};
 
 		const menusApiStub = {
@@ -87,19 +80,10 @@ describe('admin/tab/panels/plugins/index.js', function () {
 				TIME_UNITS: [],
 			},
 			MsghubAdminTabPluginsData: { createPluginsDataApi: () => pluginsDataApiStub },
-			MsghubAdminTabPluginsIngestStatesData: { createIngestStatesDataApi: () => ingestStatesDataApiStub },
 			MsghubAdminTabPluginsForm: { createPluginsFormApi: () => ({}) },
 			MsghubAdminTabPluginsMenus: { createPluginsMenusApi: () => menusApiStub },
 			MsghubAdminTabPluginsCatalog: { createPluginsCatalogApi: () => catalogApiStub },
 			MsghubAdminTabPluginsInstance: { createPluginsInstanceApi: () => instanceApiStub },
-			MsghubAdminTabPluginsBulkApply: {
-				createPluginsBulkApplyApi: () => ({ renderIngestStatesBulkApply: () => createElement('div') }),
-			},
-			MsghubAdminTabPluginsPresets: {
-				createPluginsPresetsApi: () => ({
-					renderIngestStatesMessagePresetsTool: () => createElement('div'),
-				}),
-			},
 		};
 	}
 
@@ -115,7 +99,6 @@ describe('admin/tab/panels/plugins/index.js', function () {
 				i18n: { t: k => k, tOr: (k, fb) => fb, pickText: v => v },
 				constants: null,
 				plugins: null,
-				ingestStates: null,
 				ui: null,
 			},
 			h: createH(),
@@ -240,7 +223,6 @@ describe('admin/tab/panels/plugins/index.js', function () {
 					i18n: { t: k => k, tOr: (k, fb) => fb, pickText: v => v },
 					constants: null,
 					plugins: null,
-					ingestStates: null,
 					ui,
 				},
 			}),
@@ -296,7 +278,6 @@ describe('admin/tab/panels/plugins/index.js', function () {
 					i18n: { t: k => k, tOr: (k, fb) => fb, pickText: v => v },
 					constants: null,
 					plugins: null,
-					ingestStates: null,
 					ui,
 				},
 			}),
@@ -354,7 +335,6 @@ describe('admin/tab/panels/plugins/index.js', function () {
 					i18n: { t: k => k, tOr: (k, fb) => fb, pickText: v => v },
 					constants: null,
 					plugins: null,
-					ingestStates: null,
 					ui,
 				},
 			}),
@@ -412,7 +392,6 @@ describe('admin/tab/panels/plugins/index.js', function () {
 					i18n: { t: k => k, tOr: (k, fb) => fb, pickText: v => v },
 					constants: null,
 					plugins: null,
-					ingestStates: null,
 					ui,
 				},
 			}),
