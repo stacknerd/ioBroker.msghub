@@ -18,7 +18,7 @@
  * - Nachfolgende Module (`registry.js`, `api.js`, `runtime.js`, ...) nutzen diese Variablen.
  *
  * Schnittstellen:
- */
+ *
  * - Exportiert keine ES-Module, sondern legt Dateiscope-Variablen für die sequenziell
  *   geladenen Scripts an.
  */
