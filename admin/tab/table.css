@@ -78,11 +78,6 @@
 	cursor: default;
 }
 
-.msghub-root .msghub-table tbody.msghub-table-group tr:hover td,
-.msghub-root .msghub-table tbody.msghub-table-group tr:hover th {
-	background: inherit;
-}
-
 .msghub-root .msghub-table tbody.msghub-table-group tr.msghub-table-data-row {
 	cursor: pointer;
 }
