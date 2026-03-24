@@ -182,28 +182,10 @@
 	}
 }
 @media (max-width: 750px) {
-	.msghub-root .msghub-panel.msghub-messages {
-		overflow: hidden;
-	}
-}
-
-/* table min with 750px */
-
-@media (max-width: 750px) {
-	.msghub-root .msghub-panel.msghub-messages {
-		overflow: hidden;
-	}
-
-	.msghub-root .msghub-messages #messages-root {
-		display: flex;
-		flex-direction: column;
-		min-height: 100%;
-	}
-
 	.msghub-root .msghub-messages .msghub-table-wrap {
-		flex: 1 1 auto;
-		min-height: 0;
-		overflow: auto;
+		overflow-x: auto;
+		overflow-y: visible;
+		-webkit-overflow-scrolling: touch;
 	}
 
 	.msghub-root .msghub-messages .msghub-table-tools,
