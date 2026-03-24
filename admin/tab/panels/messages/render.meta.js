@@ -16,9 +16,9 @@
 	 * Messages meta/layout renderer module.
 	 *
 	 * Contains:
-	 * - Actions and paging controls.
+	 * - Action toolbar and separate table tools row.
 	 * - Table shell (colgroup/thead/tbody).
-	 * - Loading/error/meta/empty state rendering.
+	 * - Loading/meta/empty state rendering.
 	 *
 	 * Integration:
 	 * - Provides DOM nodes for header/table renderers.
@@ -59,10 +59,12 @@
 			typeof opts.onPageSizeChanged === 'function' ? opts.onPageSizeChanged : () => undefined;
 
 		const actions = h('div', { class: 'msghub-toolbar__group' });
+		const refreshLabel = t('msghub.i18n.core.admin.ui.action.refresh');
 		const refreshBtn = h('button', {
 			class: 'msghub-uibutton-icon msghub-toolbarbutton-icon msghub-messages-toolbar-refresh',
 			type: 'button',
-			'aria-label': 'Refresh',
+			title: refreshLabel,
+			'aria-label': refreshLabel,
 		});
 		const deleteLabel = t('msghub.i18n.core.admin.ui.messages.toolbar.delete.action');
 		const deleteBtn = h('button', {
@@ -95,25 +97,33 @@
 		actions.appendChild(deleteBtn);
 
 		const sizeOptions = [10, 25, 50, 100, 250];
+		const firstPageLabel = t('msghub.i18n.core.admin.ui.pagination.firstPage');
+		const previousPageLabel = t('msghub.i18n.core.admin.ui.pagination.previousPage');
+		const nextPageLabel = t('msghub.i18n.core.admin.ui.pagination.nextPage');
+		const lastPageLabel = t('msghub.i18n.core.admin.ui.pagination.lastPage');
 		const firstBtn = h('button', {
 			class: 'msghub-uibutton-icon msghub-toolbarbutton-icon msghub-messages-toolbar-first',
 			type: 'button',
-			'aria-label': 'First page',
+			title: firstPageLabel,
+			'aria-label': firstPageLabel,
 		});
 		const prevBtn = h('button', {
 			class: 'msghub-uibutton-icon msghub-toolbarbutton-icon msghub-messages-toolbar-prev',
 			type: 'button',
-			'aria-label': 'Previous page',
+			title: previousPageLabel,
+			'aria-label': previousPageLabel,
 		});
 		const nextBtn = h('button', {
 			class: 'msghub-uibutton-icon msghub-toolbarbutton-icon msghub-messages-toolbar-next',
 			type: 'button',
-			'aria-label': 'Next page',
+			title: nextPageLabel,
+			'aria-label': nextPageLabel,
 		});
 		const lastBtn = h('button', {
 			class: 'msghub-uibutton-icon msghub-toolbarbutton-icon msghub-messages-toolbar-last',
 			type: 'button',
-			'aria-label': 'Last page',
+			title: lastPageLabel,
+			'aria-label': lastPageLabel,
 		});
 		const pageInfoEl = h('div', {
 			class: 'msghub-muted',
@@ -133,24 +143,24 @@
 			sizeOptions.map(n => h('option', { value: String(n), text: String(n) })),
 		);
 
-		const paging = h('div', { class: 'msghub-toolbar__group msghub-messages-paging' }, [
+		const paging = h('div', { class: 'msghub-table-tools__group msghub-messages-paging' }, [
 			firstBtn,
 			prevBtn,
 			pageInfoEl,
 			nextBtn,
 			lastBtn,
 		]);
-		const pageSizeControl = h('div', { class: 'msghub-toolbar__group msghub-messages-pagesize' }, [
+		const pageSizeControl = h('div', { class: 'msghub-table-tools__group msghub-messages-pagesize' }, [
 			h('label', { class: 'msghub-muted', text: pageSizeLabel }),
 			pageSizeSelect,
 		]);
-		const head = h('div', { class: 'msghub-toolbar msghub-toolbar--tripartite msghub-messages-head' }, [
-			h('div', { class: 'msghub-toolbar__left' }, [actions]),
-			h('div', { class: 'msghub-toolbar__center' }, [paging]),
-			h('div', { class: 'msghub-toolbar__right' }, [pageSizeControl]),
-		]);
-		const errorEl = h('div', { class: 'msghub-error is-hidden' });
+		const toolbarEl = h('div', { class: 'msghub-toolbar msghub-messages-toolbar' }, [actions]);
 		const metaEl = h('div', { class: 'msghub-muted msghub-messages-meta' });
+		const tableToolsEl = h('div', { class: 'msghub-table-tools' }, [
+			h('div', { class: 'msghub-table-tools__left' }, [metaEl]),
+			h('div', { class: 'msghub-table-tools__center' }, [paging]),
+			h('div', { class: 'msghub-table-tools__right' }, [pageSizeControl]),
+		]);
 		const emptyEl = h('div', {
 			class: 'msghub-muted is-hidden',
 			text: t('msghub.i18n.core.admin.ui.messages.empty.text'),
@@ -164,6 +174,7 @@
 		tableEl.appendChild(colgroupEl);
 		tableEl.appendChild(theadEl);
 		tableEl.appendChild(tbodyEl);
+		tableWrap.appendChild(tableToolsEl);
 		tableWrap.appendChild(tableEl);
 
 		refreshBtn.addEventListener('click', e => {
@@ -201,7 +212,7 @@
 		 * @param {HTMLElement} root - Messages root element.
 		 */
 		function mount(root) {
-			root.replaceChildren(head, errorEl, metaEl, tableWrap, emptyEl);
+			root.replaceChildren(toolbarEl, tableWrap, emptyEl);
 			updatePaging();
 		}
 
@@ -251,20 +262,10 @@
 		}
 
 		/**
-		 * Renders error message state.
-		 *
-		 * @param {string|null} error - Error message.
-		 */
-		function setError(error) {
-			errorEl.textContent = error ? String(error) : '';
-			errorEl.classList.toggle('is-hidden', !error);
-		}
-
-		/**
 		 * Renders one-line meta text and tooltip details.
 		 *
 		 * @param {object} meta - Meta payload.
-		 * @param {string} meta.generatedAtText - Visible one-line generatedAt text.
+		 * @param {string} meta.generatedAtText - Visible generatedAt text.
 		 * @param {string} meta.timeZone - Raw timezone string.
 		 * @param {string} meta.source - Raw source string.
 		 */
@@ -272,16 +273,18 @@
 			const generatedAtText =
 				typeof meta?.generatedAtText === 'string' && meta.generatedAtText.trim()
 					? meta.generatedAtText.trim()
-					: 'n/a';
-			const timeZone = typeof meta?.timeZone === 'string' && meta.timeZone.trim() ? meta.timeZone.trim() : 'n/a';
-			const source = typeof meta?.source === 'string' && meta.source.trim() ? meta.source.trim() : 'n/a';
+					: '';
+			const timeZone = typeof meta?.timeZone === 'string' && meta.timeZone.trim() ? meta.timeZone.trim() : '';
+			const source = typeof meta?.source === 'string' && meta.source.trim() ? meta.source.trim() : '';
 			const tooltip = [
 				`${t('msghub.i18n.core.admin.ui.messages.meta.timeZone.label')}: ${timeZone}`,
 				`${t('msghub.i18n.core.admin.ui.messages.meta.source.label')}: ${source}`,
 			].join('\n');
 			metaEl.title = tooltip;
 			metaEl.setAttribute('aria-label', tooltip);
-			metaEl.replaceChildren(h('div', { text: generatedAtText }));
+			metaEl.replaceChildren(
+				h('div', { text: generatedAtText }),
+			);
 		}
 
 		/**
@@ -326,11 +329,12 @@
 			updateDeleteButton,
 			updatePaging,
 			updateButtons,
-			setError,
 			setMeta,
 			setEmptyVisible,
 			updateTbody,
 			elements: Object.freeze({
+				toolbarEl,
+				tableToolsEl,
 				refreshBtn,
 				deleteBtn,
 				autoBtn,

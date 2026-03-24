@@ -116,7 +116,7 @@
 				for (const item of items) {
 					const row = document.createElement('div');
 					row.className = 'msghub-messages-archive-item';
-					const ts = item && Object.prototype.hasOwnProperty.call(item, 'ts') ? String(item.ts) : 'n/a';
+					const ts = item && Object.prototype.hasOwnProperty.call(item, 'ts') ? String(item.ts) : '';
 					const event = item && typeof item.event === 'string' ? item.event : 'event';
 					row.textContent = `${ts} · ${event}`;
 					fragment.appendChild(row);

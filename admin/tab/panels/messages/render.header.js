@@ -166,7 +166,7 @@
 			return h(
 				'th',
 				{
-					class: `msghub-th msghub-colCell msghub-colCell--${colKey}`,
+					class: `msghub-th msghub-colCell msghub-colCell--${colKey} msghub-col--${colKey}`,
 					onclick: e => {
 						const target = e?.target;
 						if (target && btn && typeof btn.contains === 'function' && btn.contains(target)) {
@@ -194,7 +194,9 @@
 		 */
 		function makeSelectAllTh() {
 			if (!state.expertMode) {
-				return h('th', { class: 'msghub-th msghub-messages-select msghub-colCell msghub-colCell--select' }, []);
+				return h('th', {
+					class: 'msghub-th msghub-messages-select msghub-colCell msghub-colCell--select msghub-col--select',
+				}, []);
 			}
 			const input = h('input', {
 				type: 'checkbox',
@@ -218,9 +220,13 @@
 				},
 			});
 			state.headerSelectAllInput = input;
-			return h('th', { class: 'msghub-th msghub-messages-select msghub-colCell msghub-colCell--select' }, [
-				input,
-			]);
+			return h(
+				'th',
+				{
+					class: 'msghub-th msghub-messages-select msghub-colCell msghub-colCell--select msghub-col--select',
+				},
+				[input],
+			);
 		}
 
 		/**

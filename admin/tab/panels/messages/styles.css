@@ -115,10 +115,10 @@
 	width: 12ch;
 }
 .msghub-root .msghub-messages .msghub-col--created {
-	width: 18ch;
+	width: 20ch;
 }
 .msghub-root .msghub-messages .msghub-col--updated {
-	width: 18ch;
+	width: 20ch;
 }
 .msghub-root .msghub-messages .msghub-col--origin {
 	width: 14ch;
@@ -130,6 +130,7 @@
 	width: 30%;
 }
 .msghub-root .msghub-messages .msghub-col--text {
+	min-width: 50ch;
 	width: 40%;
 }
 
@@ -148,117 +149,71 @@
 	text-overflow: ellipsis;
 }
 
-.msghub-root .msghub-messages .msghub-thBtn {
-	appearance: none;
-	background: transparent;
-	border: 0;
-	padding: 0;
-	margin: 0;
-	width: 100%;
-	text-align: left;
-	font: var(--msghub-font-body-bold);
-	color: inherit;
-	cursor: pointer;
-	display: inline-flex;
-	align-items: center;
-	gap: var(--msghub-space-1);
+/* reduce table columns based on viewport width */
+
+@media (max-width: 1400px) {
+	.msghub-root .msghub-messages .msghub-col--progress {
+		display: none;
+	}
+}
+@media (max-width: 1300px) {
+	.msghub-root .msghub-messages .msghub-col--origin {
+		display: none;
+	}
+}
+@media (max-width: 1200px) {
+	.msghub-root .msghub-messages .msghub-col--updated {
+		display: none;
+	}
+}
+@media (max-width: 1100px) {
+	.msghub-root .msghub-messages .msghub-col--lifecycle {
+		display: none;
+	}
+}
+@media (max-width: 1000px) {
+	.msghub-root .msghub-messages .msghub-col--level {
+		display: none;
+	}
+}
+@media (max-width: 900px) {
+	.msghub-root .msghub-messages .msghub-col--text {
+		display: none;
+	}
+}
+@media (max-width: 750px) {
+	.msghub-root .msghub-panel.msghub-messages {
+		overflow: hidden;
+	}
 }
 
-.msghub-root .msghub-messages .msghub-th-label {
-	flex: 1 1 auto;
-	min-width: 0;
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
-}
+/* table min with 750px */
 
-.msghub-root .msghub-messages .msghub-thIcon {
-	flex: 0 0 auto;
-	width: 12px;
-	height: 12px;
-	background-color: currentColor;
-	-webkit-mask-repeat: no-repeat;
-	-webkit-mask-position: center;
-	-webkit-mask-size: 12px 12px;
-	mask-repeat: no-repeat;
-	mask-position: center;
-	mask-size: 12px 12px;
-	opacity: 0.85;
-}
+@media (max-width: 750px) {
+	.msghub-root .msghub-panel.msghub-messages {
+		overflow: hidden;
+	}
 
-.msghub-root .msghub-messages .msghub-thIcon--sort {
-	display: none;
-}
+	.msghub-root .msghub-messages #messages-root {
+		display: flex;
+		flex-direction: column;
+		min-height: 100%;
+	}
 
-.msghub-root .msghub-messages .msghub-thIcon--filter {
-	display: none;
-	-webkit-mask-image: var(--msghub-icon-filter);
-	mask-image: var(--msghub-icon-filter);
-	opacity: 0.75;
-}
+	.msghub-root .msghub-messages .msghub-table-wrap {
+		flex: 1 1 auto;
+		min-height: 0;
+		overflow: auto;
+	}
 
-.msghub-root .msghub-messages .msghub-thBtn--filter[data-sort-dir='asc'] .msghub-thIcon--sort {
-	display: inline-flex;
-	-webkit-mask-image: var(--msghub-icon-sort-asc);
-	mask-image: var(--msghub-icon-sort-asc);
-}
+	.msghub-root .msghub-messages .msghub-table-tools,
+	.msghub-root .msghub-messages .msghub-table {
+		min-width: 750px;
+	}
 
-.msghub-root .msghub-messages .msghub-thBtn--filter[data-sort-dir='desc'] .msghub-thIcon--sort {
-	display: inline-flex;
-	-webkit-mask-image: var(--msghub-icon-sort-desc);
-	mask-image: var(--msghub-icon-sort-desc);
-}
-
-.msghub-root .msghub-messages .msghub-thBtn--filter[data-filter-count] .msghub-thIcon--filter {
-	display: inline-flex;
-}
-
-.msghub-root .msghub-messages .msghub-th-sort.is-active,
-.msghub-root .msghub-messages .msghub-th-filter[data-sort-dir],
-.msghub-root .msghub-messages .msghub-th-filter[data-filter-count] {
-	color: var(--msghub-accent);
-}
-
-.msghub-root .msghub-messages .msghub-th-badge {
-	display: none;
-}
-
-.msghub-root .msghub-messages .msghub-th-sort::after,
-.msghub-root .msghub-messages .msghub-th-filter::after {
-	content: '';
-	width: 12px;
-	height: 12px;
-	background-color: currentColor;
-	-webkit-mask-image: var(--msghub-icon-chevron);
-	-webkit-mask-repeat: no-repeat;
-	-webkit-mask-position: center;
-	-webkit-mask-size: 12px 12px;
-	mask-image: var(--msghub-icon-chevron);
-	mask-repeat: no-repeat;
-	mask-position: center;
-	mask-size: 12px 12px;
-	opacity: 0.75;
-}
-
-.msghub-root .msghub-messages .msghub-th-filter[data-sort-dir]::after,
-.msghub-root .msghub-messages .msghub-th-filter[data-filter-count]::after {
-	display: none;
-}
-
-.msghub-root .msghub-messages .msghub-th-sort.is-active::after {
-	display: none;
-}
-
-.msghub-root .msghub-messages .msghub-th-sort.is-active[data-sort-dir='asc'] .msghub-thIcon--sort {
-	display: inline-flex;
-	-webkit-mask-image: var(--msghub-icon-sort-asc);
-	mask-image: var(--msghub-icon-sort-asc);
-}
-
-.msghub-root .msghub-messages .msghub-th-sort.is-active[data-sort-dir='desc'] .msghub-thIcon--sort {
-	display: inline-flex;
-	-webkit-mask-image: var(--msghub-icon-sort-desc);
-	mask-image: var(--msghub-icon-sort-desc);
+	.msghub-root .msghub-messages .msghub-table {
+		width: max(100%, 750px);
+	}
 }
 
 /* Checkbox-header override: disable pointer cursor and hover overlay */

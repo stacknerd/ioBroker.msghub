@@ -17,6 +17,7 @@
 	padding: var(--msghub-space-2);
 	border: 1px solid var(--msghub-border);
 	border-radius: var(--msghub-radius);
+	background: var(--msghub-bg-tabs);
 	margin-bottom: var(--msghub-space-3);
 }
 
@@ -145,7 +146,6 @@ html[data-msghub-layout='tabs'] .msghub-root .msghub-connpanel-host {
 	min-height: 0;
 	overflow: auto;
 	overflow-x: hidden;
-	scrollbar-gutter: stable;
 }
 
 /* ========================================================================== */

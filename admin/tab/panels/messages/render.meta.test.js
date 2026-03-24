@@ -89,8 +89,10 @@ describe('admin/tab/panels/messages/render.meta.js', function () {
 		const root = createElement('div');
 
 		renderer.mount(root);
-		assert.equal(root.children.length, 5);
+		assert.equal(root.children.length, 3);
 		assert.equal(root.children[0].classList.contains('msghub-toolbar'), true);
+		assert.equal(root.children[1].classList.contains('msghub-table-wrap'), true);
+		assert.equal(root.children[1].children[0].classList.contains('msghub-table-tools'), true);
 			assert.equal(renderer.elements.refreshBtn.classList.contains('msghub-uibutton-icon'), true);
 			assert.equal(renderer.elements.refreshBtn.classList.contains('msghub-toolbarbutton-icon'), true);
 			assert.equal(renderer.elements.firstBtn.classList.contains('msghub-uibutton-icon'), true);
@@ -156,27 +158,28 @@ describe('admin/tab/panels/messages/render.meta.js', function () {
 		assert.equal(renderer.elements.pageSizeSelect.value, '50');
 	});
 
-	it('renders error/meta/empty and tbody loading row', async function () {
+	it('renders meta/empty and tbody loading row', async function () {
 		const sandbox = await loadPanelModule('admin/tab/panels/messages/render.meta.js');
 		const moduleApi = sandbox.window.MsghubAdminTabMessagesRenderMeta;
 		const fixture = createFixture();
 		const renderer = moduleApi.createMetaRenderer(fixture.options);
 
-		renderer.setError('boom');
 		const mountedRoot = createElement('div');
 		renderer.mount(mountedRoot);
 		renderer.setMeta({
-			generatedAtText: 'generatedAt: x',
+			generatedAtText: 'generatedAt: x, 12:34:56',
 			timeZone: 'Europe/Berlin',
 			source: 'server',
 		});
 		renderer.setEmptyVisible(true);
 		renderer.updateTbody([], { showLoadingRow: true });
 		assert.equal(renderer.elements.tbodyEl.children.length, 1);
-		assert.equal(mountedRoot.children[2].children.length, 1);
-		assert.equal(mountedRoot.children[2].children[0].textContent, 'generatedAt: x');
 		assert.equal(
-			mountedRoot.children[2].title,
+			mountedRoot.children[1].children[0].children[0].children[0].children[0].textContent,
+			'generatedAt: x, 12:34:56',
+		);
+		assert.equal(
+			mountedRoot.children[1].children[0].children[0].children[0].title,
 			'msghub.i18n.core.admin.ui.messages.meta.timeZone.label:: Europe/Berlin\n' +
 				'msghub.i18n.core.admin.ui.messages.meta.source.label:: server',
 		);

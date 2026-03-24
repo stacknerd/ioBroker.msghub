@@ -171,8 +171,8 @@
 			try {
 				await api.messages.executeAction({ ref, actionId });
 				ui?.overlayLarge?.close?.();
-				await loadMessages({ silent: false });
-				if (!state.lastError) {
+				const refreshOk = await loadMessages({ silent: false });
+				if (refreshOk) {
 					toast(
 						t('msghub.i18n.core.admin.ui.messages.action.executed.text', safeStr(actionType), safeStr(ref)),
 						'ok',
@@ -431,10 +431,8 @@
 			headerApi.updateHeaderButtons();
 			metaApi.updatePaging();
 
-			metaApi.setError(state.lastError ? String(state.lastError) : null);
-
 			const meta = isObject(state.lastMeta) ? state.lastMeta : {};
-			const generatedAt = formatTs(meta.generatedAt) || 'n/a';
+			const generatedAt = formatTs(meta.generatedAt) || '';
 			const tz = typeof meta.tz === 'string' && meta.tz.trim() ? meta.tz.trim() : null;
 			const policy = api?.time?.getPolicy?.() || {};
 			const policyTimeZone = String(policy.timeZone || '').trim();
@@ -442,11 +440,11 @@
 			state.serverTz = policyTimeZone || tz;
 			metaApi.setMeta({
 				generatedAtText: `${t('msghub.i18n.core.admin.ui.messages.meta.generatedAt.label')}: ${generatedAt}`,
-				timeZone: policyTimeZone || state.serverTz || 'n/a',
-				source: policySource || 'n/a',
+				timeZone: policyTimeZone || state.serverTz || '',
+				source: policySource || '',
 			});
 
-			const showEmpty = !state.loading && !state.lastError && state.items.length === 0;
+			const showEmpty = !state.loading && state.items.length === 0;
 			metaApi.setEmptyVisible(showEmpty);
 
 			if (!state.hasLoadedOnce && state.loading) {
@@ -485,7 +483,6 @@
 				: (ui?.spinner?.show({ message: t('msghub.i18n.core.admin.panels.messages.loading.text') }) ?? null);
 			state.loading = true;
 			state.silentLoading = silent;
-			state.lastError = null;
 			render({ forceRows: !state.hasLoadedOnce });
 
 			try {
@@ -504,14 +501,13 @@
 						? Math.max(1, Math.trunc(res.pages))
 						: 1;
 				state.pageIndex = Math.min(Math.max(1, state.pageIndex), state.pages);
+				return true;
 			} catch (e) {
 				if (reqId !== state.requestSeq) {
-					return;
+					return false;
 				}
-				state.lastError = String(e?.message || e);
-				if (!state.silentLoading) {
-					toast(state.lastError, 'danger');
-				}
+				toast(String(e?.message || e), 'danger');
+				return false;
 			} finally {
 				if (spinnerId != null) {
 					ui?.spinner?.hide(spinnerId);
@@ -553,8 +549,8 @@
 				await dataApi.deleteMessages(refs);
 				state.selectedRefs.clear();
 				metaApi.updateDeleteButton();
-				await loadMessages({ silent: false });
-				if (!state.lastError) {
+				const refreshOk = await loadMessages({ silent: false });
+				if (refreshOk) {
 					toast(
 						refs.length === 1
 							? t('msghub.i18n.core.admin.ui.messages.delete.deleted.text', safeStr(refs[0]))

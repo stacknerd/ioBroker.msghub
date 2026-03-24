@@ -18,7 +18,6 @@ describe('admin/tab/panels/messages/index.js', function () {
 			autoTimer: null,
 			requestSeq: 0,
 			hasLoadedOnce: false,
-			lastError: null,
 			constants: null,
 			items: [],
 			total: 0,
@@ -118,7 +117,6 @@ describe('admin/tab/panels/messages/index.js', function () {
 				updateDeleteButton() {},
 				updateButtons() {},
 				updatePaging() {},
-				setError() {},
 				setMeta() {},
 				setEmptyVisible() {},
 				updateTbody() {},
@@ -272,7 +270,6 @@ describe('admin/tab/panels/messages/index.js', function () {
 						updateDeleteButton() {},
 						updateButtons() {},
 						updatePaging() {},
-						setError() {},
 						setMeta() {},
 						setEmptyVisible() {},
 						updateTbody() {},
@@ -451,7 +448,6 @@ describe('admin/tab/panels/messages/index.js', function () {
 					calls.updatePaging += 1;
 				},
 				setProgressVisible() {},
-				setError() {},
 				setMeta() {},
 				setEmptyVisible() {},
 				updateTbody() {
@@ -511,6 +507,203 @@ describe('admin/tab/panels/messages/index.js', function () {
 		assert.equal(calls.queryMessagesPage, 1);
 		assert.equal(calls.scheduleAuto, 1);
 		assert.ok(calls.updateTbody >= 1);
+	});
+
+	it('shows danger toast when initial messages load fails', async function () {
+		const sandbox = await loadIndexModule();
+		const root = createElement('div');
+		root.closest = () => ({ classList: { toggle() {} } });
+		const toasts = [];
+
+		sandbox.window.MsghubAdminTabMessagesState = {
+			createMessagesState: () => createState(),
+			detectExpertMode: () => false,
+			isObject: value => !!value && typeof value === 'object' && !Array.isArray(value),
+			safeStr: value => (value == null ? '' : String(value)),
+			pick: (obj, path) => path.split('.').reduce((cur, key) => (cur ? cur[key] : undefined), obj),
+			formatTs: value => `ts:${value}`,
+		};
+		sandbox.window.MsghubAdminTabMessagesDataMessages = {
+			createMessagesDataApi: () => ({
+				loadConstants: async () => undefined,
+				queryMessagesPage: async () => {
+					throw new Error('query_failed');
+				},
+				deleteMessages: async () => undefined,
+				getLevelLabel: value => String(value),
+				getFilterSet: () => new Set(),
+			}),
+		};
+		sandbox.window.MsghubAdminTabMessagesDataArchive = {
+			createArchiveDataApi: () => ({ normalizeCursorEdge: value => value }),
+		};
+		sandbox.window.MsghubAdminTabMessagesOverlayJson = {
+			createJsonOverlay: () => ({ openMessageJson() {} }),
+		};
+		sandbox.window.MsghubAdminTabMessagesOverlayArchive = {
+			createArchiveOverlay: () => ({ openArchiveOverlay() {}, renderArchiveView() {} }),
+		};
+		sandbox.window.MsghubAdminTabMessagesMenus = {
+			createMessagesMenus: () => ({ openRowContextMenu() {} }),
+		};
+		sandbox.window.MsghubAdminTabMessagesRenderMeta = {
+			createMetaRenderer: () => ({
+				mount() {},
+				updateDeleteButton() {},
+				updateButtons() {},
+				updatePaging() {},
+				setMeta() {},
+				setEmptyVisible() {},
+				updateTbody() {},
+				elements: {
+					tbodyEl: createElement('tbody'),
+					theadEl: createElement('thead'),
+					colgroupEl: createElement('colgroup'),
+					tableEl: createElement('table'),
+				},
+			}),
+		};
+		sandbox.window.MsghubAdminTabMessagesRenderHeader = {
+			createHeaderRenderer: () => ({ renderThead() {}, updateHeaderButtons() {} }),
+		};
+		sandbox.window.MsghubAdminTabMessagesRenderTable = {
+			createTableRenderer: () => ({ renderRows: () => [] }),
+		};
+		sandbox.window.MsghubAdminTabMessagesLifecycle = {
+			createLifecycle: () => ({
+				scheduleAuto() {},
+				stopAuto() {},
+				bindEvents() {},
+				unbindEvents() {},
+				canAutoRefresh: () => true,
+			}),
+		};
+
+		const panel = sandbox.window.MsghubAdminTabMessages.init({
+			api: {
+				i18n: { t: key => key },
+				ui: {
+					toast: toastOpts => toasts.push(toastOpts),
+					dialog: { confirm: async () => true },
+					spinner: { show: () => 'sid', hide: () => undefined },
+				},
+				time: {
+					formatTs: () => '',
+					formatDate: () => '',
+					getPolicy: () => ({ timeZone: 'UTC', source: 'server' }),
+				},
+			},
+			ui: {},
+			h: createH(),
+			elements: { messagesRoot: root },
+		});
+
+		await panel.onConnect();
+
+		assert.equal(toasts.length, 1);
+		assert.equal(toasts[0].variant, 'danger');
+		assert.equal(toasts[0].text, 'query_failed');
+	});
+
+	it('shows danger toast when silent follow refresh fails', async function () {
+		const sandbox = await loadIndexModule();
+		const root = createElement('div');
+		root.closest = () => ({ classList: { toggle() {} } });
+		const toasts = [];
+		let onRefreshFollow = null;
+
+		sandbox.window.MsghubAdminTabMessagesState = {
+			createMessagesState: () => createState(),
+			detectExpertMode: () => false,
+			isObject: value => !!value && typeof value === 'object' && !Array.isArray(value),
+			safeStr: value => (value == null ? '' : String(value)),
+			pick: (obj, path) => path.split('.').reduce((cur, key) => (cur ? cur[key] : undefined), obj),
+			formatTs: value => `ts:${value}`,
+		};
+		sandbox.window.MsghubAdminTabMessagesDataMessages = {
+			createMessagesDataApi: () => ({
+				loadConstants: async () => undefined,
+				queryMessagesPage: async () => {
+					throw new Error('silent_refresh_failed');
+				},
+				deleteMessages: async () => undefined,
+				getLevelLabel: value => String(value),
+				getFilterSet: () => new Set(),
+			}),
+		};
+		sandbox.window.MsghubAdminTabMessagesDataArchive = {
+			createArchiveDataApi: () => ({ normalizeCursorEdge: value => value }),
+		};
+		sandbox.window.MsghubAdminTabMessagesOverlayJson = {
+			createJsonOverlay: () => ({ openMessageJson() {} }),
+		};
+		sandbox.window.MsghubAdminTabMessagesOverlayArchive = {
+			createArchiveOverlay: () => ({ openArchiveOverlay() {}, renderArchiveView() {} }),
+		};
+		sandbox.window.MsghubAdminTabMessagesMenus = {
+			createMessagesMenus: () => ({ openRowContextMenu() {} }),
+		};
+		sandbox.window.MsghubAdminTabMessagesRenderMeta = {
+			createMetaRenderer: () => ({
+				mount() {},
+				updateDeleteButton() {},
+				updateButtons() {},
+				updatePaging() {},
+				setMeta() {},
+				setEmptyVisible() {},
+				updateTbody() {},
+				elements: {
+					tbodyEl: createElement('tbody'),
+					theadEl: createElement('thead'),
+					colgroupEl: createElement('colgroup'),
+					tableEl: createElement('table'),
+				},
+			}),
+		};
+		sandbox.window.MsghubAdminTabMessagesRenderHeader = {
+			createHeaderRenderer: () => ({ renderThead() {}, updateHeaderButtons() {} }),
+		};
+		sandbox.window.MsghubAdminTabMessagesRenderTable = {
+			createTableRenderer: () => ({ renderRows: () => [] }),
+		};
+		sandbox.window.MsghubAdminTabMessagesLifecycle = {
+			createLifecycle: optsArg => {
+				onRefreshFollow = optsArg.onRefreshFollow;
+				return {
+					scheduleAuto() {},
+					stopAuto() {},
+					bindEvents() {},
+					unbindEvents() {},
+					canAutoRefresh: () => true,
+				};
+			},
+		};
+
+		sandbox.window.MsghubAdminTabMessages.init({
+			api: {
+				i18n: { t: key => key },
+				ui: {
+					toast: toastOpts => toasts.push(toastOpts),
+					dialog: { confirm: async () => true },
+					spinner: { show: () => 'sid', hide: () => undefined },
+				},
+				time: {
+					formatTs: () => '',
+					formatDate: () => '',
+					getPolicy: () => ({ timeZone: 'UTC', source: 'server' }),
+				},
+			},
+			ui: {},
+			h: createH(),
+			elements: { messagesRoot: root },
+		});
+
+		assert.equal(typeof onRefreshFollow, 'function');
+		await onRefreshFollow();
+
+		assert.equal(toasts.length, 1);
+		assert.equal(toasts[0].variant, 'danger');
+		assert.equal(toasts[0].text, 'silent_refresh_failed');
 	});
 
 		it('onActionExecute: confirm accepted fires executeAction, closes overlay, refreshes list, and shows success toast', async function () {
@@ -639,7 +832,6 @@ describe('admin/tab/panels/messages/index.js', function () {
 				updateDeleteButton() {},
 				updateButtons() {},
 				updatePaging() {},
-				setError() {},
 				setMeta() {},
 				setEmptyVisible() {},
 				updateTbody() {},

@@ -148,7 +148,6 @@
 			autoTimer: null,
 			requestSeq: 0,
 			hasLoadedOnce: false,
-			lastError: null,
 			constants: null,
 			items: [],
 			total: 0,

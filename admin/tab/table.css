@@ -2,6 +2,57 @@
 /* Layout: Tables / Shared table base styles (panel-neutral)                  */
 /* ========================================================================== */
 
+/* table tools*/
+
+.msghub-root .msghub-table-tools {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+	align-items: center;
+	gap: var(--msghub-space-2);
+	margin-top: var(--msghub-space-4);
+	padding: var(--msghub-space-2);
+	border-bottom: 1px solid var(--msghub-border);
+	background: var(--msghub-bg-table);
+	font: var(--msghub-font-badge);
+	color: var(--msghub-muted);
+}
+
+.msghub-root .msghub-table-tools .msghub-uiselect {
+	font: var(--msghub-font-badge);
+	color: var(--msghub-muted);
+}
+
+.msghub-root .msghub-table-tools__group {
+	display: inline-flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: var(--msghub-space-2);
+	min-width: 0;
+}
+
+.msghub-root .msghub-table-tools__left,
+.msghub-root .msghub-table-tools__center,
+.msghub-root .msghub-table-tools__right {
+	display: inline-flex;
+	align-items: center;
+	min-width: 0;
+	gap: var(--msghub-space-2);
+}
+
+.msghub-root .msghub-table-tools__left {
+	justify-self: start;
+}
+
+.msghub-root .msghub-table-tools__center {
+	justify-self: center;
+}
+
+.msghub-root .msghub-table-tools__right {
+	justify-self: end;
+}
+
+/* table head+body */
+
 .msghub-root .msghub-table {
 	width: 100%;
 	border-collapse: separate;
@@ -131,4 +182,118 @@
 .msghub-root .msghub-th > * {
 	position: relative;
 	z-index: 1;
+}
+/* header buttons */
+
+.msghub-root .msghub-messages .msghub-thBtn {
+	appearance: none;
+	background: transparent;
+	border: 0;
+	padding: 0;
+	margin: 0;
+	width: 100%;
+	text-align: left;
+	font: var(--msghub-font-body-bold);
+	color: inherit;
+	cursor: pointer;
+	display: inline-flex;
+	align-items: center;
+	gap: var(--msghub-space-1);
+}
+
+.msghub-root .msghub-messages .msghub-th-label {
+	flex: 1 1 auto;
+	min-width: 0;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.msghub-root .msghub-messages .msghub-thIcon {
+	flex: 0 0 auto;
+	width: 12px;
+	height: 12px;
+	background-color: currentColor;
+	-webkit-mask-repeat: no-repeat;
+	-webkit-mask-position: center;
+	-webkit-mask-size: 12px 12px;
+	mask-repeat: no-repeat;
+	mask-position: center;
+	mask-size: 12px 12px;
+	opacity: 0.85;
+}
+
+.msghub-root .msghub-messages .msghub-thIcon--sort {
+	display: none;
+}
+
+.msghub-root .msghub-messages .msghub-thIcon--filter {
+	display: none;
+	-webkit-mask-image: var(--msghub-icon-filter);
+	mask-image: var(--msghub-icon-filter);
+	opacity: 0.75;
+}
+
+.msghub-root .msghub-messages .msghub-thBtn--filter[data-sort-dir='asc'] .msghub-thIcon--sort {
+	display: inline-flex;
+	-webkit-mask-image: var(--msghub-icon-sort-asc);
+	mask-image: var(--msghub-icon-sort-asc);
+}
+
+.msghub-root .msghub-messages .msghub-thBtn--filter[data-sort-dir='desc'] .msghub-thIcon--sort {
+	display: inline-flex;
+	-webkit-mask-image: var(--msghub-icon-sort-desc);
+	mask-image: var(--msghub-icon-sort-desc);
+}
+
+.msghub-root .msghub-messages .msghub-thBtn--filter[data-filter-count] .msghub-thIcon--filter {
+	display: inline-flex;
+}
+
+.msghub-root .msghub-messages .msghub-th-sort.is-active,
+.msghub-root .msghub-messages .msghub-th-filter[data-sort-dir],
+.msghub-root .msghub-messages .msghub-th-filter[data-filter-count] {
+	color: var(--msghub-accent);
+}
+
+.msghub-root .msghub-messages .msghub-th-badge {
+	display: none;
+}
+
+.msghub-root .msghub-messages .msghub-th-sort::after,
+.msghub-root .msghub-messages .msghub-th-filter::after {
+	content: '';
+	width: 12px;
+	height: 12px;
+	background-color: currentColor;
+	-webkit-mask-image: var(--msghub-icon-chevron);
+	-webkit-mask-repeat: no-repeat;
+	-webkit-mask-position: center;
+	-webkit-mask-size: 12px 12px;
+	mask-image: var(--msghub-icon-chevron);
+	mask-repeat: no-repeat;
+	mask-position: center;
+	mask-size: 12px 12px;
+	opacity: 0.75;
+}
+
+.msghub-root .msghub-messages .msghub-th-filter[data-sort-dir]::after,
+.msghub-root .msghub-messages .msghub-th-filter[data-filter-count]::after {
+	display: none;
+}
+
+.msghub-root .msghub-messages .msghub-th-sort.is-active::after {
+	display: none;
+}
+
+.msghub-root .msghub-messages .msghub-th-sort.is-active[data-sort-dir='asc'] .msghub-thIcon--sort {
+	display: inline-flex;
+	-webkit-mask-image: var(--msghub-icon-sort-asc);
+	mask-image: var(--msghub-icon-sort-asc);
+}
+
+.msghub-root .msghub-messages .msghub-th-sort.is-active[data-sort-dir='desc'] .msghub-thIcon--sort {
+	display: inline-flex;
+	-webkit-mask-image: var(--msghub-icon-sort-desc);
+	mask-image: var(--msghub-icon-sort-desc);
 }

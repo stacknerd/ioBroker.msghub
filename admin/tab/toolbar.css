@@ -14,9 +14,9 @@
 	align-items: center;
 	justify-content: space-between;
 	gap: var(--msghub-space-2);
-	padding: var(--msghub-space-2) 0;
-	border-bottom: 1px solid var(--msghub-border-light);
-	background: transparent;
+	padding: var(--msghub-space-2);
+	border: 1px solid var(--msghub-border-light);
+	background: var(--msghub-bg-toolbar);
 }
 
 .msghub-root .msghub-toolbar--tripartite {

@@ -132,7 +132,7 @@
 				const isSelected = !!ref && state.selectedRefs.has(ref);
 
 				const checkboxCell = state.expertMode
-					? h('td', { class: 'msghub-messages-select msghub-colCell msghub-colCell--select' }, [
+					? h('td', { class: 'msghub-messages-select msghub-colCell msghub-colCell--select msghub-col--select' }, [
 							h('label', { class: 'msghub-uicheckbox' }, [
 								h('input', {
 									class: 'msghub-uicheckbox__input',
@@ -202,43 +202,43 @@
 					},
 					[
 						...(checkboxCell ? [checkboxCell] : []),
-						h('td', { class: 'msghub-colCell msghub-colCell--icon', text: icon }),
-						h('td', { class: 'msghub-colCell msghub-colCell--title', text: title, title }),
-						h('td', { class: 'msghub-colCell msghub-colCell--text', text: text, title: text }),
-						h('td', { class: 'msghub-colCell msghub-colCell--location', text: location }),
+						h('td', { class: 'msghub-colCell msghub-colCell--icon msghub-col--icon', text: icon }),
+						h('td', { class: 'msghub-colCell msghub-colCell--title msghub-col--title', text: title, title }),
+						h('td', { class: 'msghub-colCell msghub-colCell--text msghub-col--text', text: text, title: text }),
+						h('td', { class: 'msghub-colCell msghub-colCell--location msghub-col--location', text: location }),
 						h('td', {
-							class: 'msghub-colCell msghub-colCell--kind',
+							class: 'msghub-colCell msghub-colCell--kind msghub-col--kind',
 							text: api.i18n.tOr(
 								`msghub.i18n.core.admin.common.MsgConstants.kind.${kind.toLowerCase()}.label`,
 								kind,
 							),
 						}),
 						h('td', {
-							class: 'msghub-colCell msghub-colCell--level',
+							class: 'msghub-colCell msghub-colCell--level msghub-col--level',
 							text: api.i18n.tOr(
 								`msghub.i18n.core.admin.common.MsgConstants.level.${getLevelLabel(level).toLowerCase()}.label`,
 								getLevelLabel(level),
 							),
 						}),
 						h('td', {
-							class: 'msghub-colCell msghub-colCell--lifecycle',
+							class: 'msghub-colCell msghub-colCell--lifecycle msghub-col--lifecycle',
 							text: api.i18n.tOr(
 								`msghub.i18n.core.admin.common.MsgConstants.lifecycle.state.${lifecycle.toLowerCase()}.label`,
 								lifecycle,
 							),
 						}),
 						h('td', {
-							class: 'msghub-muted msghub-colCell msghub-colCell--created',
+							class: 'msghub-muted msghub-colCell msghub-colCell--created msghub-col--created',
 							text: formatTs(typeof createdAt === 'number' ? createdAt : NaN),
 						}),
 						h('td', {
-							class: 'msghub-muted msghub-colCell msghub-colCell--updated',
+							class: 'msghub-muted msghub-colCell msghub-colCell--updated msghub-col--updated',
 							text: formatTs(typeof updatedAt === 'number' ? updatedAt : NaN),
 						}),
-						h('td', { class: 'msghub-colCell msghub-colCell--origin', text: origin }),
+						h('td', { class: 'msghub-colCell msghub-colCell--origin msghub-col--origin', text: origin }),
 						h(
 							'td',
-							{ class: 'msghub-colCell msghub-colCell--progress' },
+							{ class: 'msghub-colCell msghub-colCell--progress msghub-col--progress' },
 							progressValue === null
 								? []
 								: [
