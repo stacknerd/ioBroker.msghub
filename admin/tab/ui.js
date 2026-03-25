@@ -1,4 +1,4 @@
-/* global window, document, Node, HTMLElement, HTMLButtonElement, computeContextMenuPosition, toContextMenuIconVar */
+/* global window, document, Node, HTMLElement, HTMLButtonElement, MouseEvent, computeContextMenuPosition, toContextMenuIconVar */
 'use strict';
 
 /**
@@ -772,6 +772,167 @@ function createUi() {
 		}
 	};
 	document.addEventListener('visibilitychange', onContextMenuVisibility);
+
+	/**
+	 * Longpress polyfill: synthesises a `contextmenu` event from a sustained
+	 * single-finger touch so that panels with `oncontextmenu` handlers work
+	 * reliably on touch devices (some Android/Chrome builds do not fire the
+	 * native `contextmenu` event after a long-press).
+	 *
+	 * Does NOT call `preventDefault()` on `touchstart` so scroll is never blocked.
+	 * Text-selection suppression is handled by CSS (`user-select: none` on
+	 * `.msghub-root *` in base.css).
+	 *
+	 * Eligible targets: any element inside `.msghub-root` that is not a text-entry
+	 * element (`input`, `textarea`, `select`, `[contenteditable]` with any value).
+	 * `button` and `a` are intentionally included: header sort/filter buttons
+	 * register `oncontextmenu` directly on the `<button>` element.
+	 * Panels that use `addEventListener('contextmenu', ...)` on a container are
+	 * also covered because the synthetic event bubbles normally.  The boot.js
+	 * fallback guards against opening an empty menu when no handler is present.
+	 *
+	 * A capture-phase `contextmenu` listener additionally cancels any pending timer
+	 * when the browser fires a native event (deduplication), and suppresses the
+	 * native follow-up that some platforms emit right after our synthetic dispatch.
+	 */
+	const LONGPRESS_DELAY_MS = 500;
+	const LONGPRESS_JITTER_PX = 8;
+
+	let longpressTimer = null;
+	let longpressOrigin = null;
+	let longpressTarget = null;
+	// Timestamp of the most recent synthetic contextmenu dispatch; used by the
+	// capture listener below to suppress the native browser follow-up event that
+	// some platforms fire after the polyfill has already acted.
+	let longpressDispatchedAt = 0;
+
+	/**
+	 * Clears any pending longpress timer and resets associated state.
+	 */
+	const cancelLongpress = () => {
+		if (longpressTimer !== null) {
+			window.clearTimeout(longpressTimer);
+			longpressTimer = null;
+		}
+		longpressOrigin = null;
+		longpressTarget = null;
+	};
+
+	/**
+	 * Handles `touchstart`: starts the longpress timer for eligible single-touch targets.
+	 *
+	 * @param {TouchEvent} ev - Touch event.
+	 */
+	const onLongpressTouchStart = ev => {
+		cancelLongpress();
+		if (!ev || ev.touches.length !== 1) {
+			return;
+		}
+		const touch = ev.touches[0];
+		const target = touch && touch.target instanceof HTMLElement ? touch.target : null;
+		if (!target) {
+			return;
+		}
+		// Only fire within the MsgHub root.
+		if (!target.closest('.msghub-root')) {
+			return;
+		}
+		// Skip text-entry elements where native touch handling must apply.
+		// [contenteditable] matches any value (true, "", "plaintext-only", etc.).
+		if (target.closest('input, textarea, select, [contenteditable]')) {
+			return;
+		}
+		const cx = Number(touch.clientX) || 0;
+		const cy = Number(touch.clientY) || 0;
+		longpressOrigin = { x: cx, y: cy };
+		longpressTarget = target;
+		longpressTimer = window.setTimeout(() => {
+			const t = longpressTarget;
+			const x = longpressOrigin?.x ?? 0;
+			const y = longpressOrigin?.y ?? 0;
+			cancelLongpress();
+			if (!t || typeof t.dispatchEvent !== 'function') {
+				return;
+			}
+			try {
+				// Record dispatch time before firing so the capture listener below can
+				// suppress any native follow-up contextmenu that the browser fires
+				// immediately after the longpress (isTrusted, arrives within ~500ms).
+				longpressDispatchedAt = Date.now();
+				t.dispatchEvent(
+					new MouseEvent('contextmenu', {
+						bubbles: true,
+						cancelable: true,
+						clientX: x,
+						clientY: y,
+						view: window,
+					}),
+				);
+			} catch {
+				// ignore
+			}
+		}, LONGPRESS_DELAY_MS);
+	};
+
+	/**
+	 * Handles `touchmove`: cancels the longpress timer when the touch moves beyond
+	 * jitter tolerance or becomes multi-touch (indicating a scroll or pinch gesture).
+	 *
+	 * @param {TouchEvent} ev - Touch event.
+	 */
+	const onLongpressTouchMove = ev => {
+		if (longpressTimer === null) {
+			return;
+		}
+		if (!ev || ev.touches.length > 1) {
+			cancelLongpress();
+			return;
+		}
+		const touch = ev.touches[0];
+		if (!touch || !longpressOrigin) {
+			cancelLongpress();
+			return;
+		}
+		const dx = (Number(touch.clientX) || 0) - longpressOrigin.x;
+		const dy = (Number(touch.clientY) || 0) - longpressOrigin.y;
+		if (Math.sqrt(dx * dx + dy * dy) > LONGPRESS_JITTER_PX) {
+			cancelLongpress();
+		}
+	};
+
+	document.addEventListener('touchstart', onLongpressTouchStart, { capture: true, passive: true });
+	document.addEventListener('touchmove', onLongpressTouchMove, { capture: true, passive: true });
+	document.addEventListener('touchend', cancelLongpress, { capture: true, passive: true });
+	document.addEventListener('touchcancel', cancelLongpress, { capture: true, passive: true });
+
+	/**
+	 * Capture-phase `contextmenu` listener used by the longpress polyfill for two
+	 * purposes:
+	 *
+	 * 1. **Cancel-on-native**: if the browser fires a native (isTrusted) contextmenu
+	 *    event while the polyfill timer is still pending (browser handled the gesture
+	 *    natively), cancel the timer so no synthetic duplicate is dispatched.
+	 *
+	 * 2. **Suppress native follow-up**: some platforms fire a native contextmenu event
+	 *    immediately after the polyfill's synthetic one.  If such an event arrives
+	 *    within 500ms of our last synthetic dispatch, suppress it so only one flow
+	 *    runs per gesture.
+	 *
+	 * @param {MouseEvent} ev - Contextmenu event (native or synthetic).
+	 */
+	const onContextMenuCapture = ev => {
+		// Cancel the polyfill timer: native contextmenu means the browser handled
+		// the gesture; no synthetic event should follow.
+		cancelLongpress();
+		// Suppress the native follow-up that some browsers emit immediately after a
+		// longpress-triggered synthetic dispatch (isTrusted marks browser-generated
+		// events; our synthetic events have isTrusted === false).
+		if (ev.isTrusted && Date.now() - longpressDispatchedAt < 500) {
+			ev.preventDefault();
+			ev.stopPropagation();
+		}
+	};
+	document.addEventListener('contextmenu', onContextMenuCapture, { capture: true });
 
 	/**
 	 * Öffnet das Root-Kontextmenü mit neuem Zustand und positioniert es.

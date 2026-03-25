@@ -86,6 +86,7 @@
 	font: var(--msghub-font-mono);
 	height: auto;
 	line-height: inherit;
+	text-align: left;
 }
 .msghub-root .msghub-messages-json .msghub-json-action-btn {
 	--msghub-uibutton-icon: var(--msghub-icon-action);

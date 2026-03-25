@@ -34,6 +34,18 @@ body {
 	overflow: hidden;
 	padding: var(--msghub-space-3);
 	font: var(--msghub-font-body);
+	/* Touch: suppress iOS callout popup on long-press; disable double-tap zoom
+	   without blocking scroll (manipulation keeps pan/scroll). */
+	-webkit-touch-callout: none;
+	touch-action: manipulation;
+}
+
+/* Touch: suppress text selection during long-press on all interactive chrome.
+   Inputs, textareas, selects, and any contenteditable element (any attribute
+   value: true, "", plaintext-only, …) are excluded so native text-entry
+   gestures remain fully functional. */
+.msghub-root *:not(input):not(textarea):not(select):not([contenteditable]) {
+	user-select: none;
 }
 
 .msghub-root a {

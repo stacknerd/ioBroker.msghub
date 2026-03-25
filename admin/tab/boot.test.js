@@ -899,3 +899,55 @@ globalThis.__applyRuntimeAboutPayload = applyRuntimeAboutPayload;
 		assert.equal(overrideCalls.length, 0);
 	});
 });
+
+describe('admin/tab/boot.js — contextmenu handler contract', function () {
+	it('skips ctx.api.ui.contextMenu.open() when event defaultPrevented is true (synthetic longpress event guard)', async function () {
+		// Regression guard: the global contextmenu listener in boot.js checks
+		// e.defaultPrevented before calling ctx.api.ui.contextMenu.open().
+		// This ensures that synthetic contextmenu events fired by the longpress
+		// polyfill (ui.js) are handled exclusively by panel-local handlers (which
+		// call preventDefault()) and are never double-handled by the boot.js fallback.
+		const source = await readRepoFile('admin/tab/boot.js');
+
+		const handlerStart = source.indexOf("document.addEventListener('contextmenu'");
+		assert.ok(handlerStart !== -1, "global 'contextmenu' listener exists in boot.js");
+
+		// Both guards must exist inside the handler.
+		const guardIdx = source.indexOf('e.defaultPrevented', handlerStart);
+		const menuOpenIdx = source.indexOf('ctx.api.ui.contextMenu.open(', handlerStart);
+
+		assert.ok(guardIdx !== -1, 'defaultPrevented guard present in contextmenu handler');
+		assert.ok(menuOpenIdx !== -1, 'ctx.api.ui.contextMenu.open() present in contextmenu handler');
+		// The guard MUST appear before the open() call so a panel-handled (preventDefault'd)
+		// event is never forwarded to the boot.js fallback menu.
+		assert.ok(
+			guardIdx < menuOpenIdx,
+			'defaultPrevented guard precedes contextMenu.open() — synthetic events route correctly',
+		);
+	});
+
+	it('does not open an empty menu for elements with no contextmenu handler (plain-button guard)', async function () {
+		// Regression guard: the boot.js fallback must not call contextMenu.open() when
+		// the items array is empty.  This prevents longpress on plain toolbar buttons
+		// (no handler, non-editable) from showing an empty custom context menu.
+		// The guard belongs in boot.js so it applies equally to touch (polyfill) and
+		// desktop right-click, and independently of how panel handlers are registered
+		// (oncontextmenu property vs. addEventListener).
+		const source = await readRepoFile('admin/tab/boot.js');
+
+		const handlerStart = source.indexOf("document.addEventListener('contextmenu'");
+		assert.ok(handlerStart !== -1, "global 'contextmenu' listener exists in boot.js");
+
+		// items is built from editable context; guard must check length before opening.
+		const itemsIdx = source.indexOf('items.length', handlerStart);
+		const menuOpenIdx = source.indexOf('ctx.api.ui.contextMenu.open(', handlerStart);
+
+		assert.ok(itemsIdx !== -1, 'items.length guard present in contextmenu handler');
+		assert.ok(menuOpenIdx !== -1, 'ctx.api.ui.contextMenu.open() present in contextmenu handler');
+		// The guard MUST appear before open() so an empty items array aborts before opening.
+		assert.ok(
+			itemsIdx < menuOpenIdx,
+			'items.length guard precedes contextMenu.open() — empty menu never shown',
+		);
+	});
+});

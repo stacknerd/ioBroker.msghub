@@ -194,9 +194,13 @@
 		 */
 		function makeSelectAllTh() {
 			if (!state.expertMode) {
-				return h('th', {
-					class: 'msghub-th msghub-messages-select msghub-colCell msghub-colCell--select msghub-col--select',
-				}, []);
+				return h(
+					'th',
+					{
+						class: 'msghub-th msghub-messages-select msghub-colCell msghub-colCell--select msghub-col--select',
+					},
+					[],
+				);
 			}
 			const input = h('input', {
 				type: 'checkbox',

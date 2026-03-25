@@ -450,6 +450,12 @@ document.addEventListener('contextmenu', e => {
 		e.preventDefault();
 
 		const items = editable ? buildInputContextMenuItems(editable) : [];
+		// Do not open an empty menu — happens when the target is neither editable
+		// nor handled by a panel (e.g. a plain toolbar button).  The native menu
+		// is already suppressed above; no custom menu is preferable to an empty one.
+		if (items.length === 0) {
+			return;
+		}
 		const anchorPoint = { x: e.clientX, y: e.clientY };
 		ctx.api.ui.contextMenu.open({ items, anchorPoint, ariaLabel: 'Context menu', placement: 'bottom-start' });
 	} catch {

@@ -282,9 +282,7 @@
 			].join('\n');
 			metaEl.title = tooltip;
 			metaEl.setAttribute('aria-label', tooltip);
-			metaEl.replaceChildren(
-				h('div', { text: generatedAtText }),
-			);
+			metaEl.replaceChildren(h('div', { text: generatedAtText }));
 		}
 
 		/**

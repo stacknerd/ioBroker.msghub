@@ -132,25 +132,31 @@
 				const isSelected = !!ref && state.selectedRefs.has(ref);
 
 				const checkboxCell = state.expertMode
-					? h('td', { class: 'msghub-messages-select msghub-colCell msghub-colCell--select msghub-col--select' }, [
-							h('label', { class: 'msghub-uicheckbox' }, [
-								h('input', {
-									class: 'msghub-uicheckbox__input',
-									type: 'checkbox',
-									checked: state.selectedRefs.has(ref) ? 'true' : null,
-									onchange: e => {
-										const on = !!e?.target?.checked;
-										if (on) {
-											state.selectedRefs.add(ref);
-										} else {
-											state.selectedRefs.delete(ref);
-										}
-										onSelectionChanged();
-									},
-								}),
-								h('span', { class: 'msghub-uicheckbox__box', text: '' }),
-							]),
-						])
+					? h(
+							'td',
+							{
+								class: 'msghub-messages-select msghub-colCell msghub-colCell--select msghub-col--select',
+							},
+							[
+								h('label', { class: 'msghub-uicheckbox' }, [
+									h('input', {
+										class: 'msghub-uicheckbox__input',
+										type: 'checkbox',
+										checked: state.selectedRefs.has(ref) ? 'true' : null,
+										onchange: e => {
+											const on = !!e?.target?.checked;
+											if (on) {
+												state.selectedRefs.add(ref);
+											} else {
+												state.selectedRefs.delete(ref);
+											}
+											onSelectionChanged();
+										},
+									}),
+									h('span', { class: 'msghub-uicheckbox__box', text: '' }),
+								]),
+							],
+						)
 					: null;
 
 				return h(
@@ -203,9 +209,20 @@
 					[
 						...(checkboxCell ? [checkboxCell] : []),
 						h('td', { class: 'msghub-colCell msghub-colCell--icon msghub-col--icon', text: icon }),
-						h('td', { class: 'msghub-colCell msghub-colCell--title msghub-col--title', text: title, title }),
-						h('td', { class: 'msghub-colCell msghub-colCell--text msghub-col--text', text: text, title: text }),
-						h('td', { class: 'msghub-colCell msghub-colCell--location msghub-col--location', text: location }),
+						h('td', {
+							class: 'msghub-colCell msghub-colCell--title msghub-col--title',
+							text: title,
+							title,
+						}),
+						h('td', {
+							class: 'msghub-colCell msghub-colCell--text msghub-col--text',
+							text: text,
+							title: text,
+						}),
+						h('td', {
+							class: 'msghub-colCell msghub-colCell--location msghub-col--location',
+							text: location,
+						}),
 						h('td', {
 							class: 'msghub-colCell msghub-colCell--kind msghub-col--kind',
 							text: api.i18n.tOr(
