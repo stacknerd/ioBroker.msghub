@@ -45,6 +45,11 @@ Inside the panel, `index.js` sits above the specialized submodules:
    - The returned `onConnect()` loads constants, loads the current messages page, and then starts auto refresh scheduling.
    - `index.js` also binds the lifecycle listeners immediately during initialization.
 
+5. Apply additive expert-mode handling inside the panel.
+   - `ctx.args?.expert` is forwarded to `detectExpertMode(...)`.
+   - The forwarding happens once during initialization and again in the 1500 ms polling loop.
+   - URL expert mode adds to host/session expert mode; it does not replace or suppress it.
+
 ---
 
 ## Public surface / integration points
@@ -60,6 +65,7 @@ window.MsghubAdminTabMessages = {
 `init(ctx)` expects the native panel init context assembled by `boot.js`, especially:
 
 - `ctx.api` with `i18n`, `messages`, `constants`, `time`, and `ui`
+- `ctx.args` for optional runtime flags such as `expert`
 - `ctx.h` as the DOM helper used across the Admin tab
 - `ctx.elements.messagesRoot` as the mount point
 
@@ -86,7 +92,7 @@ Important internal integration points:
 - The first render path is intentionally different from later refreshes:
   - before the first successful load, a loading row is rendered
   - during later silent refreshes, the existing rows stay visible
-- Expert mode is polled, not event-driven. `detectExpertMode()` is applied once immediately and then every 1500 ms.
+- Expert mode is polled, not event-driven. `detectExpertMode(ctx.args?.expert)` is applied once immediately and then every 1500 ms.
 - Selection is tied to the currently visible rows. After each row render, `pruneSelectionToVisibleRows()` removes selections that no longer exist in the current tbody.
 - The archive overlay is wired, but the normal row menu keeps the archive action disabled by passing `isArchiveActionEnabled: () => false`.
 - `onConnect()` is the point where the panel starts talking to the backend. `init(ctx)` alone only builds the local panel instance.
@@ -95,9 +101,9 @@ Important internal integration points:
 
 ## Related files
 
-- Implementation: `admin/tab/panels/messages/index.js`
-- Test: `admin/tab/panels/messages/index.test.js`
+- Implementation: [`admin/tab/panels/messages/index.js`](../../admin/tab/panels/messages/index.js)
+- Test: [`admin/tab/panels/messages/index.test.js`](../../admin/tab/panels/messages/index.test.js)
 - State: [`./tab-panels-messages-state.md`](./tab-panels-messages-state.md)
 - Data facade: [`./tab-panels-messages-data.messages.md`](./tab-panels-messages-data.messages.md)
 - Lifecycle: [`./tab-panels-messages-lifecycle.md`](./tab-panels-messages-lifecycle.md)
-- Admin frontend overview: `docs/ui/README.md`
+- Admin frontend overview: [`./README.md`](./README.md)

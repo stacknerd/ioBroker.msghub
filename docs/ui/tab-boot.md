@@ -193,6 +193,7 @@ It also triggers an unconditional initial `sendPing()` during module load, befor
 - Reconnect warmup is centralized here. Panels are not expected to implement their own retry loop for core shell availability.
 - `pickText()` is the shell-side text normalizer for plain strings, admin i18n keys, and language maps such as `{ en, de }`.
 - Shell-wide timezone fallback warning is intentionally shown only once per page lifetime.
+- The connection panel reports the effective frontend format locale shown to the shell. When `args.locale` is present and valid, that value is shown instead of the old ambient browser-locale source.
 
 ---
 

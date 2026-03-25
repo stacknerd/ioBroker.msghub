@@ -85,21 +85,22 @@ function createElement(tagName) {
 	return element;
 }
 
-async function loadLayoutSandbox() {
+async function loadLayoutSandbox(options = {}) {
 	const source = await readRepoFile('admin/tab/layout.js');
 	const expose = `
-window.__layoutFns = {
-	initTabs,
-	h,
-	getActiveComposition,
-	buildLayoutFromRegistry,
-	loadCssFiles,
+	window.__layoutFns = {
+		initTabs,
+		h,
+		resolveViewId,
+		getActiveComposition,
+		buildLayoutFromRegistry,
+		loadCssFiles,
 	loadJsFilesSequential,
 	computeAssetsForComposition,
 	getPanelDefinition,
 	renderPanelBootError
 };
-`;
+	`;
 
 	const headElement = createElement('head');
 	const appendToHead = headElement.appendChild.bind(headElement);
@@ -119,10 +120,14 @@ window.__layoutFns = {
 	const allLinks = [];
 	const allScripts = [];
 
+	const listeners = new Map();
+	const intervalCallbacks = [];
+	const observerCallbacks = [];
+	const appliedThemes = [];
 	const documentObject = {
 		head: headElement,
 		documentElement: {
-			getAttribute: key => (key === 'data-msghub-view' ? 'adminTab' : ''),
+			getAttribute: key => (key === 'data-msghub-view' ? (options.viewIdAttr || 'adminTab') : ''),
 		},
 		querySelector: selector => {
 			if (selector === '.msghub-root') {
@@ -166,12 +171,17 @@ window.__layoutFns = {
 	};
 
 	const windowObject = {
-		addEventListener() {},
-		setInterval() {
-			return 1;
+		addEventListener(type, handler) {
+			const list = listeners.get(String(type)) || [];
+			list.push(handler);
+			listeners.set(String(type), list);
 		},
-		top: null,
+		setInterval(handler) {
+			intervalCallbacks.push(handler);
+			return intervalCallbacks.length;
+		},
 	};
+	windowObject.top = options.topDocument ? { document: options.topDocument } : windowObject;
 
 	const sandbox = {
 		window: windowObject,
@@ -188,8 +198,8 @@ window.__layoutFns = {
 				this.detail = init?.detail;
 			}
 		},
-		win: {
-			MsghubAdminTabRegistry: {
+			win: {
+				MsghubAdminTabRegistry: {
 				panels: {
 					stats: {
 						mountId: 'stats-root',
@@ -209,19 +219,24 @@ window.__layoutFns = {
 						defaultPanel: 'messages',
 					},
 				},
+				},
 			},
-		},
-		applyTheme() {},
-		detectTheme() {
-			return 'light';
-		},
-		readThemeFromTopWindow() {
-			return null;
-		},
-	};
+			args: options.args || {},
+			urlThemeLocked: options.urlThemeLocked === true,
+			applyTheme: options.applyTheme || (theme => appliedThemes.push(String(theme))),
+			detectTheme: options.detectTheme || (() => 'light'),
+			readThemeFromTopWindow: options.readThemeFromTopWindow || (() => null),
+			MutationObserver: class {
+				constructor(callback) {
+					this.callback = callback;
+					observerCallbacks.push(callback);
+				}
+				observe() {}
+			},
+		};
 
 	vm.runInNewContext(`${source}\n${expose}`, sandbox, { filename: 'admin/tab/layout.js' });
-	return { sandbox, layoutHost, allLinks, allScripts, headElement };
+	return { sandbox, layoutHost, allLinks, allScripts, headElement, listeners, intervalCallbacks, observerCallbacks, appliedThemes };
 }
 
 describe('admin/tab/layout.js', function () {
@@ -259,15 +274,100 @@ describe('admin/tab/layout.js', function () {
 		]);
 	});
 
-	it('returns panel definitions and active composition from registry', async function () {
+	it('returns panel definitions, resolved view id, and active composition from registry defaults', async function () {
 		const { sandbox } = await loadLayoutSandbox();
 
 		const getPanelDefinition = sandbox.window.__layoutFns.getPanelDefinition;
+		const resolveViewId = sandbox.window.__layoutFns.resolveViewId;
 		const getActiveComposition = sandbox.window.__layoutFns.getActiveComposition;
 
 		assert.ok(getPanelDefinition('stats'));
 		assert.equal(getPanelDefinition('unknown'), null);
+		assert.equal(resolveViewId(), 'adminTab');
 		assert.equal(getActiveComposition().defaultPanel, 'messages');
+	});
+
+	it('resolveViewId() prefers a valid URL composition over data-msghub-view', async function () {
+		const { sandbox } = await loadLayoutSandbox({
+			args: { composition: 'customView' },
+			viewIdAttr: 'adminTab',
+		});
+		sandbox.win.MsghubAdminTabRegistry.compositions.customView = {
+			layout: 'single',
+			panels: ['messages'],
+			defaultPanel: 'messages',
+		};
+
+		assert.equal(sandbox.window.__layoutFns.resolveViewId(), 'customView');
+		assert.equal(sandbox.window.__layoutFns.getActiveComposition().layout, 'single');
+	});
+
+	it('resolveViewId() falls back from invalid URL composition to a valid data-msghub-view', async function () {
+		const { sandbox } = await loadLayoutSandbox({
+			args: { composition: 'does-not-exist' },
+			viewIdAttr: 'adminTab',
+		});
+
+		assert.equal(sandbox.window.__layoutFns.resolveViewId(), 'adminTab');
+		assert.equal(sandbox.window.__layoutFns.getActiveComposition().defaultPanel, 'messages');
+	});
+
+	it('resolveViewId() falls back to adminTab when URL and markup views are invalid', async function () {
+		const { sandbox } = await loadLayoutSandbox({
+			args: { composition: 'does-not-exist' },
+			viewIdAttr: 'also-missing',
+		});
+
+		assert.equal(sandbox.window.__layoutFns.resolveViewId(), 'adminTab');
+		assert.equal(sandbox.window.__layoutFns.getActiveComposition().defaultPanel, 'messages');
+	});
+
+	it('resolveViewId() allows wildcard compositions only when explicitly selected and registered', async function () {
+		const { sandbox } = await loadLayoutSandbox({
+			args: { composition: 'allPlugins' },
+		});
+		sandbox.win.MsghubAdminTabRegistry.compositions.allPlugins = {
+			layout: 'tabs',
+			panels: ['*'],
+			defaultPanel: 'messages',
+		};
+
+		assert.equal(sandbox.window.__layoutFns.resolveViewId(), 'allPlugins');
+		assert.deepEqual(JSON.parse(JSON.stringify(sandbox.window.__layoutFns.getActiveComposition().panels)), ['*']);
+	});
+
+	it('blocks all dynamic theme update paths when a URL theme override is locked', async function () {
+		const topDocument = { documentElement: {} };
+		const { listeners, intervalCallbacks, observerCallbacks, appliedThemes } = await loadLayoutSandbox({
+			urlThemeLocked: true,
+			topDocument,
+			detectTheme: () => 'light',
+			readThemeFromTopWindow: () => 'dark',
+		});
+
+		listeners.get('message')[0]({ data: 'dark' });
+		listeners.get('storage')[0]();
+		intervalCallbacks[0]();
+		observerCallbacks[0]();
+
+		assert.deepEqual(appliedThemes, []);
+	});
+
+	it('keeps dynamic theme update paths active when no URL theme override is locked', async function () {
+		const topDocument = { documentElement: {} };
+		const { listeners, intervalCallbacks, observerCallbacks, appliedThemes } = await loadLayoutSandbox({
+			urlThemeLocked: false,
+			topDocument,
+			detectTheme: () => 'light',
+			readThemeFromTopWindow: () => 'dark',
+		});
+
+		listeners.get('message')[0]({ data: 'dark' });
+		listeners.get('storage')[0]();
+		intervalCallbacks[0]();
+		observerCallbacks[0]();
+
+		assert.deepEqual(appliedThemes, ['dark', 'light', 'light', 'dark']);
 	});
 
 	it('buildLayoutFromRegistry() separates native panelIds from plugin panel refs', async function () {

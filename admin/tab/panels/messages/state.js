@@ -19,7 +19,7 @@
 	 * Contains:
 	 * - Shared panel state factory.
 	 * - Stateless value/path helpers used across messages submodules.
-	 * - Expert mode detection from admin host/session.
+	 * - Expert mode detection from URL args plus admin host/session state.
 	 *
 	 * Integration:
 	 * - Loaded before all other messages panel modules.
@@ -111,11 +111,18 @@
 	}
 
 	/**
-	 * Detects whether expert mode is enabled in current admin session.
+	 * Detects whether expert mode is enabled in the current admin session.
 	 *
+	 * The URL flag is additive only: `true` forces expert mode on, while `false`
+	 * does not disable expert mode provided by session storage or `_system`.
+	 *
+	 * @param {any} [argsExpert] - Optional normalized `args.expert` value.
 	 * @returns {boolean} True when expert mode is active.
 	 */
-	function detectExpertMode() {
+	function detectExpertMode(argsExpert) {
+		if (argsExpert === true || argsExpert === '1' || argsExpert === 'true') {
+			return true;
+		}
 		try {
 			const storage = win.sessionStorage;
 			if (storage && typeof storage.getItem === 'function') {

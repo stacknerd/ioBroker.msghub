@@ -53,4 +53,39 @@ describe('admin/tab/panels/messages/state.js', function () {
 		sandboxB.window.window = sandboxB.window;
 		assert.equal(sandboxB.window.MsghubAdminTabMessagesState.detectExpertMode(), true);
 	});
+
+	it('treats args.expert as additive only and does not suppress host expert mode', async function () {
+		const sandbox = await loadPanelModule('admin/tab/panels/messages/state.js', {
+			window: {
+				window: null,
+				sessionStorage: { getItem: () => null },
+				top: { _system: { expertMode: true } },
+				setTimeout() {},
+				setInterval() {},
+			},
+		});
+		sandbox.window.window = sandbox.window;
+
+		assert.equal(sandbox.window.MsghubAdminTabMessagesState.detectExpertMode(true), true);
+		assert.equal(sandbox.window.MsghubAdminTabMessagesState.detectExpertMode(false), true);
+	});
+
+	it('returns false when the URL flag is off and host access fails or reports no expert mode', async function () {
+		const sandbox = await loadPanelModule('admin/tab/panels/messages/state.js', {
+			window: {
+				window: null,
+				top: {},
+				setTimeout() {},
+				setInterval() {},
+			},
+		});
+		sandbox.window.window = sandbox.window;
+		Object.defineProperty(sandbox.window, 'sessionStorage', {
+			get() {
+				throw new Error('blocked');
+			},
+		});
+
+		assert.equal(sandbox.window.MsghubAdminTabMessagesState.detectExpertMode(false), false);
+	});
 });

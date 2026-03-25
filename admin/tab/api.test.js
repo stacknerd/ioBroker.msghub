@@ -30,12 +30,29 @@ window.__apiFns = {
 			getAttribute: () => 'adminTab',
 		},
 	};
+	const defaultResolveViewId = () => {
+		const raw = documentObject?.documentElement?.getAttribute?.('data-msghub-view') || '';
+		return String(raw || '').trim() || 'adminTab';
+	};
+	const effectiveResolveViewId = overrides.resolveViewId || defaultResolveViewId;
+	const defaultGetActiveComposition = () => {
+		const registry = windowObject.MsghubAdminTabRegistry;
+		const compositions = registry && typeof registry === 'object' ? registry.compositions : null;
+		if (!compositions || typeof compositions !== 'object') {
+			return null;
+		}
+		const viewId = effectiveResolveViewId();
+		const composition = compositions[viewId];
+		return composition && typeof composition === 'object' ? composition : null;
+	};
 
 	const sandbox = {
 		window: windowObject,
 		document: documentObject,
 		win: windowObject,
 		hasAdminKey: key => key === 'known.key',
+		resolveViewId: effectiveResolveViewId,
+		getActiveComposition: overrides.getActiveComposition || defaultGetActiveComposition,
 		console: { debug() {}, info() {}, warn() {}, error() {} },
 		...overrides,
 	};
@@ -118,16 +135,16 @@ describe('admin/tab/api.js', function () {
 		assert.equal(iconVar(null), '');
 	});
 
-		it('builds stable admin API contracts and routes backend calls', async function () {
-			const sentCommands = [];
-			let closeCalls = 0;
-			let openPayload = null;
-			const toastCalls = [];
-			const uiStub = {
-				toast: payload => toastCalls.push(payload),
-				contextMenu: {
-					open(payload) {
-						openPayload = payload;
+	it('builds stable admin API contracts and routes backend calls', async function () {
+		const sentCommands = [];
+		let closeCalls = 0;
+		let openPayload = null;
+		const toastCalls = [];
+		const uiStub = {
+			toast: payload => toastCalls.push(payload),
+			contextMenu: {
+				open(payload) {
+					openPayload = payload;
 					return undefined;
 				},
 				close() {
@@ -182,13 +199,13 @@ describe('admin/tab/api.js', function () {
 		assert.equal(api.host.layout, 'tabs');
 		assert.deepEqual(JSON.parse(JSON.stringify(api.host.panels)), ['stats', 'messages', 'plugins']);
 		assert.equal(api.host.isConnected(), true);
-			assert.equal(api.i18n.lang(), 'de');
-			assert.equal(api.i18n.has('known.key'), true);
-			assert.equal(api.i18n.tOr('missing.key', 'fallback'), 'fallback');
-			assert.equal(typeof api.time.getPolicy, 'function');
-			assert.equal(typeof api.time.formatTs, 'function');
+		assert.equal(api.i18n.lang(), 'de');
+		assert.equal(api.i18n.has('known.key'), true);
+		assert.equal(api.i18n.tOr('missing.key', 'fallback'), 'fallback');
+		assert.equal(typeof api.time.getPolicy, 'function');
+		assert.equal(typeof api.time.formatTs, 'function');
 
-			await api.constants.get();
+		await api.constants.get();
 		await api.stats.get({ fast: true });
 		await api.messages.query({ page: 1 });
 		await api.messages.delete(['ref-1']);
@@ -213,15 +230,15 @@ describe('admin/tab/api.js', function () {
 				},
 			],
 		});
-			assert.ok(openPayload && Array.isArray(openPayload.items));
-			await openPayload.items[0].onSelect();
-			assert.equal(closeCalls > 0, true, 'context menu should close before action execution');
-			assert.equal(toastCalls.length, 0, 'context menu wrapper must not emit generic toasts');
+		assert.ok(openPayload && Array.isArray(openPayload.items));
+		await openPayload.items[0].onSelect();
+		assert.equal(closeCalls > 0, true, 'context menu should close before action execution');
+		assert.equal(toastCalls.length, 0, 'context menu wrapper must not emit generic toasts');
 
-				assert.throws(() => api.notSupported('x'), err => err && err.code === 'NOT_SUPPORTED');
-			});
+		assert.throws(() => api.notSupported('x'), err => err && err.code === 'NOT_SUPPORTED');
+	});
 
-		it('api.host.panels filters out structured plugin panel refs — returns only string IDs', async function () {
+	it('api.host.panels filters out structured plugin panel refs — returns only string IDs', async function () {
 		const sandbox = await loadApiSandbox({
 			window: {
 				MsghubAdminTabRegistry: {
@@ -260,73 +277,254 @@ describe('admin/tab/api.js', function () {
 		}
 	});
 
+	it('uses the shared view resolver and active composition globals for host metadata', async function () {
+		const sandbox = await loadApiSandbox({
+			resolveViewId: () => 'customView',
+			getActiveComposition: () => ({
+				layout: 'single',
+				panels: [
+					'messages',
+					{ type: 'pluginPanel', pluginType: 'IngestStates', instanceId: 0, panelId: 'presets' },
+				],
+				defaultPanel: 'messages',
+				deviceMode: 'screenOnly',
+			}),
+			document: {
+				documentElement: {
+					getAttribute: () => 'adminTab',
+				},
+			},
+		});
+		const createAdminApi = sandbox.window.__apiFns.createAdminApi;
+		const api = createAdminApi({
+			msghubRequest: async () => ({}),
+			msghubSocket: { connected: true },
+			adapterInstance: 'msghub.0',
+			lang: 'en',
+			t: key => String(key),
+			pickText: value => String(value || ''),
+			ui: {},
+		});
+
+		assert.equal(api.host.viewId, 'customView');
+		assert.equal(api.host.layout, 'single');
+		assert.equal(api.host.deviceMode, 'screenOnly');
+		assert.equal(api.host.defaultPanel, 'messages');
+		assert.deepEqual(JSON.parse(JSON.stringify(api.host.panels)), ['messages']);
+	});
+
+	it('handles missing active composition defensively while still using the shared resolved view id', async function () {
+		const sandbox = await loadApiSandbox({
+			resolveViewId: () => 'adminTab',
+			getActiveComposition: () => null,
+		});
+		const createAdminApi = sandbox.window.__apiFns.createAdminApi;
+		const api = createAdminApi({
+			msghubRequest: async () => ({}),
+			msghubSocket: { connected: false },
+			adapterInstance: 'msghub.0',
+			lang: 'en',
+			t: key => String(key),
+			pickText: value => String(value || ''),
+			ui: {},
+		});
+
+		assert.equal(api.host.viewId, 'adminTab');
+		assert.equal(api.host.layout, 'tabs');
+		assert.equal(api.host.deviceMode, 'pc');
+		assert.deepEqual(JSON.parse(JSON.stringify(api.host.panels)), []);
+		assert.equal(api.host.defaultPanel, '');
+	});
+
+	it('api.host.isExpertMode treats the URL flag as additive over session and host state', async function () {
+		const urlEnabled = await loadApiSandbox({
+			args: { expert: true },
+			window: {
+				sessionStorage: { getItem: () => 'false' },
+				top: { _system: { expertMode: false } },
+			},
+		});
+		const createAdminApiA = urlEnabled.window.__apiFns.createAdminApi;
+		const apiA = createAdminApiA({
+			msghubRequest: async () => ({}),
+			msghubSocket: { connected: true },
+			adapterInstance: 'msghub.0',
+			lang: 'en',
+			t: key => String(key),
+			pickText: value => String(value || ''),
+			ui: {},
+		});
+		assert.equal(apiA.host.isExpertMode(), true);
+
+		const hostFallback = await loadApiSandbox({
+			args: { expert: false },
+			window: {
+				sessionStorage: { getItem: key => (String(key) === 'App.expertMode' ? 'true' : null) },
+				top: { _system: { expertMode: false } },
+			},
+		});
+		const createAdminApiB = hostFallback.window.__apiFns.createAdminApi;
+		const apiB = createAdminApiB({
+			msghubRequest: async () => ({}),
+			msghubSocket: { connected: true },
+			adapterInstance: 'msghub.0',
+			lang: 'en',
+			t: key => String(key),
+			pickText: value => String(value || ''),
+			ui: {},
+		});
+		assert.equal(apiB.host.isExpertMode(), true);
+	});
+
+	it('api.host.isExpertMode tolerates host access errors and returns false when nothing enables it', async function () {
+		const sandbox = await loadApiSandbox({
+			args: { expert: false },
+			window: {
+				top: {},
+			},
+		});
+		Object.defineProperty(sandbox.window, 'sessionStorage', {
+			get() {
+				throw new Error('blocked');
+			},
+		});
+
+		const createAdminApi = sandbox.window.__apiFns.createAdminApi;
+		const api = createAdminApi({
+			msghubRequest: async () => ({}),
+			msghubSocket: { connected: true },
+			adapterInstance: 'msghub.0',
+			lang: 'en',
+			t: key => String(key),
+			pickText: value => String(value || ''),
+			ui: {},
+		});
+
+		assert.equal(api.host.isExpertMode(), false);
+	});
+
 	it('context menu wrapper does not emit generic error toasts when handlers reject', async function () {
-			let openPayload = null;
-			const toastCalls = [];
-			const sandbox = await loadApiSandbox();
-			const createAdminApi = sandbox.window.__apiFns.createAdminApi;
-			const api = createAdminApi({
-				msghubRequest: async () => ({}),
-				msghubSocket: { connected: true },
-				adapterInstance: 'msghub.0',
-				lang: 'en',
-				t: key => String(key),
-				pickText: value => String(value || ''),
-				ui: {
-					toast: payload => toastCalls.push(payload),
-					contextMenu: {
-						open(payload) {
-							openPayload = payload;
-						},
-						close() {},
-						isOpen() {
-							return false;
-						},
+		let openPayload = null;
+		const toastCalls = [];
+		const sandbox = await loadApiSandbox();
+		const createAdminApi = sandbox.window.__apiFns.createAdminApi;
+		const api = createAdminApi({
+			msghubRequest: async () => ({}),
+			msghubSocket: { connected: true },
+			adapterInstance: 'msghub.0',
+			lang: 'en',
+			t: key => String(key),
+			pickText: value => String(value || ''),
+			ui: {
+				toast: payload => toastCalls.push(payload),
+				contextMenu: {
+					open(payload) {
+						openPayload = payload;
+					},
+					close() {},
+					isOpen() {
+						return false;
 					},
 				},
-			});
+			},
+		});
 
-			api.ui.contextMenu.open({
-				items: [
-					{
-						label: 'Explode',
-						onSelect: async () => {
-							throw new Error('boom');
-						},
+		api.ui.contextMenu.open({
+			items: [
+				{
+					label: 'Explode',
+					onSelect: async () => {
+						throw new Error('boom');
 					},
-				],
-			});
-
-			await assert.rejects(() => openPayload.items[0].onSelect(), /boom/);
-			assert.equal(toastCalls.length, 0, 'rejected handlers must not trigger generic error toasts');
+				},
+			],
 		});
 
-			it('normalizes timezone policy and formats timestamps with UTC fallback', async function () {
-			const sandbox = await loadApiSandbox();
-			const createAdminApi = sandbox.window.__apiFns.createAdminApi;
-			const api = createAdminApi({
-				msghubRequest: async () => ({}),
-				msghubSocket: { connected: true },
-				adapterInstance: 'msghub.0',
-				lang: 'en',
-				t: key => String(key),
-				pickText: value => String(value || ''),
-				ui: {},
-			});
-
-			const initial = api.time.getPolicy();
-			assert.equal(initial.timeZone, 'UTC');
-			assert.equal(initial.isFallbackUtc, true);
-
-			const policy = api.time.setPolicy({ timeZone: 'Europe/Berlin', source: 'server' });
-			assert.equal(policy.timeZone, 'Europe/Berlin');
-			assert.equal(policy.isFallbackUtc, false);
-			assert.notEqual(api.time.formatTs(1700000000000), '');
-
-			const invalid = api.time.setPolicy({ timeZone: 'Invalid/Zone', source: 'server' });
-			assert.equal(invalid.timeZone, 'UTC');
-			assert.equal(invalid.isFallbackUtc, true);
-			assert.match(invalid.warning, /timezone_fallback_utc/);
-			assert.equal(api.time.formatTs(NaN), '');
-		});
+		await assert.rejects(() => openPayload.items[0].onSelect(), /boom/);
+		assert.equal(toastCalls.length, 0, 'rejected handlers must not trigger generic error toasts');
 	});
+
+	it('normalizes timezone policy and formats timestamps with UTC fallback', async function () {
+		const sandbox = await loadApiSandbox();
+		const createAdminApi = sandbox.window.__apiFns.createAdminApi;
+		const api = createAdminApi({
+			msghubRequest: async () => ({}),
+			msghubSocket: { connected: true },
+			adapterInstance: 'msghub.0',
+			lang: 'en',
+			t: key => String(key),
+			pickText: value => String(value || ''),
+			ui: {},
+		});
+
+		const initial = api.time.getPolicy();
+		assert.equal(initial.timeZone, 'UTC');
+		assert.equal(initial.isFallbackUtc, true);
+
+		const policy = api.time.setPolicy({ timeZone: 'Europe/Berlin', source: 'server' });
+		assert.equal(policy.timeZone, 'Europe/Berlin');
+		assert.equal(policy.isFallbackUtc, false);
+		assert.notEqual(api.time.formatTs(1700000000000), '');
+
+		const invalid = api.time.setPolicy({ timeZone: 'Invalid/Zone', source: 'server' });
+		assert.equal(invalid.timeZone, 'UTC');
+		assert.equal(invalid.isFallbackUtc, true);
+		assert.match(invalid.warning, /timezone_fallback_utc/);
+		assert.equal(api.time.formatTs(NaN), '');
+	});
+
+	it('uses args.locale as the default frontend format locale when no explicit locale is provided', async function () {
+		const sandbox = await loadApiSandbox({
+			args: { locale: 'de-DE' },
+		});
+		const createAdminApi = sandbox.window.__apiFns.createAdminApi;
+		const api = createAdminApi({
+			msghubRequest: async () => ({}),
+			msghubSocket: { connected: true },
+			adapterInstance: 'msghub.0',
+			lang: 'en',
+			t: key => String(key),
+			pickText: value => String(value || ''),
+			ui: {},
+		});
+
+		api.time.setPolicy({ timeZone: 'UTC', source: 'server' });
+		const rendered = api.time.formatTs(Date.UTC(2024, 0, 2, 3, 4, 5));
+		assert.match(rendered, /\b02\/01\/2024\b|\b02\.01\.2024\b/);
+	});
+
+	it('keeps explicit format locale precedence over args.locale and ignores invalid args.locale', async function () {
+		const urlOverride = await loadApiSandbox({
+			args: { locale: 'de-DE' },
+		});
+		const createAdminApiA = urlOverride.window.__apiFns.createAdminApi;
+		const apiA = createAdminApiA({
+			msghubRequest: async () => ({}),
+			msghubSocket: { connected: true },
+			adapterInstance: 'msghub.0',
+			lang: 'en',
+			t: key => String(key),
+			pickText: value => String(value || ''),
+			ui: {},
+		});
+		apiA.time.setPolicy({ timeZone: 'UTC', source: 'server' });
+		const explicit = apiA.time.formatTs(Date.UTC(2024, 0, 2, 3, 4, 5), { locale: 'en-US' });
+		assert.match(explicit, /\b01\/02\/2024\b/);
+
+		const invalidOverride = await loadApiSandbox({
+			args: { locale: 'bad-locale-@@@' },
+		});
+		const createAdminApiB = invalidOverride.window.__apiFns.createAdminApi;
+		const apiB = createAdminApiB({
+			msghubRequest: async () => ({}),
+			msghubSocket: { connected: true },
+			adapterInstance: 'msghub.0',
+			lang: 'en',
+			t: key => String(key),
+			pickText: value => String(value || ''),
+			ui: {},
+		});
+		apiB.time.setPolicy({ timeZone: 'UTC', source: 'server' });
+		assert.notEqual(apiB.time.formatTs(Date.UTC(2024, 0, 2, 3, 4, 5)), '');
+	});
+});

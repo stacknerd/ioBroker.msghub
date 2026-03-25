@@ -67,6 +67,7 @@
 	function initMessagesSection(ctx) {
 		const { api, h, elements } = ctx;
 		const root = elements.messagesRoot;
+		const argsExpert = ctx?.args?.expert;
 		if (!root) {
 			throw new Error('MsghubAdminTabMessages: missing messagesRoot element');
 		}
@@ -584,8 +585,8 @@
 			render({ forceRows: true });
 		}
 
-		applyExpertMode(detectExpertMode());
-		win.setInterval(() => applyExpertMode(detectExpertMode()), 1500);
+		applyExpertMode(detectExpertMode(argsExpert));
+		win.setInterval(() => applyExpertMode(detectExpertMode(argsExpert)), 1500);
 
 		lifecycleApi.bindEvents();
 		metaApi.updateDeleteButton();

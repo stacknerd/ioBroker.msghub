@@ -29,6 +29,8 @@ The UI intentionally does not:
 
 In other words: the UI is an access surface, not a second backend.
 
+For the supported Admin Tab URL/query/hash behavior, start with [`./url-parameters.md`](./url-parameters.md). That guide documents the implemented `instance` / `lang` / `locale` / `composition` / `expert` / `theme` handling, hash navigation, and the legacy `react` theme alias.
+
 ## Composition: one UI, multiple representations
 
 Message Hub uses a composition-based UI model.
@@ -199,4 +201,5 @@ Then continue based on your question:
 - `tab-runtime`: [`./tab-runtime.md`](./tab-runtime.md)
 - `tab-ui`: [`./tab-ui.md`](./tab-ui.md)
 - `tab`: [`./tab.md`](./tab.md)
+- `url-parameters`: [`./url-parameters.md`](./url-parameters.md)
 <!-- AUTO-GENERATED:UI-INDEX:END -->

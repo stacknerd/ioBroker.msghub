@@ -509,6 +509,120 @@ describe('admin/tab/panels/messages/index.js', function () {
 		assert.ok(calls.updateTbody >= 1);
 	});
 
+	it('forwards ctx.args.expert to expert-mode detection on init and interval polling', async function () {
+		const sandbox = await loadIndexModule();
+		const detectCalls = [];
+		let intervalFn = null;
+		const toggleCalls = [];
+		const root = createElement('div');
+		root.closest = () => ({
+			classList: {
+				toggle(cls, force) {
+					toggleCalls.push({ cls, force });
+				},
+			},
+		});
+		sandbox.window.setInterval = fn => {
+			intervalFn = fn;
+			return 1;
+		};
+
+		sandbox.window.MsghubAdminTabMessagesState = {
+			createMessagesState: () => createState(),
+			detectExpertMode: arg => {
+				detectCalls.push(arg);
+				return arg === true;
+			},
+			isObject: value => !!value && typeof value === 'object' && !Array.isArray(value),
+			safeStr: value => (value == null ? '' : String(value)),
+			pick: (obj, path) => path.split('.').reduce((cur, key) => (cur ? cur[key] : undefined), obj),
+			formatTs: value => `ts:${value}`,
+			setFormatTsFormatter() {},
+		};
+		sandbox.window.MsghubAdminTabMessagesDataMessages = {
+			createMessagesDataApi: () => ({
+				loadConstants: async () => undefined,
+				queryMessagesPage: async () => ({ items: [], total: 0, pages: 1, meta: {} }),
+				deleteMessages: async () => undefined,
+				getLevelLabel: value => String(value),
+				getFilterSet: () => new Set(),
+			}),
+		};
+		sandbox.window.MsghubAdminTabMessagesDataArchive = {
+			createArchiveDataApi: () => ({ normalizeCursorEdge: value => value }),
+		};
+		sandbox.window.MsghubAdminTabMessagesOverlayJson = {
+			createJsonOverlay: () => ({ openMessageJson() {} }),
+		};
+		sandbox.window.MsghubAdminTabMessagesOverlayArchive = {
+			createArchiveOverlay: () => ({ openArchiveOverlay() {}, renderArchiveView() {} }),
+		};
+		sandbox.window.MsghubAdminTabMessagesMenus = {
+			createMessagesMenus: () => ({ openRowContextMenu() {} }),
+		};
+		sandbox.window.MsghubAdminTabMessagesRenderMeta = {
+			createMetaRenderer: () => ({
+				mount() {},
+				updateDeleteButton() {},
+				updateButtons() {},
+				updatePaging() {},
+				setMeta() {},
+				setEmptyVisible() {},
+				updateTbody() {},
+				elements: {
+					tbodyEl: createElement('tbody'),
+					theadEl: createElement('thead'),
+					colgroupEl: createElement('colgroup'),
+					tableEl: createElement('table'),
+				},
+			}),
+		};
+		sandbox.window.MsghubAdminTabMessagesRenderHeader = {
+			createHeaderRenderer: () => ({
+				renderThead() {},
+				updateHeaderButtons() {},
+			}),
+		};
+		sandbox.window.MsghubAdminTabMessagesRenderTable = {
+			createTableRenderer: () => ({ renderRows: () => [] }),
+		};
+		sandbox.window.MsghubAdminTabMessagesLifecycle = {
+			createLifecycle: () => ({
+				scheduleAuto() {},
+				stopAuto() {},
+				bindEvents() {},
+				unbindEvents() {},
+				canAutoRefresh: () => true,
+			}),
+		};
+
+		sandbox.window.MsghubAdminTabMessages.init({
+			args: { expert: true },
+			api: {
+				i18n: { t: key => key },
+				ui: {
+					toast() {},
+					dialog: { confirm: async () => true },
+					spinner: { show: () => 'sid', hide: () => undefined },
+				},
+				time: {
+					formatTs: () => '',
+					formatDate: () => '',
+					getPolicy: () => ({ timeZone: 'UTC', source: 'server' }),
+				},
+			},
+			ui: {},
+			h: createH(),
+			elements: { messagesRoot: root },
+		});
+
+		assert.deepEqual(detectCalls, [true]);
+		assert.equal(typeof intervalFn, 'function');
+		intervalFn();
+		assert.deepEqual(detectCalls, [true, true]);
+		assert.ok(toggleCalls.some(call => call.cls === 'is-expert' && call.force === true));
+	});
+
 	it('shows danger toast when initial messages load fails', async function () {
 		const sandbox = await loadIndexModule();
 		const root = createElement('div');

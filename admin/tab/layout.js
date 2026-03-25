@@ -1,31 +1,31 @@
-/* global window, document, location, history, MutationObserver, win, applyTheme, detectTheme, readThemeFromTopWindow, t */
+/* global window, document, location, history, MutationObserver, win, args, applyTheme, detectTheme, readThemeFromTopWindow, urlThemeLocked, t */
 'use strict';
 
 /**
- * MsgHub Admin Tab: Layout-, Asset- und DOM-Orchestrierung.
+ * MsgHub Admin Tab layout, asset, and DOM orchestration.
  *
  * Docs: ../../docs/ui/tab-layout.md
  *
- * Inhalt:
- * - Tab-Navigation und Panel-Sichtbarkeit.
- * - Dynamischer Layoutaufbau aus der Registry.
- * - Laden von CSS/JS-Assets pro Composition.
- * - Hilfsfunktionen für DOM-Erzeugung und Panel-Fehlerdarstellung.
+ * Contents:
+ * - Tab navigation and panel visibility.
+ * - Dynamic layout building from the registry.
+ * - CSS and JS asset loading per composition.
+ * - DOM helpers and panel boot error rendering.
  *
- * Systemeinbindung:
- * - Verwendet Runtime-Funktionen (`applyTheme`, `detectTheme`, `readThemeFromTopWindow`).
- * - Wird von `boot.js` zur Initialisierung des sichtbaren Admin-Layouts genutzt.
+ * Integration:
+ * - Uses runtime globals such as `args`, `applyTheme`, `detectTheme`, and `urlThemeLocked`.
+ * - Is used by `boot.js` to initialize the visible admin layout.
  *
- * Schnittstellen:
- * - Liefert Utility-Funktionen wie `buildLayoutFromRegistry`, `initTabs`,
- *   `computeAssetsForComposition`, `getPanelDefinition`.
+ * Interfaces:
+ * - Exposes helpers such as `buildLayoutFromRegistry`, `initTabs`,
+ *   `computeAssetsForComposition`, `getPanelDefinition`, and `resolveViewId`.
  */
 
 /**
- * Initialisiert die Tab-Navigation und synchronisiert Tab/Panels mit `location.hash`.
+ * Initializes tab navigation and synchronizes tabs/panels with `location.hash`.
  *
- * @param {object} [options] - Optionen für die Tab-Initialisierung.
- * @param {string} [options.defaultPanelId] - Fallback-Panel-ID ohne `tab-`-Präfix.
+ * @param {object} [options] - Options for tab initialization.
+ * @param {string} [options.defaultPanelId] - Fallback panel id without the `tab-` prefix.
  */
 function initTabs({ defaultPanelId = '' } = {}) {
 	const tabs = Array.from(document.querySelectorAll('.msghub-tab'));
@@ -34,10 +34,10 @@ function initTabs({ defaultPanelId = '' } = {}) {
 	}
 
 	/**
-	 * Liest aus einem Tab-Link (`href="#tab-..."`) die Ziel-ID aus.
+	 * Reads the target id from a tab link (`href="#tab-..."`).
 	 *
-	 * @param {Element} tab - Tab-Element.
-	 * @returns {string} Ziel-Panel-ID ohne führendes `#`.
+	 * @param {Element} tab - Tab element.
+	 * @returns {string} Target panel id without the leading `#`.
 	 */
 	const getTargetId = tab => {
 		const href = tab.getAttribute('href') || '';
@@ -59,9 +59,9 @@ function initTabs({ defaultPanelId = '' } = {}) {
 	let activeId = '';
 
 	/**
-	 * Aktiviert ein Panel und setzt ARIA-/Sichtbarkeitszustand für Tabs/Panels.
+	 * Activates a panel and updates ARIA and visibility state for tabs and panels.
 	 *
-	 * @param {string} id - Ziel-Panel-ID.
+	 * @param {string} id - Target panel id.
 	 */
 	const setActive = id => {
 		for (const tab of tabs) {
@@ -147,9 +147,12 @@ function initTabs({ defaultPanelId = '' } = {}) {
 }
 
 /**
- * Reagiert auf Theme-Nachrichten aus dem Admin-Hostfenster.
+ * Reacts to theme messages from the admin host window.
  */
 window.addEventListener('message', ev => {
+	if (urlThemeLocked) {
+		return;
+	}
 	const dataRaw = ev?.data;
 	let data = null;
 	if (typeof dataRaw === 'string') {
@@ -199,14 +202,20 @@ window.addEventListener('message', ev => {
 });
 
 /**
- * Reagiert auf Storage-Änderungen (z. B. Theme-Wechsel in anderem Tab/Fenster).
+ * Reacts to storage changes (for example a theme switch in another tab or window).
  */
 window.addEventListener('storage', () => {
+	if (urlThemeLocked) {
+		return;
+	}
 	applyTheme(detectTheme());
 });
 
 // Fallback polling when neither message nor storage events are available or trustworthy.
 window.setInterval(() => {
+	if (urlThemeLocked) {
+		return;
+	}
 	applyTheme(detectTheme());
 }, 1500);
 
@@ -215,6 +224,9 @@ try {
 	if (topDoc) {
 		// Observes host attribute changes to prevent theme drift.
 		const observer = new MutationObserver(() => {
+			if (urlThemeLocked) {
+				return;
+			}
 			const t = readThemeFromTopWindow();
 			if (t) {
 				applyTheme(t);
@@ -231,12 +243,12 @@ try {
 }
 
 /**
- * Minimaler DOM-Factory-Helper für elementare UI-Bausteine.
+ * Minimal DOM factory helper for simple UI building blocks.
  *
- * @param {string} tag - HTML-Tagname.
- * @param {object} [attrs] - Attribut-/Event-Map.
- * @param {Node|Node[]|string|string[]} [children] - Child-Nodes/Text.
- * @returns {HTMLElement} Erzeugtes Element.
+ * @param {string} tag - HTML tag name.
+ * @param {object} [attrs] - Attribute and event map.
+ * @param {Node|Node[]|string|string[]} [children] - Child nodes or text.
+ * @returns {HTMLElement} Created element.
  */
 function h(tag, attrs, children) {
 	const el = document.createElement(tag);
@@ -271,9 +283,9 @@ function h(tag, attrs, children) {
 }
 
 /**
- * Liefert die globale Admin-Registry in normalisierter Form.
+ * Returns the global admin registry in normalized form.
  *
- * @returns {object|null} Registry oder `null`.
+ * @returns {object|null} Registry object or `null`.
  */
 function getRegistry() {
 	const r = win.MsghubAdminTabRegistry;
@@ -281,14 +293,39 @@ function getRegistry() {
 }
 
 /**
- * Liefert die aktive Composition anhand `data-msghub-view`.
+ * Resolves the active composition view id from query, markup, and hard fallback.
  *
- * @returns {object|null} Composition oder `null`.
+ * Resolution order:
+ * 1. `args.composition` when present and registered.
+ * 2. `data-msghub-view` when present and registered.
+ * 3. `'adminTab'` hard fallback.
+ *
+ * @returns {string} Resolved composition view id.
+ */
+function resolveViewId() {
+	const registry = getRegistry();
+	const compositions =
+		registry && registry.compositions && typeof registry.compositions === 'object' ? registry.compositions : null;
+	const fromUrl = typeof args?.composition === 'string' ? args.composition.trim() : '';
+	if (fromUrl && compositions && Object.prototype.hasOwnProperty.call(compositions, fromUrl)) {
+		return fromUrl;
+	}
+	const viewIdRaw = document?.documentElement?.getAttribute?.('data-msghub-view') || '';
+	const fromMarkup = String(viewIdRaw || '').trim();
+	if (fromMarkup && compositions && Object.prototype.hasOwnProperty.call(compositions, fromMarkup)) {
+		return fromMarkup;
+	}
+	return 'adminTab';
+}
+
+/**
+ * Returns the active composition object for the resolved view id.
+ *
+ * @returns {object|null} Composition object or `null`.
  */
 function getActiveComposition() {
 	const registry = getRegistry();
-	const viewIdRaw = document?.documentElement?.getAttribute?.('data-msghub-view') || '';
-	const viewId = String(viewIdRaw || '').trim() || 'adminTab';
+	const viewId = resolveViewId();
 	const comp =
 		registry && registry.compositions && typeof registry.compositions === 'object'
 			? registry.compositions[viewId]
@@ -457,10 +494,10 @@ function buildLayoutFromRegistry({ contributions = [] } = {}) {
 }
 
 /**
- * Lädt CSS-Dateien dedupliziert und fehlertolerant.
+ * Loads CSS files with deduplication and soft-failure handling.
  *
- * @param {string[]} files - CSS-Pfade relativ zu `admin/`.
- * @returns {Promise<{failed:string[]}>} Liste nicht ladbarer Dateien.
+ * @param {string[]} files - CSS paths relative to `admin/`.
+ * @returns {Promise<{failed:string[]}>} List of files that could not be loaded.
  */
 function loadCssFiles(files) {
 	const list = (Array.isArray(files) ? files : []).map(x => String(x || '').trim()).filter(Boolean);
@@ -497,10 +534,10 @@ function loadCssFiles(files) {
 }
 
 /**
- * Lädt JavaScript-Dateien sequenziell in definierter Reihenfolge.
+ * Loads JavaScript files sequentially in deterministic order.
  *
- * @param {string[]} files - JS-Pfade relativ zu `admin/`.
- * @returns {Promise<void>} Promise auf abgeschlossene Ladefolge.
+ * @param {string[]} files - JS paths relative to `admin/`.
+ * @returns {Promise<void>} Promise for the completed load chain.
  */
 function loadJsFilesSequential(files) {
 	const list = (Array.isArray(files) ? files : []).map(x => String(x || '').trim()).filter(Boolean);
@@ -513,9 +550,9 @@ function loadJsFilesSequential(files) {
 	);
 
 	/**
-	 * Lädt genau ein Script-Asset und schlägt bei Fehlern hart fehl.
+	 * Loads exactly one script asset and fails hard on load errors.
 	 *
-	 * @param {string} src - Script-Quelle.
+	 * @param {string} src - Script source.
 	 * @returns {Promise<void>}
 	 */
 	const loadOne = src =>
@@ -541,10 +578,10 @@ function loadJsFilesSequential(files) {
 }
 
 /**
- * Ermittelt die deduplizierte Asset-Liste für eine Composition.
+ * Computes the deduplicated asset list for one composition.
  *
- * @param {string[]} panelIds - Panels der Composition.
- * @returns {{css:string[],js:string[]}} Deduplizierte Asset-Listen.
+ * @param {string[]} panelIds - Panels in the composition.
+ * @returns {{css:string[],js:string[]}} Deduplicated asset lists.
  */
 function computeAssetsForComposition(panelIds) {
 	const registry = getRegistry();
@@ -578,10 +615,10 @@ function computeAssetsForComposition(panelIds) {
 }
 
 /**
- * Liefert eine einzelne Paneldefinition aus der Registry.
+ * Returns one panel definition from the registry.
  *
- * @param {string} panelId - Panel-ID.
- * @returns {object|null} Paneldefinition oder `null`.
+ * @param {string} panelId - Panel id.
+ * @returns {object|null} Panel definition or `null`.
  */
 function getPanelDefinition(panelId) {
 	const registry = getRegistry();
@@ -591,10 +628,10 @@ function getPanelDefinition(panelId) {
 }
 
 /**
- * Rendert einen sichtbaren Fehlerzustand direkt im betroffenen Panel-Container.
+ * Renders a visible error state directly into the affected panel container.
  *
- * @param {string} panelId - Panel-ID.
- * @param {any} err - Fehlerobjekt/-wert.
+ * @param {string} panelId - Panel id.
+ * @param {any} err - Error object or value.
  */
 function renderPanelBootError(panelId, err) {
 	const panelEl = document.getElementById(`tab-${panelId}`);
@@ -607,6 +644,7 @@ function renderPanelBootError(panelId, err) {
 
 void initTabs;
 void h;
+void resolveViewId;
 void buildLayoutFromRegistry;
 void loadCssFiles;
 void loadJsFilesSequential;

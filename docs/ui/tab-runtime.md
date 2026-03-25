@@ -5,6 +5,7 @@ It answers the basic questions the rest of the shell depends on:
 
 - which adapter instance is this page talking to?
 - what language is active?
+- is there a frontend format-locale override?
 - how do we send admin commands?
 - which admin i18n dictionary is loaded?
 - which theme should the shell use?
@@ -40,6 +41,10 @@ Those later files assume that `runtime.js` already created:
 - translation helpers
 - theme helpers
 
+`runtime.js` also defines the initial browser-side source for optional URL overrides such as
+`composition`, `expert`, `theme`, and `locale`, even though some of those values are only consumed
+later by [`./tab-layout.md`](./tab-layout.md), [`./tab-api.md`](./tab-api.md), or panel code.
+
 ---
 
 ## Responsibilities
@@ -49,9 +54,17 @@ Those later files assume that `runtime.js` already created:
 `parseQuery()` normalizes the page query into `args`.
 Notable behavior:
 
-- `instance` defaults to `0`
-- `instance` is coerced to an integer
-- `lang` falls back to the browser language when missing
+- `instance` defaults to `0` and is coerced to an integer
+- `lang` falls back to the browser base language when missing or blank
+- `locale` is trimmed and removed when blank
+- `composition` is trimmed and removed when blank
+- `expert` is normalized only when the key is present
+- `theme` and `react` stay raw so later theme helpers can apply the canonical precedence rules
+- `debugTheme` stays raw in `args` and is normalized separately at module load
+- unknown keys are preserved
+
+Invalid URL encoding is handled defensively: undecodable query fragments fall back to their raw key/value
+strings instead of aborting shell bootstrap.
 
 The module then derives:
 
@@ -100,19 +113,37 @@ That keeps plugin UI translations additive and namespace-bounded.
 
 ### 5) Detect and apply the shell theme
 
-The runtime also provides theme helpers:
+The runtime owns the explicit URL theme override contract through:
 
+- `resolveExplicitUrlTheme(query)`
 - `resolveTheme(query)`
 - `readThemeFromLocalStorage()`
 - `readThemeFromTopWindow()`
 - `detectTheme()`
 - `applyTheme(nextTheme)`
 
+Key rules:
+
+- `theme` is the canonical query parameter
+- `react` is the legacy alias and is consulted only when `theme` is absent
+- if `theme` is present but invalid, the legacy alias is still blocked
+- `detectTheme()` resolves in this order:
+  1. valid explicit URL override from `theme`
+  2. valid explicit URL override from legacy `react`
+  3. embedded host theme via `readThemeFromTopWindow()`
+  4. theme-like values from `localStorage`
+  5. `prefers-color-scheme: dark`
+  6. hard fallback `light`
+
 The selected theme is written to:
 
 ```html
 <html data-msghub-theme="dark|light">
 ```
+
+When a valid explicit URL override exists, `runtime.js` also sets `urlThemeLocked = true`.
+That flag is internal runtime coordination state used by [`./tab-layout.md`](./tab-layout.md) to suppress
+later host-driven theme sync paths for the rest of the session.
 
 ---
 
@@ -146,6 +177,10 @@ This module exposes classic-script globals rather than a single exported object.
 - `applyTheme(nextTheme)`
 - `detectTheme()`
 
+Internal shell-only coordination state:
+
+- `urlThemeLocked`
+
 Main consumers:
 
 - [`./tab-api.md`](./tab-api.md)
@@ -162,7 +197,11 @@ Main consumers:
 - `ensureAdminI18nLoaded()` caches the load promise. Repeated callers share the same in-flight work.
 - `overrideLang(...)` resets the cached dictionary promise so a later load can fetch the new language.
 - Plugin i18n merging is intentionally one-way and additive. Existing keys are never overwritten.
-- `detectTheme()` gives precedence to local storage, then host-window hints, then the initial query-derived theme, then `prefers-color-scheme`.
+- Unknown query keys remain available to native panels through `ctx.args`.
+- `runtime.js` parses `composition` and `expert`, but composition resolution happens in [`./tab-layout.md`](./tab-layout.md) and expert-mode capabilities are panel/API concerns.
+- `locale` is only a browser-side format-locale override source. It does not change admin i18n loading, text language, plugin bundle language selection, or backend payloads.
+- `urlThemeLocked` is an internal inter-module flag, not a native-panel API and not a plugin-facing contract.
+- The theme is applied immediately at module load to reduce visual flicker.
 - `applyTheme(...)` is idempotent for the current DOM state and optionally writes `window.__msghubAdminTabTheme` when `debugTheme` is enabled.
 
 ---
@@ -171,6 +210,7 @@ Main consumers:
 
 - Implementation: [`admin/tab/runtime.js`](../../admin/tab/runtime.js)
 - Test: [`admin/tab/runtime.test.js`](../../admin/tab/runtime.test.js)
+- URL guide: [`./url-parameters.md`](./url-parameters.md)
 - API facade built on top of this runtime: [`./tab-api.md`](./tab-api.md)
 - Layout theme consumer: [`./tab-layout.md`](./tab-layout.md)
 - Boot orchestration: [`./tab-boot.md`](./tab-boot.md)

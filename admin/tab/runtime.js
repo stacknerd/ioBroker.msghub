@@ -2,29 +2,52 @@
 'use strict';
 
 /**
- * MsgHub Admin Tab: Laufzeitgrundlagen (Query, Socket, i18n, Theme).
+ * MsgHub Admin Tab runtime foundations (query parsing, socket, i18n, theme).
  *
  * Docs: ../../docs/ui/tab-runtime.md
  *
- * Inhalt:
- * - Parsing der URL-Parameter und Ableitung von Adapter-Instanz/Language.
- * - Aufbau der Socket-Verbindung zum Admin-Backend.
- * - Laden und Zugriff auf Admin-i18n-Dictionaries.
- * - Theme-Ermittlung aus Query, Storage, Parent-Window und Fallbacks.
+ * Contents:
+ * - URL query parsing and normalization for adapter/runtime bootstrap values.
+ * - Admin backend socket setup.
+ * - Admin i18n dictionary loading and translation helpers.
+ * - Theme detection from query, storage, host window, and fallbacks.
  *
- * Systemeinbindung:
- * - Stellt globale Runtime-Variablen bereit (`args`, `socket`, `lang`, ...),
- *   die von `api.js`, `layout.js` und `boot.js` verwendet werden.
+ * Integration:
+ * - Exposes runtime globals (`args`, `window.msghubSocket`, `lang`, ...) consumed by
+ *   `api.js`, `layout.js`, and `boot.js`.
  *
- * Schnittstellen:
- * - Utility-Funktionen wie `t`, `ensureAdminI18nLoaded`, `detectTheme`.
- * - Keine UI-Manipulation außer Setzen des Root-Theme-Attributs.
+ * Canonical query parameters:
+ * - `instance` {number}, default `0`, consumed by `adapterInstance` bootstrap in this module.
+ * - `lang` {string}, default browser base language, consumed by `lang` bootstrap and i18n loading here.
+ * - `locale` {string}, default absent, trimmed here and consumed downstream as an optional frontend format-locale override.
+ * - `composition` {string}, default absent, parsed here and preserved on `args` for downstream consumers.
+ * - `expert` {boolean}, default absent, normalized here only when the key is present and preserved on `args`.
+ * - `theme` {string}, default absent, preserved raw in `args` and consumed by the theme helpers here.
+ * - `react` {string}, default absent, preserved raw in `args` and consumed as a legacy theme alias here.
+ * - `debugTheme` {boolean|string}, default absent, preserved raw in `args` and normalized at module load by `debugTheme`.
+ *
+ * Interfaces:
+ * - Utility functions such as `t`, `ensureAdminI18nLoaded`, and `detectTheme`.
+ * - No DOM mutation except setting the root theme attribute.
  */
 
 /**
- * Liest Query-Parameter aus der URL und normalisiert Kernwerte.
+ * Reads URL query parameters and normalizes canonical runtime values.
  *
- * @returns {object} Normalisierte Query-Werte inkl. `instance` und `lang`.
+ * Normalization:
+ * - `instance`: integer, defaults to `0` when absent or invalid.
+ * - `lang`: browser base language when absent or blank.
+ * - `locale`: trimmed string; empty after trim is removed.
+ * - `composition`: trimmed string; empty after trim is removed.
+ * - `expert`: normalized only when present; `true`, `1`, and bare `?expert` become `true`.
+ * - `theme` / `react`: kept as raw strings, including whitespace.
+ * - `debugTheme`: kept raw here and normalized later at module load.
+ * - Unknown keys are preserved.
+ *
+ * Invalid URL encoding is handled defensively: undecodable keys or values fall back
+ * to their raw query fragments instead of throwing during bootstrap.
+ *
+ * @returns {object} Normalized query values including `instance` and `lang`.
  */
 function parseQuery() {
 	const q = (window.location.search || '').replace(/^\?/, '').replace(/#.*$/, '');
@@ -35,7 +58,21 @@ function parseQuery() {
 			continue;
 		}
 		const [k, v] = p.split('=');
-		out[decodeURIComponent(k)] = v === undefined ? true : decodeURIComponent(v);
+		let key = k;
+		let value = v === undefined ? true : v;
+		try {
+			key = decodeURIComponent(k);
+		} catch {
+			key = k;
+		}
+		if (v !== undefined) {
+			try {
+				value = decodeURIComponent(v);
+			} catch {
+				value = v;
+			}
+		}
+		out[key] = value;
 	}
 	if (out.instance !== undefined) {
 		const n = Number(out.instance);
@@ -46,13 +83,32 @@ function parseQuery() {
 	if (typeof out.lang !== 'string' || !out.lang.trim()) {
 		out.lang = (navigator.language || 'en').split('-')[0].toLowerCase();
 	}
+	if (out.locale !== undefined) {
+		const locale = typeof out.locale === 'string' ? out.locale.trim() : '';
+		if (locale) {
+			out.locale = locale;
+		} else {
+			delete out.locale;
+		}
+	}
+	if (out.composition !== undefined) {
+		const composition = typeof out.composition === 'string' ? out.composition.trim() : '';
+		if (composition) {
+			out.composition = composition;
+		} else {
+			delete out.composition;
+		}
+	}
+	if (out.expert !== undefined) {
+		out.expert = out.expert === true || out.expert === '1' || out.expert === 'true';
+	}
 	return out;
 }
 
 /**
- * Baut die socket.io-Verbindung für Admin-Kontexte auf.
+ * Builds the socket.io connection for admin contexts.
  *
- * @returns {any} Socket.io-Clientinstanz.
+ * @returns {any} Socket.io client instance.
  */
 function createSocket() {
 	// ioBroker always serves socket.io at /socket.io — regardless of the tab URL path.
@@ -87,17 +143,21 @@ function msghubRequest(command, message) {
 }
 let lang = typeof args.lang === 'string' ? args.lang : 'en';
 const isEmbeddedInAdmin = window !== window.top;
+// `debugTheme` remains raw in `args` and is normalized here at module load for debug marker handling.
 const debugTheme = args.debugTheme === true || args.debugTheme === '1' || args.debugTheme === 'true';
-const initialThemeFromQuery = resolveTheme(args);
-// Wörterbuch und Lade-Promise sind bewusst im Modulzustand gehalten.
+const initialThemeFromQuery = resolveExplicitUrlTheme(args);
+const urlThemeLocked =
+	Object.prototype.hasOwnProperty.call(args || {}, 'theme') &&
+	(initialThemeFromQuery === 'dark' || initialThemeFromQuery === 'light');
+// Dictionary state and load promise stay in module scope on purpose.
 let adminDict = Object.freeze({});
 let adminDictPromise = null;
 
 /**
- * Normalisiert Sprach-Codes auf ein robustes Basisschema.
+ * Normalizes language codes to a stable base format.
  *
- * @param {string} x - Rohwert (z. B. `de-DE`, `EN`).
- * @returns {string} Basissprache in lowercase.
+ * @param {string} x - Raw value (for example `de-DE` or `EN`).
+ * @returns {string} Base language in lowercase.
  */
 function normalizeLang(x) {
 	const s = typeof x === 'string' ? x.trim().toLowerCase() : '';
@@ -105,9 +165,9 @@ function normalizeLang(x) {
 }
 
 /**
- * Überschreibt die aktive Sprache und erzwingt einen Reload des Dictionaries.
+ * Overrides the active language and forces the dictionary to reload.
  *
- * @param {string} newLang - Neue Sprache (z. B. `de`, `en`).
+ * @param {string} newLang - New language code (for example `de` or `en`).
  */
 function overrideLang(newLang) {
 	const normalized = normalizeLang(newLang);
@@ -119,10 +179,10 @@ function overrideLang(newLang) {
 }
 
 /**
- * Lädt JSON robust per Fetch und validiert den Grundtyp.
+ * Loads JSON via fetch and validates the root type.
  *
- * @param {string} url - Relativer oder absoluter JSON-Pfad.
- * @returns {Promise<object>} Geparstes JSON-Objekt.
+ * @param {string} url - Relative or absolute JSON path.
+ * @returns {Promise<object>} Parsed JSON object.
  */
 async function fetchJson(url) {
 	if (typeof fetch !== 'function') {
@@ -137,7 +197,7 @@ async function fetchJson(url) {
 }
 
 /**
- * Lädt das Admin-i18n-Dictionary (Fallback `en` + aktuelle Sprache).
+ * Loads the admin i18n dictionary with `en` fallback plus the active language.
  *
  * @returns {Promise<void>}
  */
@@ -157,9 +217,9 @@ async function loadAdminI18nDictionary() {
 }
 
 /**
- * Sichert, dass das Dictionary nur einmal initial geladen wird.
+ * Ensures that the admin dictionary is loaded only once per language state.
  *
- * @returns {Promise<void>} Promise auf den Ladeprozess.
+ * @returns {Promise<void>} Promise for the load process.
  */
 function ensureAdminI18nLoaded() {
 	if (adminDictPromise) {
@@ -172,10 +232,10 @@ function ensureAdminI18nLoaded() {
 }
 
 /**
- * Prüft, ob ein i18n-Key im geladenen Admin-Dictionary existiert.
+ * Checks whether an i18n key exists in the loaded admin dictionary.
  *
- * @param {string} key - Vollständiger i18n-Key.
- * @returns {boolean} `true`, wenn der Key existiert.
+ * @param {string} key - Fully qualified i18n key.
+ * @returns {boolean} `true` when the key exists.
  */
 function hasAdminKey(key) {
 	const k = String(key || '');
@@ -215,11 +275,11 @@ function mergePluginI18n(pluginType, translations) {
 }
 
 /**
- * Übersetzt einen i18n-Key mit einfacher `%s`-Platzhalterersetzung.
+ * Translates an i18n key with simple `%s` placeholder replacement.
  *
- * @param {string} key - i18n-Key.
- * @param {...any} args - Platzhalterwerte in Reihenfolge.
- * @returns {string} Übersetzter oder unveränderter Schlüssel.
+ * @param {string} key - i18n key.
+ * @param {...any} args - Placeholder values in order.
+ * @returns {string} Translated value or the unchanged key.
  */
 function t(key, ...args) {
 	const k = String(key ?? '');
@@ -232,19 +292,40 @@ function t(key, ...args) {
 }
 
 /**
- * Ermittelt ein initiales Theme aus Query/Fallback.
+ * Resolves an explicit URL theme override from query input only.
  *
- * @param {object} query - Query-Objekt aus `parseQuery`.
- * @returns {'dark'|'light'} Ermitteltes Theme.
+ * `theme` is the canonical query parameter. When `theme` is present, `react` is
+ * not consulted at all. The legacy `react` alias is only used as a fallback when
+ * `theme` is absent.
+ *
+ * @param {object} query - Query object returned by `parseQuery()`.
+ * @returns {'dark'|'light'|null} Explicit URL theme override or `null`.
  */
-function resolveTheme(query) {
+function resolveExplicitUrlTheme(query) {
+	if (query && Object.prototype.hasOwnProperty.call(query, 'theme')) {
+		const qTheme = typeof query?.theme === 'string' ? query.theme.trim().toLowerCase() : '';
+		if (qTheme === 'dark' || qTheme === 'light') {
+			return qTheme;
+		}
+		return null;
+	}
 	const qReact = typeof query?.react === 'string' ? query.react.trim().toLowerCase() : '';
 	if (qReact === 'dark' || qReact === 'light') {
 		return qReact;
 	}
-	const qTheme = typeof query?.theme === 'string' ? query.theme.trim().toLowerCase() : '';
-	if (qTheme === 'dark' || qTheme === 'light') {
-		return qTheme;
+	return null;
+}
+
+/**
+ * Resolves a theme from URL input with prefers-color-scheme fallback.
+ *
+ * @param {object} query - Query object returned by `parseQuery()`.
+ * @returns {'dark'|'light'} Resolved theme value.
+ */
+function resolveTheme(query) {
+	const fromUrl = resolveExplicitUrlTheme(query);
+	if (fromUrl === 'dark' || fromUrl === 'light') {
+		return fromUrl;
 	}
 	try {
 		return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
@@ -254,9 +335,9 @@ function resolveTheme(query) {
 }
 
 /**
- * Versucht, das Theme aus localStorage-ähnlichen Schlüsseln abzuleiten.
+ * Tries to derive the theme from localStorage-like keys.
  *
- * @returns {'dark'|'light'|null} Erkanntes Theme oder `null`.
+ * @returns {'dark'|'light'|null} Detected theme or `null`.
  */
 function readThemeFromLocalStorage() {
 	try {
@@ -310,12 +391,15 @@ function readThemeFromLocalStorage() {
 }
 
 /**
- * Liest Theme-Hinweise aus dem übergeordneten Fenster (Admin-Host).
+ * Reads theme hints from the parent window used by the admin host.
  *
- * @returns {'dark'|'light'|null} Erkanntes Theme oder `null`.
+ * @returns {'dark'|'light'|null} Detected theme or `null`.
  */
 function readThemeFromTopWindow() {
 	try {
+		if (!isEmbeddedInAdmin) {
+			return null;
+		}
 		const topDoc = window.top && window.top.document ? window.top.document : null;
 		if (!topDoc) {
 			return null;
@@ -347,9 +431,9 @@ function readThemeFromTopWindow() {
 }
 
 /**
- * Schreibt das erkannte Theme auf das Root-Element.
+ * Writes the detected theme to the root element.
  *
- * @param {'dark'|'light'} nextTheme - Gewünschtes Theme.
+ * @param {'dark'|'light'} nextTheme - Requested theme.
  */
 function applyTheme(nextTheme) {
 	const t = nextTheme === 'dark' ? 'dark' : 'light';
@@ -368,11 +452,14 @@ function applyTheme(nextTheme) {
 }
 
 /**
- * Führt alle Theme-Quellen in fester Priorität zusammen.
+ * Combines all theme sources in fixed priority order.
  *
- * @returns {'dark'|'light'} Ergebnis-Theme.
+ * @returns {'dark'|'light'} Resulting theme.
  */
 function detectTheme() {
+	if (urlThemeLocked && (initialThemeFromQuery === 'dark' || initialThemeFromQuery === 'light')) {
+		return initialThemeFromQuery;
+	}
 	const fromStorage = readThemeFromLocalStorage();
 	if (fromStorage === 'dark' || fromStorage === 'light') {
 		return fromStorage;
@@ -398,6 +485,8 @@ void overrideLang;
 void ensureAdminI18nLoaded;
 void mergePluginI18n;
 void t;
+void resolveTheme;
+void urlThemeLocked;
 
-// Theme so früh wie möglich setzen, um visuelles Flackern zu reduzieren.
+// Apply the theme as early as possible to reduce visual flicker.
 applyTheme(detectTheme());

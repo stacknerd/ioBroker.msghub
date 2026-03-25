@@ -1,31 +1,30 @@
-/* global document, win, hasAdminKey */
+/* global hasAdminKey, resolveViewId, getActiveComposition, args, window */
 'use strict';
 
 /**
- * MsgHub Admin Tab: API-Fassade zwischen UI/Panels und ioBroker-Backend.
+ * MsgHub Admin Tab API facade between UI panels and the ioBroker backend.
  *
  * Docs: ../../docs/ui/tab-api.md
  *
- * Inhalt:
- * - Utility-Helfer (`createAsyncCache`, `computeContextMenuPosition`, Icon-Normalisierung).
- * - Aufbau der stabilen `ctx.api`-Oberfläche für Panels.
- * - Kapselung aller `sendTo`-Kommandos in klar benannten API-Gruppen.
+ * Contents:
+ * - Utility helpers (`createAsyncCache`, `computeContextMenuPosition`, icon normalization).
+ * - Construction of the stable `ctx.api` surface for panels.
+ * - Encapsulation of all `sendTo` commands in clearly named API groups.
  *
- * Systemeinbindung:
- * - `boot.js` erzeugt über `createAdminApi(...)` die einzige erlaubte Backend-Schnittstelle.
- * - Panels arbeiten ausschließlich gegen `ctx.api`, nie direkt gegen Socket oder `sendTo`.
+ * Integration:
+ * - `boot.js` creates the only supported backend interface through `createAdminApi(...)`.
+ * - Panels work exclusively against `ctx.api`, never directly against socket or `sendTo`.
  *
- * Schnittstellen:
- * - `createAdminApi(...)` liefert ein gefrorenes API-Objekt zurück.
- * - Unterstützende Funktionen sind Dateiintern, werden aber bewusst dokumentiert,
- *   damit Wartung und spätere Extraktion in separate Module nachvollziehbar bleibt.
+ * Interfaces:
+ * - `createAdminApi(...)` returns a frozen API object.
+ * - Supporting helpers stay file-local but are documented for maintenance clarity.
  */
 
 /**
- * Erzeugt einen einheitlichen Fehler für noch nicht unterstützte API-Zweige.
+ * Creates a consistent error for API branches that are intentionally unsupported.
  *
- * @param {string} message - Hinweis, welche Operation nicht unterstützt wird.
- * @returns {Error} Fehlerobjekt mit Name/Code zur gezielten Unterscheidung.
+ * @param {string} message - Message describing which operation is unsupported.
+ * @returns {Error} Error object with a stable name and code.
  */
 function createNotSupportedError(message) {
 	const err = Object.assign(new Error(String(message || 'Not supported')), { code: 'NOT_SUPPORTED' });
@@ -34,12 +33,12 @@ function createNotSupportedError(message) {
 }
 
 /**
- * Baut einen asynchronen In-Memory-Cache mit optionalem Ablauf.
+ * Builds an asynchronous in-memory cache with optional expiration.
  *
- * @param {Function} fetchFn - Funktion, die den Wert bei Cache-Miss lädt.
- * @param {object} [options] - Optionale Cache-Konfiguration.
- * @param {number} [options.maxAgeMs] - Maximales Alter eines Eintrags in Millisekunden.
- * @returns {{get: Function, invalidate: Function}} Cache-API.
+ * @param {Function} fetchFn - Function that loads the value on cache miss.
+ * @param {object} [options] - Optional cache configuration.
+ * @param {number} [options.maxAgeMs] - Maximum entry age in milliseconds.
+ * @returns {{get: Function, invalidate: Function}} Cache API.
  */
 function createAsyncCache(fetchFn, { maxAgeMs = Infinity } = {}) {
 	let value = undefined;
@@ -48,9 +47,9 @@ function createAsyncCache(fetchFn, { maxAgeMs = Infinity } = {}) {
 	let fetchedAt = 0;
 
 	/**
-	 * Prüft, ob der aktuelle Cache-Wert noch gültig ist.
+	 * Checks whether the current cache value is still valid.
 	 *
-	 * @returns {boolean} `true`, wenn ein frischer Cache-Wert existiert.
+	 * @returns {boolean} `true` when a fresh cache value exists.
 	 */
 	const isFresh = () => {
 		if (!hasValue) {
@@ -64,7 +63,7 @@ function createAsyncCache(fetchFn, { maxAgeMs = Infinity } = {}) {
 	};
 
 	/**
-	 * Leert den Cache explizit.
+	 * Clears the cache explicitly.
 	 */
 	const invalidate = () => {
 		value = undefined;
@@ -74,9 +73,9 @@ function createAsyncCache(fetchFn, { maxAgeMs = Infinity } = {}) {
 	};
 
 	/**
-	 * Liefert den Cache-Wert und lädt bei Bedarf nach.
+	 * Returns the cache value and loads it on demand when needed.
 	 *
-	 * @returns {Promise<any>} Aufgelöster Cache-Wert.
+	 * @returns {Promise<any>} Resolved cache value.
 	 */
 	const get = () => {
 		if (isFresh()) {
@@ -106,20 +105,20 @@ function createAsyncCache(fetchFn, { maxAgeMs = Infinity } = {}) {
 }
 
 /**
- * Berechnet die Bildschirmposition eines Kontextmenüs inkl. Flip/Clamp-Logik.
+ * Computes screen coordinates for a context menu including flip/clamp logic.
  *
- * @param {object} params - Positions- und Viewportparameter.
- * @param {number} params.anchorX - X-Koordinate des Menüsankers.
- * @param {number} params.anchorY - Y-Koordinate des Menüsankers.
- * @param {number} params.menuWidth - Gemessene Breite des Menüs.
- * @param {number} params.menuHeight - Gemessene Höhe des Menüs.
- * @param {number} params.viewportWidth - Breite des sichtbaren Viewports.
- * @param {number} params.viewportHeight - Höhe des sichtbaren Viewports.
- * @param {'cursor'|'anchor'|'submenu'} [params.mode] - Positionierungsmodus.
- * @param {number} [params.alignHeight] - Referenzhöhe für Submenü-Ausrichtung.
- * @param {number} [params.viewportPadding] - Mindestabstand zum Viewportrand.
- * @param {number} [params.cursorOffset] - Offset vom Cursor/Anchor.
- * @returns {{x:number,y:number}} Pixelkoordinaten für CSS `left`/`top`.
+ * @param {object} params - Position and viewport parameters.
+ * @param {number} params.anchorX - X coordinate of the menu anchor.
+ * @param {number} params.anchorY - Y coordinate of the menu anchor.
+ * @param {number} params.menuWidth - Measured menu width.
+ * @param {number} params.menuHeight - Measured menu height.
+ * @param {number} params.viewportWidth - Width of the visible viewport.
+ * @param {number} params.viewportHeight - Height of the visible viewport.
+ * @param {'cursor'|'anchor'|'submenu'} [params.mode] - Positioning mode.
+ * @param {number} [params.alignHeight] - Reference height for submenu alignment.
+ * @param {number} [params.viewportPadding] - Minimum distance to the viewport edge.
+ * @param {number} [params.cursorOffset] - Offset from the cursor or anchor.
+ * @returns {{x:number,y:number}} Pixel coordinates for CSS `left` and `top`.
  */
 function computeContextMenuPosition({
 	anchorX,
@@ -185,10 +184,10 @@ function computeContextMenuPosition({
 }
 
 /**
- * Wandelt einen Icon-Namen in eine CSS-Variablenreferenz um.
+ * Converts an icon name into a CSS variable reference.
  *
- * @param {string} iconName - Technischer Icon-Key.
- * @returns {string} CSS-Wert (`var(--msghub-icon-...)`) oder leer bei ungültigem Input.
+ * @param {string} iconName - Technical icon key.
+ * @returns {string} CSS value (`var(--msghub-icon-...)`) or an empty string for invalid input.
  */
 function toContextMenuIconVar(iconName) {
 	const name = typeof iconName === 'string' ? iconName.trim() : '';
@@ -246,26 +245,54 @@ function normalizeTimePolicy(policy) {
 }
 
 /**
- * Erzeugt die stabile API-Fassade für alle Panels.
+ * Detects whether expert mode is enabled for the current admin session.
  *
- * @param {object} deps - Laufzeitabhängigkeiten aus dem Bootstrapping.
- * @param {Function} deps.msghubRequest - Backend-Brücke für msghub-Kommandos.
+ * The URL flag is additive only: `true` forces expert mode on, while `false`
+ * does not disable host-provided expert mode from session storage or `_system`.
+ *
+ * @param {any} argsExpert - Optional normalized `args.expert` value.
+ * @returns {boolean} `true` when expert mode is active.
+ */
+function detectHostExpertMode(argsExpert) {
+	if (argsExpert === true || argsExpert === '1' || argsExpert === 'true') {
+		return true;
+	}
+
+	try {
+		const storage = window?.sessionStorage;
+		if (storage && typeof storage.getItem === 'function') {
+			if (storage.getItem('App.expertMode') === 'true') {
+				return true;
+			}
+		}
+	} catch {
+		// Ignore host/session access errors.
+	}
+
+	try {
+		const sys = window?._system || window?.top?._system;
+		return !!sys?.expertMode;
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * Creates the stable API facade for all panels.
+ *
+ * @param {object} deps - Runtime dependencies from bootstrapping.
+ * @param {Function} deps.msghubRequest - Backend bridge for msghub commands.
  * @param {any} deps.msghubSocket - Socket instance for connection state checks.
- * @param {string} deps.adapterInstance - Adapter-Instanzkennung.
- * @param {string} deps.lang - Aktuelle Sprache.
- * @param {Function} deps.t - Übersetzungsfunktion.
- * @param {Function} deps.pickText - Text-Auflöser für mehrsprachige Felder.
- * @param {object} deps.ui - UI-Fassade (`toast`, `contextMenu`, `dialog`, ...).
- * @returns {object} Gefrorene API-Oberfläche (`ctx.api`).
+ * @param {string} deps.adapterInstance - Adapter instance id.
+ * @param {string} deps.lang - Active language code.
+ * @param {Function} deps.t - Translation function.
+ * @param {Function} deps.pickText - Text resolver for localized fields.
+ * @param {object} deps.ui - UI facade (`toast`, `contextMenu`, `dialog`, ...).
+ * @returns {object} Frozen API surface (`ctx.api`).
  */
 function createAdminApi({ msghubRequest, msghubSocket, adapterInstance, lang, t, pickText, ui }) {
-	const registry = win.MsghubAdminTabRegistry || null;
-	const viewIdRaw = document?.documentElement?.getAttribute?.('data-msghub-view') || '';
-	const viewId = String(viewIdRaw || '').trim() || 'adminTab';
-	const composition =
-		registry && registry.compositions && typeof registry.compositions === 'object'
-			? registry.compositions[viewId]
-			: null;
+	const viewId = typeof resolveViewId === 'function' ? resolveViewId() : 'adminTab';
+	const composition = typeof getActiveComposition === 'function' ? getActiveComposition() : null;
 	// Filter to string entries only — structured plugin panel refs are not native panels.
 	const panelIds = Array.isArray(composition?.panels)
 		? composition.panels.filter(v => typeof v === 'string' && v)
@@ -294,6 +321,17 @@ function createAdminApi({ msghubRequest, msghubSocket, adapterInstance, lang, t,
 
 	let timePolicy = normalizeTimePolicy(null);
 	const timeFormatterCache = new Map();
+	const queryFormatLocale = (() => {
+		const candidate = typeof args !== 'undefined' && typeof args?.locale === 'string' ? args.locale.trim() : '';
+		if (!candidate) {
+			return '';
+		}
+		try {
+			return new Intl.DateTimeFormat(candidate).resolvedOptions().locale || candidate;
+		} catch {
+			return '';
+		}
+	})();
 
 	/**
 	 * Returns a cached date formatter for one locale/timezone tuple.
@@ -332,11 +370,11 @@ function createAdminApi({ msghubRequest, msghubSocket, adapterInstance, lang, t,
 		});
 
 	/**
-	 * Packt Kontextmenü-Items rekursiv, damit Select-Aktionen robust beendet
-	 * und Fehlerszenarien sichtbar an den Nutzer zurückgemeldet werden.
+	 * Wraps context menu items recursively so select actions close reliably
+	 * and failure scenarios are surfaced consistently.
 	 *
-	 * @param {Array<any>} items - Rohes Item-Array aus dem aufrufenden Panel.
-	 * @returns {Array<any>} Defensiv verpacktes Item-Array.
+	 * @param {Array<any>} items - Raw item array from the calling panel.
+	 * @returns {Array<any>} Defensively wrapped item array.
 	 */
 	const wrapContextMenuItems = items => {
 		const list = Array.isArray(items) ? items : [];
@@ -388,9 +426,9 @@ function createAdminApi({ msghubRequest, msghubSocket, adapterInstance, lang, t,
 					t('msghub.i18n.core.admin.ui.spinner.pleaseWait.text');
 				return ui?.spinner?.show({ ...opts, message });
 			},
-			/** @param {string} [id] - Spinner-ID; ohne Argument werden alle geschlossen. */
+			/** @param {string} [id] - Spinner id; without an argument all spinners are closed. */
 			hide: id => ui?.spinner?.hide(id),
-			/** @param {string} [id] - Spinner-ID; ohne Argument: irgendein offen? */
+			/** @param {string} [id] - Spinner id; without an argument checks whether any spinner is open. */
 			isOpen: id => ui?.spinner?.isOpen(id) ?? false,
 		}),
 		/** @param {string} id - Toast ID to close. */
@@ -407,13 +445,14 @@ function createAdminApi({ msghubRequest, msghubSocket, adapterInstance, lang, t,
 		defaultPanel: defaultPanelId,
 		adapterInstance,
 		isConnected: () => !!msghubSocket?.connected,
+		isExpertMode: () => detectHostExpertMode(typeof args !== 'undefined' ? args?.expert : undefined),
 	});
 
 	/**
-	 * Hilfsfunktion für absichtlich deaktivierte API-Zweige.
+	 * Helper for intentionally disabled API branches.
 	 *
-	 * @param {string} method - Name der angeforderten Operation.
-	 * @throws {Error} Immer.
+	 * @param {string} method - Name of the requested operation.
+	 * @throws {Error} Always.
 	 */
 	const notSupported = method => {
 		throw createNotSupportedError(method);
@@ -462,7 +501,8 @@ function createAdminApi({ msghubRequest, msghubSocket, adapterInstance, lang, t,
 			}
 			try {
 				const opts = options && typeof options === 'object' ? options : {};
-				const locale = typeof opts.locale === 'string' ? opts.locale.trim() : '';
+				const explicitLocale = typeof opts.locale === 'string' ? opts.locale.trim() : '';
+				const locale = explicitLocale || queryFormatLocale;
 				const includeTimeZone = opts.includeTimeZone === true;
 				const formatter = getTimeFormatter(locale, timePolicy.timeZone, includeTimeZone);
 				return formatter.format(new Date(ts));

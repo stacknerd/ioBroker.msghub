@@ -15,12 +15,16 @@ the ioBroker admin host.
 This module is loaded before [`./tab-boot.md`](./tab-boot.md) and after the runtime/UI helpers.
 It depends on:
 
-- runtime theme helpers from [`./tab-runtime.md`](./tab-runtime.md)
+- runtime query/theme helpers from [`./tab-runtime.md`](./tab-runtime.md)
 - the shell registry from [`./tab-registry.md`](./tab-registry.md)
 - the small DOM helper `h(...)` defined in this file itself
 
-The main consumer is `boot.js`, which calls `buildLayoutFromRegistry()`, `initTabs()`,
-`computeAssetsForComposition()`, `loadCssFiles()`, and `loadJsFilesSequential()`.
+The main consumer is `boot.js`, which calls `resolveViewId()`, `getActiveComposition()`,
+`buildLayoutFromRegistry()`, `initTabs()`, `computeAssetsForComposition()`, `loadCssFiles()`,
+and `loadJsFilesSequential()`.
+
+`api.js` also depends on the same composition resolution helpers so that `api.host.*` metadata and the
+visible shell use the same final view/composition decision.
 
 ---
 
@@ -42,6 +46,15 @@ It separates the result into two groups:
 That separation is important because native panels are initialized from registry assets, while plugin panels
 are hydrated later from runtime discover data.
 
+The active composition is resolved centrally through:
+
+1. registered `args.composition`
+2. registered `data-msghub-view`
+3. hard fallback `adminTab`
+
+Unknown composition ids do not fall through to wildcard mode. Wildcard handling happens only when the
+selected composition itself declares `panels: ['*']`.
+
 ### 2) Manage tab navigation and panel visibility
 
 `initTabs()` binds `.msghub-tab` links to their panel containers and keeps:
@@ -59,6 +72,7 @@ Its hash handling is intentionally narrow:
 - it writes a new hash via `history.replaceState(...)` on tab clicks
 
 It does not listen for `hashchange` or `popstate`, so external hash changes do not switch tabs back.
+It also does not use the hash to select a composition.
 
 When the active tab changes, it dispatches:
 
@@ -90,12 +104,25 @@ The module listens for several theme signals:
 All of them route through `applyTheme(...)` from [`./tab-runtime.md`](./tab-runtime.md).
 
 This is a practical anti-drift layer: if one host-side theme signal is missing, the shell still has backups.
+When `urlThemeLocked === true`, all of those sync paths become no-ops so an explicit URL theme override remains authoritative.
 
 ---
 
 ## Public surface / integration points
 
 `layout.js` exposes the shell helpers as classic global functions.
+
+### `resolveViewId()`
+
+Returns the resolved composition id using the shared fallback order:
+
+1. registered `args.composition`
+2. registered `data-msghub-view`
+3. `adminTab`
+
+### `getActiveComposition()`
+
+Returns the registered composition object for `resolveViewId()`, or `null`.
 
 ### `initTabs({ defaultPanelId })`
 
@@ -138,12 +165,14 @@ Writes a visible error state directly into the affected panel container.
 
 ## Design notes / invariants
 
+- `resolveViewId()` is the shared composition resolver for both `layout.js` and `api.js`; visible layout and `api.host.viewId` must not drift.
 - Plugin panel refs are never mixed into `panelIds`. Native and plugin panels follow different initialization paths.
 - Plugin tabs render in a disabled placeholder state until discover hydration confirms availability.
 - `initTabs()` skips disabled tabs when resolving the initial active panel from hash, markup, and fallback defaults.
 - `loadCssFiles()` deduplicates URLs and reports failures instead of throwing.
 - `loadJsFilesSequential()` preserves script order and throws on the first failed script, because many panel files depend on earlier globals.
 - Theme syncing is intentionally redundant: message, storage, polling, and mutation observation all feed the same final theme setter.
+- `urlThemeLocked` is runtime-owned internal coordination state. `layout.js` consumes it, but it is not a public native-panel or plugin-facing API.
 
 ---
 
@@ -152,6 +181,8 @@ Writes a visible error state directly into the affected panel container.
 - Implementation: [`admin/tab/layout.js`](../../admin/tab/layout.js)
 - Test: [`admin/tab/layout.test.js`](../../admin/tab/layout.test.js)
 - Registry input: [`./tab-registry.md`](./tab-registry.md)
-- Runtime theme helpers: [`./tab-runtime.md`](./tab-runtime.md)
+- Runtime query/theme helpers: [`./tab-runtime.md`](./tab-runtime.md)
+- API host metadata consumer: [`./tab-api.md`](./tab-api.md)
 - Boot orchestration: [`./tab-boot.md`](./tab-boot.md)
+- URL guide: [`./url-parameters.md`](./url-parameters.md)
 - Shell HTML host: [`admin/tab.html`](../../admin/tab.html)

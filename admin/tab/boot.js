@@ -2,34 +2,34 @@
 'use strict';
 
 /**
- * MsgHub Admin Tab: Bootstrapping und Runtime-Orchestrierung.
+ * MsgHub Admin Tab bootstrapping and runtime orchestration.
  *
  * Docs: ../../docs/ui/tab-boot.md
  *
- * Inhalt:
- * - Aufbau von `ui`, `api`, `ctx` und DOM-Elementzugriffen.
- * - Initialisierung und Lifecycle-Verwaltung der Panels.
- * - Connection-Status, i18n-Anwendung und globales Context-Menü für Eingabefelder.
- * - Reconnect-Warmup für verzögert verfügbare Backend-APIs.
+ * Contents:
+ * - Construction of `ui`, `api`, `ctx`, and DOM element accessors.
+ * - Panel initialization and lifecycle management.
+ * - Connection status, i18n application, and the global context menu for editable inputs.
+ * - Reconnect warmup for backend APIs that may become available later.
  *
- * Systemeinbindung:
- * - Nutzt die zuvor geladenen Module `runtime.js`, `api.js`, `layout.js`, `ui.js`.
- * - Ist das letzte Core-Modul in der Ladereihenfolge und startet den eigentlichen Betrieb.
+ * Integration:
+ * - Consumes the previously loaded `runtime.js`, `api.js`, `layout.js`, and `ui.js` modules.
+ * - Acts as the last core module in load order and starts the actual runtime flow.
  *
- * Schnittstellen:
- * - Kein externes Export-Objekt; arbeitet über Event-Handler und globale Boot-Sequenz.
- * - Panels erhalten ihre Runtime über das gefrorene `ctx`.
+ * Interfaces:
+ * - No exported module object; it works through event handlers and the global boot sequence.
+ * - Panels receive their runtime via the frozen `ctx`.
  */
 
 /**
- * Löst lokalisierbare Textwerte robust auf.
+ * Resolves localizable text values defensively.
  *
- * Unterstützt:
- * - direkten String (ggf. i18n-Key),
- * - sprachabhängige Objektwerte (`{ en: "...", de: "..." }`).
+ * Supports:
+ * - direct strings, including i18n keys
+ * - language-mapped objects such as `{ en: "...", de: "..." }`
  *
- * @param {any} value - Quellwert.
- * @returns {string} Aufgelöster Text.
+ * @param {any} value - Source value.
+ * @returns {string} Resolved text.
  */
 function pickText(value) {
 	if (typeof value === 'string') {
@@ -66,7 +66,7 @@ ui?.contextMenu?.setBrandingText?.('Message Hub');
 
 const api = createAdminApi({ msghubRequest, msghubSocket, adapterInstance, lang, t, pickText, ui });
 
-// `ctx` ist die einzige Runtime-Sicht, die Panels erhalten.
+// `ctx` is the only runtime view that native panels receive.
 const ctx = Object.freeze({
 	args,
 	adapterInstance,
@@ -156,10 +156,10 @@ async function refreshRuntimeAbout() {
 void refreshRuntimeAbout();
 
 /**
- * Liefert ein editierbares Ziel unterhalb eines Event-Targets.
+ * Returns an editable target beneath an event target.
  *
- * @param {EventTarget|HTMLElement|null} el - Event-Target.
- * @returns {HTMLElement|null} Editierbares Element oder `null`.
+ * @param {EventTarget|HTMLElement|null} el - Event target.
+ * @returns {HTMLElement|null} Editable element or `null`.
  */
 function findEditableTarget(el) {
 	const node = el instanceof HTMLElement ? el : null;
@@ -194,10 +194,10 @@ function findEditableTarget(el) {
 }
 
 /**
- * Liest den aktuellen Selection-Status für ein editierbares Element.
+ * Reads the current selection state for an editable element.
  *
- * @param {HTMLElement} editable - Ziel-Element.
- * @returns {{hasSelection:boolean,selectedText:string,start:number,end:number}} Selektionsdaten.
+ * @param {HTMLElement} editable - Target element.
+ * @returns {{hasSelection:boolean,selectedText:string,start:number,end:number}} Selection metadata.
  */
 function getEditableSelectionInfo(editable) {
 	if (editable instanceof HTMLInputElement || editable instanceof HTMLTextAreaElement) {
@@ -222,9 +222,9 @@ function getEditableSelectionInfo(editable) {
 }
 
 /**
- * Markiert den gesamten Inhalt eines editierbaren Elements.
+ * Selects the full contents of an editable element.
  *
- * @param {HTMLElement} editable - Ziel-Element.
+ * @param {HTMLElement} editable - Target element.
  */
 function selectAllInEditable(editable) {
 	if (editable instanceof HTMLInputElement || editable instanceof HTMLTextAreaElement) {
@@ -246,10 +246,10 @@ function selectAllInEditable(editable) {
 }
 
 /**
- * Führt `document.execCommand` defensiv aus.
+ * Runs `document.execCommand` defensively.
  *
- * @param {string} cmd - Command-Name (`copy`, `cut`, ...).
- * @returns {boolean} `true`, wenn der Command erfolgreich war.
+ * @param {string} cmd - Command name (`copy`, `cut`, ...).
+ * @returns {boolean} `true` when the command succeeded.
  */
 function execCommandSafe(cmd) {
 	try {
@@ -263,9 +263,9 @@ function execCommandSafe(cmd) {
 }
 
 /**
- * Kopiert die aktuelle Auswahl in die Zwischenablage.
+ * Copies the current selection to the clipboard.
  *
- * @param {HTMLElement} editable - Editierbares Element.
+ * @param {HTMLElement} editable - Editable element.
  * @returns {Promise<void>}
  */
 async function copySelectionFromEditable(editable) {
@@ -285,9 +285,9 @@ async function copySelectionFromEditable(editable) {
 }
 
 /**
- * Schneidet die aktuelle Auswahl aus und schreibt sie in die Zwischenablage.
+ * Cuts the current selection and writes it to the clipboard.
  *
- * @param {HTMLElement} editable - Editierbares Element.
+ * @param {HTMLElement} editable - Editable element.
  * @returns {Promise<void>}
  */
 async function cutSelectionFromEditable(editable) {
@@ -317,9 +317,9 @@ async function cutSelectionFromEditable(editable) {
 }
 
 /**
- * Fügt Clipboard-Text in ein editierbares Element ein.
+ * Pastes clipboard text into an editable element.
  *
- * @param {HTMLElement} editable - Editierbares Element.
+ * @param {HTMLElement} editable - Editable element.
  * @returns {Promise<void>}
  */
 async function pasteIntoEditable(editable) {
@@ -363,10 +363,10 @@ async function pasteIntoEditable(editable) {
 }
 
 /**
- * Baut Standard-Kontextmenüeinträge für Text-Eingabefelder.
+ * Builds standard context-menu items for text-like editable fields.
  *
- * @param {HTMLElement} editable - Editierbares Element.
- * @returns {Array<object>} Context-Menu-Items.
+ * @param {HTMLElement} editable - Editable element.
+ * @returns {Array<object>} Context-menu items.
  */
 function buildInputContextMenuItems(editable) {
 	const info = getEditableSelectionInfo(editable);
@@ -464,10 +464,10 @@ document.addEventListener('contextmenu', e => {
 });
 
 /**
- * Schreibt Layout-/Device-Infos als Root-Attribute.
+ * Writes layout/device metadata to root attributes.
  *
- * @param {'tabs'|'single'} layout - Aktive Layoutart.
- * @param {'pc'|'mobile'|'screenOnly'} deviceMode - Geräteprofil.
+ * @param {'tabs'|'single'} layout - Active layout mode.
+ * @param {'pc'|'mobile'|'screenOnly'} deviceMode - Device profile.
  */
 const setConnLayout = (layout, deviceMode) => {
 	const el = elements.connection;
@@ -486,9 +486,9 @@ const setConnLayout = (layout, deviceMode) => {
 };
 
 /**
- * Aktualisiert die Online/Offline-Klassen am Verbindungsbalken.
+ * Updates the online/offline classes on the connection bar.
  *
- * @param {boolean} isOnline - Neuer Verbindungszustand.
+ * @param {boolean} isOnline - New connection state.
  */
 const setConnStatus = isOnline => {
 	if (!elements.connection) {
@@ -509,7 +509,7 @@ const CONN_TOAST_ID = 'msghub-connection-status';
 let connLostToastActive = false;
 
 /**
- * Wendet `data-i18n`-Texte für statische DOM-Knoten an.
+ * Applies `data-i18n` text to static DOM nodes.
  */
 function applyStaticI18n() {
 	for (const el of document.querySelectorAll('[data-i18n]')) {
@@ -533,6 +533,17 @@ function updateConnectionPanel() {
 		}
 	};
 	const dash = '—';
+	const frontendFormatLocale = (() => {
+		const queryLocale = typeof args !== 'undefined' && typeof args?.locale === 'string' ? args.locale.trim() : '';
+		if (queryLocale) {
+			try {
+				return new Intl.DateTimeFormat(queryLocale).resolvedOptions().locale || queryLocale;
+			} catch {
+				// Ignore invalid URL locale overrides and fall back to the existing source.
+			}
+		}
+		return navigator.language || '';
+	})();
 	set(
 		'msghub-conn-status',
 		t(
@@ -575,7 +586,7 @@ function updateConnectionPanel() {
 	set('msghub-conn-version', connPanelData.version || dash);
 	set('msghub-conn-fe-tz', Intl.DateTimeFormat().resolvedOptions().timeZone || dash);
 	set('msghub-conn-fe-lang', lang || dash);
-	set('msghub-conn-fe-fmt', navigator.language || dash);
+	set('msghub-conn-fe-fmt', frontendFormatLocale || dash);
 	// Timezone hint: visible only when server TZ differs from browser TZ
 	const tzHint = document.getElementById('msghub-conn-tz-hint');
 	if (tzHint) {
@@ -653,10 +664,10 @@ function initConnectionPanelInteraction() {
 const panelSections = new Map();
 
 /**
- * Initialisiert ein Panel anhand seiner Registry-ID.
+ * Initializes a panel by its registry id.
  *
- * @param {string} panelId - Panel-ID.
- * @returns {object|null} Panel-Handle (optional mit `onConnect` etc.).
+ * @param {string} panelId - Panel id.
+ * @returns {object|null} Panel handle (optionally with `onConnect`, etc.).
  */
 function initPanelById(panelId) {
 	const id = String(panelId || '').trim();
@@ -693,9 +704,9 @@ function initPanelById(panelId) {
 }
 
 /**
- * Initialisiert alle Panels der aktuellen Composition inklusive Asset-Ladung.
+ * Initializes all panels of the active composition, including asset loading.
  *
- * @param {string[]} panelIds - Panel-IDs der Composition.
+ * @param {string[]} panelIds - Panel ids from the active composition.
  * @returns {Promise<void>}
  */
 async function initPanelsForComposition(panelIds) {
@@ -806,9 +817,9 @@ async function hydratePluginPanels(refs, host, knownContributions = null) {
 let bootPromise = null;
 
 /**
- * Führt den kompletten Bootprozess idempotent aus.
+ * Runs the full boot process idempotently.
  *
- * @returns {Promise<void>} Promise auf den Bootstatus.
+ * @returns {Promise<void>} Promise for the boot state.
  */
 function ensureBooted() {
 	if (bootPromise) {
@@ -915,7 +926,7 @@ function ensureBooted() {
 	return bootPromise;
 }
 
-// Initialer Boot direkt nach DOM-Bereitschaft.
+// Start the initial boot as soon as the DOM is ready.
 window.addEventListener('DOMContentLoaded', () => {
 	void ensureBooted();
 });
@@ -924,17 +935,17 @@ let connectWarmupToken = 0;
 let connectWarmupPromise = null;
 
 /**
- * Async-Sleep mit defensiver ms-Normalisierung.
+ * Async sleep with defensive millisecond normalization.
  *
- * @param {number} ms - Wartedauer in Millisekunden.
+ * @param {number} ms - Wait duration in milliseconds.
  * @returns {Promise<void>}
  */
 const sleepMs = ms => new Promise(resolve => setTimeout(resolve, Math.max(0, Math.trunc(Number(ms) || 0))));
 
 /**
- * Warmup-Loop: wartet auf verfügbare API-Konstanten nach Reconnect.
+ * Warmup loop that waits for API constants to become available after reconnect.
  *
- * @returns {Promise<boolean>} `true`, wenn Warmup erfolgreich war.
+ * @returns {Promise<boolean>} `true` when warmup succeeded.
  */
 async function warmupAdminApis() {
 	const token = ++connectWarmupToken;
@@ -955,9 +966,9 @@ async function warmupAdminApis() {
 }
 
 /**
- * Startet (oder re-used) den Warmup-Reconnect-Prozess.
+ * Starts (or reuses) the reconnect warmup process.
  *
- * @returns {Promise<void>} Promise auf den laufenden Warmup.
+ * @returns {Promise<void>} Promise for the running warmup.
  */
 function triggerWarmupReconnect() {
 	if (connectWarmupPromise) {

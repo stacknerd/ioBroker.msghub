@@ -1,30 +1,53 @@
 /* eslint-env mocha */
 'use strict';
 
+/**
+ * Runtime module tests for admin/tab/runtime.js.
+ *
+ * Contents:
+ * - Sandbox-based loading of the browser runtime module.
+ * - Query parsing, socket bootstrap, i18n helpers, and theme behavior tests.
+ *
+ * Integration:
+ * - Executes `runtime.js` inside a VM-backed browser-like sandbox.
+ * - Exposes selected runtime globals through `window.__runtime` for assertions.
+ *
+ * Interfaces:
+ * - `loadRuntimeSandbox(options)` creates an isolated runtime fixture for each test.
+ */
+
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
 const { readRepoFile } = require('./_test.utils');
 
+/**
+ * Loads `admin/tab/runtime.js` into an isolated browser-like sandbox.
+ *
+ * @param {object} [options={}] - Sandbox overrides for location, storage, fetch, and socket behavior.
+ * @returns {Promise<object>} Sandbox with `window.__runtime` plus test metadata in `__meta`.
+ */
 async function loadRuntimeSandbox(options = {}) {
 	const source = await readRepoFile('admin/tab/runtime.js');
 	const expose = `
-window.__runtime = {
-	parseQuery,
-	createSocket,
-	normalizeLang,
+	window.__runtime = {
+		parseQuery,
+		createSocket,
+		normalizeLang,
 	fetchJson,
 	loadAdminI18nDictionary,
 	ensureAdminI18nLoaded,
 	hasAdminKey,
-	mergePluginI18n,
-	t,
-	resolveTheme,
-	readThemeFromLocalStorage,
-	readThemeFromTopWindow,
-	applyTheme,
-	detectTheme,
-	args,
-	adapterInstance,
+		mergePluginI18n,
+		t,
+		resolveExplicitUrlTheme,
+		resolveTheme,
+		readThemeFromLocalStorage,
+		readThemeFromTopWindow,
+		applyTheme,
+		detectTheme,
+		urlThemeLocked,
+		args,
+		adapterInstance,
 	msghubSocket: window.msghubSocket,
 	msghubRequest,
 	lang
@@ -96,14 +119,14 @@ window.__runtime = {
 		pathname: options.pathname || '/admin/index_m.html',
 	};
 
-	const windowObject = {
-		location: locationObject,
-		navigator: { language: options.navigatorLanguage || 'en-US' },
-		localStorage,
-		top: topDocument ? { document: topDocument } : {},
-		matchMedia: query => ({ matches: query.includes('dark') ? !!options.prefersDark : false }),
-	};
-	windowObject.window = windowObject;
+		const windowObject = {
+			location: locationObject,
+			navigator: { language: options.navigatorLanguage || 'en-US' },
+			localStorage,
+			matchMedia: query => ({ matches: query.includes('dark') ? !!options.prefersDark : false }),
+		};
+		windowObject.window = windowObject;
+		windowObject.top = topDocument ? { document: topDocument } : windowObject;
 
 	const sandbox = {
 		window: windowObject,
@@ -122,6 +145,79 @@ window.__runtime = {
 }
 
 describe('admin/tab/runtime.js', function () {
+	describe('parseQuery()', function () {
+		async function parse(search) {
+			const sandbox = await loadRuntimeSandbox({ search });
+			return sandbox.window.__runtime.parseQuery();
+		}
+
+		it('keeps theme and react as raw strings while normalizing composition and expert', async function () {
+			const result = await parse('?theme=%20dark%20&react=%20light%20&composition=%20adminTab%20&expert=true');
+
+			assert.equal(result.theme, ' dark ');
+			assert.equal(result.react, ' light ');
+			assert.equal(result.composition, 'adminTab');
+			assert.equal(result.expert, true);
+		});
+
+		it('trims locale and keeps it when non-empty', async function () {
+			const result = await parse('?locale=%20de-DE%20');
+			assert.equal(result.locale, 'de-DE');
+		});
+
+		it('removes locale when it is blank after trimming', async function () {
+			const result = await parse('?locale=%20%20%20');
+			assert.equal(result.locale, undefined);
+		});
+
+		it('removes composition when it is blank after trimming', async function () {
+			const result = await parse('?composition=%20%20%20');
+			assert.equal(result.composition, undefined);
+		});
+
+		it('removes composition when it is a bare flag without a value', async function () {
+			const result = await parse('?composition');
+			assert.equal(result.composition, undefined);
+		});
+
+		it('treats a bare expert flag and numeric expert flag as true', async function () {
+			assert.equal((await parse('?expert')).expert, true);
+			assert.equal((await parse('?expert=1')).expert, true);
+		});
+
+		it('normalizes present invalid expert values to false and preserves unknown keys', async function () {
+			const result = await parse('?expert=maybe&unknown=value');
+			assert.equal(result.expert, false);
+			assert.equal(result.unknown, 'value');
+		});
+
+		it('normalizes explicit expert=false to false', async function () {
+			assert.equal((await parse('?expert=false')).expert, false);
+		});
+
+		it('keeps expert undefined when the query does not contain the key', async function () {
+			const result = await parse('?instance=0');
+			assert.equal(result.expert, undefined);
+		});
+
+		it('falls back to raw fragments for invalid percent-encoding instead of throwing', async function () {
+			const sandbox = await loadRuntimeSandbox({
+				search: '?composition=%E0%A4%A&%E0%A4%A=value',
+			});
+			const result = sandbox.window.__runtime.parseQuery();
+
+			assert.equal(result.composition, '%E0%A4%A');
+			assert.equal(result['%E0%A4%A'], 'value');
+		});
+
+		it('keeps instance and lang fallback behavior intact', async function () {
+			const result = await parse('?instance=oops&lang=');
+			assert.equal(result.instance, 0);
+			assert.equal(result.lang, 'en');
+			assert.equal(result.expert, undefined);
+		});
+	});
+
 	it('parses query args and derives adapter/lang', async function () {
 		const sandbox = await loadRuntimeSandbox({
 			search: '?instance=2&lang=de&theme=dark',
@@ -156,22 +252,126 @@ describe('admin/tab/runtime.js', function () {
 		assert.equal(call.options.path, '/socket.io');
 	});
 
-	it('normalizes language and resolves theme precedence', async function () {
-		const sandbox = await loadRuntimeSandbox({
-			search: '?instance=1',
-			prefersDark: true,
+		it('resolves explicit URL themes with canonical theme semantics and react as absent-only fallback', async function () {
+			const sandbox = await loadRuntimeSandbox({
+				search: '?instance=1',
+			});
+			const runtime = sandbox.window.__runtime;
+
+			assert.equal(runtime.resolveExplicitUrlTheme({ theme: 'dark', react: 'light' }), 'dark');
+			assert.equal(runtime.resolveExplicitUrlTheme({ theme: ' light ', react: 'dark' }), 'light');
+			assert.equal(runtime.resolveExplicitUrlTheme({ react: 'dark' }), 'dark');
+			assert.equal(runtime.resolveExplicitUrlTheme({ theme: 'blue', react: 'light' }), null);
+			assert.equal(runtime.resolveExplicitUrlTheme({ theme: 'blue' }), null);
+			assert.equal(runtime.resolveExplicitUrlTheme({}), null);
+			assert.equal(runtime.resolveTheme({ theme: 'dark' }), 'dark');
+			assert.equal(runtime.resolveTheme({ react: 'light' }), 'light');
+		});
+
+		it('detectTheme keeps explicit theme= override ahead of host, storage, and prefers-color-scheme', async function () {
+			const topDocument = {
+				documentElement: { getAttribute: key => (key === 'data-theme' ? 'light' : null), className: '' },
+				body: null,
+				getElementById: () => null,
+			};
+			const sandbox = await loadRuntimeSandbox({
+				search: '?instance=1&theme=dark&react=light',
+				topDocument,
+				prefersDark: false,
+				localStorage: {
+					'app.theme': 'light',
+				},
+			});
+			const runtime = sandbox.window.__runtime;
+
+			assert.equal(runtime.urlThemeLocked, true);
+			assert.equal(runtime.detectTheme(), 'dark');
+		});
+
+		it('react=light does not enable the theme lock and still allows the host theme to win', async function () {
+			const topDocument = {
+				documentElement: { getAttribute: key => (key === 'data-theme' ? 'dark' : null), className: '' },
+				body: null,
+				getElementById: () => null,
+			};
+			const sandbox = await loadRuntimeSandbox({
+				search: '?instance=1&react=light',
+				topDocument,
+				prefersDark: false,
+			});
+			const runtime = sandbox.window.__runtime;
+
+			assert.equal(runtime.urlThemeLocked, false);
+			assert.equal(runtime.readThemeFromTopWindow(), 'dark');
+			assert.equal(runtime.detectTheme(), 'dark');
+		});
+
+		it('react=light does not enable the theme lock and still allows localStorage to win', async function () {
+			const sandbox = await loadRuntimeSandbox({
+				search: '?instance=1&react=light',
+				prefersDark: false,
+				localStorage: {
+					'app.theme': 'dark',
+				},
+			});
+			const runtime = sandbox.window.__runtime;
+
+			assert.equal(runtime.urlThemeLocked, false);
+			assert.equal(runtime.readThemeFromLocalStorage(), 'dark');
+			assert.equal(runtime.detectTheme(), 'dark');
+		});
+
+		it('detectTheme follows the host theme before localStorage when embedded without explicit override', async function () {
+			const topDocument = {
+				documentElement: { getAttribute: key => (key === 'data-theme' ? 'dark' : null), className: '' },
+				body: null,
+				getElementById: () => null,
+			};
+			const sandbox = await loadRuntimeSandbox({
+				search: '?instance=1',
+				topDocument,
+				prefersDark: false,
+				localStorage: {
+					'app.theme': 'light',
+				},
+			});
+			const runtime = sandbox.window.__runtime;
+
+			assert.equal(runtime.urlThemeLocked, false);
+			assert.equal(runtime.readThemeFromTopWindow(), 'dark');
+			assert.equal(runtime.readThemeFromLocalStorage(), 'light');
+			assert.equal(runtime.detectTheme(), 'dark');
+		});
+
+		it('detectTheme uses localStorage before prefers-color-scheme when standalone', async function () {
+			const sandbox = await loadRuntimeSandbox({
+				search: '?instance=1',
+				prefersDark: true,
 			localStorage: {
 				'app.theme': 'light',
 			},
 		});
-		const runtime = sandbox.window.__runtime;
+			const runtime = sandbox.window.__runtime;
 
-		assert.equal(runtime.normalizeLang('DE-DE'), 'de-de');
-		assert.equal(runtime.resolveTheme({ theme: 'dark' }), 'dark');
-		assert.equal(runtime.resolveTheme({ react: 'light' }), 'light');
-		assert.equal(runtime.readThemeFromLocalStorage(), 'light');
-		assert.equal(runtime.detectTheme(), 'light', 'storage should win over prefers-color-scheme');
-	});
+			assert.equal(runtime.normalizeLang('DE-DE'), 'de-de');
+			assert.equal(runtime.readThemeFromTopWindow(), null);
+			assert.equal(runtime.readThemeFromLocalStorage(), 'light');
+			assert.equal(runtime.detectTheme(), 'light', 'storage should win over prefers-color-scheme');
+		});
+
+		it('falls back to prefers-color-scheme and light when no higher-priority source exists', async function () {
+			const darkSandbox = await loadRuntimeSandbox({
+				search: '?instance=1',
+				prefersDark: true,
+			});
+			assert.equal(darkSandbox.window.__runtime.detectTheme(), 'dark');
+
+			const lightSandbox = await loadRuntimeSandbox({
+				search: '?instance=1',
+				prefersDark: false,
+			});
+			assert.equal(lightSandbox.window.__runtime.detectTheme(), 'light');
+		});
 
 	it('loads i18n dictionary once and translates with fallback', async function () {
 		const sandbox = await loadRuntimeSandbox({
@@ -219,6 +419,26 @@ describe('admin/tab/runtime.js', function () {
 
 		runtime.applyTheme('light');
 		assert.equal(sandbox.__meta.attrs.get('data-msghub-theme'), 'light');
+		assert.equal(sandbox.window.__msghubAdminTabTheme, 'light');
+	});
+
+	it('treats bare debugTheme as enabled at module load', async function () {
+		const sandbox = await loadRuntimeSandbox({
+			search: '?instance=0&debugTheme&theme=dark',
+		});
+		const runtime = sandbox.window.__runtime;
+
+		runtime.applyTheme('dark');
+		assert.equal(sandbox.window.__msghubAdminTabTheme, 'dark');
+	});
+
+	it('treats debugTheme=true as enabled at module load', async function () {
+		const sandbox = await loadRuntimeSandbox({
+			search: '?instance=0&debugTheme=true&theme=light',
+		});
+		const runtime = sandbox.window.__runtime;
+
+		runtime.applyTheme('light');
 		assert.equal(sandbox.window.__msghubAdminTabTheme, 'light');
 	});
 

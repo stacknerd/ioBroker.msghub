@@ -30,6 +30,10 @@ ctx.api
 Native panels use it directly.
 Plugin-owned bundles receive a narrowed wrapper of it through [`./tab-plugin-ui-host.md`](./tab-plugin-ui-host.md).
 
+`api.js` also depends on the shared composition resolver from [`./tab-layout.md`](./tab-layout.md), so
+`api.host.viewId`, `api.host.layout`, `api.host.panels`, and the visible shell all reflect the same final
+composition decision.
+
 ---
 
 ## Responsibilities
@@ -80,6 +84,12 @@ Instead of letting panels call arbitrary `sendTo` commands, `api.js` maps explic
 
 These helpers are not business features by themselves, but they keep panel code simpler and more consistent.
 
+The time helpers now support one more browser-side input source:
+
+- `options.locale` remains the strongest locale override for `formatTs(...)` / `formatDate(...)`
+- otherwise a valid `args.locale` becomes the default frontend format locale
+- missing or invalid `args.locale` keeps the previous ambient/browser default behavior
+
 ---
 
 ## Public surface / integration points
@@ -126,9 +136,22 @@ Composition and connection metadata:
 - `defaultPanel`
 - `adapterInstance`
 - `isConnected()`
+- `isExpertMode()`
 
-Important: `host.panels` contains only native panel string IDs.
-Structured plugin panel refs are filtered out.
+Important:
+
+- `host.panels` contains only string entries from `composition.panels`
+- structured plugin panel refs are filtered out
+- string sentinels such as `'*'` may still appear in wildcard compositions
+- wildcard expansion remains a responsibility of [`./tab-layout.md`](./tab-layout.md), not `api.js`
+
+`api.host.isExpertMode()` is a native-panel helper with additive semantics:
+
+1. `args.expert === true` forces expert mode on
+2. otherwise `sessionStorage['App.expertMode'] === 'true'`
+3. otherwise `window._system.expertMode` or `window.top._system.expertMode`
+
+`false` from the URL does not disable host expert mode.
 
 ### `api.constants`
 
@@ -143,6 +166,12 @@ Shell-side formatting based on the current timezone policy:
 - `setPolicy(policy)`
 - `formatTs(ts, options)`
 - `formatDate(date, options)`
+
+`formatTs(...)` and `formatDate(...)` use locale precedence in this order:
+
+1. explicit `options.locale`
+2. valid `args.locale`
+3. ambient/browser default locale
 
 ### `api.notSupported(method)`
 
@@ -160,6 +189,7 @@ This is used for API branches that are intentionally unavailable in the current 
 - Context-menu item handlers are wrapped recursively so the menu closes first, including nested submenu items.
 - The context-menu wrapper intentionally does not emit generic fallback toasts when an action rejects. Error handling stays with the caller.
 - `host.panels` is derived from the active composition but keeps only string entries, because structured plugin refs are hosted differently.
+- `args.locale` affects only the browser-side default format locale for `api.time.*`; it does not change text language, i18n loading, plugin bundle language selection, or backend payloads.
 
 ---
 
@@ -168,6 +198,8 @@ This is used for API branches that are intentionally unavailable in the current 
 - Implementation: [`admin/tab/api.js`](../../admin/tab/api.js)
 - Test: [`admin/tab/api.test.js`](../../admin/tab/api.test.js)
 - Runtime transport and i18n/theme state: [`./tab-runtime.md`](./tab-runtime.md)
+- Shared resolver/layout metadata: [`./tab-layout.md`](./tab-layout.md)
 - Boot integration: [`./tab-boot.md`](./tab-boot.md)
 - Shared UI primitives: [`./tab-ui.md`](./tab-ui.md)
 - Plugin wrapper that narrows this API for bundles: [`./tab-plugin-ui-host.md`](./tab-plugin-ui-host.md)
+- UI API reference: [`./API.md`](./API.md)

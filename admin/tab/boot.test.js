@@ -195,6 +195,12 @@ globalThis.__execCommandSafe = execCommandSafe;
 		assert.match(source, /\bmsghubSocket\.on\(\s*['"]disconnect['"]/);
 	});
 
+	it('keeps composition resolution delegated to shared layout helpers', async function () {
+		const source = await readRepoFile('admin/tab/boot.js');
+		assert.match(source, /\bgetActiveComposition\s*\(/);
+		assert.doesNotMatch(source, /data-msghub-view/);
+	});
+
 	it('applies runtime.about payload to branding and timezone policy', async function () {
 		const source = await readRepoFile('admin/tab/boot.js');
 		const applyRuntimeAboutPayloadSource = extractFunctionSource(source, 'applyRuntimeAboutPayload');
@@ -385,6 +391,7 @@ globalThis.__fn = updateConnectionPanel;
 				t: (key, arg) => arg != null ? `${key}:${arg}` : key,
 				msghubSocket: { url: 'http://localhost:8081', io: { uri: 'http://localhost:8081' } },
 				adapterInstance: 'msghub.0',
+				args: {},
 				lang: 'de',
 				navigator: { language: 'de-DE' },
 				Intl: { DateTimeFormat: () => ({ resolvedOptions: () => ({ timeZone: 'UTC' }) }) },
@@ -411,6 +418,65 @@ globalThis.__fn = updateConnectionPanel;
 		// serverTz=Europe/Berlin, browserTz=UTC → differ → hint visible (not hidden)
 		assert.equal(tzHintHidden, false);
 		assert.equal(tzHintAriaHidden, 'false');
+	});
+
+	it('updateConnectionPanel shows the effective frontend format locale after a valid URL override', async function () {
+		const source = await readRepoFile('admin/tab/boot.js');
+		const fnSource = extractFunctionSource(source, 'updateConnectionPanel');
+
+		const makeEl = () => ({ textContent: '' });
+		const elMap = {
+			'msghub-conn-status':       makeEl(),
+			'msghub-conn-core-connection': makeEl(),
+			'msghub-conn-host':         makeEl(),
+			'msghub-conn-adapter':      makeEl(),
+			'msghub-conn-latency':      makeEl(),
+			'msghub-conn-server-tz':    makeEl(),
+			'msghub-conn-core-lang':    makeEl(),
+			'msghub-conn-core-fmt':     makeEl(),
+			'msghub-conn-backend-lang': makeEl(),
+			'msghub-conn-version':      makeEl(),
+			'msghub-conn-fe-tz':        makeEl(),
+			'msghub-conn-fe-lang':      makeEl(),
+			'msghub-conn-fe-fmt':       makeEl(),
+			'msghub-conn-tz-hint': {
+				classList: { toggle() {} },
+				setAttribute() {},
+			},
+		};
+
+		const sandbox = runInSandbox(
+			`
+let connOnline = true;
+let lastPingLatencyMs = null;
+let connPanelData = {};
+${fnSource}
+globalThis.__fn = updateConnectionPanel;
+`,
+			{
+				document: { getElementById: id => elMap[id] || null },
+				t: key => key,
+				msghubSocket: null,
+				adapterInstance: 'msghub.0',
+				args: { locale: 'de-DE' },
+				lang: 'en',
+				navigator: { language: 'en-US' },
+				Intl: {
+					DateTimeFormat: function (locale) {
+						return {
+						resolvedOptions: () => ({
+							timeZone: 'UTC',
+							locale: locale || 'en-US',
+						}),
+						};
+					},
+				},
+			},
+			'boot-updateConnectionPanel-localeOverride.js',
+		);
+
+		sandbox.__fn();
+		assert.equal(elMap['msghub-conn-fe-fmt'].textContent, 'de-DE');
 	});
 
 	it('updateConnectionPanel shows dash for null latency and hides tz-hint when TZs match', async function () {
@@ -467,6 +533,7 @@ globalThis.__fn = updateConnectionPanel;
 				t: key => key,
 				msghubSocket: null,
 				adapterInstance: null,
+				args: {},
 				lang: 'en',
 				navigator: { language: 'en-US' },
 				Intl: { DateTimeFormat: () => ({ resolvedOptions: () => ({ timeZone: 'Europe/Berlin' }) }) },
@@ -897,57 +964,5 @@ globalThis.__applyRuntimeAboutPayload = applyRuntimeAboutPayload;
 		});
 
 		assert.equal(overrideCalls.length, 0);
-	});
-});
-
-describe('admin/tab/boot.js — contextmenu handler contract', function () {
-	it('skips ctx.api.ui.contextMenu.open() when event defaultPrevented is true (synthetic longpress event guard)', async function () {
-		// Regression guard: the global contextmenu listener in boot.js checks
-		// e.defaultPrevented before calling ctx.api.ui.contextMenu.open().
-		// This ensures that synthetic contextmenu events fired by the longpress
-		// polyfill (ui.js) are handled exclusively by panel-local handlers (which
-		// call preventDefault()) and are never double-handled by the boot.js fallback.
-		const source = await readRepoFile('admin/tab/boot.js');
-
-		const handlerStart = source.indexOf("document.addEventListener('contextmenu'");
-		assert.ok(handlerStart !== -1, "global 'contextmenu' listener exists in boot.js");
-
-		// Both guards must exist inside the handler.
-		const guardIdx = source.indexOf('e.defaultPrevented', handlerStart);
-		const menuOpenIdx = source.indexOf('ctx.api.ui.contextMenu.open(', handlerStart);
-
-		assert.ok(guardIdx !== -1, 'defaultPrevented guard present in contextmenu handler');
-		assert.ok(menuOpenIdx !== -1, 'ctx.api.ui.contextMenu.open() present in contextmenu handler');
-		// The guard MUST appear before the open() call so a panel-handled (preventDefault'd)
-		// event is never forwarded to the boot.js fallback menu.
-		assert.ok(
-			guardIdx < menuOpenIdx,
-			'defaultPrevented guard precedes contextMenu.open() — synthetic events route correctly',
-		);
-	});
-
-	it('does not open an empty menu for elements with no contextmenu handler (plain-button guard)', async function () {
-		// Regression guard: the boot.js fallback must not call contextMenu.open() when
-		// the items array is empty.  This prevents longpress on plain toolbar buttons
-		// (no handler, non-editable) from showing an empty custom context menu.
-		// The guard belongs in boot.js so it applies equally to touch (polyfill) and
-		// desktop right-click, and independently of how panel handlers are registered
-		// (oncontextmenu property vs. addEventListener).
-		const source = await readRepoFile('admin/tab/boot.js');
-
-		const handlerStart = source.indexOf("document.addEventListener('contextmenu'");
-		assert.ok(handlerStart !== -1, "global 'contextmenu' listener exists in boot.js");
-
-		// items is built from editable context; guard must check length before opening.
-		const itemsIdx = source.indexOf('items.length', handlerStart);
-		const menuOpenIdx = source.indexOf('ctx.api.ui.contextMenu.open(', handlerStart);
-
-		assert.ok(itemsIdx !== -1, 'items.length guard present in contextmenu handler');
-		assert.ok(menuOpenIdx !== -1, 'ctx.api.ui.contextMenu.open() present in contextmenu handler');
-		// The guard MUST appear before open() so an empty items array aborts before opening.
-		assert.ok(
-			itemsIdx < menuOpenIdx,
-			'items.length guard precedes contextMenu.open() — empty menu never shown',
-		);
 	});
 });

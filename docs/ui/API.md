@@ -19,7 +19,7 @@
 
 | Entry | Contract | Owner | Reference |
 | --- | --- | --- | --- |
-| `args` | Parsed query object from `window.location.search`. `instance` is normalized to an integer and defaults to `0`. `lang` defaults to the browser base language when absent. Other query keys pass through as decoded values. | Browser runtime | `admin/tab/runtime.js` |
+| `args` | Parsed query object from `window.location.search`. `instance` is normalized to an integer and defaults to `0`. `lang` falls back to the browser base language. `locale` is trimmed and removed when blank, then used only as an optional frontend format-locale override by downstream consumers. `composition` is trimmed and removed when empty. `expert` is normalized only when present. Unknown query keys are preserved. | Browser runtime | `admin/tab/runtime.js` |
 | `adapterInstance` | Always `msghub.<args.instance>`. | Browser runtime | `admin/tab/runtime.js` |
 | `msghubSocket` | Socket.io client connected to `'/'` with `path: '/socket.io'`. Exposed as `window.msghubSocket`. | Browser runtime | `admin/tab/runtime.js` |
 | `msghubRequest(command, message)` | Socket `sendTo` bridge to `adapterInstance`. Resolves with `res.data` when the backend response has `ok: true`. Rejects with `Error(message)` on missing response or backend `ok: false`. | Browser runtime | `admin/tab/runtime.js` |
@@ -32,9 +32,13 @@
 | `pickText(value)` | Browser-side text resolver. Accepts a plain string or a translated object. For objects, uses `value[lang] ?? value.en ?? value.de`. Strings that start with `msghub.i18n.` or already exist in the admin dictionary are translated through `t(...)`. | Boot runtime | `admin/tab/boot.js` |
 | `readThemeFromTopWindow()` | Best-effort theme probe against the parent/top-window DOM. Returns `'dark'`, `'light'`, or `null`. | Browser runtime | `admin/tab/runtime.js` |
 | `applyTheme(nextTheme)` | Writes `data-msghub-theme="dark|light"` on `document.documentElement`. In `debugTheme` mode it also stores the effective value in `window.__msghubAdminTabTheme`. | Browser runtime | `admin/tab/runtime.js` |
-| `detectTheme()` | Theme resolution priority: local storage, then top window, then query-derived initial theme, then `matchMedia('(prefers-color-scheme: dark)')`, then `'light'`. | Browser runtime | `admin/tab/runtime.js` |
+| `detectTheme()` | Theme resolution priority: explicit URL override (`theme`, then legacy `react` when `theme` is absent), then top window, then local storage, then `matchMedia('(prefers-color-scheme: dark)')`, then `'light'`. | Browser runtime | `admin/tab/runtime.js` |
 | `window.__msghubAdminTabTheme` | Debug-only mirror of the current effective theme. Written only when `debugTheme` is enabled. | Browser runtime | `admin/tab/runtime.js`, `admin/tab/contracts.d.ts` |
 | `window.__msghubAdminTabEntryLoaded` | Optional browser-global flag declared in `contracts.d.ts`. No current shell writer in the inspected code. | Declared browser contract | `admin/tab/contracts.d.ts` |
+
+Internal runtime coordination such as `urlThemeLocked` is intentionally documented in
+[`./tab-runtime.md`](./tab-runtime.md) and [`./tab-layout.md`](./tab-layout.md), not as a UI-facing
+panel/plugin contract in this reference.
 
 ### Shared shell builders and globals
 
@@ -45,7 +49,8 @@
 | `createAdminApi(deps)` | Builds the frozen `ctx.api` facade used by native panels and wrapped by the plugin UI host. | Browser API layer | `admin/tab/api.js`, `admin/tab/contracts.d.ts` |
 | `initTabs({ defaultPanelId? })` | Wires tab activation against `location.hash`. Skips tabs marked `aria-disabled="true"`. Returns `{ initial, setActive(tabDomId) }`. | Layout runtime | `admin/tab/layout.js`, `admin/tab/contracts.d.ts` |
 | `buildLayoutFromRegistry({ contributions? })` | Builds the visible shell layout from `window.MsghubAdminTabRegistry`. Returns `{ layout, panelIds, pluginPanelRefs, defaultPanelId }`. `panelIds` contains native panel ids only. `pluginPanelRefs` contains structured plugin-panel refs. | Layout runtime | `admin/tab/layout.js`, `admin/tab/contracts.d.ts` |
-| `getActiveComposition()` | Returns the composition selected by `document.documentElement[data-msghub-view]`, defaulting to `adminTab`. | Layout runtime | `admin/tab/layout.js`, `admin/tab/contracts.d.ts` |
+| `resolveViewId()` | Resolves the active composition id in this order: registered `args.composition`, registered `data-msghub-view`, then hard fallback `adminTab`. | Layout runtime | `admin/tab/layout.js`, `admin/tab/contracts.d.ts` |
+| `getActiveComposition()` | Returns the registered composition object for `resolveViewId()`, or `null`. | Layout runtime | `admin/tab/layout.js`, `admin/tab/contracts.d.ts` |
 | `computeAssetsForComposition(panelIds)` | Dedupe-merges CSS and JS asset paths from registry panel definitions. Returns `{ css, js }`. | Layout runtime | `admin/tab/layout.js`, `admin/tab/contracts.d.ts` |
 | `loadCssFiles(files)` | Deduplicated stylesheet loader. Returns `{ failed: string[] }`. Missing files do not reject; they are collected in `failed`. | Layout runtime | `admin/tab/layout.js`, `admin/tab/contracts.d.ts` |
 | `loadJsFilesSequential(files)` | Deduplicated script loader. Loads in order. Rejects on the first script load failure. | Layout runtime | `admin/tab/layout.js`, `admin/tab/contracts.d.ts` |
@@ -183,17 +188,18 @@
 | `ctx.api.host.viewId` | Active composition/view id. Defaults to `adminTab`. | Browser API layer | `admin/tab/api.js`, `admin/tab/layout.js` |
 | `ctx.api.host.layout` | `'tabs'` or `'single'`. Derived from the active composition. | Browser API layer | `admin/tab/api.js` |
 | `ctx.api.host.deviceMode` | Composition `deviceMode` value, currently defaulting to `'pc'` when absent. | Browser API layer | `admin/tab/api.js` |
-| `ctx.api.host.panels` | Frozen array of string entries from `composition.panels`. Non-string plugin-panel ref objects are filtered out, but string sentinels such as `'*'` (wildcard composition) pass through as-is. The wildcard is expanded only by `layout.js`, not here. | Browser API layer | `admin/tab/api.js` |
+| `ctx.api.host.panels` | Frozen array of string entries from `composition.panels`. Non-string plugin-panel ref objects are filtered out, but string sentinels such as `'*'` (wildcard composition) pass through as-is. Wildcard expansion is owned by `layout.js`, not by `api.js`. | Browser API layer | `admin/tab/api.js` |
 | `ctx.api.host.defaultPanel` | Composition `defaultPanel` string or `''`. | Browser API layer | `admin/tab/api.js` |
 | `ctx.api.host.adapterInstance` | Same value as `adapterInstance`. | Browser API layer | `admin/tab/api.js` |
 | `ctx.api.host.isConnected()` | Returns `!!msghubSocket.connected`. This is transport state only; it is not the same as the shell ping-derived online flag. | Browser API layer | `admin/tab/api.js` |
+| `ctx.api.host.isExpertMode()` | Native-panel helper with additive expert semantics: `args.expert === true` wins first, otherwise `sessionStorage['App.expertMode'] === 'true'`, otherwise `window._system.expertMode` / `window.top._system.expertMode`. A false URL flag does not disable host expert mode. | Browser API layer | `admin/tab/api.js` |
 | `ctx.api.constants.get()` | Async cached fetch of `admin.constants.get`. Cache age is effectively infinite until invalidated. | Browser API layer | `admin/tab/api.js` |
 | `ctx.api.constants.invalidate()` | Clears the constants cache. | Browser API layer | `admin/tab/api.js` |
 | `ctx.api.runtime.about()` | Calls `runtime.about`. Returns the backend payload directly when successful. | Browser API layer | `admin/tab/api.js`, `main.js` |
 | `ctx.api.time.getPolicy()` | Returns the current normalized timezone policy `{ timeZone, source, isFallbackUtc, warning }`. | Browser API layer | `admin/tab/api.js` |
 | `ctx.api.time.setPolicy(policy)` | Normalizes the provided policy. Invalid or missing timezones become `{ timeZone: 'UTC', source: 'fallback-utc', isFallbackUtc: true, warning: 'timezone_fallback_utc:<reason>' }`. | Browser API layer | `admin/tab/api.js` |
-| `ctx.api.time.formatTs(ts, options?)` | Formats a finite millisecond timestamp using the current policy timezone. Returns `''` for invalid input and falls back to `String(ts)` on formatting errors. `options.locale` overrides the locale. `options.includeTimeZone === true` adds the timezone name. | Browser API layer | `admin/tab/api.js` |
-| `ctx.api.time.formatDate(date, options?)` | Same formatting contract as `formatTs(...)`, but for a valid `Date` instance. | Browser API layer | `admin/tab/api.js` |
+| `ctx.api.time.formatTs(ts, options?)` | Formats a finite millisecond timestamp using the current policy timezone. Returns `''` for invalid input and falls back to `String(ts)` on formatting errors. `options.locale` overrides the locale. Otherwise a valid `args.locale` URL override becomes the default frontend format locale; missing or invalid `args.locale` keeps ambient/browser-default behavior. `options.includeTimeZone === true` adds the timezone name. | Browser API layer | `admin/tab/api.js` |
+| `ctx.api.time.formatDate(date, options?)` | Same formatting contract as `formatTs(...)`, including `options.locale` precedence and `args.locale` as the default frontend format-locale override when valid. | Browser API layer | `admin/tab/api.js` |
 | `ctx.api.notSupported(method)` | Throws `NotSupportedError` with `code: 'NOT_SUPPORTED'`. | Browser API layer | `admin/tab/api.js` |
 
 ## UI <> IO
@@ -346,7 +352,7 @@
 | Native panels and plugin bundles do not get the same boundary strength | Native panels receive raw `msghubRequest`, `msghubSocket`, and `ui` in `ctx`. Plugin bundles receive only the narrowed bundle `ctx`. | Boot runtime / plugin UI host | `admin/tab/boot.js`, `admin/tab/plugin-ui-host.js` |
 | `host.panels` excludes plugin panel refs | Native panel `ctx.api.host.panels` contains string entries from `composition.panels` with non-string plugin-panel refs removed. In wildcard compositions this array may contain `'*'` rather than expanded panel ids. | Browser API layer | `admin/tab/api.js` |
 | `ctx.api.i18n.lang()` is a boot-time snapshot | `createAdminApi(...)` captures `lang` by value. `overrideLang(...)` updates global language state, but existing `ctx.api.i18n.lang()` closures keep the captured value until the API is rebuilt. | Browser API layer | `admin/tab/api.js`, `admin/tab/runtime.js` |
-| `runtime.about` updates shell-wide policy | `boot.js` uses `runtime.about` to update branding text, timezone policy, cached connection metadata, and embedded-admin language override. | Boot runtime | `admin/tab/boot.js`, `main.js` |
+| `runtime.about` updates shell-wide policy | `boot.js` uses `runtime.about` to update branding text, timezone policy, cached connection metadata, and embedded-admin language override. The connection panel still reports the frontend format locale locally, with `args.locale` able to override that browser-side source when valid. | Boot runtime | `admin/tab/boot.js`, `main.js` |
 | Timezone fallback is explicit | Missing or invalid runtime timezone metadata becomes a UTC fallback policy and may trigger one warning toast. | Browser API layer / boot runtime | `admin/tab/api.js`, `admin/tab/boot.js` |
 | Plugin bundle cache key includes language | Bundle cache identity is `(pluginType, instanceId, panelId, hash, lang)` because the bundle response may contain language-specific i18n payloads. | Plugin UI host | `admin/tab/plugin-ui-host.js` |
 | `discover` hash is advisory, `bundle.get` hash is authoritative | `IoAdminTab._pluginUiDiscover()` best-effort computes hashes, but `bundle.get` recomputes the authoritative content hash. | Admin runtime | `lib/IoAdminTab.js` |

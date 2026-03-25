@@ -36,6 +36,7 @@ declare global {
 	function readThemeFromTopWindow(): 'dark' | 'light' | null;
 	function applyTheme(nextTheme: 'dark' | 'light'): void;
 	function detectTheme(): 'dark' | 'light';
+	const urlThemeLocked: boolean;
 
 	function computeContextMenuPosition(params: any): { x: number; y: number };
 	function toContextMenuIconVar(iconName: string): string;
@@ -51,6 +52,7 @@ declare global {
 		pluginPanelRefs: any[];
 	};
 	function createMsghubPluginUiHost(opts: { request: any; api: any }): any;
+	function resolveViewId(): string;
 	function getActiveComposition(): any;
 	function computeAssetsForComposition(panelIds: string[]): { css: string[]; js: string[] };
 	function loadCssFiles(files: string[]): Promise<{ failed: string[] }>;
