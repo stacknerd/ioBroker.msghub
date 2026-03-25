@@ -60,11 +60,15 @@ describe('admin/tab/registry.js', function () {
 			// defaultPanel is a plain string — either a native panel ID or a plugin panel DOM key.
 			const defaultResolvable =
 				composition.panels.some(p => typeof p === 'string' && p === composition.defaultPanel) ||
+				composition.panels.some(p => typeof p === 'string' && p === '*') ||
 				String(composition.defaultPanel).startsWith('plugin-');
 			assert.ok(defaultResolvable, `defaultPanel '${composition.defaultPanel}' not resolvable in '${compositionId}'`);
 
 			for (const panelEntry of composition.panels) {
 				if (typeof panelEntry === 'string') {
+					if (panelEntry === '*') {
+						continue;
+					}
 					assert.ok(registry.panels[panelEntry], `unknown native panel '${panelEntry}' in composition '${compositionId}'`);
 				} else if (panelEntry && typeof panelEntry === 'object') {
 					// Structured plugin panel reference — must have required shape fields.

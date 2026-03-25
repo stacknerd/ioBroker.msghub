@@ -460,13 +460,21 @@ function detectTheme() {
 	if (urlThemeLocked && (initialThemeFromQuery === 'dark' || initialThemeFromQuery === 'light')) {
 		return initialThemeFromQuery;
 	}
+	if (isEmbeddedInAdmin) {
+		const fromTop = readThemeFromTopWindow();
+		if (fromTop === 'dark' || fromTop === 'light') {
+			return fromTop;
+		}
+	}
 	const fromStorage = readThemeFromLocalStorage();
 	if (fromStorage === 'dark' || fromStorage === 'light') {
 		return fromStorage;
 	}
-	const fromTop = readThemeFromTopWindow();
-	if (fromTop === 'dark' || fromTop === 'light') {
-		return fromTop;
+	if (!isEmbeddedInAdmin) {
+		const fromTop = readThemeFromTopWindow();
+		if (fromTop === 'dark' || fromTop === 'light') {
+			return fromTop;
+		}
 	}
 	if (initialThemeFromQuery === 'dark' || initialThemeFromQuery === 'light') {
 		return initialThemeFromQuery;
