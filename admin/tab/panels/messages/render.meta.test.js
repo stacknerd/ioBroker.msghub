@@ -91,35 +91,38 @@ describe('admin/tab/panels/messages/render.meta.js', function () {
 		renderer.mount(root);
 		assert.equal(root.children.length, 3);
 		assert.equal(root.children[0].classList.contains('msghub-toolbar'), true);
+		assert.equal(root.children[0].classList.contains('msghub-strip-host'), true);
+		assert.equal(root.children[0].children[0].classList.contains('msghub-strip-viewport'), true);
+		assert.equal(root.children[0].children[0].children[0].classList.contains('msghub-toolbar__group'), true);
 		assert.equal(root.children[1].classList.contains('msghub-table-wrap'), true);
 		assert.equal(root.children[1].children[0].classList.contains('msghub-table-tools'), true);
-			assert.equal(renderer.elements.refreshBtn.classList.contains('msghub-uibutton-icon'), true);
-			assert.equal(renderer.elements.refreshBtn.classList.contains('msghub-toolbarbutton-icon'), true);
-			assert.equal(renderer.elements.firstBtn.classList.contains('msghub-uibutton-icon'), true);
-			assert.equal(renderer.elements.prevBtn.classList.contains('msghub-uibutton-icon'), true);
-			assert.equal(renderer.elements.nextBtn.classList.contains('msghub-uibutton-icon'), true);
-			assert.equal(renderer.elements.lastBtn.classList.contains('msghub-uibutton-icon'), true);
+		assert.equal(renderer.elements.refreshBtn.classList.contains('msghub-uibutton-icon'), true);
+		assert.equal(renderer.elements.refreshBtn.classList.contains('msghub-toolbarbutton-icon'), true);
+		assert.equal(renderer.elements.firstBtn.classList.contains('msghub-uibutton-icon'), true);
+		assert.equal(renderer.elements.prevBtn.classList.contains('msghub-uibutton-icon'), true);
+		assert.equal(renderer.elements.nextBtn.classList.contains('msghub-uibutton-icon'), true);
+		assert.equal(renderer.elements.lastBtn.classList.contains('msghub-uibutton-icon'), true);
 
-			renderer.elements.refreshBtn.click();
-			renderer.elements.deleteBtn.click();
-			renderer.elements.autoBtn.click();
-			renderer.elements.firstBtn.click();
-			renderer.elements.prevBtn.click();
-			renderer.elements.nextBtn.click();
-			renderer.elements.lastBtn.click();
-			renderer.elements.pageSizeSelect.dispatchEvent({
-				type: 'change',
-				target: { value: '25' },
+		renderer.elements.refreshBtn.click();
+		renderer.elements.deleteBtn.click();
+		renderer.elements.autoBtn.click();
+		renderer.elements.firstBtn.click();
+		renderer.elements.prevBtn.click();
+		renderer.elements.nextBtn.click();
+		renderer.elements.lastBtn.click();
+		renderer.elements.pageSizeSelect.dispatchEvent({
+			type: 'change',
+			target: { value: '25' },
 		});
 
 		assert.equal(fixture.refreshCalls, 1);
-			assert.equal(fixture.deleteCalls, 1);
-			assert.equal(fixture.toggleCalls, 1);
-			assert.equal(fixture.firstCalls, 1);
-			assert.equal(fixture.prevCalls, 1);
-			assert.equal(fixture.nextCalls, 1);
-			assert.equal(fixture.lastCalls, 1);
-			assert.deepEqual(fixture.pageSizes, [25]);
+		assert.equal(fixture.deleteCalls, 1);
+		assert.equal(fixture.toggleCalls, 1);
+		assert.equal(fixture.firstCalls, 1);
+		assert.equal(fixture.prevCalls, 1);
+		assert.equal(fixture.nextCalls, 1);
+		assert.equal(fixture.lastCalls, 1);
+		assert.deepEqual(fixture.pageSizes, [25]);
 	});
 
 	it('updates paging, buttons, and delete state in normal and expert mode', async function () {

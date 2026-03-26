@@ -69,6 +69,12 @@ function createElement(tagName = 'div') {
 		indeterminate: false,
 		offsetParent: {},
 		appendChild(child) {
+			if (child?.parentNode && Array.isArray(child.parentNode.children)) {
+				const idx = child.parentNode.children.indexOf(child);
+				if (idx >= 0) {
+					child.parentNode.children.splice(idx, 1);
+				}
+			}
 			if (child) {
 				child.parentNode = this;
 			}
@@ -78,6 +84,12 @@ function createElement(tagName = 'div') {
 		replaceChildren(...children) {
 			this.children = JSON.parse('[]');
 			for (const child of children) {
+				if (child?.parentNode && Array.isArray(child.parentNode.children)) {
+					const idx = child.parentNode.children.indexOf(child);
+					if (idx >= 0) {
+						child.parentNode.children.splice(idx, 1);
+					}
+				}
 				if (child) {
 					child.parentNode = this;
 				}
@@ -128,6 +140,9 @@ function createElement(tagName = 'div') {
 		},
 		querySelector() {
 			return null;
+		},
+		get firstChild() {
+			return this.children[0] || null;
 		},
 		closest() {
 			return null;
@@ -192,6 +207,32 @@ function createDocumentMock() {
 async function loadPanelModule(relPath, extras = {}) {
 	const source = await readRepoFile(relPath);
 	const { documentObject } = createDocumentMock();
+	const createScrollStripStub = () => ({
+		initStrip(hostEl) {
+			if (!hostEl || typeof hostEl !== 'object' || typeof hostEl.appendChild !== 'function') {
+				return { viewport: null, disconnect() {} };
+			}
+			if (hostEl.classList?.contains?.('msghub-strip-host')) {
+				return hostEl.__msghubStripHandle || { viewport: null, disconnect() {} };
+			}
+			hostEl.classList?.add?.('msghub-strip-host');
+			const viewport = documentObject.createElement('div');
+			viewport.setAttribute('class', 'msghub-strip-viewport');
+			while (hostEl.children && hostEl.children.length > 0) {
+				viewport.appendChild(hostEl.children[0]);
+			}
+			hostEl.appendChild(viewport);
+			const edgeLeft = documentObject.createElement('span');
+			edgeLeft.setAttribute('class', 'msghub-strip-edge msghub-strip-edge--left');
+			const edgeRight = documentObject.createElement('span');
+			edgeRight.setAttribute('class', 'msghub-strip-edge msghub-strip-edge--right');
+			hostEl.appendChild(edgeLeft);
+			hostEl.appendChild(edgeRight);
+			const handle = { viewport, disconnect() {} };
+			hostEl.__msghubStripHandle = handle;
+			return handle;
+		},
+	});
 	const windowObject = {
 		window: {},
 		top: {},
@@ -214,11 +255,13 @@ async function loadPanelModule(relPath, extras = {}) {
 		},
 	};
 	windowObject.window = windowObject;
+	windowObject.MsghubScrollStrip = createScrollStripStub();
 	const sandbox = {
 		window: windowObject,
 		document: documentObject,
 		Event: globalThis.Event,
 		console,
+		MsghubScrollStrip: windowObject.MsghubScrollStrip,
 		...extras,
 	};
 	vm.runInNewContext(source, sandbox, { filename: relPath });

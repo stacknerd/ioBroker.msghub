@@ -17,6 +17,7 @@
 	padding: var(--msghub-space-2);
 	border: 1px solid var(--msghub-border-light);
 	background: var(--msghub-bg-toolbar);
+	--msghub-strip-fade-color: var(--msghub-bg-toolbar);
 }
 
 .msghub-root .msghub-toolbar--tripartite {
@@ -31,6 +32,10 @@
 	flex-wrap: wrap;
 	gap: var(--msghub-space-2);
 	min-width: 0;
+}
+
+.msghub-root .msghub-strip-viewport .msghub-toolbar__group {
+	flex-wrap: nowrap;
 }
 
 .msghub-root .msghub-toolbar__left,

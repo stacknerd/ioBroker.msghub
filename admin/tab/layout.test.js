@@ -42,11 +42,25 @@ function createElement(tagName) {
 		className: '',
 		classList: createClassList(),
 		appendChild(child) {
+			if (child?.parentNode && Array.isArray(child.parentNode.children)) {
+				const idx = child.parentNode.children.indexOf(child);
+				if (idx >= 0) {
+					child.parentNode.children.splice(idx, 1);
+				}
+			}
+			if (child) {
+				child.parentNode = this;
+			}
 			this.children.push(child);
 			return child;
 		},
 		replaceChildren(...children) {
 			this.children = [...children];
+			for (const child of children) {
+				if (child) {
+					child.parentNode = this;
+				}
+			}
 		},
 		setAttribute(name, value) {
 			const key = String(name);
@@ -80,9 +94,41 @@ function createElement(tagName) {
 				handler(event);
 			}
 		},
+		get firstChild() {
+			return this.children[0] || null;
+		},
 		remove() {},
 	};
 	return element;
+}
+
+function createScrollStripStub(documentObject) {
+	return {
+		initStrip(hostEl) {
+			if (!hostEl || typeof hostEl !== 'object' || typeof hostEl.appendChild !== 'function') {
+				return { viewport: null, disconnect() {} };
+			}
+			if (hostEl.classList?.contains?.('msghub-strip-host')) {
+				return hostEl.__msghubStripHandle || { viewport: null, disconnect() {} };
+			}
+			hostEl.classList?.add?.('msghub-strip-host');
+			const viewport = documentObject.createElement('div');
+			viewport.setAttribute('class', 'msghub-strip-viewport');
+			while (hostEl.children && hostEl.children.length > 0) {
+				viewport.appendChild(hostEl.children[0]);
+			}
+			hostEl.appendChild(viewport);
+			const edgeLeft = documentObject.createElement('span');
+			edgeLeft.setAttribute('class', 'msghub-strip-edge msghub-strip-edge--left');
+			const edgeRight = documentObject.createElement('span');
+			edgeRight.setAttribute('class', 'msghub-strip-edge msghub-strip-edge--right');
+			hostEl.appendChild(edgeLeft);
+			hostEl.appendChild(edgeRight);
+			const handle = { viewport, disconnect() {} };
+			hostEl.__msghubStripHandle = handle;
+			return handle;
+		},
+	};
 }
 
 async function loadLayoutSandbox(options = {}) {
@@ -182,6 +228,7 @@ async function loadLayoutSandbox(options = {}) {
 		},
 	};
 	windowObject.top = options.topDocument ? { document: options.topDocument } : windowObject;
+	windowObject.MsghubScrollStrip = createScrollStripStub(documentObject);
 
 	const sandbox = {
 		window: windowObject,
@@ -198,8 +245,9 @@ async function loadLayoutSandbox(options = {}) {
 				this.detail = init?.detail;
 			}
 		},
-			win: {
-				MsghubAdminTabRegistry: {
+		MsghubScrollStrip: windowObject.MsghubScrollStrip,
+		win: {
+			MsghubAdminTabRegistry: {
 				panels: {
 					stats: {
 						mountId: 'stats-root',
@@ -219,21 +267,21 @@ async function loadLayoutSandbox(options = {}) {
 						defaultPanel: 'messages',
 					},
 				},
-				},
 			},
-			args: options.args || {},
-			urlThemeLocked: options.urlThemeLocked === true,
-			applyTheme: options.applyTheme || (theme => appliedThemes.push(String(theme))),
-			detectTheme: options.detectTheme || (() => 'light'),
-			readThemeFromTopWindow: options.readThemeFromTopWindow || (() => null),
-			MutationObserver: class {
-				constructor(callback) {
-					this.callback = callback;
-					observerCallbacks.push(callback);
-				}
-				observe() {}
-			},
-		};
+		},
+		args: options.args || {},
+		urlThemeLocked: options.urlThemeLocked === true,
+		applyTheme: options.applyTheme || (theme => appliedThemes.push(String(theme))),
+		detectTheme: options.detectTheme || (() => 'light'),
+		readThemeFromTopWindow: options.readThemeFromTopWindow || (() => null),
+		MutationObserver: class {
+			constructor(callback) {
+				this.callback = callback;
+				observerCallbacks.push(callback);
+			}
+			observe() {}
+		},
+	};
 
 	vm.runInNewContext(`${source}\n${expose}`, sandbox, { filename: 'admin/tab/layout.js' });
 	return { sandbox, layoutHost, allLinks, allScripts, headElement, listeners, intervalCallbacks, observerCallbacks, appliedThemes };
@@ -408,7 +456,7 @@ describe('admin/tab/layout.js', function () {
 		// DOM: plugin tab must be rendered with aria-disabled and is-disabled.
 		const fragment = layoutHost.children[0];
 		const nav = fragment.children[0];
-		const pluginTab = nav.children[1]; // native tab is [0], plugin tab is [1]
+		const pluginTab = nav.children[0].children[1]; // native tab is [0], plugin tab is [1]
 		assert.equal(pluginTab.getAttribute('aria-disabled'), 'true');
 		assert.ok(pluginTab.className.includes('is-disabled'));
 		assert.equal(pluginTab.getAttribute('href'), '#tab-plugin-IngestStates-0-presets');
@@ -470,8 +518,13 @@ describe('admin/tab/layout.js', function () {
 		// DOM: both a native tab and a plugin tab rendered.
 		const fragment = layoutHost.children[0];
 		const nav = fragment.children[0];
-		assert.equal(nav.children.length, 2);
-		const pluginTab = nav.children[1];
+		assert.equal(nav.classList.contains('msghub-strip-host'), true);
+		assert.equal(nav.children.length, 3);
+		assert.equal(nav.children[0].classList.contains('msghub-strip-viewport'), true);
+		assert.equal(nav.children[1].classList.contains('msghub-strip-edge--left'), true);
+		assert.equal(nav.children[2].classList.contains('msghub-strip-edge--right'), true);
+		assert.equal(nav.children[0].children.length, 2);
+		const pluginTab = nav.children[0].children[1];
 		assert.equal(pluginTab.getAttribute('aria-disabled'), 'true');
 	});
 

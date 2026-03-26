@@ -63,6 +63,10 @@
 	--msghub-toast-min-height: 36px;
 	--msghub-toast-max-width: 420px;
 
+	/* horizontal scroll strips */
+	--msghub-strip-edge-width: 50px;
+	--msghub-tabs-conn-clearance: 44px;
+
 	/* Spinner */
 	--msghub-spinner-size: 20px;
 	--msghub-spinner-size-lg: 30px;

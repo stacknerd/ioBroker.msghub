@@ -155,6 +155,7 @@
 			pageSizeSelect,
 		]);
 		const toolbarEl = h('div', { class: 'msghub-toolbar msghub-messages-toolbar' }, [actions]);
+		window.MsghubScrollStrip?.initStrip?.(toolbarEl);
 		const metaEl = h('div', { class: 'msghub-muted msghub-messages-meta' });
 		const tableToolsEl = h('div', { class: 'msghub-table-tools' }, [
 			h('div', { class: 'msghub-table-tools__left' }, [metaEl]),

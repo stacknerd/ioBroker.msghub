@@ -199,6 +199,7 @@ Then continue based on your question:
 - `tab-plugin-ui-host`: [`./tab-plugin-ui-host.md`](./tab-plugin-ui-host.md)
 - `tab-registry`: [`./tab-registry.md`](./tab-registry.md)
 - `tab-runtime`: [`./tab-runtime.md`](./tab-runtime.md)
+- `tab-scroll-strip`: [`./tab-scroll-strip.md`](./tab-scroll-strip.md)
 - `tab-ui`: [`./tab-ui.md`](./tab-ui.md)
 - `tab`: [`./tab.md`](./tab.md)
 - `url-parameters`: [`./url-parameters.md`](./url-parameters.md)

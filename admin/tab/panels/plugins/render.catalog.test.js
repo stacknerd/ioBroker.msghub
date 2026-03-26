@@ -185,10 +185,10 @@ describe('admin/tab/panels/plugins/render.catalog.js', function () {
 		};
 		const toolbar = renderAddToolbar(vm);
 		assert.ok(toolbar);
-		assert.ok(
-			toolbar.children.some(c =>
-				c?.children?.some(btn => btn?.classList?.contains('msghub-plugin-toolbar-add')),
-			),
+		assert.equal(toolbar.children[0].classList.contains('msghub-strip-viewport'), true);
+		assert.equal(
+			toolbar.children[0].children[0].children[0].classList.contains('msghub-plugin-toolbar-add'),
+			true,
 		);
 	});
 

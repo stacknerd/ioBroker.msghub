@@ -359,9 +359,11 @@
 					items: menuItems,
 				});
 			};
-			return h('div', { class: 'msghub-toolbar msghub-plugin-toolbar' }, [
+			const toolbar = h('div', { class: 'msghub-toolbar msghub-plugin-toolbar' }, [
 				h('div', { class: 'msghub-toolbar__group' }, [addBtn]),
 			]);
+			window.MsghubScrollStrip?.initStrip?.(toolbar);
+			return toolbar;
 		}
 
 		/**

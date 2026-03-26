@@ -8,13 +8,16 @@
  * 1) tokens
  * 2) base/root
  * 3) primitives
- * 4) layout
- * 5) infrastructure
+ * 4) toolbar
+ * 5) strip
+ * 6) layout
+ * 7) infrastructure
  */
 
 @import './tab/tokens.css';
 @import './tab/base.css';
 @import './tab/primitives.css';
 @import './tab/toolbar.css';
+@import './tab/strip.css';
 @import './tab/layout.css';
 @import './tab/infrastructure.css';

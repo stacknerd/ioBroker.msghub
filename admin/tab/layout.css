@@ -19,6 +19,12 @@
 	border-radius: var(--msghub-radius);
 	background: var(--msghub-bg-tabs);
 	margin-bottom: var(--msghub-space-3);
+	--msghub-strip-fade-color: var(--msghub-bg-tabs);
+	padding-inline-end: calc(var(--msghub-space-2) + var(--msghub-tabs-conn-clearance));
+}
+
+.msghub-root .msghub-tabs .msghub-strip-edge--right {
+	right: var(--msghub-tabs-conn-clearance);
 }
 
 .msghub-root .msghub-tab {

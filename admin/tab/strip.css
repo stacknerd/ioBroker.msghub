@@ -1,0 +1,56 @@
+/* ========================================================================== */
+/* Components: Scroll Strip                                                   */
+/* ========================================================================== */
+/* Generic horizontal scroll strip pattern. */
+
+.msghub-root .msghub-strip-host {
+	position: relative;
+	overflow: hidden;
+}
+
+.msghub-root .msghub-strip-viewport {
+	display: flex;
+	align-items: center;
+	gap: inherit;
+	flex: 1 1 0;
+	min-width: 0;
+	overflow-x: auto;
+	scrollbar-width: none;
+	-ms-overflow-style: none;
+}
+
+.msghub-root .msghub-strip-viewport::-webkit-scrollbar {
+	display: none;
+}
+
+.msghub-root .msghub-strip-viewport > * {
+	flex-shrink: 0;
+}
+
+.msghub-root .msghub-strip-edge {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	width: var(--msghub-strip-edge-width);
+	pointer-events: none;
+	opacity: 0;
+	transition: opacity var(--msghub-anim-overlay-out);
+}
+
+.msghub-root .msghub-strip-edge--left {
+	left: 0;
+	background: linear-gradient(to right, var(--msghub-strip-fade-color), transparent);
+}
+
+.msghub-root .msghub-strip-edge--right {
+	right: 0;
+	background: linear-gradient(to left, var(--msghub-strip-fade-color), transparent);
+}
+
+.msghub-root .msghub-strip-host.has-overflow-left .msghub-strip-edge--left {
+	opacity: 1;
+}
+
+.msghub-root .msghub-strip-host.has-overflow-right .msghub-strip-edge--right {
+	opacity: 1;
+}

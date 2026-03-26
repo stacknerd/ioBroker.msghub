@@ -453,6 +453,7 @@ function buildLayoutFromRegistry({ contributions = [] } = {}) {
 			}
 		}
 		fragment.appendChild(nav);
+		window.MsghubScrollStrip?.initStrip?.(nav);
 	}
 
 	for (const entry of allEntries) {
