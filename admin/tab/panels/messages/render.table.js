@@ -54,6 +54,10 @@
 		const openRowContextMenu = opts.openRowContextMenu;
 		const onSelectionChanged =
 			typeof opts.onSelectionChanged === 'function' ? opts.onSelectionChanged : () => undefined;
+		const TOUCH_DBLTAP_DELAY_MS = 350;
+
+		let lastTouchTapAt = 0;
+		let lastTouchTapRef = '';
 
 		/**
 		 * Applies row selection rules.
@@ -181,6 +185,9 @@
 								return;
 							}
 							onSelectionChanged();
+							if ((Number(e?.detail) || 0) >= 2) {
+								openMessageJson(msg);
+							}
 						},
 						oncontextmenu: e => {
 							if (e?.ctrlKey === true) {
@@ -195,6 +202,8 @@
 									return;
 								}
 							}
+							lastTouchTapAt = 0;
+							lastTouchTapRef = '';
 							state.suppressRowClickUntil = Date.now() + 500;
 							if (applySelection(ref, 'contextmenu')) {
 								onSelectionChanged();
@@ -202,8 +211,31 @@
 							e?.preventDefault?.();
 							openRowContextMenu(e, msg);
 						},
-						ondblclick: () => {
-							openMessageJson(msg);
+						ontouchend: e => {
+							if (!ref) {
+								return;
+							}
+							if (Date.now() < state.suppressRowClickUntil) {
+								lastTouchTapAt = 0;
+								lastTouchTapRef = '';
+								return;
+							}
+							const target = e?.target;
+							if (target && typeof target.closest === 'function') {
+								if (target.closest('input, button, a, select, textarea, label')) {
+									return;
+								}
+							}
+							const now = Date.now();
+							if (lastTouchTapRef === ref && now - lastTouchTapAt <= TOUCH_DBLTAP_DELAY_MS) {
+								lastTouchTapAt = 0;
+								lastTouchTapRef = '';
+								e?.preventDefault?.();
+								openMessageJson(msg);
+								return;
+							}
+							lastTouchTapAt = now;
+							lastTouchTapRef = ref;
 						},
 					},
 					[

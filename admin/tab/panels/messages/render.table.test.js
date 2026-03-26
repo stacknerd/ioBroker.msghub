@@ -163,7 +163,72 @@ describe('admin/tab/panels/messages/render.table.js', function () {
 		});
 		assert.deepEqual(Array.from(fixture.state.selectedRefs), []);
 
-		row.dispatchEvent({ type: 'dblclick' });
+		row.dispatchEvent({ type: 'click', detail: 2, target: createElement('span') });
+		assert.equal(fixture.openJsonCalls, 1);
+	});
+
+	it('opens json on touch double tap fallback', async function () {
+		let now = 1_000;
+		const sandbox = await loadPanelModule('admin/tab/panels/messages/render.table.js', {
+			Date: { now: () => now },
+		});
+		const moduleApi = sandbox.window.MsghubAdminTabMessagesRenderTable;
+		const fixture = createFixture();
+		const renderer = moduleApi.createTableRenderer(fixture.options);
+		const row = renderer.renderRows([buildMessage()])[0];
+		const target = createElement('span');
+		let prevented = false;
+
+		row.dispatchEvent({
+			type: 'touchend',
+			target,
+			preventDefault() {
+				prevented = true;
+			},
+		});
+		assert.equal(fixture.openJsonCalls, 0);
+		assert.equal(prevented, false);
+
+		now += 200;
+		row.dispatchEvent({
+			type: 'touchend',
+			target,
+			preventDefault() {
+				prevented = true;
+			},
+		});
+		assert.equal(fixture.openJsonCalls, 1);
+		assert.equal(prevented, true);
+	});
+
+	it('resets touch double tap fallback after context menu suppression', async function () {
+		let now = 1_000;
+		const sandbox = await loadPanelModule('admin/tab/panels/messages/render.table.js', {
+			Date: { now: () => now },
+		});
+		const moduleApi = sandbox.window.MsghubAdminTabMessagesRenderTable;
+		const fixture = createFixture();
+		const renderer = moduleApi.createTableRenderer(fixture.options);
+		const row = renderer.renderRows([buildMessage()])[0];
+		const target = createElement('span');
+
+		row.dispatchEvent({ type: 'touchend', target, preventDefault() {} });
+		row.dispatchEvent({
+			type: 'contextmenu',
+			target,
+			preventDefault() {},
+		});
+
+		now += 200;
+		row.dispatchEvent({ type: 'touchend', target, preventDefault() {} });
+		assert.equal(fixture.openJsonCalls, 0);
+
+		now = fixture.state.suppressRowClickUntil + 10;
+		row.dispatchEvent({ type: 'touchend', target, preventDefault() {} });
+		assert.equal(fixture.openJsonCalls, 0);
+
+		now += 200;
+		row.dispatchEvent({ type: 'touchend', target, preventDefault() {} });
 		assert.equal(fixture.openJsonCalls, 1);
 	});
 

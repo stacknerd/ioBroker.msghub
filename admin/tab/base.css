@@ -45,10 +45,20 @@ body {
    value: true, "", plaintext-only, …) are excluded so native text-entry
    gestures remain fully functional. */
 .msghub-root *:not(input):not(textarea):not(select):not([contenteditable]) {
+	-webkit-touch-callout: none;
+	-webkit-user-select: none;
 	user-select: none;
+}
+
+.msghub-root input,
+.msghub-root textarea,
+.msghub-root select,
+.msghub-root [contenteditable] {
+	-webkit-touch-callout: default;
+	-webkit-user-select: text;
+	user-select: text;
 }
 
 .msghub-root a {
 	color: inherit;
 }
-
