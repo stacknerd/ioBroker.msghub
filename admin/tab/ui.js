@@ -73,32 +73,184 @@ function createUi() {
 		return el;
 	})();
 
-	const overlayBackdrop =
-		document.getElementById('msghub-overlay-large') ||
-		(() => {
-			const el = document.createElement('div');
-			el.id = 'msghub-overlay-large';
-			el.className = 'msghub-overlay-backdrop is-hidden';
-			el.setAttribute('aria-hidden', 'true');
-			(root || document.body).appendChild(el);
-			return el;
-		})();
+	/**
+	 * Ensures the large overlay DOM exists and is complete.
+	 *
+	 * @returns {HTMLElement} Large overlay backdrop element.
+	 */
+	const ensureOverlayLargeDom = () => {
+		const existing = document.getElementById('msghub-overlay-large');
+		if (
+			existing &&
+			document.getElementById('msghub-overlay-large-title') &&
+			document.getElementById('msghub-overlay-large-body') &&
+			document.getElementById('msghub-overlay-large-close')
+		) {
+			return existing;
+		}
+		const backdrop = existing || document.createElement('div');
+		backdrop.id = 'msghub-overlay-large';
+		backdrop.setAttribute('class', 'msghub-overlay-backdrop is-hidden');
+		backdrop.setAttribute('aria-hidden', 'true');
+
+		const panel = document.createElement('div');
+		panel.setAttribute('class', 'msghub-overlay');
+		panel.setAttribute('role', 'dialog');
+		panel.setAttribute('aria-modal', 'true');
+		panel.setAttribute('aria-labelledby', 'msghub-overlay-large-title');
+
+		const head = document.createElement('div');
+		head.setAttribute('class', 'msghub-overlay-head');
+
+		const title = document.createElement('div');
+		title.id = 'msghub-overlay-large-title';
+		title.setAttribute('class', 'msghub-overlay-title');
+
+		const closeBtn = document.createElement('button');
+		closeBtn.id = 'msghub-overlay-large-close';
+		closeBtn.setAttribute('type', 'button');
+		closeBtn.setAttribute('class', 'msghub-uibutton-icon msghub-overlay-close');
+		closeBtn.setAttribute('aria-label', 'Close');
+
+		const body = document.createElement('div');
+		body.id = 'msghub-overlay-large-body';
+		body.setAttribute('class', 'msghub-overlay-body');
+
+		head.appendChild(title);
+		head.appendChild(closeBtn);
+		panel.appendChild(head);
+		panel.appendChild(body);
+		backdrop.replaceChildren(panel);
+
+		if (!existing) {
+			(root || document.body).appendChild(backdrop);
+		}
+		return backdrop;
+	};
+
+	/**
+	 * Returns the large overlay backdrop with guaranteed DOM structure.
+	 *
+	 * @returns {HTMLElement} Large overlay backdrop element.
+	 */
+	const getOverlayBackdrop = () => {
+		const existing = document.getElementById('msghub-overlay-large');
+		if (
+			existing &&
+			document.getElementById('msghub-overlay-large-title') &&
+			document.getElementById('msghub-overlay-large-body') &&
+			document.getElementById('msghub-overlay-large-close')
+		) {
+			return existing;
+		}
+		return ensureOverlayLargeDom();
+	};
+
+	const overlayBackdrop = getOverlayBackdrop();
 	const overlayTitle = document.getElementById('msghub-overlay-large-title');
 	const overlayBody = document.getElementById('msghub-overlay-large-body');
 	const overlayClose = document.getElementById('msghub-overlay-large-close');
 
-	const dialogBackdrop =
-		document.getElementById('msghub-dialog-small') ||
-		(() => {
-			const el = document.createElement('div');
-			el.id = 'msghub-dialog-small';
-			el.className = 'msghub-dialog-backdrop is-hidden';
-			el.setAttribute('aria-hidden', 'true');
-			(root || document.body).appendChild(el);
-			return el;
-		})();
+	/**
+	 * Ensures the small dialog DOM exists and is complete.
+	 *
+	 * @returns {HTMLElement} Small dialog backdrop element.
+	 */
+	const ensureDialogDom = () => {
+		const existing = document.getElementById('msghub-dialog-small');
+		if (
+			existing &&
+			document.getElementById('msghub-dialog-small-title') &&
+			document.getElementById('msghub-dialog-small-body') &&
+			document.getElementById('msghub-dialog-small-close') &&
+			document.getElementById('msghub-dialog-small-cancel') &&
+			document.getElementById('msghub-dialog-small-confirm')
+		) {
+			return existing;
+		}
+		const backdrop = existing || document.createElement('div');
+		backdrop.id = 'msghub-dialog-small';
+		backdrop.setAttribute('class', 'msghub-dialog-backdrop is-hidden');
+		backdrop.setAttribute('aria-hidden', 'true');
+
+		const panel = document.createElement('div');
+		panel.setAttribute('class', 'msghub-dialog');
+		panel.setAttribute('role', 'dialog');
+		panel.setAttribute('aria-modal', 'true');
+		panel.setAttribute('aria-labelledby', 'msghub-dialog-small-title');
+		panel.setAttribute('aria-describedby', 'msghub-dialog-small-body');
+
+		const head = document.createElement('div');
+		head.setAttribute('class', 'msghub-overlay-head msghub-dialog-head');
+
+		const title = document.createElement('div');
+		title.id = 'msghub-dialog-small-title';
+		title.setAttribute('class', 'msghub-overlay-title msghub-dialog-title');
+
+		const closeBtn = document.createElement('button');
+		closeBtn.id = 'msghub-dialog-small-close';
+		closeBtn.setAttribute('type', 'button');
+		closeBtn.setAttribute('class', 'msghub-uibutton-icon msghub-dialog-close');
+		closeBtn.setAttribute('aria-label', 'Close');
+
+		const body = document.createElement('div');
+		body.id = 'msghub-dialog-small-body';
+		body.setAttribute('class', 'msghub-dialog-body');
+
+		const actions = document.createElement('div');
+		actions.setAttribute('class', 'msghub-dialog-actions');
+
+		const cancelBtn = document.createElement('button');
+		cancelBtn.id = 'msghub-dialog-small-cancel';
+		cancelBtn.setAttribute('type', 'button');
+		cancelBtn.setAttribute('class', 'msghub-uibutton-text');
+		cancelBtn.textContent = 'Cancel';
+
+		const confirmBtn = document.createElement('button');
+		confirmBtn.id = 'msghub-dialog-small-confirm';
+		confirmBtn.setAttribute('type', 'button');
+		confirmBtn.setAttribute('class', 'msghub-uibutton-text');
+		confirmBtn.textContent = 'OK';
+
+		head.appendChild(title);
+		head.appendChild(closeBtn);
+		actions.appendChild(cancelBtn);
+		actions.appendChild(confirmBtn);
+		panel.appendChild(head);
+		panel.appendChild(body);
+		panel.appendChild(actions);
+		backdrop.replaceChildren(panel);
+
+		if (!existing) {
+			(root || document.body).appendChild(backdrop);
+		}
+		return backdrop;
+	};
+
+	/**
+	 * Returns the small dialog backdrop with guaranteed DOM structure.
+	 *
+	 * @returns {HTMLElement} Small dialog backdrop element.
+	 */
+	const getDialogBackdrop = () => {
+		const existing = document.getElementById('msghub-dialog-small');
+		if (
+			existing &&
+			document.getElementById('msghub-dialog-small-title') &&
+			document.getElementById('msghub-dialog-small-body') &&
+			document.getElementById('msghub-dialog-small-close') &&
+			document.getElementById('msghub-dialog-small-cancel') &&
+			document.getElementById('msghub-dialog-small-confirm')
+		) {
+			return existing;
+		}
+		return ensureDialogDom();
+	};
+
+	const dialogBackdrop = getDialogBackdrop();
 	const dialogTitle = document.getElementById('msghub-dialog-small-title');
 	const dialogBody = document.getElementById('msghub-dialog-small-body');
+	const dialogBtnClose = document.getElementById('msghub-dialog-small-close');
 	const dialogBtnCancel = document.getElementById('msghub-dialog-small-cancel');
 	const dialogBtnConfirm = document.getElementById('msghub-dialog-small-confirm');
 
@@ -1264,6 +1416,9 @@ function createUi() {
 	if (dialogBtnCancel) {
 		dialogBtnCancel.addEventListener('click', () => dialogCloseFn(false));
 	}
+	if (dialogBtnClose) {
+		dialogBtnClose.addEventListener('click', () => dialogCloseFn(false));
+	}
 	if (dialogBtnConfirm) {
 		dialogBtnConfirm.addEventListener('click', () => dialogCloseFn(true));
 	}
@@ -1340,6 +1495,7 @@ function createUi() {
 			if (dialogBtnConfirm) {
 				dialogBtnConfirm.textContent = confirmText;
 				dialogBtnConfirm.classList.toggle('msghub-danger', isDanger);
+				dialogBtnConfirm.classList.toggle('is-danger', isDanger);
 			}
 			if (dialogBtnCancel) {
 				dialogBtnCancel.textContent = cancelText;

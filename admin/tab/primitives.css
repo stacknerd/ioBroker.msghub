@@ -134,11 +134,27 @@
 	opacity: 0.45;
 }
 
+.msghub-root .msghub-uibutton-icon.is-danger,
+.msghub-root .msghub-uibutton-text.is-danger,
+.msghub-root .msghub-uibutton-iconandtext.is-danger,
+.msghub-root .msghub-uibutton-selectandtext.is-danger,
+.msghub-root .msghub-uibutton-icon.msghub-danger,
+.msghub-root .msghub-uibutton-text.msghub-danger,
+.msghub-root .msghub-uibutton-iconandtext.msghub-danger,
+.msghub-root .msghub-uibutton-selectandtext.msghub-danger {
+	color: var(--msghub-danger);
+}
+
 .msghub-root .msghub-uibutton-icon.is-danger:not(:disabled):hover,
 .msghub-root .msghub-uibutton-text.is-danger:not(:disabled):hover,
 .msghub-root .msghub-uibutton-iconandtext.is-danger:not(:disabled):hover,
-.msghub-root .msghub-uibutton-selectandtext.is-danger:not(:disabled):hover {
+.msghub-root .msghub-uibutton-selectandtext.is-danger:not(:disabled):hover,
+.msghub-root .msghub-uibutton-icon.msghub-danger:not(:disabled):hover,
+.msghub-root .msghub-uibutton-text.msghub-danger:not(:disabled):hover,
+.msghub-root .msghub-uibutton-iconandtext.msghub-danger:not(:disabled):hover,
+.msghub-root .msghub-uibutton-selectandtext.msghub-danger:not(:disabled):hover {
 	color: var(--msghub-danger);
+	background: var(--msghub-danger-dim);
 }
 
 .msghub-root .msghub-uibutton-selectandtext {

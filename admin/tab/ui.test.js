@@ -238,7 +238,7 @@ async function loadUiSandbox() {
 
 describe('admin/tab/ui.js', function () {
 	it('creates the UI facade with expected primitives', async function () {
-		const { sandbox } = await loadUiSandbox();
+		const { sandbox, documentObject } = await loadUiSandbox();
 		const ui = sandbox.window.__uiFactory();
 
 		assert.ok(ui && typeof ui === 'object');
@@ -247,6 +247,15 @@ describe('admin/tab/ui.js', function () {
 		assert.ok(ui.overlayLarge && typeof ui.overlayLarge.open === 'function');
 		assert.ok(ui.dialog && typeof ui.dialog.confirm === 'function');
 		assert.ok(typeof ui.closeAll === 'function');
+
+		const overlayClose = documentObject.getElementById('msghub-overlay-large-close');
+		const dialogClose = documentObject.getElementById('msghub-dialog-small-close');
+		const dialogCancel = documentObject.getElementById('msghub-dialog-small-cancel');
+		const dialogConfirm = documentObject.getElementById('msghub-dialog-small-confirm');
+		assert.equal(overlayClose?.classList.contains('msghub-uibutton-icon'), true);
+		assert.equal(dialogClose?.classList.contains('msghub-uibutton-icon'), true);
+		assert.equal(dialogCancel?.classList.contains('msghub-uibutton-text'), true);
+		assert.equal(dialogConfirm?.classList.contains('msghub-uibutton-text'), true);
 	});
 
 	it('opens and closes context menus through the public API', async function () {
@@ -269,14 +278,18 @@ describe('admin/tab/ui.js', function () {
 	});
 
 	it('supports dialog lifecycle via confirm/close', async function () {
-		const { sandbox } = await loadUiSandbox();
+		const { sandbox, documentObject } = await loadUiSandbox();
 		const ui = sandbox.window.__uiFactory();
 
 		const promise = ui.dialog.confirm({
 			title: 'Confirm',
 			text: 'Proceed?',
+			danger: true,
 		});
+		const dialogConfirm = documentObject.getElementById('msghub-dialog-small-confirm');
 		assert.equal(ui.dialog.isOpen(), true);
+		assert.equal(dialogConfirm?.classList.contains('msghub-danger'), true);
+		assert.equal(dialogConfirm?.classList.contains('is-danger'), true);
 		ui.dialog.close(true);
 		const result = await promise;
 		assert.equal(result, true);
@@ -284,7 +297,7 @@ describe('admin/tab/ui.js', function () {
 	});
 
 	it('supports overlay lifecycle via open/close', async function () {
-		const { sandbox } = await loadUiSandbox();
+		const { sandbox, documentObject } = await loadUiSandbox();
 		const ui = sandbox.window.__uiFactory();
 
 		ui.overlayLarge.open({
@@ -292,8 +305,31 @@ describe('admin/tab/ui.js', function () {
 			bodyText: 'Body',
 		});
 		assert.equal(ui.overlayLarge.isOpen(), true);
+		documentObject.getElementById('msghub-overlay-large-close').dispatchEvent({ type: 'click' });
+		assert.equal(ui.overlayLarge.isOpen(), false);
+
+		ui.overlayLarge.open({
+			title: 'Details',
+			bodyText: 'Body',
+		});
+		assert.equal(ui.dialog.isOpen(), false);
 		ui.overlayLarge.close();
 		assert.equal(ui.overlayLarge.isOpen(), false);
+	});
+
+	it('supports dialog close button as cancel action', async function () {
+		const { sandbox, documentObject } = await loadUiSandbox();
+		const ui = sandbox.window.__uiFactory();
+
+		const promise = ui.dialog.confirm({
+			title: 'Confirm',
+			text: 'Proceed?',
+		});
+
+		documentObject.getElementById('msghub-dialog-small-close').dispatchEvent({ type: 'click' });
+		const result = await promise;
+		assert.equal(result, false);
+		assert.equal(ui.dialog.isOpen(), false);
 	});
 
 	it('toast applies variant class and adds a close button', async function () {

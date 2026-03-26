@@ -103,6 +103,12 @@
 	color: inherit;
 }
 
+.msghub-root .msghub-overlay-close,
+.msghub-root .msghub-dialog-close {
+	flex-shrink: 0;
+	--msghub-uibutton-icon: var(--msghub-icon-close);
+}
+
 /* Spinner ring inside toast replaces close button — same right-aligned position */
 .msghub-root .msghub-toast .msghub-spinner-ring {
 	margin-left: auto;
@@ -536,12 +542,10 @@
 
 .msghub-root .msghub-dialog-title {
 	margin: 0;
-	padding: var(--msghub-space-3) var(--msghub-space-3) 0 var(--msghub-space-3);
-	font: var(--msghub-font-tab);
 }
 
 .msghub-root .msghub-dialog-body {
-	padding: var(--msghub-space-2) var(--msghub-space-3);
+	padding: var(--msghub-space-3);
 	overflow: auto;
 }
 
@@ -549,7 +553,7 @@
 	display: flex;
 	justify-content: flex-end;
 	gap: var(--msghub-space-2);
-	padding: var(--msghub-space-2) var(--msghub-space-3) var(--msghub-space-3) var(--msghub-space-3);
+	padding: var(--msghub-space-2) var(--msghub-space-3) var(--msghub-space-3);
 	border-top: 1px solid var(--msghub-border);
 }
 

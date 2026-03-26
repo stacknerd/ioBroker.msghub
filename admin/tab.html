@@ -94,9 +94,8 @@
 			<div class="msghub-overlay" role="dialog" aria-modal="true" aria-labelledby="msghub-overlay-large-title">
 				<div class="msghub-overlay-head">
 					<div id="msghub-overlay-large-title" class="msghub-overlay-title"></div>
-					<button id="msghub-overlay-large-close" type="button" class="msghub-overlay-close">
-						Close
-					</button>
+					<button id="msghub-overlay-large-close" type="button" class="msghub-uibutton-icon msghub-overlay-close"
+						aria-label="Close"></button>
 				</div>
 				<div id="msghub-overlay-large-body" class="msghub-overlay-body"></div>
 			</div>
@@ -104,13 +103,17 @@
 		<div id="msghub-dialog-small" class="msghub-dialog-backdrop is-hidden" aria-hidden="true">
 			<div class="msghub-dialog" role="dialog" aria-modal="true" aria-labelledby="msghub-dialog-small-title"
 				aria-describedby="msghub-dialog-small-body">
-				<h6 id="msghub-dialog-small-title" class="msghub-dialog-title"></h6>
+				<div class="msghub-overlay-head msghub-dialog-head">
+					<div id="msghub-dialog-small-title" class="msghub-overlay-title msghub-dialog-title"></div>
+					<button id="msghub-dialog-small-close" type="button" class="msghub-uibutton-icon msghub-dialog-close"
+						aria-label="Close"></button>
+				</div>
 				<div id="msghub-dialog-small-body" class="msghub-dialog-body"></div>
 				<div class="msghub-dialog-actions">
-					<button id="msghub-dialog-small-cancel" type="button">
+					<button id="msghub-dialog-small-cancel" type="button" class="msghub-uibutton-text">
 						Cancel
 					</button>
-					<button id="msghub-dialog-small-confirm" type="button">
+					<button id="msghub-dialog-small-confirm" type="button" class="msghub-uibutton-text">
 						OK
 					</button>
 				</div>
