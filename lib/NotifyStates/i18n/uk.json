@@ -1,0 +1,11 @@
+{
+  "msghub.i18n.NotifyStates.state.blob.label.format": "full json dump of MsgHub store (interval=%ss)",
+  "msghub.i18n.NotifyStates.state.latest.event.label.format": "latest notification for event \"%s\"",
+  "msghub.i18n.NotifyStates.state.latest.kind.label.format": "latest notification of kind \"%s\" for event \"%s\"",
+  "msghub.i18n.NotifyStates.state.latest.level.label.format": "latest notification of level \"%s\" for event \"%s\"",
+  "msghub.i18n.NotifyStates.state.stats.deleted.label": "Messages (deleted)",
+  "msghub.i18n.NotifyStates.state.stats.dueNow.label": "Messages (due now)",
+  "msghub.i18n.NotifyStates.state.stats.expired.label": "Messages (expired)",
+  "msghub.i18n.NotifyStates.state.stats.open.label": "Messages (open)",
+  "msghub.i18n.NotifyStates.state.stats.total.label": "Messages (total)"
+}

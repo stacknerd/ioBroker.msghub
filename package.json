@@ -67,12 +67,14 @@
     "release": "release-script",
     "dev-server": "dev-server",
     "i18n": "npm run i18n:sync && npm run i18n:check",
-    "i18n:sync": "npm run i18n:generate && npm run i18n:sort && npm run i18n:generate:backend-overlay",
-    "i18n:check": "npm run i18n:generate:backend-overlay:check && node i18n-check.mjs --scope all --sort",
+    "i18n:sync": "npm run i18n:generate && npm run i18n:sort && npm run i18n:generate:backend-overlay && npm run i18n:place:plugin-runtime && npm run i18n:sort ",
+    "i18n:check": "npm run i18n:generate:backend-overlay:check && npm run i18n:place:plugin-runtime:check && node i18n-check.mjs --scope all --sort",
     "i18n:generate": "node i18n-generate.mjs --scope all",
     "i18n:generate:remove": "node i18n-generate.mjs --scope all --remove",
     "i18n:generate:backend-overlay": "node i18n-generate-backend-overlay.mjs",
     "i18n:generate:backend-overlay:check": "node i18n-generate-backend-overlay.mjs --check",
+    "i18n:place:plugin-runtime": "node i18n-plugin-runtime-placement.mjs",
+    "i18n:place:plugin-runtime:check": "node i18n-plugin-runtime-placement.mjs --check",
     "i18n:sort": "node i18n-sort.mjs --scope all"
   },
   "bugs": {

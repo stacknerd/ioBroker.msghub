@@ -1,0 +1,6 @@
+{
+  "msghub.i18n.NotifyShoppingPdf.footer.itemsPrinted.format": "Gesamt: %s / gedruckt: %s",
+  "msghub.i18n.NotifyShoppingPdf.footer.pageOf.format": "Seite %s von %s",
+  "msghub.i18n.NotifyShoppingPdf.notes.spaceForAdditions.label": "Platz für Ergänzungen:",
+  "msghub.i18n.NotifyShoppingPdf.notes.title.label": "NOTIZEN"
+}

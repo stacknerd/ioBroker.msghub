@@ -1,0 +1,4 @@
+{
+  "msghub.i18n.IngestDwd.details.reason.weatherCondition.label": "Weather condition",
+  "msghub.i18n.IngestDwd.warning.validUntil.format": "Warning valid until: %s"
+}

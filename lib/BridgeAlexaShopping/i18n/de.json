@@ -1,0 +1,4 @@
+{
+  "msghub.i18n.BridgeAlexaShopping.msg.syncInfo.text": "Automatisch synchronisierte Einkaufsliste basierend auf der Alexa-Liste \"%s\".",
+  "msghub.i18n.BridgeAlexaShopping.status.connectionLost.label": "Verbindung zum Alexa-Dienst verloren"
+}
