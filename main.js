@@ -6,6 +6,8 @@
 
 // The adapter-core module gives you access to the core ioBroker functions
 // you need to create an adapter
+const path = require('path');
+
 const utils = require('@iobroker/adapter-core');
 const ioPackage = require('./io-package.json');
 
@@ -17,51 +19,8 @@ const { MsgAi } = require(`${__dirname}/src/MsgAi`);
 const { IoArchiveResolver } = require(`${__dirname}/lib/IoArchiveResolver`);
 const { IoCoreConnection } = require(`${__dirname}/lib/IoCoreConnection`);
 const { IoStorageIobroker } = require(`${__dirname}/lib/IoStorageIobroker`);
-
-function buildI18nWords(rootDir) {
-	const langs = ['de', 'en', 'es', 'fr', 'it', 'nl', 'pl', 'pt', 'ru', 'uk', 'zh-cn'];
-	const words = {};
-	for (const lang of langs) {
-		const data = require(`${rootDir}/i18n/${lang}.json`);
-		for (const key of Object.keys(data)) {
-			if (!words[key]) {
-				words[key] = {};
-			}
-			words[key][lang] = data[key];
-		}
-	}
-	return words;
-}
-
-function createI18nInstance(words, language) {
-	const lang = language || 'en';
-	const t = (key, ...args) => {
-		let text = words[key]?.[lang] || words[key]?.en || key;
-		for (const arg of args) {
-			text = text.replace('%s', arg === null ? 'null' : String(arg));
-		}
-		return text;
-	};
-	const getTranslatedObject = (key, ...args) => {
-		if (!words[key]) {
-			return { en: key };
-		}
-		const word = words[key];
-		if (word.en && word.en.includes('%s')) {
-			const result = {};
-			for (const l of Object.keys(word)) {
-				let s = word[l];
-				for (const arg of args) {
-					s = s.replace('%s', arg === null ? 'null' : String(arg));
-				}
-				result[l] = s;
-			}
-			return result;
-		}
-		return { ...word };
-	};
-	return { t, getTranslatedObject };
-}
+const { IoRuntimeI18n } = require(`${__dirname}/lib/IoRuntimeI18n`);
+const { loadI18nDir } = require(`${__dirname}/lib/loadI18nDir`);
 
 function decryptIfPossible(adapter, value) {
 	const raw = typeof value === 'string' ? value.trim() : '';
@@ -142,6 +101,9 @@ class Msghub extends utils.Adapter {
 
 		// Official platform-side core-link connection state.
 		this._coreConnection = null;
+
+		// Backend i18n registry — shared between _i18ninit() and IoPlugins (initialized in onReady).
+		this._i18nRegistry = null;
 	}
 
 	/**
@@ -235,7 +197,7 @@ class Msghub extends utils.Adapter {
 			if (typeof IoPlugins?.create !== 'function') {
 				throw new Error('IoPlugins.create is not a function');
 			}
-			this._msgPlugins = await IoPlugins.create(this, this.msgStore);
+			this._msgPlugins = await IoPlugins.create(this, this.msgStore, { i18nRegistry: this._i18nRegistry });
 		} catch (e) {
 			this.log?.error?.(`Plugin wiring failed: ${e?.message || e}`);
 		}
@@ -513,16 +475,23 @@ class Msghub extends utils.Adapter {
 			`MsgHub main.js locale policy: coreFormatLocale=${general.coreFormatLocale} / coreTextLanguage=${general.coreTextLanguage} / backendTextLanguage=${general.backendTextLanguage}`,
 		);
 
-		const words = buildI18nWords(__dirname);
+		const registry = new IoRuntimeI18n({ log: this.log });
+		registry.addSource('core-runtime', 'core-runtime', loadI18nDir(path.join(__dirname, 'i18n'), this.log));
+		registry.addSource(
+			'root-admin-overlay',
+			'root-admin-overlay',
+			loadI18nDir(path.join(__dirname, 'lib/_generated/backend-i18n/root-admin'), this.log),
+		);
+		this._i18nRegistry = registry;
 
 		this.i18nBackend = Object.freeze({
-			...createI18nInstance(words, general.backendTextLanguage || 'en'),
+			...registry.createTranslator(general.backendTextLanguage || 'en'),
 			locale: general.coreFormatLocale,
 			i18nlocale: general.backendTextLanguage,
 		});
 
 		this.i18nCore = Object.freeze({
-			...createI18nInstance(words, general.coreTextLanguage || 'en'),
+			...registry.createTranslator(general.coreTextLanguage || 'en'),
 			locale: general.coreFormatLocale,
 			i18nlocale: general.coreTextLanguage,
 		});
