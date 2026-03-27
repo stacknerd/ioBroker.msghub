@@ -12,7 +12,7 @@ It manages named translation sources, merges them lazily by priority, and provid
 `IoRuntimeI18n` is the layer between:
 
 - the static i18n source files loaded by `main.js` (`i18n/` and `lib/_generated/backend-i18n/root-admin/`),
-- plugin-owned backend i18n directories loaded by `IoPlugins` (`lib/<PluginType>/i18n/`),
+- plugin-owned runtime i18n directories loaded by `IoPlugins` (`lib/<PluginType>/admin-ui/i18n/` and `lib/<PluginType>/i18n/`),
 - the translator facades exposed on the adapter as `adapter.i18nBackend` and `adapter.i18nCore`.
 
 Conceptually:

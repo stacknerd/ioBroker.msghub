@@ -683,12 +683,14 @@ Each bundle loads its own i18n independently of the central Admin-Tab workflow:
 - Not part of `admin/i18n/**` or the central overlay workflow (`i18n:generate:backend-overlay`).
 - Key namespace: `msghub.i18n.<TypeName>.ui.*`
 - Language is determined at `bundle.get` time and does not change during the session.
+- These keys are also backend-visible through `IoPlugins._loadPluginI18n()` when the plugin is registered.
 
 ### Plugin-owned Backend i18n
 
 Backend runtime strings (message texts, error messages, log output) that a plugin owns
-live in a separate location from Admin UI i18n:
+live in a separate location from Admin UI i18n, but runtime loading sees both places:
 
+- Shared UI/backend plugin texts: `lib/<TypeName>/admin-ui/i18n/<lang>.json`
 - File: `lib/<TypeName>/i18n/<lang>.json`
 - Not part of `admin/i18n/**` or the overlay workflow.
 - Key namespace: `msghub.i18n.<TypeName>.*` (broader than admin-ui; covers `msg.*`, `error.*`, etc.)
@@ -699,8 +701,8 @@ live in a separate location from Admin UI i18n:
 only the offending keys are filtered out — the rest of the package is registered normally.
 
 **Lifecycle:** Backend i18n is loaded in `IoPlugins._loadPluginI18n()` on plugin register
-and removed from the `IoRuntimeI18n` registry on plugin unregister. Plugins without a
-`lib/<TypeName>/i18n/` directory run normally without backend i18n (degraded success model).
+from `admin-ui/i18n` and `i18n`, then removed from the `IoRuntimeI18n` registry on plugin
+unregister. Plugins without either directory run normally without backend i18n (degraded success model).
 
 **Available as:** `adapter.i18nBackend.t('msghub.i18n.<TypeName>.<area>.<key>')` and
 `adapter.i18nCore.t(...)` — both facades read from the same `IoRuntimeI18n` registry.
@@ -711,7 +713,7 @@ and removed from the `IoRuntimeI18n` registry on plugin unregister. Plugins with
 |---|---|---|
 | File | `lib/<Type>/admin-ui/i18n/<lang>.json` | `lib/<Type>/i18n/<lang>.json` |
 | Namespace | `msghub.i18n.<TypeName>.ui.*` | `msghub.i18n.<TypeName>.*` |
-| Transport | Via `admin.pluginUi.bundle.get` | Via `IoRuntimeI18n` registry (runtime load) |
+| Transport | Via `admin.pluginUi.bundle.get` and via `IoRuntimeI18n` registry (runtime load) | Via `IoRuntimeI18n` registry (runtime load) |
 | Guard | Host-side (admin/tab/runtime.js) | IoPlugins `_loadPluginI18n()` |
 
 ### Reference implementation
