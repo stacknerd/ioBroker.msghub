@@ -28,6 +28,7 @@ export default [
 			'admin/tab.js',
 			'admin/tab.*.js',
 			'i18n-mirror-admin-to-runtime.mjs',
+			'i18n-generate-backend-overlay.mjs',
 		],
 	},
 	{
