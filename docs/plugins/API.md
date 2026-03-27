@@ -253,6 +253,7 @@
 | `panel.bundle.entry` | Relative path to the ESM bundle inside the plugin directory. Required. | Plugin-owned, consumed by IO/UI runtime | `lib/IngestStates/manifest.js`, `lib/IoPlugins.js` |
 | Companion CSS | Optional stylesheet at the same path as `panel.bundle.entry` with `.js` replaced by `.css`. There is no separate manifest field for CSS. | UI host convention | `lib/IoPlugins.js`, `admin/tab/plugin-ui-host.js` |
 | Plugin-owned Admin UI i18n | Optional files under `admin-ui/i18n/<lang>.json`. | Plugin-owned, consumed by IO/UI runtime | `lib/IoPlugins.js`, `admin/tab/runtime.js` |
+| Plugin-owned Backend i18n | Optional files under `lib/<TypeName>/i18n/<lang>.json`. Keys must use prefix `msghub.i18n.<TypeName>.*`; foreign keys are rejected with warn. Loaded by IoPlugins on register; removed on unregister. | Plugin-owned, consumed by IoRuntimeI18n | `lib/IoPlugins.js`, `lib/IoRuntimeI18n.js` |
 
 ### Current plugin-owned Admin UI contributors
 

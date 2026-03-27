@@ -680,9 +680,39 @@ For the full reference, see [`docs/plugins/API.md`](./API.md#plugin-owned-admin-
 Each bundle loads its own i18n independently of the central Admin-Tab workflow:
 
 - File: `lib/<TypeName>/admin-ui/i18n/<lang>.json`
-- Not part of `admin/i18n/**` or the mirror workflow.
+- Not part of `admin/i18n/**` or the central overlay workflow (`i18n:generate:backend-overlay`).
 - Key namespace: `msghub.i18n.<TypeName>.ui.*`
 - Language is determined at `bundle.get` time and does not change during the session.
+
+### Plugin-owned Backend i18n
+
+Backend runtime strings (message texts, error messages, log output) that a plugin owns
+live in a separate location from Admin UI i18n:
+
+- File: `lib/<TypeName>/i18n/<lang>.json`
+- Not part of `admin/i18n/**` or the overlay workflow.
+- Key namespace: `msghub.i18n.<TypeName>.*` (broader than admin-ui; covers `msg.*`, `error.*`, etc.)
+- Namespace source: `manifest.type` — the same canonical type name used for plugin registration IDs.
+
+**Namespace guard:** On plugin registration, keys are validated against the allowed prefix
+`msghub.i18n.<TypeName>.`. Keys outside this prefix are rejected with `adapter.log.warn()`;
+only the offending keys are filtered out — the rest of the package is registered normally.
+
+**Lifecycle:** Backend i18n is loaded in `IoPlugins._loadPluginI18n()` on plugin register
+and removed from the `IoRuntimeI18n` registry on plugin unregister. Plugins without a
+`lib/<TypeName>/i18n/` directory run normally without backend i18n (degraded success model).
+
+**Available as:** `adapter.i18nBackend.t('msghub.i18n.<TypeName>.<area>.<key>')` and
+`adapter.i18nCore.t(...)` — both facades read from the same `IoRuntimeI18n` registry.
+
+**Symmetry with Admin UI i18n:**
+
+| | Admin UI i18n | Backend i18n |
+|---|---|---|
+| File | `lib/<Type>/admin-ui/i18n/<lang>.json` | `lib/<Type>/i18n/<lang>.json` |
+| Namespace | `msghub.i18n.<TypeName>.ui.*` | `msghub.i18n.<TypeName>.*` |
+| Transport | Via `admin.pluginUi.bundle.get` | Via `IoRuntimeI18n` registry (runtime load) |
+| Guard | Host-side (admin/tab/runtime.js) | IoPlugins `_loadPluginI18n()` |
 
 ### Reference implementation
 

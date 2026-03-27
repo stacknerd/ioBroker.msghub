@@ -174,5 +174,6 @@ Then continue based on your question:
 - `IoPluginGuards`: [`./IoPluginGuards.md`](./IoPluginGuards.md)
 - `IoPluginResources`: [`./IoPluginResources.md`](./IoPluginResources.md)
 - `IoPlugins`: [`./IoPlugins.md`](./IoPlugins.md)
+- `IoRuntimeI18n`: [`./IoRuntimeI18n.md`](./IoRuntimeI18n.md)
 - `IoStorageIobroker`: [`./IoStorageIobroker.md`](./IoStorageIobroker.md)
 <!-- AUTO-GENERATED:IO-INDEX:END -->

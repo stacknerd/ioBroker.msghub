@@ -64,8 +64,11 @@ Why this exists:
 
 Builds an optional i18n facade:
 
-- Returns `null` when i18n is not available (for example, when `main.js` did not attach `adapter.i18n`).
-- Otherwise returns `{ t, getTranslatedObject, i18nlocale }` from the adapter-scoped i18n instance.
+- Returns `null` when `adapter.i18nCore` is not present or does not expose a `t` function (for example, during testing without a full adapter lifecycle).
+- Otherwise returns `{ t, getTranslatedObject, i18nlocale }` sourced from `adapter.i18nCore`.
+
+`adapter.i18nCore` is wired by `main.js` in `_i18ninit()` using the `IoRuntimeI18n` registry.
+It represents the backend text language used for message translations consumed by Core and plugins.
 
 Semantics of this metadata:
 - `i18nlocale`: effective ioBroker text language (`system.config.common.language`, normalized).

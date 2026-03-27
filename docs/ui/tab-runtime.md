@@ -94,6 +94,9 @@ The module owns the admin dictionary state:
 If `lang !== 'en'`, it additionally loads `i18n/<lang>.json` and overlays it on top of the English base.
 If `lang === 'en'`, no second language file is fetched.
 
+Note: these paths are admin-relative URLs served by the ioBroker host from `admin/i18n/<lang>.json` in the repo.
+They are the Admin Tab i18n source (`admin/i18n/`) and are unrelated to the backend runtime catalog at `i18n/` in the repo root.
+
 Translation access then happens through:
 
 - `hasAdminKey(key)`
