@@ -38,6 +38,7 @@
 	"msghub.i18n.core.admin.common.MsgConstants.lifecycle.state.expired.label": "Expired",
 	"msghub.i18n.core.admin.common.MsgConstants.lifecycle.state.open.label": "Open",
 	"msghub.i18n.core.admin.common.MsgConstants.lifecycle.state.snoozed.label": "Snoozed",
+	"msghub.i18n.core.admin.common.time.d.label": "d",
 	"msghub.i18n.core.admin.common.time.h.label": "h",
 	"msghub.i18n.core.admin.common.time.min.label": "min",
 	"msghub.i18n.core.admin.common.time.ms.label": "ms",

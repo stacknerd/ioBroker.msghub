@@ -1,14 +1,39 @@
 /* ========================================================================== */
-/* Layout: Presets tool — list + editor split                                 */
+/* Toolbar                                                                    */
 /* ========================================================================== */
 
-.msghub-plugin-ui-mount[data-plugin-type="IngestStates"][data-panel-id="presets"] .msghub-tools-presets-grid {
+.msghub-plugin-ui-mount[data-plugin-type='IngestStates'][data-panel-id='presets'] .msghub-tools-presets-toolbar {
+	margin-bottom: var(--msghub-space-3);
+}
+
+.msghub-plugin-ui-mount[data-plugin-type='IngestStates'][data-panel-id='presets']
+	.msghub-tools-presets-toolbar-refresh {
+	--msghub-uibutton-icon: var(--msghub-icon-refresh);
+}
+
+.msghub-plugin-ui-mount[data-plugin-type='IngestStates'][data-panel-id='presets'] .msghub-tools-presets-toolbar-add {
+	--msghub-uibutton-icon: var(--msghub-icon-add);
+}
+
+.msghub-plugin-ui-mount[data-plugin-type='IngestStates'][data-panel-id='presets'] .msghub-tools-presets-toolbar-copy {
+	--msghub-uibutton-icon: var(--msghub-icon-copy);
+}
+
+.msghub-plugin-ui-mount[data-plugin-type='IngestStates'][data-panel-id='presets'] .msghub-tools-presets-toolbar-delete {
+	--msghub-uibutton-icon: var(--msghub-icon-delete);
+}
+
+/* ========================================================================== */
+/* Split Layout                                                               */
+/* ========================================================================== */
+
+.msghub-plugin-ui-mount[data-plugin-type='IngestStates'][data-panel-id='presets'] .msghub-tools-presets-grid {
 	display: flex;
 	gap: var(--msghub-space-3);
 	align-items: flex-start;
 }
 
-.msghub-plugin-ui-mount[data-plugin-type="IngestStates"][data-panel-id="presets"] .msghub-tools-presets-list {
+.msghub-plugin-ui-mount[data-plugin-type='IngestStates'][data-panel-id='presets'] .msghub-tools-presets-list {
 	height: 80vh;
 	flex: 0 0 50%;
 	min-width: 260px;
@@ -19,62 +44,154 @@
 	padding-right: var(--msghub-space-3);
 }
 
-.msghub-plugin-ui-mount[data-plugin-type="IngestStates"][data-panel-id="presets"] .msghub-tools-presets-editor {
+.msghub-plugin-ui-mount[data-plugin-type='IngestStates'][data-panel-id='presets'] .msghub-tools-presets-editor {
 	height: 80vh;
 	flex: 1 1 auto;
 	min-width: 500px;
 	overflow: auto;
 }
 
-.msghub-plugin-ui-mount[data-plugin-type="IngestStates"][data-panel-id="presets"] .msghub-tools-presets-list-items {
+.msghub-plugin-ui-mount[data-plugin-type='IngestStates'][data-panel-id='presets'] .msghub-tools-presets-list-items {
 	overflow: auto;
 }
 
 /* ========================================================================== */
-/* Preset table column widths                                                 */
+/* Preset Table                                                               */
 /* ========================================================================== */
 
-.msghub-plugin-ui-mount[data-plugin-type="IngestStates"][data-panel-id="presets"] .msghub-col--preset-ownedBy {
+.msghub-plugin-ui-mount[data-plugin-type='IngestStates'][data-panel-id='presets'] .msghub-col--select {
+	width: 34px;
+}
+
+.msghub-plugin-ui-mount[data-plugin-type='IngestStates'][data-panel-id='presets'] .msghub-tools-presets-select {
+	text-align: center;
+}
+
+.msghub-plugin-ui-mount[data-plugin-type='IngestStates'][data-panel-id='presets']
+	.msghub-tools-presets-select-indicator {
+	pointer-events: none;
+}
+
+.msghub-plugin-ui-mount[data-plugin-type='IngestStates'][data-panel-id='presets'] .msghub-col--preset-ownedBy {
 	width: 20ch;
 }
 @media (max-width: 900px) {
-	.msghub-plugin-ui-mount[data-plugin-type="IngestStates"][data-panel-id="presets"] .msghub-presets-table .msghub-col--preset-ownedBy {
+	.msghub-plugin-ui-mount[data-plugin-type='IngestStates'][data-panel-id='presets']
+		.msghub-presets-table
+		.msghub-col--preset-ownedBy {
 		display: none;
 	}
 }
 
-.msghub-plugin-ui-mount[data-plugin-type="IngestStates"][data-panel-id="presets"] .msghub-col--preset-usage {
+.msghub-plugin-ui-mount[data-plugin-type='IngestStates'][data-panel-id='presets'] .msghub-col--preset-usage {
 	width: 5ch;
+	text-align: center;
 }
 
-.msghub-plugin-ui-mount[data-plugin-type="IngestStates"][data-panel-id="presets"] .msghub-col--preset-subset {
+.msghub-plugin-ui-mount[data-plugin-type='IngestStates'][data-panel-id='presets'] .msghub-col--preset-subset {
 	width: 20ch;
 }
 @media (max-width: 1600px) {
-	.msghub-plugin-ui-mount[data-plugin-type="IngestStates"][data-panel-id="presets"] .msghub-presets-table .msghub-col--preset-subset {
+	.msghub-plugin-ui-mount[data-plugin-type='IngestStates'][data-panel-id='presets']
+		.msghub-presets-table
+		.msghub-col--preset-subset {
 		display: none;
 	}
 }
 
-.msghub-plugin-ui-mount[data-plugin-type="IngestStates"][data-panel-id="presets"] .msghub-col--preset-kind {
+.msghub-plugin-ui-mount[data-plugin-type='IngestStates'][data-panel-id='presets'] .msghub-col--preset-kind {
 	width: 10ch;
 }
 @media (max-width: 1000px) {
-	.msghub-plugin-ui-mount[data-plugin-type="IngestStates"][data-panel-id="presets"] .msghub-presets-table .msghub-col--preset-kind {
+	.msghub-plugin-ui-mount[data-plugin-type='IngestStates'][data-panel-id='presets']
+		.msghub-presets-table
+		.msghub-col--preset-kind {
 		display: none;
 	}
 }
 
-.msghub-plugin-ui-mount[data-plugin-type="IngestStates"][data-panel-id="presets"] .msghub-col--preset-level {
+.msghub-plugin-ui-mount[data-plugin-type='IngestStates'][data-panel-id='presets'] .msghub-col--preset-level {
 	width: 10ch;
 }
 @media (max-width: 1200px) {
-	.msghub-plugin-ui-mount[data-plugin-type="IngestStates"][data-panel-id="presets"] .msghub-presets-table .msghub-col--preset-level {
+	.msghub-plugin-ui-mount[data-plugin-type='IngestStates'][data-panel-id='presets']
+		.msghub-presets-table
+		.msghub-col--preset-level {
 		display: none;
 	}
 }
 
-.msghub-plugin-ui-mount[data-plugin-type="IngestStates"][data-panel-id="presets"] .msghub-col--preset-name {
+.msghub-plugin-ui-mount[data-plugin-type='IngestStates'][data-panel-id='presets'] .msghub-col--preset-name {
 	width: 100%;
 	min-width: 20ch;
+}
+
+/* ========================================================================== */
+/* Preset Editor                                                              */
+/* ========================================================================== */
+
+.msghub-plugin-ui-mount[data-plugin-type='IngestStates'][data-panel-id='presets'] .msghub-preset-editor-row {
+	display: grid;
+	align-items: flex-start;
+	grid-template-columns: minmax(15ch, 20ch) minmax(0, 1fr) 24px;
+	gap: var(--msghub-space-2);
+	padding: var(--msghub-space-2);
+	width: 100%;
+	box-sizing: border-box;
+}
+
+.msghub-plugin-ui-mount[data-plugin-type='IngestStates'][data-panel-id='presets'] .msghub-preset-editor-rowLabel {
+	min-width: 0;
+}
+
+.msghub-plugin-ui-mount[data-plugin-type='IngestStates'][data-panel-id='presets'] .msghub-preset-editor-helpSlot {
+	width: 40px;
+}
+
+.msghub-plugin-ui-mount[data-plugin-type='IngestStates'][data-panel-id='presets'] .msghub-preset-editor-rowField {
+	min-width: 0;
+}
+
+.msghub-plugin-ui-mount[data-plugin-type='IngestStates'][data-panel-id='presets']
+	.msghub-preset-editor-rowField
+	.msghub-preset-editor-controlGroup {
+	display: flex;
+	align-items: center;
+	gap: var(--msghub-space-2);
+	width: 100%;
+}
+
+.msghub-plugin-ui-mount[data-plugin-type='IngestStates'][data-panel-id='presets']
+	.msghub-preset-editor-rowField
+	input[type='text'],
+.msghub-plugin-ui-mount[data-plugin-type='IngestStates'][data-panel-id='presets']
+	.msghub-preset-editor-rowField
+	select {
+	width: 100%;
+	box-sizing: border-box;
+}
+
+.msghub-plugin-ui-mount[data-plugin-type='IngestStates'][data-panel-id='presets']
+	.msghub-preset-editor-rowField
+	textarea {
+	width: 100%;
+	min-height: calc(6 * 1lh);
+	box-sizing: border-box;
+	resize: vertical;
+}
+
+.msghub-plugin-ui-mount[data-plugin-type='IngestStates'][data-panel-id='presets']
+	.msghub-preset-editor-rowField
+	.msghub-preset-editor-controlGroup
+	input {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.msghub-plugin-ui-mount[data-plugin-type='IngestStates'][data-panel-id='presets']
+	.msghub-preset-editor-rowField
+	.msghub-preset-editor-controlGroup
+	select {
+	flex: 0 0 10ch;
+	width: 10ch;
 }
