@@ -16,6 +16,7 @@
 	gap: var(--msghub-space-2);
 	padding: var(--msghub-space-2);
 	border: 1px solid var(--msghub-border-light);
+	border-radius: var(--msghub-radius);
 	background: var(--msghub-bg-toolbar);
 	--msghub-strip-fade-color: var(--msghub-bg-toolbar);
 }

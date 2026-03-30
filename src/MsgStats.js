@@ -362,7 +362,7 @@ class MsgStats {
 	}
 
 	/**
-	 * Return the domain "fällig" timestamp (timing.dueAt/startAt), not notification due.
+	 * Return the domain due timestamp (timing.dueAt/startAt), not notification due.
 	 *
 	 * @param {object} message Message object.
 	 * @returns {number|null} Timestamp or null if missing.
@@ -377,7 +377,7 @@ class MsgStats {
 		const startAt = MsgStats._isFiniteNumber(timing.startAt) ? Math.trunc(timing.startAt) : null;
 		const kind = typeof message.kind === 'string' ? message.kind : '';
 
-		// Domain semantics: appointments are "fällig" by startAt, others by dueAt.
+		// Domain semantics: appointments are due by startAt, others by dueAt.
 		if (kind === this.msgConstants.kind?.appointment) {
 			return startAt != null ? startAt : dueAt;
 		}

@@ -316,7 +316,6 @@ describe('_i18ninit live-binding (A8 integration)', () => {
 		const { t } = registry.createTranslator('en');
 
 		// Use a synthetic key that is not present in the core-runtime source.
-		// (Until Etappe 5 removes mirrored admin keys from i18n/, all overlay keys also exist
 		// in i18n/, so real overlay files cannot demonstrate the "not yet visible" state.)
 		const syntheticKey = 'msghub.i18n.core.admin._test.livebinding.sentinel';
 		expect(t(syntheticKey)).to.equal(syntheticKey);

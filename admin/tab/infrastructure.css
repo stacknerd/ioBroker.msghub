@@ -521,6 +521,8 @@
 	padding: var(--msghub-space-2) var(--msghub-space-3);
 	border-bottom: 1px solid var(--msghub-border);
 	background: var(--msghub-bg-overlayHeader);
+	border-top-left-radius: var(--msghub-radius);
+	border-top-right-radius: var(--msghub-radius);
 }
 
 .msghub-root .msghub-overlay-title {

@@ -37,7 +37,7 @@ Primary consumers today:
    - totals and breakdowns over the current in-memory list (`fullList`)
    - buckets: by kind, by lifecycle state, by level, by origin system (`origin.system`)
 
-2. **Schedule buckets (“fällig”, domain time)**
+2. **Schedule buckets (domain due time)**
    - counts of messages that have a domain due timestamp
    - windows: overdue, today, tomorrow, next 7 days, this week, this month
    - additional “from today” windows (exclude overdue): this week (from today), this month (from today)
@@ -54,11 +54,11 @@ Primary consumers today:
 
 ---
 
-## Domain semantics: “fällig” vs “due notification”
+## Domain semantics: domain due time vs `due` notification
 
 This module intentionally distinguishes two different concepts:
 
-- **Domain time** (“fällig”): `timing.dueAt` for tasks/lists; `timing.startAt` for appointments.
+- **Domain time**: `timing.dueAt` for tasks/lists; `timing.startAt` for appointments.
 - **Notification event `"due"`**: a reminder delivery event driven by `timing.notifyAt`.
 
 `MsgStats.schedule.*` uses **domain time only**. It does not look at `notifyAt`.
@@ -97,7 +97,7 @@ Returns a JSON object shaped like:
 
 - `meta`: generatedAt, time zone, locale, and computed window boundaries
 - `current`: total + breakdowns
-- `schedule`: due buckets (domain “fällig”)
+- `schedule`: due buckets (domain due time)
 - `done`: rollup buckets (today/thisWeek/thisMonth) + lastClosedAt
 - `io`: storage + archive status
 

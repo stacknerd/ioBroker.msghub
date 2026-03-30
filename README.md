@@ -27,9 +27,9 @@ See [`docs/README.md`](./docs/README.md)
 ### **WORK IN PROGRESS**
 * (Ben) initial release
 
-## KI-Unterstützung
+## AI Assistance
 
-Bei der Entwicklung dieses ioBroker-Adapters wurde KI-Assistenz (z. B. für Code-Vorschläge, Refactorings und Dokumentation) eingesetzt. Alle Änderungen werden von mir reviewed, getestet und verantwortet. Falls dir ein Bug auffällt, erstelle bitte ein Issue. Sicherheitslücken bitte vertraulich über GitHub: Security → Advisories → Report a vulnerability.
+AI assistance (for example for code suggestions, refactorings, and documentation) was used during the development of this ioBroker adapter. I review, test, and take responsibility for all changes. If you find a bug, please open an issue. Please report security vulnerabilities confidentially via GitHub: Security -> Advisories -> Report a vulnerability.
 
 
 ## License

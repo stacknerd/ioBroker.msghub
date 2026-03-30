@@ -5,22 +5,22 @@
 'use strict';
 
 /**
- * MsgHub Admin Tab: globale Laufzeit-Bindings.
+ * MsgHub Admin Tab: global runtime bindings.
  *
  * Docs: ../../docs/ui/tab-globals.md
  *
- * Inhalt:
- * - Zentrale Referenz auf das Browser-`window` (`win`) für alle Teilmodule.
- * - Zugriff auf socket.io (`io`), das in `admin/tab.html` vorab geladen wird.
+ * Contents:
+ * - Central reference to the browser `window` (`win`) for all submodules.
+ * - Access to socket.io (`io`), which is loaded in advance by `admin/tab.html`.
  *
- * Systemeinbindung:
- * - Dieses Modul ist der erste Baustein in der Ladereihenfolge von `admin/tab.html`.
- * - Nachfolgende Module (`registry.js`, `api.js`, `runtime.js`, ...) nutzen diese Variablen.
+ * Integration:
+ * - This module is the first building block in the load order of `admin/tab.html`.
+ * - Subsequent modules (`registry.js`, `api.js`, `runtime.js`, ...) use these variables.
  *
- * Schnittstellen:
+ * Interfaces:
  *
- * - Exportiert keine ES-Module, sondern legt Dateiscope-Variablen für die sequenziell
- *   geladenen Scripts an.
+ * - Does not export ES modules; instead it defines file-scope variables for the
+ *   sequentially loaded scripts.
  */
 const win = window;
 const io = win.io;

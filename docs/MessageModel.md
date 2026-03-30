@@ -289,7 +289,7 @@ Important terminology (common source of confusion):
 
 - `timing.dueAt` / `timing.startAt` / `timing.endAt` describe **domain time** (what humans typically call "due"" / “scheduled”).
 - `notfication.events.due` is a **notification event name** (reminder delivery), driven by `timing.notifyAt`.
-- These are intentionally independent: a message can be “fällig” without any notification being due, and vice versa.
+- These are intentionally independent: a message can be due in domain terms without any notification being due, and vice versa.
 
 Important behavior:
 

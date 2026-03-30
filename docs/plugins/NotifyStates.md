@@ -142,7 +142,7 @@ The plugin writes into fixed subtrees below that base:
 - `deleted`: messages with `lifecycle.state === "deleted"`.
 - `expired`: messages with `lifecycle.state === "expired"`.
 - `dueNow`: subset of `open` only: messages with `lifecycle.state === "open"` and `timing.notifyAt <= now` (and not expired by `timing.expiresAt`).
-  - Note: this is “notification due now” (driven by `notifyAt`), not “fällig” in the domain sense (`dueAt`/`startAt`).
+  - Note: this is “notification due now” (driven by `notifyAt`), not the domain due time (`dueAt`/`startAt`).
 - Update behavior:
   - on notifications: stats updates are requested and throttled via `statsMinIntervalMs`
   - idle refresh: forced via `statsMaxIntervalMs` even without new notifications

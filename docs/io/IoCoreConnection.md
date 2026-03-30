@@ -67,7 +67,7 @@ References:
 `IoCoreConnection` is explicitly **not** responsible for:
 
 1. AdminTab socket/ping status (`Browser/AdminTab <-> Adapter`).
-2. Aggregating plugin, cloud, or fremdsystem connection states.
+2. Aggregating plugin, cloud, or third-party system connection states.
 3. Defining a remote-core transport protocol.
 4. Exposing optional diagnostic states such as latency, last-seen, or error-reason.
 

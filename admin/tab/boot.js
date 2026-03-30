@@ -984,7 +984,7 @@ function triggerWarmupReconnect() {
 				try {
 					await section?.onConnect?.();
 				} catch {
-					// Panel-Fehler werden lokal behandelt und blockieren keinen Reconnect.
+					// Panel errors are handled locally and do not block reconnect.
 				}
 			}
 		})

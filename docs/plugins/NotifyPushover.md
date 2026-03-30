@@ -216,7 +216,7 @@ If `message.attachments[]` contains entries with:
 Then one extra Pushover message is sent per image:
 
 - `message: "📷"`
-- `title: "neues Foto"`
+- `title`: localized image title from `msghub.i18n.NotifyPushover.image.title.label`
 - `priority: -1`
 - `file: <attachment.value>`
 

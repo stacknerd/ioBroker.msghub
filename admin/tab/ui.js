@@ -2,29 +2,29 @@
 'use strict';
 
 /**
- * MsgHub Admin Tab: UI-Primitives und globale Interaktionsschicht.
+ * MsgHub Admin Tab: UI primitives and global interaction layer.
  *
  * Docs: ../../docs/ui/tab-ui.md
  *
- * Inhalt:
- * - Toast-System.
- * - Kontextmenü-Engine mit Untermenüs, Positionierung und globalen Close-Triggern.
- * - Großes Overlay (Detailansicht) und kleines Bestätigungsdialog-Primitive.
- * - Globale Escape-/TabSwitch-Reaktionen zum konsistenten Schließen von Overlays.
+ * Contents:
+ * - Toast system.
+ * - Context-menu engine with submenus, positioning, and global close triggers.
+ * - Large overlay (detail view) and small confirmation-dialog primitive.
+ * - Global Escape/tab-switch reactions for consistent overlay closing.
  *
- * Systemeinbindung:
- * - Wird von `boot.js` genau einmal erzeugt (`createUi()`).
- * - Panels nutzen die resultierenden Funktionen über `ctx.api.ui`.
+ * Integration:
+ * - Created exactly once by `boot.js` (`createUi()`).
+ * - Panels use the resulting functions via `ctx.api.ui`.
  *
- * Schnittstellen:
- * - Rückgabeobjekt mit `toast`, `toastClose`, `contextMenu`, `overlayLarge`, `dialog`, `spinner`, `closeAll`.
- * - Keine direkte Backend-Logik; rein visuelles Verhalten und DOM-Interaktion.
+ * Interfaces:
+ * - Returns an object with `toast`, `toastClose`, `contextMenu`, `overlayLarge`, `dialog`, `spinner`, `closeAll`.
+ * - No direct backend logic; purely visual behavior and DOM interaction.
  */
 
 /**
- * Erzeugt alle UI-Primitives und bindet globale Event-Listener.
+ * Creates all UI primitives and binds global event listeners.
  *
- * @returns {object} Gefrorenes UI-Objekt für `ctx.api.ui`.
+ * @returns {object} Frozen UI object for `ctx.api.ui`.
  */
 function createUi() {
 	const root = document.querySelector('.msghub-root');
@@ -255,9 +255,9 @@ function createUi() {
 	const dialogBtnConfirm = document.getElementById('msghub-dialog-small-confirm');
 
 	/**
-	 * Schaltet die Root-CSS-Klasse für aktiven Modalzustand.
+	 * Toggles the root CSS class for active modal state.
 	 *
-	 * @param {boolean} isOpen - `true`, wenn ein Modal offen ist.
+	 * @param {boolean} isOpen - `true` when a modal is open.
 	 */
 	const setRootModalOpen = isOpen => {
 		if (root) {
@@ -266,15 +266,15 @@ function createUi() {
 	};
 
 	/**
-	 * Zeigt eine kurze Toast-Nachricht an.
+	 * Shows a short toast message.
 	 *
-	 * @param {object}       opts           - Optionen.
-	 * @param {string}       opts.text      - Anzeigetext.
-	 * @param {string}       [opts.variant] - `ok`|`warning`|`danger`|`neutral` (Standard).
-	 * @param {number}       [opts.timeoutMs] - Auto-Close-Verzögerung in ms (Standard 2500).
-	 * @param {string}       [opts.id]      - Benannter Toast; wiederholter Aufruf ersetzt bestehenden.
-	 * @param {boolean}      [opts.persist] - Kein Auto-Close. Close-Button bleibt unberührt.
-	 * @param {object|null}  [opts.closeEl] - Ersetzt den Close-Button durch dieses Element.
+	 * @param {object}       opts           - Options.
+	 * @param {string}       opts.text      - Display text.
+	 * @param {string}       [opts.variant] - `ok`|`warning`|`danger`|`neutral` (default).
+	 * @param {number}       [opts.timeoutMs] - Auto-close delay in ms (default 2500).
+	 * @param {string}       [opts.id]      - Named toast; repeated calls replace the existing one.
+	 * @param {boolean}      [opts.persist] - Disables auto-close. The close button stays untouched.
+	 * @param {object|null}  [opts.closeEl] - Replaces the close button with this element.
 	 */
 	const toast = opts => {
 		const text = String(opts?.text ?? '');
@@ -362,9 +362,9 @@ function createUi() {
 	};
 
 	/**
-	 * Schließt einen benannten Toast sofort (ohne Animation).
+	 * Closes a named toast immediately (without animation).
 	 *
-	 * @param {string} id - Die ID des zu schließenden Toasts.
+	 * @param {string} id - The ID of the toast to close.
 	 */
 	const toastClose = id => {
 		const fn = toastRegistry.get(String(id ?? ''));
@@ -403,9 +403,9 @@ function createUi() {
 	const contextMenuStack = [];
 
 	/**
-	 * Schaltet Sichtbarkeit/ARIA-Zustand des Kontextmenü-Hosts.
+	 * Toggles visibility/ARIA state of the context-menu host.
 	 *
-	 * @param {boolean} isOpen - Zielzustand.
+	 * @param {boolean} isOpen - Target state.
 	 */
 	const contextMenuSetOpen = isOpen => {
 		contextMenuIsOpen = !!isOpen;
@@ -414,11 +414,11 @@ function createUi() {
 	};
 
 	/**
-	 * Stellt sicher, dass das Root-Menü als erstes Stack-Element existiert.
+	 * Ensures that the root menu exists as the first stack entry.
 	 *
-	 * @param {HTMLElement} menuEl - Menü-Container.
-	 * @param {HTMLElement} listEl - Menü-Liste.
-	 * @param {HTMLElement|null} parentButton - Trigger-Button bei Submenüs.
+	 * @param {HTMLElement} menuEl - Menu container.
+	 * @param {HTMLElement} listEl - Menu list.
+	 * @param {HTMLElement|null} parentButton - Trigger button for submenus.
 	 */
 	const ensureMenuInStack = (menuEl, listEl, parentButton) => {
 		if (!contextMenuStack.length) {
@@ -427,9 +427,9 @@ function createUi() {
 	};
 
 	/**
-	 * Schließt Submenüs bis zur gewünschten Tiefe.
+	 * Closes submenus down to the requested depth.
 	 *
-	 * @param {number} depth - Zieltiefe, die erhalten bleiben soll.
+	 * @param {number} depth - Target depth to keep.
 	 */
 	const closeContextMenuLevel = depth => {
 		const d = Math.max(0, Math.trunc(Number(depth) || 0));
@@ -449,7 +449,7 @@ function createUi() {
 	};
 
 	/**
-	 * Schließt alle Menüebenen und leert den transienten Zustand.
+	 * Closes all menu levels and clears transient state.
 	 */
 	const closeAllContextMenus = () => {
 		closeContextMenuLevel(0);
@@ -458,11 +458,11 @@ function createUi() {
 	};
 
 	/**
-	 * Rendert Menüeinträge einer Ebene inkl. Sondertypen und Footer.
+	 * Renders menu entries for one level including special types and footer.
 	 *
-	 * @param {HTMLElement} listEl - Ziel-Liste.
-	 * @param {Array<object>} items - Menüeinträge.
-	 * @param {number} depth - Tiefe (0 = Root-Menü).
+	 * @param {HTMLElement} listEl - Target list.
+	 * @param {Array<object>} items - Menu entries.
+	 * @param {number} depth - Depth (0 = root menu).
 	 */
 	const renderContextMenuItems = (listEl, items, depth = 0) => {
 		const hoverEnabled = (() => {
@@ -587,9 +587,9 @@ function createUi() {
 				btn.appendChild(row);
 
 				/**
-				 * Aktualisiert Checkmark und ARIA-State für Checkbox-Menüeinträge.
+				 * Updates checkmark and ARIA state for checkbox menu entries.
 				 *
-				 * @param {boolean} isChecked - Neuer Zustand.
+				 * @param {boolean} isChecked - New state.
 				 */
 				const setCheckedUI = isChecked => {
 					btn.setAttribute('aria-checked', isChecked ? 'true' : 'false');
@@ -775,10 +775,10 @@ function createUi() {
 	};
 
 	/**
-	 * Ermittelt den effektiven Ankerpunkt aus explizitem Punkt oder Anchor-Element.
+	 * Resolves the effective anchor point from an explicit point or anchor element.
 	 *
-	 * @param {object} state - Kontextmenüzustand.
-	 * @returns {{x:number,y:number}} Aufgelöster Pixelanker.
+	 * @param {object} state - Context-menu state.
+	 * @returns {{x:number,y:number}} Resolved pixel anchor.
 	 */
 	const applyContextMenuAnchor = state => {
 		const s = state && typeof state === 'object' ? state : {};
@@ -803,15 +803,15 @@ function createUi() {
 	};
 
 	/**
-	 * Positioniert ein Menüelement anhand der Clamp/Flip-Logik.
+	 * Positions a menu element using clamp/flip logic.
 	 *
-	 * @param {HTMLElement} menuEl - Zu positionierendes Menü.
-	 * @param {number} anchorX - X-Anker.
-	 * @param {number} anchorY - Y-Anker.
-	 * @param {object} [options] - Positionierungsoptionen.
-	 * @param {'cursor'|'anchor'|'submenu'} [options.mode] - Positionierungsmodus.
-	 * @param {number} [options.alignHeight] - Referenzhöhe für Submenü-Ausrichtung.
-	 * @param {number} [options.cursorOffset] - Offset vom Cursor/Anchor.
+	 * @param {HTMLElement} menuEl - Menu to position.
+	 * @param {number} anchorX - X anchor.
+	 * @param {number} anchorY - Y anchor.
+	 * @param {object} [options] - Positioning options.
+	 * @param {'cursor'|'anchor'|'submenu'} [options.mode] - Positioning mode.
+	 * @param {number} [options.alignHeight] - Reference height for submenu alignment.
+	 * @param {number} [options.cursorOffset] - Offset from cursor/anchor.
 	 */
 	const positionMenuWithClamp = (
 		menuEl,
@@ -849,9 +849,9 @@ function createUi() {
 	};
 
 	/**
-	 * Schließt das Kontextmenü bei Pointerdown außerhalb des Menühosts.
+	 * Closes the context menu on pointerdown outside the menu host.
 	 *
-	 * @param {Event} ev - Pointer-Event.
+	 * @param {Event} ev - Pointer event.
 	 */
 	const onContextMenuDocPointerDown = ev => {
 		if (!contextMenuIsOpen) {
@@ -867,9 +867,9 @@ function createUi() {
 	document.addEventListener('pointerdown', onContextMenuDocPointerDown, true);
 
 	/**
-	 * Schließt das Kontextmenü bei Scroll-Wheel außerhalb.
+	 * Closes the context menu on wheel scrolling outside.
 	 *
-	 * @param {Event} ev - Wheel-Event.
+	 * @param {Event} ev - Wheel event.
 	 */
 	const onContextMenuWheel = ev => {
 		if (!contextMenuIsOpen) {
@@ -884,9 +884,9 @@ function createUi() {
 	document.addEventListener('wheel', onContextMenuWheel, { capture: true, passive: true });
 
 	/**
-	 * Schließt das Kontextmenü bei Container-Scroll außerhalb.
+	 * Closes the context menu on container scrolling outside.
 	 *
-	 * @param {Event} ev - Scroll-Event.
+	 * @param {Event} ev - Scroll event.
 	 */
 	const onContextMenuScroll = ev => {
 		if (!contextMenuIsOpen) {
@@ -902,7 +902,7 @@ function createUi() {
 	window.addEventListener('scroll', onContextMenuScroll, true);
 
 	/**
-	 * Schließt das Kontextmenü bei Fenster-Resize.
+	 * Closes the context menu on window resize.
 	 */
 	const onContextMenuResize = () => {
 		if (!contextMenuIsOpen) {
@@ -913,7 +913,7 @@ function createUi() {
 	window.addEventListener('resize', onContextMenuResize, { passive: true });
 
 	/**
-	 * Schließt das Kontextmenü, wenn das Dokument in den Hintergrund wechselt.
+	 * Closes the context menu when the document goes into the background.
 	 */
 	const onContextMenuVisibility = () => {
 		if (!contextMenuIsOpen) {
@@ -1087,9 +1087,9 @@ function createUi() {
 	document.addEventListener('contextmenu', onContextMenuCapture, { capture: true });
 
 	/**
-	 * Öffnet das Root-Kontextmenü mit neuem Zustand und positioniert es.
+	 * Opens the root context menu with new state and positions it.
 	 *
-	 * @param {object} opts - Menüoptionen.
+	 * @param {object} opts - Menu options.
 	 */
 	const contextMenuOpen = opts => {
 		const o = opts && typeof opts === 'object' ? opts : {};
@@ -1121,7 +1121,7 @@ function createUi() {
 	};
 
 	/**
-	 * Schließt das Root-Kontextmenü und feuert das Close-Event.
+	 * Closes the root context menu and fires the close event.
 	 */
 	const contextMenuClose = () => {
 		if (!contextMenuIsOpen) {
@@ -1136,11 +1136,11 @@ function createUi() {
 	};
 
 	/**
-	 * Öffnet ein Submenü relativ zu einem Parent-Button.
+	 * Opens a submenu relative to a parent button.
 	 *
-	 * @param {number} depth - Zieltiefe.
-	 * @param {HTMLElement} parentButton - Trigger-Button.
-	 * @param {Array<object>} items - Submenü-Items.
+	 * @param {number} depth - Target depth.
+	 * @param {HTMLElement} parentButton - Trigger button.
+	 * @param {Array<object>} items - Submenu items.
 	 */
 	const openSubmenu = (depth, parentButton, items) => {
 		if (!contextMenuIsOpen) {
@@ -1205,10 +1205,10 @@ function createUi() {
 	let overlayPrevActive = null;
 
 	/**
-	 * Parsiert CSS-Zeitwerte (`ms`/`s`) in Millisekunden.
+	 * Parses CSS time values (`ms`/`s`) into milliseconds.
 	 *
-	 * @param {string} s - CSS-Zeitwert.
-	 * @returns {number} Millisekunden.
+	 * @param {string} s - CSS time value.
+	 * @returns {number} Milliseconds.
 	 */
 	const parseCssTimeToMs = s => {
 		const str = String(s || '').trim();
@@ -1228,10 +1228,10 @@ function createUi() {
 	};
 
 	/**
-	 * Ermittelt die längste effektive Transitiondauer eines Elements.
+	 * Resolves the longest effective transition duration of an element.
 	 *
-	 * @param {HTMLElement} el - Ziel-Element.
-	 * @returns {number} Maximaldauer in Millisekunden.
+	 * @param {HTMLElement} el - Target element.
+	 * @returns {number} Maximum duration in milliseconds.
 	 */
 	const getMaxTransitionMs = el => {
 		try {
@@ -1256,10 +1256,10 @@ function createUi() {
 	};
 
 	/**
-	 * Öffnet/schließt Backdrops mit CSS-Transitionen.
+	 * Opens/closes backdrops with CSS transitions.
 	 *
-	 * @param {HTMLElement} el - Backdrop-Element.
-	 * @param {boolean} isOpen - Zielzustand.
+	 * @param {HTMLElement} el - Backdrop element.
+	 * @param {boolean} isOpen - Target state.
 	 */
 	const setBackdropOpenAnimated = (el, isOpen) => {
 		if (!el) {
@@ -1300,9 +1300,9 @@ function createUi() {
 	};
 
 	/**
-	 * Schaltet den großen Overlay-Dialog.
+	 * Toggles the large overlay dialog.
 	 *
-	 * @param {boolean} isOpen - Zielzustand.
+	 * @param {boolean} isOpen - Target state.
 	 */
 	const overlaySetOpen = isOpen => {
 		overlayIsOpen = isOpen;
@@ -1312,7 +1312,7 @@ function createUi() {
 	};
 
 	/**
-	 * Schließt den großen Overlay-Dialog und stellt Fokus wieder her.
+	 * Closes the large overlay dialog and restores focus.
 	 */
 	const overlayCloseFn = () => {
 		if (!overlayIsOpen) {
@@ -1331,9 +1331,9 @@ function createUi() {
 	};
 
 	/**
-	 * Öffnet den großen Overlay-Dialog mit Titel und Inhalt.
+	 * Opens the large overlay dialog with title and content.
 	 *
-	 * @param {object} opts - Overlay-Optionen (`title`, `bodyEl`, `bodyText`).
+	 * @param {object} opts - Overlay options (`title`, `bodyEl`, `bodyText`).
 	 */
 	const overlayOpen = opts => {
 		const title = typeof opts?.title === 'string' ? opts.title : '';
@@ -1375,9 +1375,9 @@ function createUi() {
 	let dialogPendingResolve = undefined;
 
 	/**
-	 * Schaltet den kleinen Confirm-Dialog.
+	 * Toggles the small confirm dialog.
 	 *
-	 * @param {boolean} isOpen - Zielzustand.
+	 * @param {boolean} isOpen - Target state.
 	 */
 	const dialogSetOpen = isOpen => {
 		dialogIsOpen = isOpen;
@@ -1387,10 +1387,10 @@ function createUi() {
 	};
 
 	/**
-	 * Schließt den Dialog, resolved ggf. das offene Confirm-Promise
-	 * und restauriert den Fokus.
+	 * Closes the dialog, resolves any pending confirm promise,
+	 * and restores focus.
 	 *
-	 * @param {boolean} ok - Nutzerentscheidung.
+	 * @param {boolean} ok - User decision.
 	 */
 	const dialogCloseFn = ok => {
 		if (!dialogIsOpen) {
@@ -1461,10 +1461,10 @@ function createUi() {
 	});
 
 	/**
-	 * Öffnet den Confirm-Dialog und liefert die Nutzerentscheidung.
+	 * Opens the confirm dialog and returns the user decision.
 	 *
-	 * @param {object} opts - Dialogoptionen (`title`, `text`, `danger`, ...).
-	 * @returns {Promise<boolean>} `true` bei Bestätigung.
+	 * @param {object} opts - Dialog options (`title`, `text`, `danger`, ...).
+	 * @returns {Promise<boolean>} `true` on confirmation.
 	 */
 	const confirm = opts =>
 		new Promise(resolve => {
