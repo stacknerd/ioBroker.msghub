@@ -36,7 +36,7 @@ The shell startup is roughly:
 4. Fetch `runtime.about` to update branding, timezone policy, and cached connection metadata.
 5. On `DOMContentLoaded`, run `ensureBooted()`.
 6. Build the current layout from the registry.
-7. Load composition CSS, initialize tab navigation, and initialize native panels.
+7. Load composition CSS, activate the initial panel (`initTabs()` for tabbed layouts, `activatePanel(...)` for single layouts), and initialize native panels.
 8. Discover matching plugin panel contributions and enable their tab slots.
 9. Register lazy-mount handling for later plugin-tab switches.
 10. Keep connection state current via ping, socket reconnect handling, and reconnect warmup.
@@ -80,6 +80,7 @@ Important: panels are expected to work against this frozen `ctx`, not against ad
 - embedded-admin language override via `backendTextLanguage` when the tab is actually embedded in the admin host (`isEmbeddedInAdmin`)
 
 If the backend does not provide a valid timezone, the shell falls back to UTC and shows a warning toast once.
+When static i18n text is refreshed afterwards, `applyStaticI18n()` also resynchronizes the derived document title.
 
 ### 3) Initialize native panels from the registry
 
@@ -99,6 +100,13 @@ If the handle exposes `onConnect()`, `boot.js` can call it in three different si
 
 Because `onBecomeOnline()` also starts `triggerWarmupReconnect()`, reconnect handling can produce two `onConnect()`
 passes for the same panel.
+
+Before native panel initialization, `boot.js` also establishes the initial visible panel for the current layout:
+
+- `tabs`: via `initTabs({ defaultPanelId })`
+- `single`: via `activatePanel('tab-...')`
+
+This keeps initial visibility and document-title derivation on the same activation path.
 
 ### 4) Hydrate plugin panel tab slots
 
@@ -187,6 +195,7 @@ It also triggers an unconditional initial `sendPing()` during module load, befor
 
 - `ensureBooted()` is idempotent. A cached `bootPromise` prevents duplicate boot sequences.
 - Plugin tabs start disabled. They are enabled only when a matching discover contribution and DOM mount container both exist.
+- Initial panel activation is layout-aware: tabbed compositions use `initTabs()`, single compositions call the shared `activatePanel(...)` path directly.
 - `ctx` is frozen before it is handed to panels. Panels should treat it as read-only runtime state.
 - `ctx.elements` exposes getters for `connection`, `pluginsRoot`, `messagesRoot`, and `statsRoot`. In the current shell, `statsRoot` has no matching mount point in [`admin/tab.html`](../../admin/tab.html) and currently resolves to `null`.
 - Transport reconnect is not treated as sufficient proof of health. The shell waits for a successful ping before switching to online UX.

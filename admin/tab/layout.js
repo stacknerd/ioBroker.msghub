@@ -21,6 +21,89 @@
  *   `computeAssetsForComposition`, `getPanelDefinition`, and `resolveViewId`.
  */
 
+let currentActivePanelId = '';
+
+/**
+ * Returns the tab target id from a tab link (`href="#tab-..."`).
+ *
+ * @param {Element|null|undefined} tab - Tab element.
+ * @returns {string} Target panel id without the leading `#`.
+ */
+function getTabTargetId(tab) {
+	const href = tab?.getAttribute?.('href') || '';
+	return href.startsWith('#') ? href.slice(1) : '';
+}
+
+/**
+ * Synchronises document.title with the currently active panel.
+ *
+ * For tab layouts, the visible tab label is the source of truth so plugin labels
+ * and translated native labels are reflected automatically. For single layouts,
+ * native panel title keys are resolved from the registry because no tab DOM exists.
+ *
+ * @param {string} [panelId] - Active panel DOM id. Defaults to the current active panel.
+ */
+function updateDocumentTitle(panelId = currentActivePanelId) {
+	const activePanelId = typeof panelId === 'string' ? panelId.trim() : '';
+	const activeTab = activePanelId
+		? document.querySelector(`.msghub-tab[href="#${activePanelId}"]`)
+		: document.querySelector('.msghub-tab.is-active');
+	const tabLabel = typeof activeTab?.textContent === 'string' ? activeTab.textContent.trim() : '';
+	if (tabLabel) {
+		document.title = `${tabLabel} — Message Hub`;
+		return;
+	}
+
+	const nativePanelId = activePanelId.startsWith('tab-') ? activePanelId.slice(4) : '';
+	const panelDef = nativePanelId ? getPanelDefinition(nativePanelId) : null;
+	const titleKey = typeof panelDef?.titleKey === 'string' ? panelDef.titleKey.trim() : '';
+	const nativeLabel = titleKey ? String(t(titleKey) || '').trim() : '';
+	document.title = nativeLabel ? `${nativeLabel} — Message Hub` : 'Message Hub';
+}
+
+/**
+ * Activates a panel, updates tab state, and keeps the derived document title in sync.
+ *
+ * This is the single activation path for both tabbed and single-panel layouts.
+ *
+ * @param {string} id - Target panel DOM id.
+ * @returns {string} Normalized active panel DOM id.
+ */
+function activatePanel(id) {
+	const panelId = typeof id === 'string' ? id.trim() : '';
+	if (!panelId) {
+		updateDocumentTitle('');
+		return '';
+	}
+
+	const tabs = Array.from(document.querySelectorAll('.msghub-tab'));
+	for (const tab of tabs) {
+		const tabId = getTabTargetId(tab);
+		const isActive = tabId === panelId;
+		tab.classList.toggle('is-active', isActive);
+		tab.setAttribute('aria-selected', isActive ? 'true' : 'false');
+		tab.setAttribute('tabindex', isActive ? '0' : '-1');
+	}
+
+	const panels = Array.from(document.querySelectorAll('.msghub-panel')).filter(panel => !!panel?.id);
+	for (const panel of panels) {
+		panel.toggleAttribute('hidden', panel.id !== panelId);
+	}
+
+	if (currentActivePanelId && currentActivePanelId !== panelId) {
+		try {
+			document.dispatchEvent(
+				new CustomEvent('msghub:tabSwitch', { detail: { from: currentActivePanelId, to: panelId } }),
+			);
+		} catch {
+			// ignore
+		}
+	}
+	currentActivePanelId = panelId;
+	updateDocumentTitle(panelId);
+	return panelId;
+}
+
 /**
  * Initializes tab navigation and synchronizes tabs/panels with `location.hash`.
  *
@@ -30,23 +113,12 @@
 function initTabs({ defaultPanelId = '' } = {}) {
 	const tabs = Array.from(document.querySelectorAll('.msghub-tab'));
 	if (!tabs.length) {
-		return { setActive: () => {} };
+		return { setActive: activatePanel, initial: null };
 	}
-
-	/**
-	 * Reads the target id from a tab link (`href="#tab-..."`).
-	 *
-	 * @param {Element} tab - Tab element.
-	 * @returns {string} Target panel id without the leading `#`.
-	 */
-	const getTargetId = tab => {
-		const href = tab.getAttribute('href') || '';
-		return href.startsWith('#') ? href.slice(1) : '';
-	};
 
 	const panels = new Map();
 	for (const tab of tabs) {
-		const id = getTargetId(tab);
+		const id = getTabTargetId(tab);
 		if (!id) {
 			continue;
 		}
@@ -56,34 +128,6 @@ function initTabs({ defaultPanelId = '' } = {}) {
 		}
 	}
 
-	let activeId = '';
-
-	/**
-	 * Activates a panel and updates ARIA and visibility state for tabs and panels.
-	 *
-	 * @param {string} id - Target panel id.
-	 */
-	const setActive = id => {
-		for (const tab of tabs) {
-			const tid = getTargetId(tab);
-			const isActive = tid === id;
-			tab.classList.toggle('is-active', isActive);
-			tab.setAttribute('aria-selected', isActive ? 'true' : 'false');
-			tab.setAttribute('tabindex', isActive ? '0' : '-1');
-		}
-		for (const [pid, panel] of panels.entries()) {
-			panel.toggleAttribute('hidden', pid !== id);
-		}
-		if (activeId && activeId !== id) {
-			try {
-				document.dispatchEvent(new CustomEvent('msghub:tabSwitch', { detail: { from: activeId, to: id } }));
-			} catch {
-				// ignore
-			}
-		}
-		activeId = id;
-	};
-
 	// Returns true if a tab link is marked disabled (e.g. an unhydrated plugin panel tab).
 	const isDisabled = tab => tab.getAttribute('aria-disabled') === 'true';
 
@@ -92,26 +136,26 @@ function initTabs({ defaultPanelId = '' } = {}) {
 		const h = String(location.hash || '');
 		const candidate = h.startsWith('#') ? h.slice(1) : '';
 		if (candidate && panels.has(candidate)) {
-			const candidateTab = tabs.find(t => getTargetId(t) === candidate);
+			const candidateTab = tabs.find(t => getTabTargetId(t) === candidate);
 			if (!candidateTab || !isDisabled(candidateTab)) {
 				return candidate;
 			}
 		}
 		const fromMarkup = tabs.find(t => t.classList.contains('is-active') && !isDisabled(t)) || null;
-		const fromMarkupId = fromMarkup ? getTargetId(fromMarkup) : '';
+		const fromMarkupId = fromMarkup ? getTabTargetId(fromMarkup) : '';
 		if (fromMarkupId && panels.has(fromMarkupId)) {
 			return fromMarkupId;
 		}
 		const fallback = defaultPanelId ? `tab-${String(defaultPanelId)}` : 'tab-plugins';
 		if (panels.has(fallback)) {
-			const fallbackTab = tabs.find(t => getTargetId(t) === fallback);
+			const fallbackTab = tabs.find(t => getTabTargetId(t) === fallback);
 			if (!fallbackTab || !isDisabled(fallbackTab)) {
 				return fallback;
 			}
 		}
 		// Last resort: first non-disabled panel in DOM order.
 		for (const id of panels.keys()) {
-			const t = tabs.find(tab => getTargetId(tab) === id);
+			const t = tabs.find(tab => getTabTargetId(tab) === id);
 			if (!t || !isDisabled(t)) {
 				return id;
 			}
@@ -120,7 +164,7 @@ function initTabs({ defaultPanelId = '' } = {}) {
 	})();
 
 	if (initial) {
-		setActive(initial);
+		activatePanel(initial);
 	}
 
 	for (const tab of tabs) {
@@ -130,7 +174,7 @@ function initTabs({ defaultPanelId = '' } = {}) {
 			if (isDisabled(tab)) {
 				return;
 			}
-			const id = getTargetId(tab);
+			const id = getTabTargetId(tab);
 			if (!id || !panels.has(id)) {
 				return;
 			}
@@ -139,11 +183,11 @@ function initTabs({ defaultPanelId = '' } = {}) {
 			} catch {
 				// ignore
 			}
-			setActive(id);
+			activatePanel(id);
 		});
 	}
 
-	return { setActive, initial };
+	return { setActive: activatePanel, initial };
 }
 
 /**
@@ -644,6 +688,8 @@ function renderPanelBootError(panelId, err) {
 }
 
 void initTabs;
+void activatePanel;
+void updateDocumentTitle;
 void h;
 void resolveViewId;
 void buildLayoutFromRegistry;

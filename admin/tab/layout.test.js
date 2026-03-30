@@ -136,6 +136,8 @@ async function loadLayoutSandbox(options = {}) {
 	const expose = `
 	window.__layoutFns = {
 		initTabs,
+		activatePanel,
+		updateDocumentTitle,
 		h,
 		resolveViewId,
 		getActiveComposition,
@@ -171,6 +173,7 @@ async function loadLayoutSandbox(options = {}) {
 	const observerCallbacks = [];
 	const appliedThemes = [];
 	const documentObject = {
+		title: '',
 		head: headElement,
 		documentElement: {
 			getAttribute: key => (key === 'data-msghub-view' ? (options.viewIdAttr || 'adminTab') : ''),
@@ -183,6 +186,9 @@ async function loadLayoutSandbox(options = {}) {
 		},
 		querySelectorAll: selector => {
 			if (selector === '.msghub-tab') {
+				return [];
+			}
+			if (selector === '.msghub-panel') {
 				return [];
 			}
 			if (selector === 'link[rel="stylesheet"]') {
@@ -274,6 +280,7 @@ async function loadLayoutSandbox(options = {}) {
 		applyTheme: options.applyTheme || (theme => appliedThemes.push(String(theme))),
 		detectTheme: options.detectTheme || (() => 'light'),
 		readThemeFromTopWindow: options.readThemeFromTopWindow || (() => null),
+		t: options.t || (key => key),
 		MutationObserver: class {
 			constructor(callback) {
 				this.callback = callback;
@@ -604,5 +611,108 @@ describe('admin/tab/layout.js', function () {
 		assert.deepEqual(JSON.parse(JSON.stringify(cssResult.failed)), []);
 
 		await loadJsFilesSequential(['a.js', 'b.js', 'a.js']);
+	});
+
+	it('updateDocumentTitle() uses the active tab label when tab navigation is present', async function () {
+		const { sandbox } = await loadLayoutSandbox();
+		const tab = createElement('a');
+		tab.setAttribute('href', '#tab-messages');
+		tab.textContent = 'Messages';
+		sandbox.document.querySelector = selector => {
+			if (selector === '.msghub-tab[href="#tab-messages"]') {
+				return tab;
+			}
+			if (selector === '.msghub-tab.is-active') {
+				return tab;
+			}
+			return null;
+		};
+
+		sandbox.window.__layoutFns.updateDocumentTitle('tab-messages');
+		assert.equal(sandbox.document.title, 'Messages — Message Hub');
+	});
+
+	it('activatePanel() sets title from the registry in single layout mode', async function () {
+		const { sandbox } = await loadLayoutSandbox({
+			t: key => (key === 'messages.key' ? 'Messages' : key),
+		});
+		const activePanel = createElement('div');
+		activePanel.id = 'tab-messages';
+		activePanel.classList = createClassList('msghub-panel');
+		const inactivePanel = createElement('div');
+		inactivePanel.id = 'tab-stats';
+		inactivePanel.classList = createClassList('msghub-panel');
+		const toggleCalls = [];
+		activePanel.toggleAttribute = (name, force) => {
+			toggleCalls.push({ id: activePanel.id, name, force });
+			return force !== false;
+		};
+		inactivePanel.toggleAttribute = (name, force) => {
+			toggleCalls.push({ id: inactivePanel.id, name, force });
+			return force !== false;
+		};
+
+		sandbox.document.querySelectorAll = selector => {
+			if (selector === '.msghub-tab') {
+				return [];
+			}
+			if (selector === '.msghub-panel') {
+				return [activePanel, inactivePanel];
+			}
+			return [];
+		};
+		sandbox.document.querySelector = selector => {
+			if (selector === '.msghub-root') {
+				return null;
+			}
+			if (selector === '.msghub-tab.is-active') {
+				return null;
+			}
+			if (selector === '.msghub-tab[href="#tab-messages"]') {
+				return null;
+			}
+			return null;
+		};
+
+		sandbox.window.__layoutFns.activatePanel('tab-messages');
+		assert.equal(sandbox.document.title, 'Messages — Message Hub');
+		assert.deepEqual(JSON.parse(JSON.stringify(toggleCalls)), [
+			{ id: 'tab-messages', name: 'hidden', force: false },
+			{ id: 'tab-stats', name: 'hidden', force: true },
+		]);
+	});
+
+	it('initTabs() reflects the active panel label in document.title', async function () {
+		const { sandbox } = await loadLayoutSandbox();
+		const tab = createElement('a');
+		tab.setAttribute('href', '#tab-messages');
+		tab.textContent = 'Messages';
+		tab.classList = createClassList('msghub-tab');
+		const panel = createElement('div');
+		panel.id = 'tab-messages';
+		panel.classList = createClassList('msghub-panel');
+
+		sandbox.document.querySelectorAll = selector => {
+			if (selector === '.msghub-tab') {
+				return [tab];
+			}
+			if (selector === '.msghub-panel') {
+				return [panel];
+			}
+			return [];
+		};
+		sandbox.document.getElementById = id => (id === 'tab-messages' ? panel : null);
+		sandbox.document.querySelector = selector => {
+			if (selector === '.msghub-tab[href="#tab-messages"]') {
+				return tab;
+			}
+			if (selector === '.msghub-tab.is-active') {
+				return tab.classList.contains('is-active') ? tab : null;
+			}
+			return null;
+		};
+
+		sandbox.window.__layoutFns.initTabs({ defaultPanelId: 'messages' });
+		assert.equal(sandbox.document.title, 'Messages — Message Hub');
 	});
 });

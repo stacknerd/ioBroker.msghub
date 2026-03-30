@@ -553,6 +553,29 @@ globalThis.__fn = updateConnectionPanel;
 		assert.equal(tzHintAriaHidden, 'true');
 	});
 
+	it('applyStaticI18n() refreshes the document title after translating visible text', async function () {
+		const source = await readRepoFile('admin/tab/boot.js');
+		const applyStaticI18nSource = extractFunctionSource(source, 'applyStaticI18n');
+		const updateDocumentTitleCalls = [];
+		const i18nElements = [{ getAttribute: () => 'msghub.i18n.core.sample', textContent: '' }];
+		const sandbox = runInSandbox(
+			`
+${applyStaticI18nSource}
+globalThis.__applyStaticI18n = applyStaticI18n;
+`,
+			{
+				pickText: key => `T:${key}`,
+				updateDocumentTitle: () => updateDocumentTitleCalls.push(1),
+				document: { querySelectorAll: () => i18nElements },
+			},
+			'boot-applyStaticI18n.js',
+		);
+
+		sandbox.__applyStaticI18n();
+		assert.equal(updateDocumentTitleCalls.length, 1, 'applyStaticI18n must refresh the document title once');
+		assert.equal(i18nElements[0].textContent, 'T:msghub.i18n.core.sample');
+	});
+
 	it('applyRuntimeAboutPayload populates connPanelData and calls updateConnectionPanel', async function () {
 		const source = await readRepoFile('admin/tab/boot.js');
 		const fnSource = extractFunctionSource(source, 'applyRuntimeAboutPayload');
@@ -847,6 +870,12 @@ globalThis.__fn = hydratePluginPanels;
 
 		// ingestStates warmup must be gone.
 		assert.doesNotMatch(source, /ingestStates\s*\?\s*\.constants/, 'ingestStates warmup must be removed from boot');
+	});
+
+	it('single composition activation uses the shared panel activation path', async function () {
+		const source = await readRepoFile('admin/tab/boot.js');
+		assert.match(source, /if \(layout === 'tabs'\)/, 'boot must still branch by layout mode');
+		assert.match(source, /initialTabId = activatePanel\(singlePanelId\)/, 'single layouts must activate their panel via activatePanel');
 	});
 
 	it('mixed composition defaultPanel: tabSetActive called when defaultPanel is a hydrated plugin tab', async function () {

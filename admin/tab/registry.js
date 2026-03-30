@@ -91,6 +91,13 @@
 			defaultPanel: 'messages',
 			deviceMode: 'pc',
 		}),
+		messagesSingle: Object.freeze({
+			id: 'messagesSingle',
+			layout: 'single',
+			panels: Object.freeze(['messages']),
+			defaultPanel: 'messages',
+			deviceMode: 'pc',
+		}),
 	});
 
 	win.MsghubAdminTabRegistry = Object.freeze({ panels, compositions });

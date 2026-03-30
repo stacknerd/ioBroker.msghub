@@ -105,6 +105,20 @@ describe('admin/tab/registry.js', function () {
 		}
 	});
 
+	it('exposes a dedicated single-layout composition for messages', async function () {
+		const source = await readRepoFile('admin/tab/registry.js');
+		const sandbox = { window: {} };
+		sandbox.win = sandbox.window;
+		vm.runInNewContext(source, sandbox, { filename: 'admin/tab/registry.js' });
+		const registry = sandbox.window.MsghubAdminTabRegistry;
+
+		const composition = registry.compositions.messagesSingle;
+		assert.ok(composition, 'messagesSingle composition must exist');
+		assert.equal(composition.layout, 'single');
+		assert.deepEqual(JSON.parse(JSON.stringify(composition.panels)), ['messages']);
+		assert.equal(composition.defaultPanel, 'messages');
+	});
+
 	it('is idempotent when loaded multiple times', async function () {
 		const source = await readRepoFile('admin/tab/registry.js');
 		const original = Object.freeze({ keep: true });

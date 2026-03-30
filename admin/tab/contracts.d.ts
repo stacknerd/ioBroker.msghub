@@ -59,4 +59,6 @@ declare global {
 	function loadJsFilesSequential(files: string[]): Promise<void>;
 	function getPanelDefinition(panelId: string): any;
 	function renderPanelBootError(panelId: string, err: any): void;
+	function activatePanel(panelId: string): string;
+	function updateDocumentTitle(panelId?: string): void;
 }

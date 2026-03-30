@@ -20,8 +20,8 @@ It depends on:
 - the small DOM helper `h(...)` defined in this file itself
 
 The main consumer is `boot.js`, which calls `resolveViewId()`, `getActiveComposition()`,
-`buildLayoutFromRegistry()`, `initTabs()`, `computeAssetsForComposition()`, `loadCssFiles()`,
-and `loadJsFilesSequential()`.
+`buildLayoutFromRegistry()`, `initTabs()`, `activatePanel()`, `updateDocumentTitle()`,
+`computeAssetsForComposition()`, `loadCssFiles()`, and `loadJsFilesSequential()`.
 
 `api.js` also depends on the same composition resolution helpers so that `api.host.*` metadata and the
 visible shell use the same final view/composition decision.
@@ -55,9 +55,15 @@ The active composition is resolved centrally through:
 Unknown composition ids do not fall through to wildcard mode. Wildcard handling happens only when the
 selected composition itself declares `panels: ['*']`.
 
-### 2) Manage tab navigation and panel visibility
+### 2) Manage panel activation, tab navigation, and visibility
 
-`initTabs()` binds `.msghub-tab` links to their panel containers and keeps:
+`layout.js` owns one shared activation path for visible panels:
+
+- `activatePanel(panelId)` updates active state and visibility for the currently rendered shell
+- `initTabs()` binds `.msghub-tab` links to that shared activation path
+- `updateDocumentTitle()` derives the page title from the active panel
+
+For tabbed layouts, `activatePanel(...)` keeps:
 
 - `is-active` classes
 - `aria-selected`
@@ -66,7 +72,10 @@ selected composition itself declares `panels: ['*']`.
 
 in sync.
 
-Its hash handling is intentionally narrow:
+For single-panel layouts, the same activation path still owns panel visibility and document title,
+even though no tab strip exists.
+
+`initTabs()` hash handling is intentionally narrow:
 
 - it reads `location.hash` once during initialization to choose the initial panel
 - it writes a new hash via `history.replaceState(...)` on tab clicks
@@ -74,13 +83,18 @@ Its hash handling is intentionally narrow:
 It does not listen for `hashchange` or `popstate`, so external hash changes do not switch tabs back.
 It also does not use the hash to select a composition.
 
-When the active tab changes, it dispatches:
+When the active panel changes from one panel to another, `activatePanel(...)` dispatches:
 
 ```js
 new CustomEvent('msghub:tabSwitch', { detail: { from, to } })
 ```
 
 That event is used by other shell code, especially plugin-panel lazy mounting and overlay cleanup.
+
+`updateDocumentTitle()` follows the active panel:
+
+- tabbed layouts: use the visible tab label, so translated native labels and hydrated plugin labels are reflected automatically
+- single layouts: resolve the native panel `titleKey` from the registry because no tab DOM exists
 
 ### 3) Load panel assets in a predictable way
 
@@ -134,6 +148,19 @@ Initializes the tab strip and returns:
 
 `initial` may be `null` when every tab is disabled, which is relevant for plugin-only compositions before hydration.
 
+`setActive` is the shared `activatePanel(...)` path used by the shell, not a tab-private implementation.
+
+### `activatePanel(panelId)`
+
+Activates one rendered panel container by DOM id (for example `tab-messages`), updates tab state when present,
+updates panel visibility, dispatches `msghub:tabSwitch` on real panel changes, and keeps `document.title` in sync.
+
+### `updateDocumentTitle(panelId?)`
+
+Derives `document.title` from the active panel.
+If a matching tab exists, its visible label is used.
+Otherwise, the function falls back to the native panel `titleKey` from the registry.
+
 ### `buildLayoutFromRegistry({ contributions })`
 
 Builds the current composition and returns:
@@ -168,7 +195,9 @@ Writes a visible error state directly into the affected panel container.
 - `resolveViewId()` is the shared composition resolver for both `layout.js` and `api.js`; visible layout and `api.host.viewId` must not drift.
 - Plugin panel refs are never mixed into `panelIds`. Native and plugin panels follow different initialization paths.
 - Plugin tabs render in a disabled placeholder state until discover hydration confirms availability.
+- `activatePanel(...)` is the shared activation path for both `tabs` and `single` layouts.
 - `initTabs()` skips disabled tabs when resolving the initial active panel from hash, markup, and fallback defaults.
+- `document.title` is derived from the active panel: from the visible tab label when tabs exist, otherwise from the native panel registry title key.
 - `loadCssFiles()` deduplicates URLs and reports failures instead of throwing.
 - `loadJsFilesSequential()` preserves script order and throws on the first failed script, because many panel files depend on earlier globals.
 - Theme syncing is intentionally redundant: message, storage, polling, and mutation observation all feed the same final theme setter.

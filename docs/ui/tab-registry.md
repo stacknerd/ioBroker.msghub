@@ -45,26 +45,23 @@ load the panel assets, and call the panel's `init(ctx)` entrypoint.
 
 ### 2) Define view compositions
 
-The current registry exposes one composition:
+The current registry exposes these compositions:
 
-```js
-adminTab
-```
+- `adminTab`
+- `full`
+- `messagesSingle`
 
-Its current settings are:
+Their current roles are:
 
-- `layout: 'tabs'`
-- `defaultPanel: 'messages'`
-- `deviceMode: 'pc'`
-
-The composition mixes native panel IDs with structured plugin panel refs.
+- `adminTab`: default tabbed admin view with native panels plus selected plugin panel slots
+- `full`: wildcard tabbed view that renders all native panels and all discovered plugin panel contributions
+- `messagesSingle`: dedicated single-layout view for the native `messages` panel
 
 ### 3) Declare plugin panel slots without turning them into native panels
 
-The current `adminTab` composition contains two structured plugin panel refs:
+The current `adminTab` composition contains one active structured plugin panel ref:
 
 - `IngestStates` instance `0`, panel `presets`
-- `IngestStates` instance `0`, panel `bulkapply`
 
 These refs are part of the composition, but they are intentionally **not** entries in `registry.panels`.
 They are hydrated later through plugin discover data.

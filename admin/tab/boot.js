@@ -1,4 +1,4 @@
-/* global window, document, HTMLElement, HTMLInputElement, HTMLTextAreaElement, hasAdminKey, t, lang, createUi, createAdminApi, msghubRequest, msghubSocket, adapterInstance, args, h, getPanelDefinition, win, loadJsFilesSequential, renderPanelBootError, buildLayoutFromRegistry, getActiveComposition, computeAssetsForComposition, ensureAdminI18nLoaded, loadCssFiles, initTabs, isEmbeddedInAdmin, overrideLang, createMsghubPluginUiHost */
+/* global window, document, HTMLElement, HTMLInputElement, HTMLTextAreaElement, hasAdminKey, t, lang, createUi, createAdminApi, msghubRequest, msghubSocket, adapterInstance, args, h, getPanelDefinition, win, loadJsFilesSequential, renderPanelBootError, buildLayoutFromRegistry, getActiveComposition, computeAssetsForComposition, ensureAdminI18nLoaded, loadCssFiles, initTabs, activatePanel, updateDocumentTitle, isEmbeddedInAdmin, overrideLang, createMsghubPluginUiHost */
 'use strict';
 
 /**
@@ -519,6 +519,7 @@ function applyStaticI18n() {
 		}
 		el.textContent = pickText(key);
 	}
+	updateDocumentTitle();
 }
 
 /**
@@ -858,6 +859,15 @@ function ensureBooted() {
 				const tabs = initTabs({ defaultPanelId });
 				tabSetActive = tabs?.setActive ?? null;
 				initialTabId = tabs?.initial ?? null;
+			} else {
+				const singlePanelId = defaultPanelId
+					? `tab-${String(defaultPanelId)}`
+					: panelIds[0]
+						? `tab-${panelIds[0]}`
+						: '';
+				if (singlePanelId) {
+					initialTabId = activatePanel(singlePanelId);
+				}
 			}
 
 			await initPanelsForComposition(panelIds);
