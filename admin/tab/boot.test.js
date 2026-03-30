@@ -845,6 +845,84 @@ globalThis.__fn = hydratePluginPanels;
 		assert.deepEqual(JSON.parse(JSON.stringify(enabledTabIds)), [], 'discover failure must leave all slots disabled without crashing');
 	});
 
+	it('resolveHydratedPluginTabId() prefers a hydrated hash tab over the composition default', async function () {
+		const source = await readRepoFile('admin/tab/boot.js');
+		const fnSource = extractFunctionSource(source, 'resolveHydratedPluginTabId');
+		const sandbox = runInSandbox(
+			`
+${fnSource}
+globalThis.__fn = resolveHydratedPluginTabId;
+`,
+			{
+				location: { hash: '#tab-plugin-IngestStates-0-presets' },
+			},
+			'boot-resolveHydratedPluginTabId.js',
+		);
+
+		const resolved = sandbox.__fn('messages', ['tab-plugin-IngestStates-0-presets', 'tab-plugin-IngestStates-0-bulkapply']);
+		assert.equal(resolved, 'tab-plugin-IngestStates-0-presets');
+	});
+
+	it('resolveHydratedPluginTabId() falls back to defaultPanel and then first enabled when allowed', async function () {
+		const source = await readRepoFile('admin/tab/boot.js');
+		const fnSource = extractFunctionSource(source, 'resolveHydratedPluginTabId');
+		const sandbox = runInSandbox(
+			`
+${fnSource}
+globalThis.__fn = resolveHydratedPluginTabId;
+`,
+			{
+				location: { hash: '#tab-plugin-IngestStates-0-missing' },
+			},
+			'boot-resolveHydratedPluginTabId-fallback.js',
+		);
+
+		assert.equal(sandbox.__fn('plugin-IngestStates-0-presets', ['tab-plugin-IngestStates-0-presets']), 'tab-plugin-IngestStates-0-presets');
+		assert.equal(
+			sandbox.__fn('messages', ['tab-plugin-IngestStates-0-presets'], { allowFirstEnabled: true }),
+			'tab-plugin-IngestStates-0-presets',
+		);
+		assert.equal(sandbox.__fn('messages', ['tab-plugin-IngestStates-0-presets']), null);
+	});
+
+	it('mountPluginPanelIfNeeded() mounts a hydrated plugin panel only once', async function () {
+		const source = await readRepoFile('admin/tab/boot.js');
+		const fnSource = extractFunctionSource(source, 'mountPluginPanelIfNeeded');
+		const mountCalls = [];
+		const sandbox = runInSandbox(
+			`
+const pluginPanelTabMap = new Map();
+${fnSource}
+pluginPanelTabMap.set('tab-plugin-IngestStates-0-presets', {
+	ref: { pluginType: 'IngestStates', instanceId: 0, panelId: 'presets' },
+	hash: 'hash-1',
+	container: { id: 'plugin-IngestStates-0-presets' },
+	mountHandle: null,
+});
+globalThis.__fn = mountPluginPanelIfNeeded;
+globalThis.__map = pluginPanelTabMap;
+`,
+			{
+				String,
+			},
+			'boot-mountPluginPanelIfNeeded.js',
+		);
+
+		const pluginUiHost = {
+			mount(opts) {
+				mountCalls.push(opts);
+				return { mounted: true };
+			},
+		};
+
+		sandbox.__fn('tab-plugin-IngestStates-0-presets', pluginUiHost);
+		sandbox.__fn('tab-plugin-IngestStates-0-presets', pluginUiHost);
+
+		assert.equal(mountCalls.length, 1, 'plugin panel must mount only once');
+		assert.equal(mountCalls[0].panelId, 'presets');
+		assert.ok(sandbox.__map.get('tab-plugin-IngestStates-0-presets').mountHandle);
+	});
+
 	it('boot.js wires plugin panel lifecycle: discover hydration, spinner, activation, lazy-load', async function () {
 		const source = await readRepoFile('admin/tab/boot.js');
 
@@ -857,16 +935,16 @@ globalThis.__fn = hydratePluginPanels;
 		assert.match(source, /ui\?\.spinner\?\.show\?\./, 'blocking spinner must be shown in plugin-only path');
 		assert.match(source, /ui\?\.spinner\?\.hide\?\./, 'spinner must be hidden after activation');
 
-		// Post-hydration activation logic present for both paths.
-		assert.match(source, /enabledTabIds\.includes\(wantedTabId\)/, 'defaultPanel activation must check enabledTabIds');
+		// Post-hydration activation logic must resolve plugin targets from hash/default state.
+		assert.match(source, /\bresolveHydratedPluginTabId\s*\(/, 'post-hydration activation must resolve the preferred plugin tab');
+		assert.match(source, /location\.hash/, 'hydrated plugin resolution must consider the URL hash');
 
 		// Persistent toast when all plugin panels unavailable.
 		assert.match(source, /persist:\s*true/, 'persistent toast must be shown when no panels available');
 
-		// Lazy-load wired via msghub:tabSwitch.
+		// Lazy-load wired via msghub:tabSwitch and initial plugin mount fallback.
 		assert.match(source, /['"]msghub:tabSwitch['"]/, 'lazy-load must listen to msghub:tabSwitch');
-		assert.match(source, /pluginPanelTabMap\.get\(/, 'lazy-load must look up entry in pluginPanelTabMap');
-		assert.match(source, /pluginUiHost\.mount\s*\(/, 'lazy-load must call pluginUiHost.mount');
+		assert.match(source, /\bmountPluginPanelIfNeeded\s*\(/, 'boot must mount initially selected plugin panels explicitly when needed');
 
 		// ingestStates warmup must be gone.
 		assert.doesNotMatch(source, /ingestStates\s*\?\s*\.constants/, 'ingestStates warmup must be removed from boot');
@@ -878,39 +956,13 @@ globalThis.__fn = hydratePluginPanels;
 		assert.match(source, /initialTabId = activatePanel\(singlePanelId\)/, 'single layouts must activate their panel via activatePanel');
 	});
 
-	it('mixed composition defaultPanel: tabSetActive called when defaultPanel is a hydrated plugin tab', async function () {
+	it('mixed composition prefers a hydrated hash plugin tab over the default panel', async function () {
 		const source = await readRepoFile('admin/tab/boot.js');
-		const fnSource = 'async ' + extractFunctionSource(source, 'hydratePluginPanels');
-
-		// Extract the else-branch (mixed-composition activation) from production source.
-		// The anchor `tabSetActive(wantedTabId)` is unique to this branch (the spinner branch uses chosenTabId).
-		const anchor = 'tabSetActive(wantedTabId)';
-		const anchorPos = source.indexOf(anchor);
-		assert.ok(anchorPos >= 0, 'mixed-composition else-branch must exist in boot.js');
-		const beforeAnchor = source.slice(0, anchorPos);
-		const elseStart = source.indexOf('{', beforeAnchor.lastIndexOf('} else {'));
-		assert.ok(elseStart >= 0, 'else-branch opening brace must be found');
-
-		// Simple brace counter — all braces in this block are balanced (including ${...} in template literals).
-		let depth = 0;
-		let elseEnd = -1;
-		for (let i = elseStart; i < source.length; i++) {
-			if (source[i] === '{') depth++;
-			else if (source[i] === '}') {
-				depth--;
-				if (depth === 0) {
-					elseEnd = i;
-					break;
-				}
-			}
-		}
-		assert.ok(elseEnd > elseStart, 'else-branch closing brace must be found');
-		const elseBody = source.slice(elseStart + 1, elseEnd);
-
-		// Behavioral: run hydratePluginPanels from source, then run the extracted else-branch.
-		// This covers the full mixed-composition path: native panel active pre-hydration,
-		// defaultPanel points to the plugin tab, post-hydration switch activates it.
+		const hydrateSource = 'async ' + extractFunctionSource(source, 'hydratePluginPanels');
+		const resolveSource = extractFunctionSource(source, 'resolveHydratedPluginTabId');
+		const mountSource = extractFunctionSource(source, 'mountPluginPanelIfNeeded');
 		const activatedIds = [];
+		const mountCalls = [];
 		const container = {};
 		const tabEl = {
 			removeAttribute: () => {},
@@ -920,15 +972,21 @@ globalThis.__fn = hydratePluginPanels;
 		const sandbox = runInSandbox(
 			`
 const pluginPanelTabMap = new Map();
-${fnSource}
+${hydrateSource}
+${resolveSource}
+${mountSource}
 globalThis.__test = async function() {
 	const enabledTabIds = await hydratePluginPanels(
 		[{ pluginType: 'IngestStates', instanceId: 0, panelId: 'presets' }],
-		{},
+		pluginUiHost,
 		null,
 	);
-	const defaultPanelId = 'plugin-IngestStates-0-presets';
-	${elseBody}
+	const defaultPanelId = 'messages';
+	const chosenTabId = resolveHydratedPluginTabId(defaultPanelId, enabledTabIds);
+	if (chosenTabId && tabSetActive) {
+		tabSetActive(chosenTabId);
+		mountPluginPanelIfNeeded(chosenTabId, pluginUiHost);
+	}
 	return enabledTabIds;
 };`,
 			{
@@ -946,11 +1004,18 @@ globalThis.__test = async function() {
 					getElementById: id => (id === 'plugin-IngestStates-0-presets' ? container : null),
 					querySelector: () => tabEl,
 				},
+				location: { hash: '#tab-plugin-IngestStates-0-presets' },
 				api: { i18n: { pickText: v => (v && typeof v === 'object' ? v.en || '' : String(v || '')) } },
+				pluginUiHost: {
+					mount(opts) {
+						mountCalls.push(opts);
+						return { mounted: true };
+					},
+				},
 				tabSetActive: id => activatedIds.push(id),
 				Promise,
 			},
-			'boot-mixed-defaultPanel.js',
+			'boot-mixed-hashPanel.js',
 		);
 
 		await sandbox.__test();
@@ -958,8 +1023,9 @@ globalThis.__test = async function() {
 		assert.deepEqual(
 			activatedIds,
 			['tab-plugin-IngestStates-0-presets'],
-			'tabSetActive must be called with the plugin defaultPanel tab ID in mixed composition',
+			'tabSetActive must prefer the hydrated hash plugin tab in mixed composition',
 		);
+		assert.equal(mountCalls.length, 1, 'initially selected plugin tab must mount immediately');
 	});
 
 	it('does not override lang when not embedded in admin', async function () {

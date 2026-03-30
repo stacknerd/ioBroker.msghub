@@ -41,10 +41,14 @@ The shell startup is roughly:
 9. Register lazy-mount handling for later plugin-tab switches.
 10. Keep connection state current via ping, socket reconnect handling, and reconnect warmup.
 
-Important: the current code does **not** mount the first plugin tab automatically activated during boot.
-`tabSetActive(...)` for the first plugin tab can happen before the `msghub:tabSwitch` listener is registered,
-and in the plugin-only case the first activation does not dispatch `msghub:tabSwitch` at all because there is
-no previous active tab yet.
+Important: plugin panel activation after discover is resolved in this order:
+
+1. URL hash, when it targets a hydrated plugin tab
+2. composition `defaultPanel`, when it resolves to a hydrated plugin tab
+3. first enabled plugin tab, but only for plugin-only compositions
+
+If a plugin tab becomes active during boot before the lazy-load event listener is registered,
+`boot.js` mounts that plugin panel immediately so the initial selection is not lost.
 
 ---
 
@@ -117,13 +121,8 @@ Structured plugin panel refs from the composition are not active immediately.
 - replaces the temporary loading label with the discovered title
 - stores the mount metadata in `pluginPanelTabMap`
 
-Actual plugin bundle mounting is deferred until the tab becomes active.
-More precisely: the current implementation mounts a plugin panel only on a later `msghub:tabSwitch` event that is
-observed **after** the listener was registered. The first plugin tab selected automatically during boot can miss
-that path in both of these current scenarios:
-
-- plugin-only composition: `tabSetActive(...)` runs while no previous tab is active, so `initTabs()` does not dispatch `msghub:tabSwitch`
-- mixed composition with a plugin `defaultPanel`: the switch event is dispatched, but it happens before `boot.js` registers the listener
+Actual plugin bundle mounting is lazy by default, but `boot.js` also mounts a plugin panel immediately when it
+became active during boot before the later `msghub:tabSwitch` listener could observe that activation.
 
 ### 5) Own connection and health-state behavior for the shell
 

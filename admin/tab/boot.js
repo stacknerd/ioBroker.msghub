@@ -1,4 +1,4 @@
-/* global window, document, HTMLElement, HTMLInputElement, HTMLTextAreaElement, hasAdminKey, t, lang, createUi, createAdminApi, msghubRequest, msghubSocket, adapterInstance, args, h, getPanelDefinition, win, loadJsFilesSequential, renderPanelBootError, buildLayoutFromRegistry, getActiveComposition, computeAssetsForComposition, ensureAdminI18nLoaded, loadCssFiles, initTabs, activatePanel, updateDocumentTitle, isEmbeddedInAdmin, overrideLang, createMsghubPluginUiHost */
+/* global window, document, location, HTMLElement, HTMLInputElement, HTMLTextAreaElement, hasAdminKey, t, lang, createUi, createAdminApi, msghubRequest, msghubSocket, adapterInstance, args, h, getPanelDefinition, win, loadJsFilesSequential, renderPanelBootError, buildLayoutFromRegistry, getActiveComposition, computeAssetsForComposition, ensureAdminI18nLoaded, loadCssFiles, initTabs, activatePanel, updateDocumentTitle, isEmbeddedInAdmin, overrideLang, createMsghubPluginUiHost */
 'use strict';
 
 /**
@@ -815,6 +815,61 @@ async function hydratePluginPanels(refs, host, knownContributions = null) {
 	return enabledTabIds;
 }
 
+/**
+ * Resolves the preferred hydrated plugin tab after discover completed.
+ *
+ * URL hash wins when it targets an enabled plugin tab. Otherwise the composition
+ * default panel wins. For plugin-only layouts, the first enabled tab can be used
+ * as a final fallback.
+ *
+ * @param {string} defaultPanelId - Composition default panel id without the `tab-` prefix.
+ * @param {string[]} enabledTabIds - Enabled plugin tab DOM ids.
+ * @param {object} [options] - Resolution options.
+ * @param {boolean} [options.allowFirstEnabled] - Whether the first enabled plugin tab may be used as a fallback.
+ * @returns {string|null} Preferred plugin tab DOM id, or `null`.
+ */
+function resolveHydratedPluginTabId(defaultPanelId, enabledTabIds, options) {
+	const list = Array.isArray(enabledTabIds) ? enabledTabIds.filter(id => typeof id === 'string' && id) : [];
+	const allowFirstEnabled = options?.allowFirstEnabled === true;
+	const rawHash = String(location.hash || '');
+	const hashTabId = rawHash.startsWith('#') ? rawHash.slice(1) : '';
+	if (hashTabId && list.includes(hashTabId)) {
+		return hashTabId;
+	}
+
+	const wantedTabId = defaultPanelId ? `tab-${String(defaultPanelId)}` : '';
+	if (wantedTabId && list.includes(wantedTabId)) {
+		return wantedTabId;
+	}
+
+	return allowFirstEnabled ? (list[0] ?? null) : null;
+}
+
+/**
+ * Mounts a hydrated plugin panel immediately when its tab became active before the
+ * lazy-load event listener was registered.
+ *
+ * @param {string|null|undefined} tabId - Plugin tab DOM id.
+ * @param {object} pluginUiHost - Plugin UI host instance.
+ */
+function mountPluginPanelIfNeeded(tabId, pluginUiHost) {
+	const normalizedTabId = typeof tabId === 'string' ? tabId.trim() : '';
+	if (!normalizedTabId) {
+		return;
+	}
+	const entry = pluginPanelTabMap.get(normalizedTabId);
+	if (!entry || entry.mountHandle) {
+		return;
+	}
+	entry.mountHandle = pluginUiHost.mount({
+		container: entry.container,
+		pluginType: entry.ref.pluginType,
+		instanceId: String(entry.ref.instanceId),
+		panelId: entry.ref.panelId,
+		hash: entry.hash,
+	});
+}
+
 let bootPromise = null;
 
 /**
@@ -885,13 +940,14 @@ function ensureBooted() {
 
 				if (needsSpinner) {
 					// Plugin-only composition: no tab was active pre-hydration.
-					// Prefer defaultPanel tab if available; fall back to first enabled tab.
-					const wantedTabId = defaultPanelId ? `tab-${defaultPanelId}` : null;
-					const chosenTabId =
-						wantedTabId && enabledTabIds.includes(wantedTabId) ? wantedTabId : (enabledTabIds[0] ?? null);
+					// URL hash wins when it targets a hydrated plugin tab.
+					const chosenTabId = resolveHydratedPluginTabId(defaultPanelId, enabledTabIds, {
+						allowFirstEnabled: true,
+					});
 
 					if (chosenTabId && tabSetActive) {
 						tabSetActive(chosenTabId);
+						mountPluginPanelIfNeeded(chosenTabId, pluginUiHost);
 						ui?.spinner?.hide?.();
 					} else {
 						// All plugin panels unavailable — keep spinner; show persistent toast.
@@ -903,26 +959,17 @@ function ensureBooted() {
 					}
 				} else {
 					// Mixed composition: a native panel is already active.
-					// If defaultPanel is a plugin panel that was just hydrated, switch to it now.
-					const wantedTabId = defaultPanelId ? `tab-${defaultPanelId}` : null;
-					if (wantedTabId && enabledTabIds.includes(wantedTabId) && tabSetActive) {
-						tabSetActive(wantedTabId);
+					// URL hash wins when it targets a hydrated plugin tab.
+					const chosenTabId = resolveHydratedPluginTabId(defaultPanelId, enabledTabIds);
+					if (chosenTabId && tabSetActive) {
+						tabSetActive(chosenTabId);
+						mountPluginPanelIfNeeded(chosenTabId, pluginUiHost);
 					}
 				}
 
 				// Lazy-load: mount plugin bundle on first tab activation.
 				document.addEventListener('msghub:tabSwitch', ({ detail }) => {
-					const entry = pluginPanelTabMap.get(detail?.to);
-					if (!entry || entry.mountHandle) {
-						return; // Not a plugin panel tab, or already mounted.
-					}
-					entry.mountHandle = pluginUiHost.mount({
-						container: entry.container,
-						pluginType: entry.ref.pluginType,
-						instanceId: String(entry.ref.instanceId),
-						panelId: entry.ref.panelId,
-						hash: entry.hash,
-					});
+					mountPluginPanelIfNeeded(detail?.to, pluginUiHost);
 				});
 			}
 		})
