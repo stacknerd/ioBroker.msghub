@@ -160,6 +160,7 @@ class Msghub extends utils.Adapter {
 		});
 
 		this.msgStore = new MsgStore(this, this.msgConstants, this.msgFactory, {
+			general: msgCfg.corePrivate.general,
 			store: msgCfg.corePrivate.store,
 			storage: {
 				...msgCfg.corePrivate.storage,

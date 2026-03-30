@@ -119,11 +119,13 @@ class MsgStats {
 	 * @param {object} [options] Optional configuration.
 	 * @param {number} [options.rollupKeepDays] Retention for rollup buckets (days).
 	 * @param {() => any} [options.createStorageBackend] Platform-resolved storage backend factory for rollup persistence.
+	 * @param {{ coreFormatLocale?: string }} [options.general] Normalized general config from MsgConfig.
 	 */
-	constructor(adapter, msgConstants, store, { rollupKeepDays = 400, createStorageBackend } = {}) {
+	constructor(adapter, msgConstants, store, options = {}) {
 		if (!adapter?.namespace) {
 			throw new Error('MsgStats: adapter is required');
 		}
+		const { rollupKeepDays = 400, createStorageBackend, general } = options;
 		if (!msgConstants) {
 			throw new Error('MsgStats: msgConstants is required');
 		}
@@ -133,10 +135,20 @@ class MsgStats {
 		if (typeof createStorageBackend !== 'function') {
 			throw new Error('MsgStats: options.createStorageBackend is required');
 		}
+		if (
+			!general ||
+			typeof general !== 'object' ||
+			Array.isArray(general) ||
+			typeof general.coreFormatLocale !== 'string' ||
+			!general.coreFormatLocale.trim()
+		) {
+			throw new Error('MsgStats: options.general.coreFormatLocale is required');
+		}
 
 		this.adapter = adapter;
 		this.msgConstants = msgConstants;
 		this.store = store;
+		this.locale = general.coreFormatLocale.trim();
 		this.rollupKeepDays =
 			typeof rollupKeepDays === 'number' && Number.isFinite(rollupKeepDays)
 				? Math.max(1, Math.trunc(rollupKeepDays))
@@ -517,7 +529,7 @@ class MsgStats {
 				schemaVersion: 1,
 				generatedAt: now,
 				tz,
-				locale: this.adapter?.locale || null,
+				locale: this.locale,
 				windows,
 			},
 			current,

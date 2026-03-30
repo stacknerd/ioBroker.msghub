@@ -133,6 +133,7 @@ describe('MsgStats', () => {
 		const store = { fullList: messages, msgStorage, msgArchive };
 		const stats = new MsgStats(adapter, MsgConstants, store, {
 			createStorageBackend: createStorageBackendFactory(adapter, 'data'),
+			general: { coreFormatLocale: 'de-DE' },
 		});
 
 		withFixedNow(now, () => {
@@ -147,6 +148,7 @@ describe('MsgStats', () => {
 		const snap = await withFixedNow(now, async () => await stats.getStats());
 
 		expect(snap).to.have.property('current');
+		expect(snap.meta.locale).to.equal('de-DE');
 		expect(snap.current.total).to.equal(4);
 		expect(snap.current.byKind).to.have.property(MsgConstants.kind.task, 3);
 

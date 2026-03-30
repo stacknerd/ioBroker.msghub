@@ -8,7 +8,11 @@ describe('MsgRender', () => {
 	const locale = 'en-GB';
 
 	function createRenderer(options = {}) {
-		return new MsgRender({ log: { info: () => {} } }, options);
+		const { locale: formatLocale = locale, ...rest } = options;
+		return new MsgRender(
+			{ log: { info: () => {} } },
+			{ general: { coreFormatLocale: formatLocale }, ...rest },
+		);
 	}
 
 	function buildMetrics(entries) {

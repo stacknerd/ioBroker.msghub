@@ -130,8 +130,14 @@ function createStore({
 		hardDeleteStartupDelayMs: 1000 * 60,
 		deleteClosedIntervalMs: 1000 * 10,
 	};
+	const defaultGeneralCfg = {
+		coreFormatLocale: 'de-DE',
+		coreTextLanguage: 'de',
+		backendTextLanguage: 'en',
+	};
 
 	const store = new MsgStore(selectedAdapter, msgConstants || MsgConstants, msgFactory, {
+		general: defaultGeneralCfg,
 		store: defaultStoreCfg,
 		storage: {
 			createStorageBackend: createStorageBackendFactory(selectedAdapter, 'data'),
@@ -181,6 +187,48 @@ function withFixedNow(now, fn) {
 }
 
 describe('MsgStore', () => {
+	it('forwards general config to MsgRender and MsgStats', () => {
+		const { adapter } = createAdapter();
+		const msgFactory = createFactory();
+		const store = new MsgStore(adapter, MsgConstants, msgFactory, {
+			general: { coreFormatLocale: 'de-DE', coreTextLanguage: 'de', backendTextLanguage: 'en' },
+			store: {
+				pruneIntervalMs: 30_000,
+				notifierIntervalMs: 0,
+				hardDeleteAfterMs: 1000 * 60 * 60 * 24 * 3,
+				hardDeleteIntervalMs: 1000 * 60 * 60 * 4,
+				hardDeleteBacklogIntervalMs: 1000 * 5,
+				hardDeleteBatchSize: 50,
+				hardDeleteStartupDelayMs: 1000 * 60,
+				deleteClosedIntervalMs: 1000 * 10,
+			},
+			storage: {
+				createStorageBackend: createStorageBackendFactory(adapter, 'data'),
+			},
+			archive: {
+				createStorageBackend: onMutated =>
+					new IoArchiveIobroker({
+						adapter,
+						metaId: adapter.namespace,
+						baseDir: 'data/archive',
+						fileExtension: 'jsonl',
+						onMutated,
+					}),
+				archiveRuntime: {
+					configuredStrategyLock: '',
+					effectiveStrategy: 'iobroker',
+					effectiveStrategyReason: 'test-default',
+					nativeRootDir: '',
+					nativeProbeError: '',
+				},
+			},
+			stats: {},
+		});
+
+		expect(store.msgRender.locale).to.equal('de-DE');
+		expect(store.msgStats.locale).to.equal('de-DE');
+	});
+
 	describe('getMessages (raw snapshot)', () => {
 		it('does not render (query/getByRef still render)', () => {
 			const { msgRender, calls } = createRenderer();
@@ -707,6 +755,7 @@ describe('MsgStore', () => {
 			const { msgRender } = createRenderer();
 			const msgFactory = {};
 			const store = new MsgStore(adapter, MsgConstants, msgFactory, {
+				general: { coreFormatLocale: 'de-DE', coreTextLanguage: 'de', backendTextLanguage: 'en' },
 				store: {
 					pruneIntervalMs: 30_000,
 					notifierIntervalMs: 0,

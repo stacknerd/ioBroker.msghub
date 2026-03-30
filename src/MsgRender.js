@@ -54,15 +54,25 @@ class MsgRender {
 	 *
 	 * @param {import('@iobroker/adapter-core').AdapterInstance} adapter Adapter instance (used for logging only).
 	 * @param {object} [options] Configuration options.
-	 * @param {string} [options.locale] Default locale for number/date formatting.
+	 * @param {{ coreFormatLocale?: string }} [options.general] Normalized general config from MsgConfig.
 	 * @param {object|null} [options.render] Optional render-related settings (prefixes, styles, ...).
 	 */
-	constructor(adapter, { locale = 'en-US', render = null } = {}) {
+	constructor(adapter, options = {}) {
 		if (!adapter) {
 			throw new Error('MsgRender: adapter is required');
 		}
+		const { general, render = null } = options;
+		if (
+			!general ||
+			typeof general !== 'object' ||
+			Array.isArray(general) ||
+			typeof general.coreFormatLocale !== 'string' ||
+			!general.coreFormatLocale.trim()
+		) {
+			throw new Error('MsgRender: options.general.coreFormatLocale is required');
+		}
 		this.adapter = adapter;
-		this.locale = locale;
+		this.locale = general.coreFormatLocale.trim();
 		this.render = render && typeof render === 'object' ? render : null;
 		this._levelKeyByValue = new Map();
 		try {

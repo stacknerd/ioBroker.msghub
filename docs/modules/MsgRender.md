@@ -374,10 +374,10 @@ Notes:
 
 ## Public API (what other components call)
 
-### `new MsgRender(adapter, { locale })`
+### `new MsgRender(adapter, { general })`
 
 - `adapter` is used for logging only.
-- `locale` is used for `Intl.NumberFormat` and `Intl.DateTimeFormat` (default: `en-US`).
+- `general.coreFormatLocale` is used for `Intl.NumberFormat` and `Intl.DateTimeFormat`.
 
 ### `renderMessage(msg, { locale }): object`
 

@@ -285,18 +285,21 @@ Frequently used filters:
 When creating `MsgStore`, you can pass options:
 
 - `initialMessages` (default `[]`): initial in-memory list (primarily for tests/imports)
-- `pruneIntervalMs` (default `30000`): maximum frequency for expiration scans
-- `notifierIntervalMs` (default `10000`, `0` disables): polling interval for due notifications (`notifyAt`)
+- `general`: normalized general config from `MsgConfig`
+- `store`: normalized store config from `MsgConfig`
+- `store.pruneIntervalMs` (default `30000`): maximum frequency for expiration scans
+- `store.notifierIntervalMs` (default `10000`, `0` disables): polling interval for due notifications (`notifyAt`)
 - `quietHours` (optional): fully normalized quiet-hours policy options passed from `main.js` (`{ enabled, startMin, endMin, maxLevel, spreadMs }`)
 - `quietHoursRandomFn` (optional): random injection for quiet-hours spread (tests)
-- `hardDeleteAfterMs` (default `259200000` / 3 days): retention window before hard-delete for `deleted`/`expired` messages
-- `hardDeleteIntervalMs` (default `14400000` / 4 hours): how often the store checks for hard-deletes
-- `hardDeleteBatchSize` (default `50`): max number of messages hard-deleted per run (backlogs are processed over multiple runs)
-- `hardDeleteBacklogIntervalMs` (default `5000`): delay between hard-delete runs while a backlog exists
-- `hardDeleteStartupDelayMs` (default `60000`): delay after startup before the first hard-delete run (reduces I/O spikes)
-- `deleteClosedIntervalMs` (default `10000`): how often the store soft-deletes `closed` messages
+- `store.hardDeleteAfterMs` (default `259200000` / 3 days): retention window before hard-delete for `deleted`/`expired` messages
+- `store.hardDeleteIntervalMs` (default `14400000` / 4 hours): how often the store checks for hard-deletes
+- `store.hardDeleteBatchSize` (default `50`): max number of messages hard-deleted per run (backlogs are processed over multiple runs)
+- `store.hardDeleteBacklogIntervalMs` (default `5000`): delay between hard-delete runs while a backlog exists
+- `store.hardDeleteStartupDelayMs` (default `60000`): delay after startup before the first hard-delete run (reduces I/O spikes)
+- `store.deleteClosedIntervalMs` (default `10000`): how often the store soft-deletes `closed` messages
 - `storage`: options forwarded to `MsgStorage` (e.g. `baseDir`, `fileName`, `writeIntervalMs`)
 - `archive`: options forwarded to `MsgArchive` (e.g. `baseDir`, `fileExtension`, `flushIntervalMs`)
+- `stats`: normalized stats config from `MsgConfig`
 
 ---
 

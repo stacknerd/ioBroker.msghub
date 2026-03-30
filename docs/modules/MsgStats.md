@@ -28,6 +28,7 @@ Primary consumers today:
 - the in-memory store list (`MsgStore.fullList`) for “current” and “schedule”
 - `MsgStorage.getStatus()` for persistence info
 - `MsgArchive.getStatus()` (and optionally `MsgArchive.estimateSizeBytes(...)`) for archive info
+- `general.coreFormatLocale` for `meta.locale`
 
 ---
 
@@ -95,7 +96,7 @@ Most callers should not construct `MsgStats` directly. Use:
 
 Returns a JSON object shaped like:
 
-- `meta`: generatedAt, time zone, locale, and computed window boundaries
+- `meta`: generatedAt, time zone, locale, and computed window boundaries; `meta.locale` reflects `general.coreFormatLocale`
 - `current`: total + breakdowns
 - `schedule`: due buckets (domain due time)
 - `done`: rollup buckets (today/thisWeek/thisMonth) + lastClosedAt

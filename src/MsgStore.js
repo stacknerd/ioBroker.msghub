@@ -92,6 +92,8 @@ class MsgStore {
 	 * @param {import('./MsgFactory').MsgFactory} msgFactory Factory used for patching/validation.
 	 * @param {object} options Configuration.
 	 * @param {Array<object>} [options.initialMessages] Initial in-memory message list (primarily for tests/imports).
+	 * @param {{ coreFormatLocale: string, coreTextLanguage: string, backendTextLanguage: string }} options.general
+	 *   Normalized general config (source of truth: MsgConfig).
 	 * @param {{ pruneIntervalMs: number, notifierIntervalMs: number, hardDeleteAfterMs: number, hardDeleteIntervalMs: number, hardDeleteBacklogIntervalMs: number, hardDeleteBatchSize: number, hardDeleteStartupDelayMs: number, deleteClosedIntervalMs: number }} options.store
 	 *   Normalized store config (source of truth: MsgConfig).
 	 * @param {object} options.storage Normalized storage config (source of truth: MsgConfig).
@@ -108,7 +110,7 @@ class MsgStore {
 		if (!opt) {
 			throw new Error('MsgStore: options is required');
 		}
-		const { initialMessages = [], store, storage, archive, stats, ai = null } = opt;
+		const { initialMessages = [], general, store, storage, archive, stats, ai = null } = opt;
 
 		if (!adapter) {
 			throw new Error('MsgStore: adapter is required');
@@ -126,6 +128,9 @@ class MsgStore {
 		this.msgFactory = msgFactory;
 
 		const isObject = v => !!v && typeof v === 'object' && !Array.isArray(v);
+		if (!isObject(general)) {
+			throw new Error('MsgStore: options.general is required');
+		}
 		if (!isObject(store)) {
 			throw new Error('MsgStore: options.store is required');
 		}
@@ -203,7 +208,7 @@ class MsgStore {
 		this.msgArchive = new MsgArchive(this.adapter, { baseDir: 'data/archive', ...archive });
 
 		// View rendering (pure transformation; no I/O).
-		this.msgRender = new MsgRender(this.adapter, { locale: this.adapter?.locale, render: options?.render || null });
+		this.msgRender = new MsgRender(this.adapter, { general, render: options?.render || null });
 
 		// Notification dispatcher (plugins register elsewhere).
 		this.msgNotify = new MsgNotify(this.adapter, this.msgConstants, { store: this, ai });
@@ -219,6 +224,7 @@ class MsgStore {
 
 		// Stats (read-only insights + rollups).
 		this.msgStats = new MsgStats(this.adapter, this.msgConstants, this, {
+			general,
 			...stats,
 			createStorageBackend,
 		});
