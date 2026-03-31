@@ -12,6 +12,7 @@
 
 .msghub-root .msghub-tabs {
 	display: flex;
+	flex: 0 0 auto;
 	align-items: center;
 	gap: var(--msghub-space-2);
 	padding: var(--msghub-space-2);
