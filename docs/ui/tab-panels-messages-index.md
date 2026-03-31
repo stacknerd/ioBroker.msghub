@@ -34,7 +34,8 @@ Inside the panel, `index.js` sits above the specialized submodules:
 
 2. Own the active panel workflow.
    - It mounts the static shell, renders the table header, and performs the full render pass after state changes.
-   - It runs `loadConstants()` and `loadMessages()` and keeps loading, error, pagination, selection, and metadata state coherent.
+   - It runs `loadConstants()` and `loadMessages()` and keeps loading, pagination, selection, and metadata state coherent.
+   - Load failures are surfaced through shell toasts; there is no inline error area in the panel shell.
 
 3. Provide the panel-level action handlers.
    - Toolbar actions: refresh, delete selection, toggle auto refresh, change page, change page size.
@@ -92,6 +93,7 @@ Important internal integration points:
 - The first render path is intentionally different from later refreshes:
   - before the first successful load, a loading row is rendered
   - during later silent refreshes, the existing rows stay visible
+- The panel shell intentionally stays mounted during failures. The coordinator reports load problems via toast instead of replacing the shell with an error banner.
 - Expert mode is polled, not event-driven. `detectExpertMode(ctx.args?.expert)` is applied once immediately and then every 1500 ms.
 - Selection is tied to the currently visible rows. After each row render, `pruneSelectionToVisibleRows()` removes selections that no longer exist in the current tbody.
 - The archive overlay is wired, but the normal row menu keeps the archive action disabled by passing `isArchiveActionEnabled: () => false`.

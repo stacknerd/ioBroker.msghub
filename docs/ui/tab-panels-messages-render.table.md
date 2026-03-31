@@ -75,6 +75,7 @@ Important options:
 ## Design notes / invariants
 
 - The visible column set must stay aligned with `state.tableColCount`, which is managed by the header renderer.
+- Column visibility is intentionally partly CSS-driven: the messages table hides lower-priority columns at narrower breakpoints and switches to horizontal scrolling below `750px` instead of shrinking content into broken layouts.
 - Selection rules differ intentionally by mode:
   - non-expert click toggles between “only this row” and “none”
   - non-expert contextmenu selects the row if needed, but does not toggle it off

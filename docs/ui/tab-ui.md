@@ -61,6 +61,13 @@ The context menu supports:
 - viewport-aware positioning
 - outside-click, wheel, scroll, resize, and visibility close triggers
 
+Touch handling is part of the shell-level contract:
+
+- sustained single-finger long-press is synthesized into a `contextmenu` event
+- text-entry elements keep native touch behavior
+- long-press text-selection side effects are suppressed by shell CSS, not by panel code
+- the capture-phase `contextmenu` listener deduplicates native follow-up events after a synthetic dispatch
+
 The root menu always includes a branding footer.
 Submenus are tracked in a stack so `Escape` can close them level by level.
 
@@ -159,6 +166,7 @@ Supports:
 - Context menu positioning always goes through the clamp/flip helper from [`./tab-api.md`](./tab-api.md).
 - The toast, overlay, dialog, and context-menu hosts are reused from [`admin/tab.html`](../../admin/tab.html) when present.
 - The spinner host is currently not part of [`admin/tab.html`](../../admin/tab.html); `ui.js` creates it dynamically.
+- Long-press context menus are a shell concern. Panels only attach `contextmenu` handlers; `ui.js` synthesizes the gesture and `boot.js` enforces the empty-menu guard.
 
 ---
 

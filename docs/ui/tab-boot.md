@@ -150,6 +150,8 @@ For text-like inputs, textareas, and `contenteditable` elements it adds standard
 - Select all
 
 `Ctrl` + right-click intentionally bypasses the custom menu and leaves the native browser menu available.
+If no shell or panel items are available for the current target, `boot.js` keeps the native browser menu suppressed but does not open an empty custom menu.
+Touch long-presses are handled by the shell polyfill in [`./tab-ui.md`](./tab-ui.md); `boot.js` only consumes the resulting `contextmenu` flow.
 
 ---
 
@@ -210,6 +212,7 @@ It also triggers an unconditional initial `sendPing()` during module load, befor
 - `pickText()` is the shell-side text normalizer for plain strings, admin i18n keys, and language maps such as `{ en, de }`.
 - Shell-wide timezone fallback warning is intentionally shown only once per page lifetime.
 - The connection panel reports the effective frontend format locale shown to the shell. When `args.locale` is present and valid, that value is shown instead of the old ambient browser-locale source.
+- The global `contextmenu` listener is intentionally shared between mouse right-click and the synthetic long-press flow. It is the fallback path for both mouse and touch.
 
 ---
 

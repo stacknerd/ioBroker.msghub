@@ -87,6 +87,7 @@ The current column model is:
 - `state.tableColCount` is set here and is part of the shared render contract used by the meta renderer for loading rows.
 - The table has `11` columns in normal mode and `12` in expert mode.
 - The header button registry (`headerBtns`) is rebuilt on each `renderThead()` call. Later state updates rely on that fresh registry.
+- The column model is paired with responsive CSS rules in `styles.css`: lower-priority columns are hidden at narrower breakpoints, and under `750px` the table wrapper becomes a horizontal scroll container instead of squeezing content into unreadable widths.
 - Sort/filter support is column-specific:
   - sort-only: `icon`, `title`, `text`, `timing.createdAt`, `timing.updatedAt`, `progress.percentage`
   - filter-capable: `details.location`, `kind`, `level`, `lifecycle.state`, `origin.system`

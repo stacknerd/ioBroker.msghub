@@ -96,6 +96,7 @@ If `lang === 'en'`, no second language file is fetched.
 
 Note: these paths are admin-relative URLs served by the ioBroker host from `admin/i18n/<lang>.json` in the repo.
 They are the Admin Tab i18n source (`admin/i18n/`) and are unrelated to the backend runtime catalog at `i18n/` in the repo root.
+The shell never treats repo-root `i18n/*` as a fallback source for Admin Tab text.
 
 Translation access then happens through:
 
@@ -200,6 +201,7 @@ Main consumers:
 - `ensureAdminI18nLoaded()` caches the load promise. Repeated callers share the same in-flight work.
 - `overrideLang(...)` resets the cached dictionary promise so a later load can fetch the new language.
 - Plugin i18n merging is intentionally one-way and additive. Existing keys are never overwritten.
+- Admin-UI text loading stays in the `admin/i18n/*` namespace. The repo-root `i18n/*` tree is reserved for backend/runtime catalogs and should not be mixed into the shell dictionary.
 - Unknown query keys remain available to native panels through `ctx.args`.
 - `runtime.js` parses `composition` and `expert`, but composition resolution happens in [`./tab-layout.md`](./tab-layout.md) and expert-mode capabilities are panel/API concerns.
 - `locale` is only a browser-side format-locale override source. It does not change admin i18n loading, text language, plugin bundle language selection, or backend payloads.
