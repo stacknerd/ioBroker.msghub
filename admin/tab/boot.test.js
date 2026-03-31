@@ -6,6 +6,7 @@ const {
 	readRepoFile,
 	extractFunctionSource,
 	runInSandbox,
+	createStorage,
 } = require('./_test.utils');
 
 describe('admin/tab/boot.js', function () {
@@ -193,6 +194,10 @@ globalThis.__execCommandSafe = execCommandSafe;
 		assert.match(source, /\binitTabs\s*\(/);
 		assert.match(source, /\bmsghubSocket\.on\(\s*['"]connect['"]/);
 		assert.match(source, /\bmsghubSocket\.on\(\s*['"]disconnect['"]/);
+		assert.match(source, /visibilitychange/);
+		assert.match(source, /pageshow/);
+		assert.match(source, /window\.addEventListener\(\s*['"]focus['"]/);
+		assert.match(source, /window\.addEventListener\(\s*['"]online['"]/);
 	});
 
 	it('keeps composition resolution delegated to shared layout helpers', async function () {
@@ -683,6 +688,135 @@ globalThis.__getLatency = () => lastPingLatencyMs;
 		await sbFail.__sendPing();
 		assert.equal(sbFail.__getLatency(), null, 'RTT should be cleared on ping failure');
 		assert.equal(offlineCalls.length, 1);
+	});
+
+	it('attemptSocketReconnect actively reconnects a disconnected socket', async function () {
+		const source = await readRepoFile('admin/tab/boot.js');
+		const fnSource = extractFunctionSource(source, 'attemptSocketReconnect');
+		let connectCalls = 0;
+		const sandbox = runInSandbox(
+			`
+${fnSource}
+globalThis.__fn = attemptSocketReconnect;
+`,
+			{
+				msghubSocket: {
+					connected: false,
+					connect: () => {
+						connectCalls++;
+					},
+				},
+			},
+			'boot-attemptSocketReconnect.js',
+		);
+
+		assert.equal(sandbox.__fn(), true);
+		assert.equal(connectCalls, 1);
+	});
+
+	it('acquireAutoReloadLease throttles automatic reloads per tab session', async function () {
+		const source = await readRepoFile('admin/tab/boot.js');
+		const fnSource = extractFunctionSource(source, 'acquireAutoReloadLease');
+		const sessionStorage = createStorage();
+		const sandbox = runInSandbox(
+			`
+const AUTO_RELOAD_SESSION_KEY = 'msghub.adminTab.autoReloadAt';
+const AUTO_RELOAD_COOLDOWN_MS = 120000;
+${fnSource}
+globalThis.__fn = acquireAutoReloadLease;
+`,
+			{
+				window: { sessionStorage },
+				Date: { now: () => 1000 },
+				Number,
+			},
+			'boot-acquireAutoReloadLease.js',
+		);
+
+		assert.equal(sandbox.__fn(), true);
+		assert.equal(sandbox.__fn(), false);
+	});
+
+	it('reloadForCriticalBoot reloads only for hard boot failures within the budget', async function () {
+		const source = await readRepoFile('admin/tab/boot.js');
+		const fnSource = extractFunctionSource(source, 'reloadForCriticalBoot');
+		let reloadCalls = 0;
+		const warnings = [];
+		const sandbox = runInSandbox(
+			`
+${fnSource}
+globalThis.__fn = reloadForCriticalBoot;
+`,
+			{
+				hasCriticalBootFailure: () => true,
+				acquireAutoReloadLease: () => true,
+				api: { log: { warn: msg => warnings.push(String(msg)) } },
+				window: { location: { reload: () => reloadCalls++ } },
+			},
+			'boot-reloadForCriticalBoot.js',
+		);
+
+		assert.equal(sandbox.__fn('resume'), true);
+		assert.equal(reloadCalls, 1);
+		assert.equal(warnings.length, 1);
+	});
+
+	it('triggerResumeRecovery debounces clustered resume events and schedules reconnect bursts', async function () {
+		const source = await readRepoFile('admin/tab/boot.js');
+		const fnSource = extractFunctionSource(source, 'triggerResumeRecovery');
+		const timers = [];
+		let reconnectCalls = 0;
+		let pingCalls = 0;
+		let reloadChecks = 0;
+		const sandbox = runInSandbox(
+			`
+let lastResumeRecoveryAt = 0;
+let resumeRecoveryToken = 0;
+const RESUME_RECOVERY_DEBOUNCE_MS = 750;
+const RESUME_RECOVERY_BURSTS_MS = Object.freeze([0, 1000, 4000]);
+const RESUME_RELOAD_DELAY_MS = 2500;
+${fnSource}
+globalThis.__fn = triggerResumeRecovery;
+`,
+			{
+				Date: { now: (() => {
+					let now = 1000;
+					return () => now;
+				})() },
+				setTimeout: (fn, delay) => {
+					timers.push({ fn, delay });
+					return timers.length;
+				},
+				attemptSocketReconnect: () => {
+					reconnectCalls++;
+				},
+				sendPing: () => {
+					pingCalls++;
+					return Promise.resolve();
+				},
+				reloadForCriticalBoot: () => {
+					reloadChecks++;
+					return false;
+				},
+				Object,
+				Promise,
+			},
+			'boot-triggerResumeRecovery.js',
+		);
+
+		sandbox.__fn('focus');
+		sandbox.__fn('pageshow');
+
+		assert.deepEqual(
+			timers.map(t => t.delay),
+			[0, 1000, 4000, 2500],
+		);
+		for (const timer of timers) {
+			timer.fn();
+		}
+		assert.equal(reconnectCalls, 3);
+		assert.equal(pingCalls, 3);
+		assert.equal(reloadChecks, 1);
 	});
 
 	it('initConnectionPanelInteraction registers hover, touch, and outside-click handlers', async function () {

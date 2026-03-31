@@ -507,6 +507,26 @@ let connPanelData = {};
 const CONN_TOAST_ID = 'msghub-connection-status';
 /** True while the "connection lost" toast is active; guards the reconnect toast. */
 let connLostToastActive = false;
+/** Core CSS assets that failed during boot. */
+let bootCssFailures = [];
+/** Per-panel fatal boot errors, keyed by panel id. */
+const bootPanelFailures = new Map();
+/** Fatal boot error outside panel-local failures. */
+let bootFatalErrorMessage = '';
+/** Session storage key guarding automatic reload loops. */
+const AUTO_RELOAD_SESSION_KEY = 'msghub.adminTab.autoReloadAt';
+/** Minimum time between automatic broken-boot reloads in one tab session. */
+const AUTO_RELOAD_COOLDOWN_MS = 2 * 60_000;
+/** Aggressive reconnect retries after the tab/browser becomes active again. */
+const RESUME_RECOVERY_BURSTS_MS = Object.freeze([0, 1000, 4000]);
+/** Delay before a broken boot is escalated to a hard reload. */
+const RESUME_RELOAD_DELAY_MS = 2500;
+/** Debounce window for clustered resume/browser events. */
+const RESUME_RECOVERY_DEBOUNCE_MS = 750;
+/** Monotonic token cancelling outdated resume-recovery timers. */
+let resumeRecoveryToken = 0;
+/** Last time a resume-recovery burst was started. */
+let lastResumeRecoveryAt = 0;
 
 /**
  * Applies `data-i18n` text to static DOM nodes.
@@ -520,6 +540,92 @@ function applyStaticI18n() {
 		el.textContent = pickText(key);
 	}
 	updateDocumentTitle();
+}
+
+/**
+ * Records a fatal panel boot failure for later recovery decisions.
+ *
+ * @param {string} panelId - Panel id.
+ * @param {any} err - Error object or value.
+ */
+function recordPanelBootFailure(panelId, err) {
+	const id = String(panelId || '').trim();
+	if (!id) {
+		return;
+	}
+	bootPanelFailures.set(id, String(err?.message || err || 'Unknown error'));
+}
+
+/**
+ * Clears a previously recorded panel boot failure.
+ *
+ * @param {string} panelId - Panel id.
+ */
+function clearPanelBootFailure(panelId) {
+	const id = String(panelId || '').trim();
+	if (!id) {
+		return;
+	}
+	bootPanelFailures.delete(id);
+}
+
+/**
+ * Detects whether the current boot state is clearly broken and should be healed.
+ *
+ * Only hard invariants are considered here: failed core CSS assets, explicit panel
+ * boot failures, or a top-level boot error.
+ *
+ * @returns {boolean} `true` when the boot is in a clearly broken state.
+ */
+function hasCriticalBootFailure() {
+	return bootCssFailures.length > 0 || bootPanelFailures.size > 0 || !!bootFatalErrorMessage;
+}
+
+/**
+ * Checks and records whether a hard auto-reload is allowed in this tab session.
+ *
+ * @returns {boolean} `true` when an auto-reload may proceed now.
+ */
+function acquireAutoReloadLease() {
+	try {
+		const storage = window?.sessionStorage;
+		if (!storage || typeof storage.getItem !== 'function' || typeof storage.setItem !== 'function') {
+			return true;
+		}
+		const now = Date.now();
+		const raw = storage.getItem(AUTO_RELOAD_SESSION_KEY);
+		const lastAt = raw == null ? Number.NaN : Number(raw);
+		if (Number.isFinite(lastAt) && now - lastAt < AUTO_RELOAD_COOLDOWN_MS) {
+			return false;
+		}
+		storage.setItem(AUTO_RELOAD_SESSION_KEY, String(now));
+		return true;
+	} catch {
+		return true;
+	}
+}
+
+/**
+ * Reloads the page when the boot is clearly broken and the session budget allows it.
+ *
+ * @param {string} reason - Human-readable recovery reason for logs.
+ * @returns {boolean} `true` when a reload was triggered.
+ */
+function reloadForCriticalBoot(reason) {
+	if (!hasCriticalBootFailure() || !acquireAutoReloadLease()) {
+		return false;
+	}
+	try {
+		api?.log?.warn?.(`AdminTab auto-reload due to broken boot: ${String(reason || 'unknown_reason')}`);
+	} catch {
+		// ignore
+	}
+	try {
+		window.location.reload();
+		return true;
+	} catch {
+		return false;
+	}
 }
 
 /**
@@ -723,6 +829,7 @@ async function initPanelsForComposition(panelIds) {
 		try {
 			await loadJsFilesSequential(jsList);
 		} catch (err) {
+			recordPanelBootFailure(panelId, err);
 			renderPanelBootError(panelId, err);
 			try {
 				ui?.toast?.({ text: String(err?.message || err), variant: 'danger' });
@@ -734,10 +841,12 @@ async function initPanelsForComposition(panelIds) {
 
 		try {
 			const section = initPanelById(panelId);
+			clearPanelBootFailure(panelId);
 			if (section && msghubSocket?.connected) {
 				section?.onConnect?.();
 			}
 		} catch (err) {
+			recordPanelBootFailure(panelId, err);
 			renderPanelBootError(panelId, err);
 			try {
 				ui?.toast?.({ text: String(err?.message || err), variant: 'danger' });
@@ -881,6 +990,9 @@ function ensureBooted() {
 	if (bootPromise) {
 		return bootPromise;
 	}
+	bootCssFailures = [];
+	bootPanelFailures.clear();
+	bootFatalErrorMessage = '';
 	bootPromise = Promise.resolve()
 		.then(async () => {
 			// Wildcard: discover must run before buildLayoutFromRegistry so tab list is known.
@@ -900,6 +1012,7 @@ function ensureBooted() {
 
 			await ensureAdminI18nLoaded();
 			const cssRes = await loadCssFiles(assets.css);
+			bootCssFailures = Array.isArray(cssRes?.failed) ? cssRes.failed.slice() : [];
 			if (cssRes?.failed?.length) {
 				ui?.toast?.({ text: `Failed to load CSS: ${cssRes.failed.join(', ')}`, variant: 'danger' });
 			}
@@ -974,8 +1087,9 @@ function ensureBooted() {
 			}
 		})
 		.catch(err => {
+			bootFatalErrorMessage = String(err?.message || err || 'Unknown boot error');
 			try {
-				ui?.toast?.({ text: String(err?.message || err), variant: 'danger' });
+				ui?.toast?.({ text: bootFatalErrorMessage, variant: 'danger' });
 			} catch {
 				// ignore
 			}
@@ -986,6 +1100,24 @@ function ensureBooted() {
 // Start the initial boot as soon as the DOM is ready.
 window.addEventListener('DOMContentLoaded', () => {
 	void ensureBooted();
+});
+
+// Mobile suspend/resume and browser re-entry often leave the transport half-dead.
+// Nudge the socket and run an immediate ping burst on the most relevant resume events.
+document.addEventListener('visibilitychange', () => {
+	if (document.hidden) {
+		return;
+	}
+	triggerResumeRecovery('visibilitychange');
+});
+window.addEventListener('pageshow', () => {
+	triggerResumeRecovery('pageshow');
+});
+window.addEventListener('focus', () => {
+	triggerResumeRecovery('focus');
+});
+window.addEventListener('online', () => {
+	triggerResumeRecovery('online');
 });
 
 let connectWarmupToken = 0;
@@ -1054,6 +1186,63 @@ function triggerWarmupReconnect() {
 const PING_INTERVAL_MS = 15_000;
 const PING_TIMEOUT_MS = 5_000;
 let pingToken = 0;
+
+/**
+ * Actively nudges the socket transport to reconnect after mobile suspend/resume.
+ *
+ * @returns {boolean} `true` when a reconnect/open call was attempted.
+ */
+function attemptSocketReconnect() {
+	try {
+		if (!msghubSocket || msghubSocket.connected) {
+			return !!msghubSocket?.connected;
+		}
+		if (typeof msghubSocket.connect === 'function') {
+			msghubSocket.connect();
+			return true;
+		}
+		if (typeof msghubSocket.open === 'function') {
+			msghubSocket.open();
+			return true;
+		}
+		if (typeof msghubSocket.io?.open === 'function') {
+			msghubSocket.io.open();
+			return true;
+		}
+	} catch {
+		// ignore
+	}
+	return false;
+}
+
+/**
+ * Starts an aggressive reconnect burst when the tab/browser becomes active again.
+ *
+ * @param {string} reason - Resume trigger source (`focus`, `pageshow`, ...).
+ */
+function triggerResumeRecovery(reason) {
+	const now = Date.now();
+	if (now - lastResumeRecoveryAt < RESUME_RECOVERY_DEBOUNCE_MS) {
+		return;
+	}
+	lastResumeRecoveryAt = now;
+	const token = ++resumeRecoveryToken;
+	for (const delayMs of RESUME_RECOVERY_BURSTS_MS) {
+		setTimeout(() => {
+			if (resumeRecoveryToken !== token) {
+				return;
+			}
+			attemptSocketReconnect();
+			void sendPing();
+		}, delayMs);
+	}
+	setTimeout(() => {
+		if (resumeRecoveryToken !== token) {
+			return;
+		}
+		reloadForCriticalBoot(reason);
+	}, RESUME_RELOAD_DELAY_MS);
+}
 
 /**
  * Transitions to online state and notifies all panels.
