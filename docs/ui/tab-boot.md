@@ -39,7 +39,7 @@ The shell startup is roughly:
 7. Load composition CSS, activate the initial panel (`initTabs()` for tabbed layouts, `activatePanel(...)` for single layouts), and initialize native panels.
 8. Discover matching plugin panel contributions and enable their tab slots.
 9. Register lazy-mount handling for later plugin-tab switches.
-10. Keep connection state current via ping, resume-triggered reconnect bursts, socket reconnect handling, and reconnect warmup.
+10. Keep connection state current via ping, guarded resume-triggered recovery checks, socket reconnect handling, and reconnect warmup.
 
 Important: plugin panel activation after discover is resolved in this order:
 
@@ -132,12 +132,12 @@ became active during boot before the later `msghub:tabSwitch` listener could obs
 - connection info panel contents
 - disconnect/reconnect toasts
 - periodic `admin.ping`
-- resume-triggered reconnect bursts on `visibilitychange -> visible`, `pageshow`, `focus`, and `online`
+- resume-triggered recovery after a real background/return cycle (`visibilitychange -> visible`) and `pageshow` from bfcache (`event.persisted === true`)
 - reconnect warmup that waits until `api.constants.get()` succeeds again
 
 The UI is treated as online only after a successful ping, not just after a transport-level socket reconnect.
-On mobile/browser resume, `boot.js` actively nudges the socket transport and sends a short burst of immediate pings
-instead of waiting for the normal periodic timer.
+On mobile/browser resume, `boot.js` first nudges the socket transport and then runs delayed recovery checks,
+so normal initial page load is not treated like a resume event.
 
 ### 6) Provide the global editable-field context menu
 
@@ -186,8 +186,6 @@ Panels receive:
 - `contextmenu`
 - `visibilitychange`
 - `pageshow`
-- `focus`
-- `online`
 - socket `connect`
 - socket `disconnect`
 - periodic ping timers
@@ -206,6 +204,7 @@ It also triggers an unconditional initial `sendPing()` during module load, befor
 - `ctx.elements` exposes getters for `connection`, `pluginsRoot`, `messagesRoot`, and `statsRoot`. In the current shell, `statsRoot` has no matching mount point in [`admin/tab.html`](../../admin/tab.html) and currently resolves to `null`.
 - Transport reconnect is not treated as sufficient proof of health. The shell waits for a successful ping before switching to online UX.
 - Resume recovery is shell-owned and stays internal to `boot.js`; native panels do not receive a dedicated `onResume()` hook.
+- Resume recovery is armed only after the page was actually backgrounded; a normal reload/open must not trigger that path.
 - Reconnect warmup is centralized here. Panels are not expected to implement their own retry loop for core shell availability.
 - Clearly broken core boot states (for example failed core CSS loads or recorded panel boot errors) may escalate to one guarded hard reload per tab session window.
 - `pickText()` is the shell-side text normalizer for plain strings, admin i18n keys, and language maps such as `{ en, de }`.

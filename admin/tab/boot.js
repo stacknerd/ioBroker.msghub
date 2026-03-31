@@ -517,8 +517,8 @@ let bootFatalErrorMessage = '';
 const AUTO_RELOAD_SESSION_KEY = 'msghub.adminTab.autoReloadAt';
 /** Minimum time between automatic broken-boot reloads in one tab session. */
 const AUTO_RELOAD_COOLDOWN_MS = 2 * 60_000;
-/** Aggressive reconnect retries after the tab/browser becomes active again. */
-const RESUME_RECOVERY_BURSTS_MS = Object.freeze([0, 1000, 4000]);
+/** Delayed recovery checks after a real resume/background return. */
+const RESUME_RECOVERY_BURSTS_MS = Object.freeze([1200, 4000]);
 /** Delay before a broken boot is escalated to a hard reload. */
 const RESUME_RELOAD_DELAY_MS = 2500;
 /** Debounce window for clustered resume/browser events. */
@@ -527,6 +527,8 @@ const RESUME_RECOVERY_DEBOUNCE_MS = 750;
 let resumeRecoveryToken = 0;
 /** Last time a resume-recovery burst was started. */
 let lastResumeRecoveryAt = 0;
+/** True after the page was backgrounded at least once and is eligible for resume recovery. */
+let resumeRecoveryArmed = false;
 
 /**
  * Applies `data-i18n` text to static DOM nodes.
@@ -1103,21 +1105,23 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 // Mobile suspend/resume and browser re-entry often leave the transport half-dead.
-// Nudge the socket and run an immediate ping burst on the most relevant resume events.
+// Only react after the page was actually backgrounded; normal initial page load must stay quiet.
 document.addEventListener('visibilitychange', () => {
 	if (document.hidden) {
+		resumeRecoveryArmed = true;
 		return;
 	}
+	if (!resumeRecoveryArmed) {
+		return;
+	}
+	resumeRecoveryArmed = false;
 	triggerResumeRecovery('visibilitychange');
 });
-window.addEventListener('pageshow', () => {
+window.addEventListener('pageshow', event => {
+	if (!event?.persisted) {
+		return;
+	}
 	triggerResumeRecovery('pageshow');
-});
-window.addEventListener('focus', () => {
-	triggerResumeRecovery('focus');
-});
-window.addEventListener('online', () => {
-	triggerResumeRecovery('online');
 });
 
 let connectWarmupToken = 0;
@@ -1227,12 +1231,16 @@ function triggerResumeRecovery(reason) {
 	}
 	lastResumeRecoveryAt = now;
 	const token = ++resumeRecoveryToken;
+	attemptSocketReconnect();
 	for (const delayMs of RESUME_RECOVERY_BURSTS_MS) {
 		setTimeout(() => {
 			if (resumeRecoveryToken !== token) {
 				return;
 			}
-			attemptSocketReconnect();
+			if (!msghubSocket?.connected) {
+				attemptSocketReconnect();
+				return;
+			}
 			void sendPing();
 		}, delayMs);
 	}

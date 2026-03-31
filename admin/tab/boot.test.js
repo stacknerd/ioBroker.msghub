@@ -196,8 +196,6 @@ globalThis.__execCommandSafe = execCommandSafe;
 		assert.match(source, /\bmsghubSocket\.on\(\s*['"]disconnect['"]/);
 		assert.match(source, /visibilitychange/);
 		assert.match(source, /pageshow/);
-		assert.match(source, /window\.addEventListener\(\s*['"]focus['"]/);
-		assert.match(source, /window\.addEventListener\(\s*['"]online['"]/);
 	});
 
 	it('keeps composition resolution delegated to shared layout helpers', async function () {
@@ -761,7 +759,7 @@ globalThis.__fn = reloadForCriticalBoot;
 		assert.equal(warnings.length, 1);
 	});
 
-	it('triggerResumeRecovery debounces clustered resume events and schedules reconnect bursts', async function () {
+	it('triggerResumeRecovery debounces clustered resume events and schedules delayed resume checks', async function () {
 		const source = await readRepoFile('admin/tab/boot.js');
 		const fnSource = extractFunctionSource(source, 'triggerResumeRecovery');
 		const timers = [];
@@ -773,7 +771,7 @@ globalThis.__fn = reloadForCriticalBoot;
 let lastResumeRecoveryAt = 0;
 let resumeRecoveryToken = 0;
 const RESUME_RECOVERY_DEBOUNCE_MS = 750;
-const RESUME_RECOVERY_BURSTS_MS = Object.freeze([0, 1000, 4000]);
+const RESUME_RECOVERY_BURSTS_MS = Object.freeze([1200, 4000]);
 const RESUME_RELOAD_DELAY_MS = 2500;
 ${fnSource}
 globalThis.__fn = triggerResumeRecovery;
@@ -790,6 +788,7 @@ globalThis.__fn = triggerResumeRecovery;
 				attemptSocketReconnect: () => {
 					reconnectCalls++;
 				},
+				msghubSocket: { connected: true },
 				sendPing: () => {
 					pingCalls++;
 					return Promise.resolve();
@@ -804,18 +803,18 @@ globalThis.__fn = triggerResumeRecovery;
 			'boot-triggerResumeRecovery.js',
 		);
 
-		sandbox.__fn('focus');
+		sandbox.__fn('visibilitychange');
 		sandbox.__fn('pageshow');
 
 		assert.deepEqual(
 			timers.map(t => t.delay),
-			[0, 1000, 4000, 2500],
+			[1200, 4000, 2500],
 		);
 		for (const timer of timers) {
 			timer.fn();
 		}
-		assert.equal(reconnectCalls, 3);
-		assert.equal(pingCalls, 3);
+		assert.equal(reconnectCalls, 1);
+		assert.equal(pingCalls, 2);
 		assert.equal(reloadChecks, 1);
 	});
 
