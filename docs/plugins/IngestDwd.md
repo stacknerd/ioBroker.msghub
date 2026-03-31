@@ -75,8 +75,10 @@ Common options:
 
 When enabled, a warning is included when:
 
-- `altitudeStart` and `altitudeEnd` are both present and `altitudeStart <= altitudeM <= altitudeEnd` (inclusive), or
-- either altitude boundary is missing/null (treated as “always relevant”).
+- both bounds are present and `altitudeStart <= altitudeM <= altitudeEnd` (inclusive), or
+- `altitudeStart` is `null` and `altitudeM <= altitudeEnd`, or
+- `altitudeEnd` is `null` and `altitudeStart <= altitudeM`, or
+- both bounds are `null` (treated as unbounded / always relevant).
 
 ### Actions created
 
