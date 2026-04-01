@@ -91,10 +91,11 @@ new CustomEvent('msghub:tabSwitch', { detail: { from, to } })
 
 That event is used by other shell code, especially plugin-panel lazy mounting and overlay cleanup.
 
-`updateDocumentTitle()` follows the active panel:
+`updateDocumentTitle()` follows the active panel descriptor:
 
-- tabbed layouts: use the visible tab label, so translated native labels and hydrated plugin labels are reflected automatically
-- single layouts: resolve the native panel `titleKey` from the registry because no tab DOM exists
+- `pickText(descriptor.label)` resolves the label from the `PanelDescriptor` stored at boot/hydration time
+- format: `'<label> - MessageHub'`; when no descriptor is available: `'MessageHub'`
+- calling with no arguments re-derives title from `panelDescriptors.get(currentActivePanelId)`, enabling i18n resync after a language change without passing an explicit descriptor
 
 ### 3) Load panel assets in a predictable way
 
@@ -155,11 +156,62 @@ Initializes the tab strip and returns:
 Activates one rendered panel container by DOM id (for example `tab-messages`), updates tab state when present,
 updates panel visibility, dispatches `msghub:tabSwitch` on real panel changes, and keeps `document.title` in sync.
 
-### `updateDocumentTitle(panelId?)`
+Passes the `PanelDescriptor` for `panelId` explicitly to `updateDocumentTitle`.
 
-Derives `document.title` from the active panel.
-If a matching tab exists, its visible label is used.
-Otherwise, the function falls back to the native panel `titleKey` from the registry.
+### `updateDocumentTitle(descriptor?)`
+
+Derives `document.title` from a `PanelDescriptor` and manages PWA/install head meta tags.
+Format: `'<label> - MessageHub'` when a label is resolved, or `'MessageHub'` when no descriptor is available.
+Label resolution goes through `pickText(descriptor.label)`, which handles i18n keys and legacy `{en, de}` language maps.
+
+When called with no argument, falls back to `panelDescriptors.get(currentActivePanelId)`. This allows
+`applyStaticI18n()` to call `updateDocumentTitle()` with no args after a language change and still
+re-derive the correct title for the currently active panel.
+
+When `descriptor.app` is present, `applyAppHeadMeta(descriptor.app)` sets or updates:
+- `<meta name="theme-color">` (when `app.themeColor` is a string)
+- `<meta name="application-name">` (when `app.name` is present, resolved via `pickText`)
+- `<meta name="apple-mobile-web-app-title">` (`app.shortName ?? app.name`, resolved via `pickText`)
+
+When `descriptor.app` is absent (including on every panel switch away from an app-panel),
+`resetAppHeadMeta()` fully removes all three managed meta tags from `document.head`. Tags are
+removed rather than emptied, because an empty `theme-color` would still override browser defaults.
+
+Both `applyAppHeadMeta` and `resetAppHeadMeta` are idempotent: calling them multiple times without
+intermediate DOM changes produces the same state as a single call.
+
+### `normalizeCorePanel(registryKey, def)`
+
+Converts a raw native panel definition from `registry.panels` into a canonical `PanelDescriptor`.
+The resulting object has: `id`, `label`, `ui` (kind, loader, initGlobal, css, js), optional `surface`,
+optional `category`, and an optional `app` block. Also sets the private `_registryKey` field used by
+`computeAssetsForComposition`.
+
+### `normalizePluginPanel(contrib, pluginRef)`
+
+Converts a plugin contribution object and its structured registry ref into a canonical `PanelDescriptor`.
+The resulting id follows the pattern `tab-plugin-<pluginType>-<instanceId>-<panelId>`.
+`ui.kind` is `'plugin'`, `ui.loader` is `'esm'`. `label` and `description` carry legacy `{en, de}`
+objects from the manifest (current IngestStates format) and are bridged via `pickText()`. `ui.entry` is not populated — the current
+discover RPC returns only `bundle.hash`, not `bundle.entry`.
+
+Optional fields are passed through from `contrib` when present:
+
+- `surface` (`'admin' | 'web' | 'both'`) — eligibility gate: where may this panel appear. Not a
+  security concept.
+- `category` (`'dashboard' | 'user' | 'admin' | ...`) — semantic group of the panel; basis for future
+  accent-bar / color coding. Not a styling field and carries no color values.
+- `app` — optional PWA / install metadata block (same `AppBlock` schema as core panels).
+  Required within `app`: `name` (i18n key string), `url` (canonical URL string). Optional: `shortName`,
+  `themeColor`, `icons` (paths package-root-relative per RFC-0012). When present,
+  `updateDocumentTitle` will call `applyAppHeadMeta` with it. When absent, the field is `undefined`
+  on the descriptor — no error, no head-meta update.
+
+### `registerPanelDescriptor(descriptor)`
+
+Stores a `PanelDescriptor` in the module-private `panelDescriptors` map keyed by `descriptor.id`.
+Called from `buildLayoutFromRegistry` for native panels and from `hydratePluginPanels` (boot.js) for plugin panels.
+Provides the lookup needed by the no-arg form of `updateDocumentTitle`.
 
 ### `buildLayoutFromRegistry({ contributions })`
 
@@ -197,7 +249,11 @@ Writes a visible error state directly into the affected panel container.
 - Plugin tabs render in a disabled placeholder state until discover hydration confirms availability.
 - `activatePanel(...)` is the shared activation path for both `tabs` and `single` layouts.
 - `initTabs()` skips disabled tabs when resolving the initial active panel from hash, markup, and fallback defaults.
-- `document.title` is derived from the active panel: from the visible tab label when tabs exist, otherwise from the native panel registry title key.
+- `document.title` is derived from the active panel via its `PanelDescriptor.label` resolved through `pickText()`. Format: `'<label> - MessageHub'`.
+- `applyAppHeadMeta` / `resetAppHeadMeta` manage exactly three head meta tags (`theme-color`, `application-name`, `apple-mobile-web-app-title`). Tags are fully removed (not emptied) on panel switch so no stale values override browser defaults. `<link rel="manifest">` is out of scope for this layer.
+- `panelDescriptors` is a module-private `Map<tabId, PanelDescriptor>`. It is not a global; `const` at script top-level does not become `window.*`.
+- `normalizeCorePanel` is layout-internal and not a global. Only `normalizePluginPanel`, `registerPanelDescriptor` are exposed as globals (implicit via top-level function declarations).
+- `pickText` is provided by `runtime.js` (loaded before `layout.js`). `layout.js` consumes it as a global without redeclaring it.
 - `loadCssFiles()` deduplicates URLs and reports failures instead of throwing.
 - `loadJsFilesSequential()` preserves script order and throws on the first failed script, because many panel files depend on earlier globals.
 - Theme syncing is intentionally redundant: message, storage, polling, and mutation observation all feed the same final theme setter.

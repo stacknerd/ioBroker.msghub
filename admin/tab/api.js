@@ -291,13 +291,28 @@ function detectHostExpertMode(argsExpert) {
  * @returns {object} Frozen API surface (`ctx.api`).
  */
 function createAdminApi({ msghubRequest, msghubSocket, adapterInstance, lang, t, pickText, ui }) {
-	const viewId = typeof resolveViewId === 'function' ? resolveViewId() : 'adminTab';
-	const composition = typeof getActiveComposition === 'function' ? getActiveComposition() : null;
-	// Filter to string entries only — structured plugin panel refs are not native panels.
-	const panelIds = Array.isArray(composition?.panels)
-		? composition.panels.filter(v => typeof v === 'string' && v)
-		: [];
-	const defaultPanelId = typeof composition?.defaultPanel === 'string' ? composition.defaultPanel : '';
+	// Panel mode: args.panel takes precedence over composition resolution.
+	// Guard: args may be undeclared in early-boot or test contexts.
+	const rawPanelArg = typeof args !== 'undefined' && typeof args?.panel === 'string' ? args.panel.trim() : '';
+	const isPanelMode = !!rawPanelArg;
+	let viewId, layout, deviceMode, panelIds, defaultPanelId;
+	if (isPanelMode) {
+		const panelTabId = rawPanelArg;
+		const panelKey = panelTabId.slice('tab-'.length);
+		viewId = null;
+		layout = 'single';
+		deviceMode = 'pc';
+		panelIds = [panelKey];
+		defaultPanelId = panelKey;
+	} else {
+		viewId = typeof resolveViewId === 'function' ? resolveViewId() : 'adminTab';
+		const composition = typeof getActiveComposition === 'function' ? getActiveComposition() : null;
+		// Filter to string entries only — structured plugin panel refs are not native panels.
+		panelIds = Array.isArray(composition?.panels) ? composition.panels.filter(v => typeof v === 'string' && v) : [];
+		defaultPanelId = typeof composition?.defaultPanel === 'string' ? composition.defaultPanel : '';
+		layout = composition?.layout || 'tabs';
+		deviceMode = composition?.deviceMode || 'pc';
+	}
 
 	const logPrefix = `msghub:${viewId}`;
 	const log = Object.freeze({
@@ -439,8 +454,8 @@ function createAdminApi({ msghubRequest, msghubSocket, adapterInstance, lang, t,
 	// Host metadata gives panels context about the active composition and connection state.
 	const host = Object.freeze({
 		viewId,
-		layout: composition?.layout || 'tabs',
-		deviceMode: composition?.deviceMode || 'pc',
+		layout,
+		deviceMode,
 		panels: Object.freeze(panelIds),
 		defaultPanel: defaultPanelId,
 		adapterInstance,

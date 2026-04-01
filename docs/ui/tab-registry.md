@@ -31,17 +31,39 @@ The current native panels are:
 - `messages`
 - `plugins`
 
-Each native panel definition contains:
+Each native panel definition follows the canonical `PanelDescriptor` shape:
 
-- `id`
-- `mountId`
-- `titleKey`
-- `initGlobal`
-- `assets.css`
-- `assets.js`
+- `id` — canonical `tab-...` identifier (e.g. `'tab-messages'`)
+- `label` — i18n key string for the panel label
+- `ui.kind` — always `'core'` for native panels
+- `ui.loader` — always `'globals'` for native panels
+- `ui.initGlobal` — name of the global init object (e.g. `'MsghubAdminTabMessages'`)
+- `ui.css` — array of CSS asset paths relative to `admin/`
+- `ui.js` — array of JS asset paths relative to `admin/`
+- `surface?` — optional; `'admin' | 'web' | 'both'` — eligibility gate (not a security concept)
+- `category?` — optional; semantic group (not a styling field; carries no color values)
+- `app?` — optional; PWA / install metadata (see below)
 
 That gives the shell enough information to render the panel container, label the tab,
 load the panel assets, and call the panel's `init(ctx)` entrypoint.
+
+#### Optional `app` block
+
+When a panel is intended to be installable as a PWA or surfaced in a standalone web context,
+its descriptor may carry an `app` block. No existing core panel has an `app` block; the field
+is reserved for future installable app panels.
+
+Required fields within `app`:
+
+- `name` — i18n key string; used for `application-name` meta and install dialog
+- `url` — canonical URL string for the standalone PWA entry point
+
+Optional fields within `app`:
+
+- `shortName` — shorter variant; falls back to `name` when absent
+- `themeColor` — CSS color string for the `theme-color` meta tag
+- `icons` — array of icon descriptors; paths are package-root-relative per RFC-0012
+  (no host-side path assumptions)
 
 ### 2) Define view compositions
 

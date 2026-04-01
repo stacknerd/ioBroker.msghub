@@ -29,19 +29,60 @@ describe('admin/tab/registry.js', function () {
 
 		for (const panelId of panelIds) {
 			const panel = registry.panels[panelId];
-			assert.equal(panel.id, panelId);
-			assert.ok(typeof panel.mountId === 'string' && panel.mountId.trim());
-			assert.ok(typeof panel.titleKey === 'string' && panel.titleKey.trim());
-			assert.ok(typeof panel.initGlobal === 'string' && panel.initGlobal.trim());
-			assert.ok(panel.assets && typeof panel.assets === 'object');
-			assert.ok(Array.isArray(panel.assets.css));
-			assert.ok(Array.isArray(panel.assets.js));
+			// id must be the canonical tab-id form, not the short registry key.
+			assert.equal(panel.id, `tab-${panelId}`);
+			assert.ok(typeof panel.label === 'string' && panel.label.trim());
+			assert.ok(panel.ui && typeof panel.ui === 'object');
+			assert.equal(panel.ui.kind, 'core');
+			assert.equal(panel.ui.loader, 'globals');
+			assert.ok(typeof panel.ui.initGlobal === 'string' && panel.ui.initGlobal.trim());
+			assert.ok(Array.isArray(panel.ui.css));
+			assert.ok(Array.isArray(panel.ui.js));
 			assert.ok(Object.isFrozen(panel));
-			assert.ok(Object.isFrozen(panel.assets));
-			assert.ok(Object.isFrozen(panel.assets.css));
-			assert.ok(Object.isFrozen(panel.assets.js));
+			assert.ok(Object.isFrozen(panel.ui));
+			assert.ok(Object.isFrozen(panel.ui.css));
+			assert.ok(Object.isFrozen(panel.ui.js));
+			// Old fields must be absent.
+			assert.equal(panel.mountId, undefined);
+			assert.equal(panel.titleKey, undefined);
+			assert.equal(panel.assets, undefined);
+			assert.equal(panel.initGlobal, undefined);
 
-			for (const asset of [...panel.assets.css, ...panel.assets.js]) {
+			// If panel carries an optional app block, validate its required and optional fields.
+			if (panel.app !== undefined) {
+				assert.ok(panel.app && typeof panel.app === 'object', `panel '${panelId}': app must be an object`);
+				assert.ok(
+					typeof panel.app.name === 'string' && panel.app.name.trim(),
+					`panel '${panelId}': app.name must be a non-empty string`,
+				);
+				assert.ok(
+					typeof panel.app.url === 'string' && panel.app.url.trim(),
+					`panel '${panelId}': app.url must be a non-empty string`,
+				);
+				if (panel.app.shortName !== undefined) {
+					assert.ok(
+						typeof panel.app.shortName === 'string' && panel.app.shortName.trim(),
+						`panel '${panelId}': app.shortName must be a non-empty string when present`,
+					);
+				}
+				if (panel.app.themeColor !== undefined) {
+					assert.ok(
+						typeof panel.app.themeColor === 'string',
+						`panel '${panelId}': app.themeColor must be a string when present`,
+					);
+				}
+				if (panel.app.icons !== undefined) {
+					assert.ok(Array.isArray(panel.app.icons), `panel '${panelId}': app.icons must be an array when present`);
+					for (const icon of panel.app.icons) {
+						assert.ok(
+							icon && typeof icon === 'object' && typeof icon.src === 'string' && icon.src.trim(),
+							`panel '${panelId}': each app.icons entry must have a non-empty src string`,
+						);
+					}
+				}
+			}
+
+			for (const asset of [...panel.ui.css, ...panel.ui.js]) {
 				const fullPath = path.join(repoRoot, 'admin', String(asset));
 				try {
 					await fs.access(fullPath);
@@ -101,7 +142,7 @@ describe('admin/tab/registry.js', function () {
 
 		// registry.panels must not contain any plugin panel entries.
 		for (const [id, panel] of Object.entries(registry.panels)) {
-			assert.ok(typeof id === 'string' && panel.mountId, `registry.panels entry '${id}' must be a native panel definition`);
+			assert.ok(typeof id === 'string' && panel.ui?.kind === 'core', `registry.panels entry '${id}' must be a native core panel definition`);
 		}
 	});
 
@@ -117,6 +158,115 @@ describe('admin/tab/registry.js', function () {
 		assert.equal(composition.layout, 'single');
 		assert.deepEqual(JSON.parse(JSON.stringify(composition.panels)), ['messages']);
 		assert.equal(composition.defaultPanel, 'messages');
+	});
+
+	describe('app block schema validator', function () {
+		/**
+		 * Applies the same validation rules as the panel loop above.
+		 * Throws with a descriptive message when the app block violates schema constraints.
+		 */
+		function validateAppBlock(panel) {
+			if (panel.app === undefined) {
+				return; // absent is valid
+			}
+			if (!panel.app || typeof panel.app !== 'object') {
+				throw new Error('app must be an object');
+			}
+			if (typeof panel.app.name !== 'string' || !panel.app.name.trim()) {
+				throw new Error('app.name is required and must be a non-empty string');
+			}
+			if (typeof panel.app.url !== 'string' || !panel.app.url.trim()) {
+				throw new Error('app.url is required and must be a non-empty string');
+			}
+			if (panel.app.shortName !== undefined) {
+				if (typeof panel.app.shortName !== 'string' || !panel.app.shortName.trim()) {
+					throw new Error('app.shortName must be a non-empty string when present');
+				}
+			}
+			if (panel.app.themeColor !== undefined) {
+				if (typeof panel.app.themeColor !== 'string') {
+					throw new Error('app.themeColor must be a string when present');
+				}
+			}
+			if (panel.app.icons !== undefined) {
+				if (!Array.isArray(panel.app.icons)) {
+					throw new Error('app.icons must be an array when present');
+				}
+				for (const icon of panel.app.icons) {
+					if (!icon || typeof icon !== 'object' || typeof icon.src !== 'string' || !icon.src.trim()) {
+						throw new Error('each app.icons entry must have a non-empty src string');
+					}
+				}
+			}
+		}
+
+		const basePanel = {
+			id: 'tab-test',
+			label: 'msghub.i18n.some.label',
+			ui: { kind: 'core', loader: 'globals', initGlobal: 'MsghubAdminTabTest', css: [], js: [] },
+		};
+
+		it('panel without app block passes silently', function () {
+			assert.doesNotThrow(() => validateAppBlock({ ...basePanel }));
+		});
+
+		it('panel with a valid app block (name + url) passes', function () {
+			const panel = { ...basePanel, app: { name: 'msghub.i18n.some.label', url: 'https://example.com' } };
+			assert.doesNotThrow(() => validateAppBlock(panel));
+		});
+
+		it('app block without name is rejected', function () {
+			const panel = { ...basePanel, app: { url: 'https://example.com' } };
+			assert.throws(() => validateAppBlock(panel), /name/);
+		});
+
+		it('app block without url is rejected', function () {
+			const panel = { ...basePanel, app: { name: 'msghub.i18n.some.label' } };
+			assert.throws(() => validateAppBlock(panel), /url/);
+		});
+
+		it('app block without shortName passes (shortName is optional)', function () {
+			// Valid app block with name and url only; absence of shortName must not throw.
+			const panel = { ...basePanel, app: { name: 'msghub.i18n.some.label', url: 'https://example.com' } };
+			assert.doesNotThrow(() => validateAppBlock(panel));
+		});
+
+		it('app block with all optional fields present and valid passes', function () {
+			const panel = {
+				...basePanel,
+				app: {
+					name: 'msghub.i18n.some.label',
+					url: 'https://example.com',
+					shortName: 'msghub.i18n.some.short',
+					themeColor: '#1f6a53',
+					icons: [{ src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png' }],
+				},
+			};
+			assert.doesNotThrow(() => validateAppBlock(panel));
+		});
+
+		it('app.shortName present but empty is rejected', function () {
+			const panel = { ...basePanel, app: { name: 'msghub.i18n.some.label', url: 'https://example.com', shortName: '  ' } };
+			assert.throws(() => validateAppBlock(panel), /shortName/);
+		});
+
+		it('app.themeColor present but non-string is rejected', function () {
+			const panel = { ...basePanel, app: { name: 'msghub.i18n.some.label', url: 'https://example.com', themeColor: 42 } };
+			assert.throws(() => validateAppBlock(panel), /themeColor/);
+		});
+
+		it('app.icons present but not an array is rejected', function () {
+			const panel = { ...basePanel, app: { name: 'msghub.i18n.some.label', url: 'https://example.com', icons: 'bad' } };
+			assert.throws(() => validateAppBlock(panel), /icons/);
+		});
+
+		it('app.icons element without src is rejected', function () {
+			const panel = {
+				...basePanel,
+				app: { name: 'msghub.i18n.some.label', url: 'https://example.com', icons: [{ sizes: '192x192' }] },
+			};
+			assert.throws(() => validateAppBlock(panel), /src/);
+		});
 	});
 
 	it('is idempotent when loaded multiple times', async function () {

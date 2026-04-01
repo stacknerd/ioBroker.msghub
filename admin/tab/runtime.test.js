@@ -39,6 +39,7 @@ async function loadRuntimeSandbox(options = {}) {
 	hasAdminKey,
 		mergePluginI18n,
 		t,
+		pickText,
 		resolveExplicitUrlTheme,
 		resolveTheme,
 		readThemeFromLocalStorage,
@@ -215,6 +216,89 @@ describe('admin/tab/runtime.js', function () {
 			assert.equal(result.instance, 0);
 			assert.equal(result.lang, 'en');
 			assert.equal(result.expert, undefined);
+		});
+
+		describe('panel parameter', function () {
+			it('preserves a valid core panel id unchanged', async function () {
+				const result = await parse('?panel=tab-messages');
+				assert.equal(result.panel, 'tab-messages');
+			});
+
+			it('preserves a full plugin panel id unchanged', async function () {
+				const result = await parse('?panel=tab-plugin-IngestStates-0-presets');
+				assert.equal(result.panel, 'tab-plugin-IngestStates-0-presets');
+			});
+
+			it('trims surrounding whitespace from the panel value', async function () {
+				const result = await parse('?panel=%20tab-messages%20');
+				assert.equal(result.panel, 'tab-messages');
+			});
+
+			it('removes panel when it is a bare flag without a value', async function () {
+				const result = await parse('?panel');
+				assert.equal(result.panel, undefined);
+			});
+
+			it('removes panel when its value is empty', async function () {
+				const result = await parse('?panel=');
+				assert.equal(result.panel, undefined);
+			});
+
+			it('removes panel when its value is blank after trimming', async function () {
+				const result = await parse('?panel=%20%20');
+				assert.equal(result.panel, undefined);
+			});
+
+			it('coexists with composition without interfering with either value', async function () {
+				const result = await parse('?composition=adminTab&panel=tab-messages');
+				assert.equal(result.composition, 'adminTab');
+				assert.equal(result.panel, 'tab-messages');
+			});
+		});
+	});
+
+	describe('pickText()', function () {
+		async function loadPickText(opts = {}) {
+			const sandbox = await loadRuntimeSandbox({
+				fetchMap: { 'i18n/en.json': { 'known.key': 'Translated', 'msghub.i18n.core.x': 'Core X' }, ...opts.fetchMap },
+				...opts,
+			});
+			// Wait for i18n to load so hasAdminKey / t are functional.
+			await sandbox.window.__runtime.ensureAdminI18nLoaded();
+			return sandbox.window.__runtime.pickText;
+		}
+
+		it('returns a plain string unchanged', async function () {
+			const pickText = await loadPickText();
+			assert.equal(pickText('plain text'), 'plain text');
+		});
+
+		it('translates an msghub.i18n. prefixed string via t()', async function () {
+			const pickText = await loadPickText();
+			assert.equal(pickText('msghub.i18n.core.x'), 'Core X');
+		});
+
+		it('translates a known admin key via t()', async function () {
+			const pickText = await loadPickText();
+			assert.equal(pickText('known.key'), 'Translated');
+		});
+
+		it('resolves language-mapped objects using active lang', async function () {
+			// lang defaults to 'en' in the sandbox.
+			const pickText = await loadPickText();
+			assert.equal(pickText({ en: 'Hello', de: 'Hallo' }), 'Hello');
+		});
+
+		it('falls back to en when active lang is absent in the object', async function () {
+			const pickText = await loadPickText();
+			assert.equal(pickText({ de: 'Hallo', en: 'Hello' }), 'Hello');
+		});
+
+		it('returns empty string for null / non-object non-string values', async function () {
+			const pickText = await loadPickText();
+			assert.equal(pickText(null), '');
+			assert.equal(pickText(undefined), '');
+			assert.equal(pickText(42), '');
 		});
 	});
 

@@ -1,4 +1,4 @@
-/* global window, document, location, history, MutationObserver, win, args, applyTheme, detectTheme, readThemeFromTopWindow, urlThemeLocked, t */
+/* global window, document, location, history, MutationObserver, win, args, applyTheme, detectTheme, readThemeFromTopWindow, urlThemeLocked, t, pickText */
 'use strict';
 
 /**
@@ -18,10 +18,125 @@
  *
  * Interfaces:
  * - Exposes helpers such as `buildLayoutFromRegistry`, `initTabs`,
- *   `computeAssetsForComposition`, `getPanelDefinition`, and `resolveViewId`.
+ *   `computeAssetsForComposition`, `getPanelDefinition`, `resolveViewId`,
+ *   `resolvePanelMode`, `buildSinglePanelShell`, and `renderPanelModeError`.
  */
 
 let currentActivePanelId = '';
+
+// Maps panel tab ids (e.g. 'tab-messages') to their PanelDescriptor.
+const panelDescriptors = new Map();
+
+/**
+ * Builds a canonical PanelDescriptor from a core panel registry entry.
+ *
+ * @param {string} registryKey - JS object key in registry.panels (e.g. 'messages').
+ * @param {object} def - Raw panel definition from registry.panels[registryKey].
+ * @returns {object} Canonical PanelDescriptor.
+ */
+function normalizeCorePanel(registryKey, def) {
+	return {
+		id: def.id,
+		label: def.label,
+		description: def.description,
+		surface: def.surface,
+		category: def.category,
+		ui: def.ui ? { ...def.ui } : {},
+		app: def.app,
+		_registryKey: registryKey,
+	};
+}
+
+/**
+ * Builds a canonical PanelDescriptor from a plugin discover contribution and a plugin ref.
+ *
+ * Note: `contrib.title` and `contrib.description` may be `{en, de}` objects from the
+ * Altbestand manifest shape — bridged via `pickText()`. New contract requires i18n-key
+ * strings; migration to i18n keys in the manifest is deferred.
+ *
+ * Note: `ui.entry` is not populated because discover returns only `bundle.hash`, not the
+ * entry path. Bundle loading uses `admin.pluginUi.bundle.get` RPC. This is a known gap.
+ *
+ * @param {object} contrib - Discover contribution (`{ pluginType, instanceId, panelId, title, description, bundle, surface?, category?, app? }`).
+ * @param {object} pluginRef - Plugin reference (`{ pluginType, instanceId, panelId }`).
+ * @returns {object} Canonical PanelDescriptor.
+ */
+function normalizePluginPanel(contrib, pluginRef) {
+	const key = `plugin-${pluginRef.pluginType}-${pluginRef.instanceId}-${pluginRef.panelId}`;
+	return {
+		id: `tab-${key}`,
+		label: contrib.title,
+		description: contrib.description,
+		surface: contrib.surface,
+		category: contrib.category,
+		ui: {
+			kind: 'plugin',
+			loader: 'esm',
+			// ui.entry: target-contract field per Concept Doc Appendix C.
+			// Not populated: discover returns bundle.hash only, not bundle.entry.
+			// Bundle is loaded via admin.pluginUi.bundle.get RPC.
+		},
+		app: contrib.app,
+	};
+}
+
+/**
+ * Registers a PanelDescriptor in the module-level map, keyed by `descriptor.id`.
+ *
+ * @param {object} descriptor - Canonical PanelDescriptor with a non-empty `id` field.
+ */
+function registerPanelDescriptor(descriptor) {
+	if (descriptor && typeof descriptor.id === 'string' && descriptor.id) {
+		panelDescriptors.set(descriptor.id, descriptor);
+	}
+}
+
+/**
+ * Applies PWA/install head meta tags from an `app` descriptor block.
+ * Sets or updates each supported tag; removes tags for absent fields so that switching
+ * between two panels with different `app` blocks leaves no stale values behind.
+ * No link tags — manifest and icon routes are deferred.
+ *
+ * @param {object} app - Panel app block.
+ */
+function applyAppHeadMeta(app) {
+	/**
+	 * Sets the named meta tag to `content` (creating it if absent), or removes it when
+	 * `content` is falsy.
+	 *
+	 * @param {string} name - Meta name attribute value.
+	 * @param {string} content - Meta content value; falsy triggers removal.
+	 */
+	function setOrRemove(name, content) {
+		const existing = document.head.querySelector(`meta[name="${name}"]`);
+		if (!content) {
+			existing?.remove();
+			return;
+		}
+		if (existing) {
+			existing.setAttribute('content', content);
+		} else {
+			const meta = document.createElement('meta');
+			meta.setAttribute('name', name);
+			meta.setAttribute('content', content);
+			document.head.appendChild(meta);
+		}
+	}
+	setOrRemove('theme-color', typeof app.themeColor === 'string' ? app.themeColor : '');
+	setOrRemove('application-name', app.name ? pickText(app.name) : '');
+	setOrRemove('apple-mobile-web-app-title', (app.shortName ?? app.name) ? pickText(app.shortName ?? app.name) : '');
+}
+
+/**
+ * Removes PWA/install head meta tags left by a previous panel.
+ * Fully removes all three managed meta tags — not just empties them —
+ * so no stale meta values override browser defaults after a panel switch.
+ */
+function resetAppHeadMeta() {
+	document.head.querySelector('meta[name="theme-color"]')?.remove();
+	document.head.querySelector('meta[name="application-name"]')?.remove();
+	document.head.querySelector('meta[name="apple-mobile-web-app-title"]')?.remove();
+}
 
 /**
  * Returns the tab target id from a tab link (`href="#tab-..."`).
@@ -35,30 +150,23 @@ function getTabTargetId(tab) {
 }
 
 /**
- * Synchronises document.title with the currently active panel.
+ * Synchronises document.title and head meta with the currently active panel descriptor.
  *
- * For tab layouts, the visible tab label is the source of truth so plugin labels
- * and translated native labels are reflected automatically. For single layouts,
- * native panel title keys are resolved from the registry because no tab DOM exists.
+ * Called with an explicit descriptor from `activatePanel()` (bypasses the default lookup)
+ * or with no arguments from `applyStaticI18n()` for language-resync (uses the default
+ * parameter to look up the active panel's descriptor).
  *
- * @param {string} [panelId] - Active panel DOM id. Defaults to the current active panel.
+ * @param {object} [descriptor] - PanelDescriptor for the active panel. Defaults to the
+ *   descriptor of the currently active panel from `panelDescriptors`.
  */
-function updateDocumentTitle(panelId = currentActivePanelId) {
-	const activePanelId = typeof panelId === 'string' ? panelId.trim() : '';
-	const activeTab = activePanelId
-		? document.querySelector(`.msghub-tab[href="#${activePanelId}"]`)
-		: document.querySelector('.msghub-tab.is-active');
-	const tabLabel = typeof activeTab?.textContent === 'string' ? activeTab.textContent.trim() : '';
-	if (tabLabel) {
-		document.title = `${tabLabel} — Message Hub`;
-		return;
+function updateDocumentTitle(descriptor = panelDescriptors.get(currentActivePanelId)) {
+	const label = descriptor ? pickText(descriptor.label) : '';
+	document.title = label ? `${label} - MessageHub` : 'MessageHub';
+	if (descriptor?.app) {
+		applyAppHeadMeta(descriptor.app);
+	} else {
+		resetAppHeadMeta();
 	}
-
-	const nativePanelId = activePanelId.startsWith('tab-') ? activePanelId.slice(4) : '';
-	const panelDef = nativePanelId ? getPanelDefinition(nativePanelId) : null;
-	const titleKey = typeof panelDef?.titleKey === 'string' ? panelDef.titleKey.trim() : '';
-	const nativeLabel = titleKey ? String(t(titleKey) || '').trim() : '';
-	document.title = nativeLabel ? `${nativeLabel} — Message Hub` : 'Message Hub';
 }
 
 /**
@@ -72,7 +180,7 @@ function updateDocumentTitle(panelId = currentActivePanelId) {
 function activatePanel(id) {
 	const panelId = typeof id === 'string' ? id.trim() : '';
 	if (!panelId) {
-		updateDocumentTitle('');
+		updateDocumentTitle(undefined);
 		return '';
 	}
 
@@ -100,7 +208,7 @@ function activatePanel(id) {
 		}
 	}
 	currentActivePanelId = panelId;
-	updateDocumentTitle(panelId);
+	updateDocumentTitle(panelDescriptors.get(panelId));
 	return panelId;
 }
 
@@ -378,6 +486,93 @@ function getActiveComposition() {
 }
 
 /**
+ * Resolves the active single-panel mode from the `panel` URL argument.
+ *
+ * Returns a result object with one of the following shapes:
+ * - `{ active: false }` — no `panel` argument present; normal composition boot applies.
+ * - `{ active: true, error: 'unknownTarget', tabId }` — argument present but unresolvable.
+ * - `{ active: true, isPlugin: false, descriptor, registryKey }` — core panel resolved.
+ * - `{ active: true, isPlugin: true, pluginRef, tabId }` — plugin panel id parsed.
+ *
+ * @returns {object} Panel mode result.
+ */
+function resolvePanelMode() {
+	const panelArg = typeof args?.panel === 'string' ? args.panel.trim() : '';
+	if (!panelArg) {
+		return { active: false };
+	}
+	if (!panelArg.startsWith('tab-')) {
+		return { active: true, error: 'unknownTarget', tabId: panelArg };
+	}
+	const registry = getRegistry();
+	const panels = registry?.panels && typeof registry.panels === 'object' ? registry.panels : {};
+	// Try to find a core panel entry whose canonical id matches.
+	const coreEntry = Object.entries(panels).find(([, def]) => def && def.id === panelArg);
+	if (coreEntry) {
+		const [registryKey, def] = coreEntry;
+		return { active: true, isPlugin: false, descriptor: normalizeCorePanel(registryKey, def), registryKey };
+	}
+	// Determine whether the id follows the plugin panel pattern.
+	const panelKey = panelArg.slice('tab-'.length);
+	if (panelKey.startsWith('plugin-')) {
+		const segments = panelKey.slice('plugin-'.length).split('-');
+		if (segments.length < 3) {
+			return { active: true, error: 'unknownTarget', tabId: panelArg };
+		}
+		const pluginType = segments[0];
+		const instanceId = segments[1];
+		const panelId = segments.slice(2).join('-');
+		return { active: true, isPlugin: true, pluginRef: { pluginType, instanceId, panelId }, tabId: panelArg };
+	}
+	return { active: true, error: 'unknownTarget', tabId: panelArg };
+}
+
+/**
+ * Builds the DOM for a single-panel shell from a canonical PanelDescriptor.
+ *
+ * Creates a panel container and mount container without a tab strip.
+ * Mount container id derivation:
+ * - Core panel: `descriptor.id.slice('tab-'.length) + '-root'`  (e.g. `'messages-root'`)
+ * - Plugin panel: `descriptor.id.slice('tab-'.length)`          (e.g. `'plugin-IngestStates-0-presets'`)
+ *
+ * @param {object} descriptor - Canonical PanelDescriptor.
+ * @returns {{ layout: string, panelIds: string[], pluginPanelRefs: object[], defaultPanelId: string }} Shell layout descriptor compatible with `setConnLayout`.
+ */
+function buildSinglePanelShell(descriptor) {
+	const layoutHost = document.getElementById('msghub-layout') || document.querySelector('.msghub-root');
+	const isPlugin = descriptor?.ui?.kind === 'plugin';
+	const panelId = typeof descriptor?.id === 'string' ? descriptor.id : '';
+	const panelKey = panelId.startsWith('tab-') ? panelId.slice('tab-'.length) : panelId;
+	const mountId = isPlugin ? panelKey : `${panelKey}-root`;
+	const panelEl = h('div', { id: panelId, class: 'msghub-panel', role: 'tabpanel' });
+	panelEl.appendChild(h('div', { id: mountId }));
+	if (layoutHost) {
+		layoutHost.replaceChildren(panelEl);
+	}
+	registerPanelDescriptor(descriptor);
+	const registryKey = descriptor?._registryKey || '';
+	return {
+		layout: 'single',
+		panelIds: registryKey ? [registryKey] : [],
+		pluginPanelRefs: [],
+		defaultPanelId: registryKey,
+	};
+}
+
+/**
+ * Renders a hard error state for unresolvable single-panel targets.
+ *
+ * @param {string} errorKey - i18n key for the error message.
+ */
+function renderPanelModeError(errorKey) {
+	const layoutHost = document.getElementById('msghub-layout') || document.querySelector('.msghub-root');
+	if (!layoutHost) {
+		return;
+	}
+	layoutHost.replaceChildren(h('div', { class: 'msghub-panel-mode-error', text: t(errorKey) }));
+}
+
+/**
  * Builds the visible layout (tabs/panel containers) from the registry.
  * Handles mixed composition panels: native string IDs and structured plugin panel references.
  * For wildcard compositions (`panels: ['*']`), pass discover contributions via opts.
@@ -475,7 +670,7 @@ function buildLayoutFromRegistry({ contributions = [] } = {}) {
 						href: `#${tabId}`,
 						role: 'tab',
 						'aria-controls': tabId,
-						'data-i18n': def.titleKey || '',
+						'data-i18n': def.label || '',
 						text: id,
 					}),
 				);
@@ -504,7 +699,8 @@ function buildLayoutFromRegistry({ contributions = [] } = {}) {
 		if (entry.kind === 'native') {
 			const { id, def } = entry;
 			const tabId = `tab-${id}`;
-			const mountId = String(def.mountId || '').trim();
+			// Mount container id is derived deterministically from the canonical panel id.
+			const mountId = def.id ? `${def.id.slice('tab-'.length)}-root` : '';
 			const panel = h('div', {
 				id: tabId,
 				class: `msghub-panel msghub-${id}`,
@@ -513,6 +709,9 @@ function buildLayoutFromRegistry({ contributions = [] } = {}) {
 			if (mountId) {
 				panel.appendChild(h('div', { id: mountId }));
 			}
+			// Register descriptor so activatePanel and updateDocumentTitle can resolve titles.
+			const descriptor = normalizeCorePanel(String(id), def);
+			registerPanelDescriptor(descriptor);
 			fragment.appendChild(panel);
 		} else {
 			// Plugin panel: container with data attributes for boot.js discover wiring.
@@ -639,9 +838,8 @@ function computeAssetsForComposition(panelIds) {
 		if (!def || typeof def !== 'object') {
 			continue;
 		}
-		const assets = def.assets && typeof def.assets === 'object' ? def.assets : null;
-		const cssList = Array.isArray(assets?.css) ? assets.css : [];
-		const jsList = Array.isArray(assets?.js) ? assets.js : [];
+		const cssList = Array.isArray(def.ui?.css) ? def.ui.css : [];
+		const jsList = Array.isArray(def.ui?.js) ? def.ui.js : [];
 		for (const c of cssList) {
 			const s = String(c || '').trim();
 			if (s && !css.includes(s)) {
@@ -698,3 +896,7 @@ void loadJsFilesSequential;
 void computeAssetsForComposition;
 void getPanelDefinition;
 void renderPanelBootError;
+void normalizePluginPanel;
+void resolvePanelMode;
+void buildSinglePanelShell;
+void renderPanelModeError;

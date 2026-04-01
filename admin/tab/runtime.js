@@ -21,6 +21,7 @@
  * - `lang` {string}, default browser base language, consumed by `lang` bootstrap and i18n loading here.
  * - `locale` {string}, default absent, trimmed here and consumed downstream as an optional frontend format-locale override.
  * - `composition` {string}, default absent, parsed here and preserved on `args` for downstream consumers.
+ * - `panel` {string}, default absent, parsed here and preserved on `args` for panel-mode activation by downstream consumers.
  * - `expert` {boolean}, default absent, normalized here only when the key is present and preserved on `args`.
  * - `theme` {string}, default absent, preserved raw in `args` and consumed by the theme helpers here.
  * - `react` {string}, default absent, preserved raw in `args` and consumed as a legacy theme alias here.
@@ -39,6 +40,7 @@
  * - `lang`: browser base language when absent or blank.
  * - `locale`: trimmed string; empty after trim is removed.
  * - `composition`: trimmed string; empty after trim is removed.
+ * - `panel`: trimmed string; empty after trim is removed.
  * - `expert`: normalized only when present; `true`, `1`, and bare `?expert` become `true`.
  * - `theme` / `react`: kept as raw strings, including whitespace.
  * - `debugTheme`: kept raw here and normalized later at module load.
@@ -97,6 +99,14 @@ function parseQuery() {
 			out.composition = composition;
 		} else {
 			delete out.composition;
+		}
+	}
+	if (out.panel !== undefined) {
+		const panel = typeof out.panel === 'string' ? out.panel.trim() : '';
+		if (panel) {
+			out.panel = panel;
+		} else {
+			delete out.panel;
 		}
 	}
 	if (out.expert !== undefined) {
@@ -289,6 +299,31 @@ function t(key, ...args) {
 		out = out.replace('%s', String(arg));
 	}
 	return out;
+}
+
+/**
+ * Resolves localizable text values defensively.
+ *
+ * Supports:
+ * - direct strings, including i18n keys
+ * - language-mapped objects such as `{ en: "...", de: "..." }`
+ *
+ * @param {any} value - Source value.
+ * @returns {string} Resolved text.
+ */
+function pickText(value) {
+	if (typeof value === 'string') {
+		const s = value;
+		return s.startsWith('msghub.i18n.') || hasAdminKey(s) ? t(s) : s;
+	}
+	if (!value || typeof value !== 'object') {
+		return '';
+	}
+	const v = value[lang] ?? value.en ?? value.de;
+	if (typeof v === 'string') {
+		return v.startsWith('msghub.i18n.') || hasAdminKey(v) ? t(v) : v;
+	}
+	return '';
 }
 
 /**
@@ -493,6 +528,7 @@ void overrideLang;
 void ensureAdminI18nLoaded;
 void mergePluginI18n;
 void t;
+void pickText;
 void resolveTheme;
 void urlThemeLocked;
 

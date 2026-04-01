@@ -26,10 +26,11 @@ The current HTML load order in [`admin/tab.html`](../../admin/tab.html) is:
 3. `api.js`
 4. `runtime.js`
 5. `ui.js`
-6. `layout.js`
-7. `plugin-ui-host.js`
-8. `boot.js`
-9. `tab.js`
+6. `scroll-strip.js`
+7. `layout.js`
+8. `plugin-ui-host.js`
+9. `boot.js`
+10. `tab.js`
 
 Those later files assume that `runtime.js` already created:
 
@@ -58,6 +59,7 @@ Notable behavior:
 - `lang` falls back to the browser base language when missing or blank
 - `locale` is trimmed and removed when blank
 - `composition` is trimmed and removed when blank
+- `panel` is trimmed and removed when blank; consumed downstream to activate Single-Panel mode
 - `expert` is normalized only when the key is present
 - `theme` and `react` stay raw so later theme helpers can apply the canonical precedence rules
 - `debugTheme` stays raw in `args` and is normalized separately at module load
@@ -174,6 +176,7 @@ This module exposes classic-script globals rather than a single exported object.
 - `mergePluginI18n(pluginType, translations)`
 - `t(key, ...args)`
 - `overrideLang(newLang)`
+- `pickText(value)` — resolves a label to a display string: translates i18n-key strings via `t()`, passes through plain strings, and bridges legacy `{en, de}` language maps using the active `lang`
 
 ### Theme
 
@@ -203,7 +206,8 @@ Main consumers:
 - Plugin i18n merging is intentionally one-way and additive. Existing keys are never overwritten.
 - Admin-UI text loading stays in the `admin/i18n/*` namespace. The repo-root `i18n/*` tree is reserved for backend/runtime catalogs and should not be mixed into the shell dictionary.
 - Unknown query keys remain available to native panels through `ctx.args`.
-- `runtime.js` parses `composition` and `expert`, but composition resolution happens in [`./tab-layout.md`](./tab-layout.md) and expert-mode capabilities are panel/API concerns.
+- `runtime.js` parses `composition`, `panel`, and `expert`, but their consumption happens downstream: composition resolution in [`./tab-layout.md`](./tab-layout.md), panel-mode activation in [`./tab-boot.md`](./tab-boot.md), expert-mode capabilities in panel/API concerns.
+- `panel` activates Single-Panel mode when set; it must carry a `tab-` prefix. Unresolvable targets render a hard error. `panel` takes precedence over `composition` when both are present.
 - `locale` is only a browser-side format-locale override source. It does not change admin i18n loading, text language, plugin bundle language selection, or backend payloads.
 - `urlThemeLocked` is an internal inter-module flag, not a native-panel API and not a plugin-facing contract.
 - The theme is applied immediately at module load to reduce visual flicker.

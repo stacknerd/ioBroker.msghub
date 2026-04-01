@@ -527,4 +527,37 @@ describe('admin/tab/api.js', function () {
 		apiB.time.setPolicy({ timeZone: 'UTC', source: 'server' });
 		assert.notEqual(apiB.time.formatTs(Date.UTC(2024, 0, 2, 3, 4, 5)), '');
 	});
+
+	it('panel mode: args.panel sets host.viewId=null, layout=single, panels=[panelKey], defaultPanel=panelKey', async function () {
+		const sandbox = await loadApiSandbox({ args: { panel: 'tab-messages' } });
+		const api = sandbox.window.__apiFns.createAdminApi({
+			msghubRequest: async () => ({}),
+			msghubSocket: { connected: true },
+			adapterInstance: 'msghub.0',
+			lang: 'en',
+			t: key => String(key),
+			pickText: value => String(value || ''),
+			ui: {},
+		});
+		assert.equal(api.host.viewId, null, 'panel mode must set viewId to null');
+		assert.equal(api.host.layout, 'single');
+		assert.equal(api.host.deviceMode, 'pc');
+		assert.deepEqual(JSON.parse(JSON.stringify(api.host.panels)), ['messages']);
+		assert.equal(api.host.defaultPanel, 'messages');
+	});
+
+	it('panel mode wins over args.composition when both are present', async function () {
+		const sandbox = await loadApiSandbox({ args: { composition: 'adminTab', panel: 'tab-messages' } });
+		const api = sandbox.window.__apiFns.createAdminApi({
+			msghubRequest: async () => ({}),
+			msghubSocket: { connected: true },
+			adapterInstance: 'msghub.0',
+			lang: 'en',
+			t: key => String(key),
+			pickText: value => String(value || ''),
+			ui: {},
+		});
+		assert.equal(api.host.viewId, null, 'panel mode must win over composition — viewId must be null');
+		assert.equal(api.host.layout, 'single');
+	});
 });

@@ -30,9 +30,10 @@ ctx.api
 Native panels use it directly.
 Plugin-owned bundles receive a narrowed wrapper of it through [`./tab-plugin-ui-host.md`](./tab-plugin-ui-host.md).
 
-`api.js` also depends on the shared composition resolver from [`./tab-layout.md`](./tab-layout.md), so
-`api.host.viewId`, `api.host.layout`, `api.host.panels`, and the visible shell all reflect the same final
-composition decision.
+In normal (composition) mode, `api.js` depends on the shared composition resolver from
+[`./tab-layout.md`](./tab-layout.md) so that `api.host.viewId`, `api.host.layout`, `api.host.panels`,
+and the visible shell all reflect the same final composition decision. In `panel=` mode this dependency
+is bypassed; `api.host.*` is derived from `args.panel` instead (see `api.host` below).
 
 ---
 
@@ -127,7 +128,7 @@ The spinner wrapper adds a default translated message when the caller does not p
 
 ### `api.host`
 
-Composition and connection metadata:
+Shell and connection metadata:
 
 - `viewId`
 - `layout`
@@ -138,7 +139,25 @@ Composition and connection metadata:
 - `isConnected()`
 - `isExpertMode()`
 
-Important:
+**`panel=` mode** (`?panel=<tab-id>` in the URL):
+
+When `args.panel` is a non-empty string, `api.js` enters panel mode and bypasses composition
+resolution entirely. The resulting `api.host` values differ from the normal composition-based values:
+
+| Field | Panel mode | Normal composition mode |
+|---|---|---|
+| `host.viewId` | `null` | resolved view id (e.g. `'adminTab'`) |
+| `host.layout` | `'single'` | composition `layout` field |
+| `host.deviceMode` | `'pc'` | composition `deviceMode` field |
+| `host.panels` | `[panelKey]` — single-element frozen array, where `panelKey = args.panel.slice('tab-'.length)` | panels from composition, strings only |
+| `host.defaultPanel` | same `panelKey` | composition `defaultPanel` |
+
+`panel=` takes precedence over `composition=`; both may appear in the URL, but `panel=` wins.
+
+The `panelKey` derived here (e.g. `'messages'` from `?panel=tab-messages`) matches the registry
+key used by `computeAssetsForComposition` and `initPanelsForComposition`.
+
+In normal (composition) mode:
 
 - `host.panels` contains only string entries from `composition.panels`
 - structured plugin panel refs are filtered out
@@ -188,7 +207,7 @@ This is used for API branches that are intentionally unavailable in the current 
 - Timezone policy is normalized centrally. Missing or invalid timezones become a UTC fallback policy.
 - Context-menu item handlers are wrapped recursively so the menu closes first, including nested submenu items.
 - The context-menu wrapper intentionally does not emit generic fallback toasts when an action rejects. Error handling stays with the caller.
-- `host.panels` is derived from the active composition but keeps only string entries, because structured plugin refs are hosted differently.
+- In normal mode, `host.panels` is derived from the active composition but keeps only string entries, because structured plugin refs are hosted differently. In `panel=` mode, `host.panels` is a single-element array derived from `args.panel`.
 - `args.locale` affects only the browser-side default format locale for `api.time.*`; it does not change text language, i18n loading, plugin bundle language selection, or backend payloads.
 
 ---

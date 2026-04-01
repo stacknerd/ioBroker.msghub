@@ -259,6 +259,8 @@
 	"msghub.i18n.core.admin.ui.pagination.nextPage": "Nächste Seite",
 	"msghub.i18n.core.admin.ui.pagination.pageOf.text": "Seite %s von %s",
 	"msghub.i18n.core.admin.ui.pagination.previousPage": "Vorherige Seite",
+	"msghub.i18n.core.admin.ui.panel.error.unavailableTarget.text": "Das angeforderte Panel ist nicht verfügbar. Bitte Verbindung prüfen und erneut versuchen.",
+	"msghub.i18n.core.admin.ui.panel.error.unknownTarget.text": "Das angeforderte Panel wurde nicht gefunden.",
 	"msghub.i18n.core.admin.ui.panel.loading.text": "Lädt…",
 	"msghub.i18n.core.admin.ui.panel.unavailable.text": "Nichts zur Anzeige verfügbar. Bitte Seite neu laden.",
 	"msghub.i18n.core.admin.ui.pluginPanel.loadError.text": "Plugin-Panel konnte nicht geladen werden.",

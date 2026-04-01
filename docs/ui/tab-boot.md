@@ -28,7 +28,23 @@ modules and then starts the actual runtime on `DOMContentLoaded`.
 
 ## What the boot flow does
 
-The shell startup is roughly:
+`ensureBooted()` first checks `resolvePanelMode()`. If `args.panel` is set, it takes the
+**Single-Panel-Mode path** and returns early — composition resolution, layout building, and
+`msghub:tabSwitch` listener registration are all skipped. Otherwise it takes the normal
+**composition path** described below.
+
+### Single-Panel-Mode path (`args.panel` set)
+
+1. Create `ui` via `createUi()`, `api` via `createAdminApi(...)`, and the frozen `ctx`.
+2. `resolvePanelMode()` resolves the target panel descriptor (or returns an error result).
+3. If the target is unresolvable: load i18n, render a hard error message, and stop.
+4. For a **core panel** target: call `buildSinglePanelShell(descriptor)`, load i18n and CSS, activate the panel, and initialize native panel assets — no tab strip.
+5. For a **plugin panel** target: load i18n, call `admin.pluginUi.discover`, match the contribution, call `buildSinglePanelShell(descriptor)`, reuse `hydratePluginPanels` to populate `pluginPanelTabMap`, activate the panel, and mount the plugin bundle immediately.
+6. Keep connection state current (same as the composition path).
+
+No `msghub:tabSwitch` listener is registered in Single-Panel-Mode because there are no tab switches.
+
+### Composition path (normal)
 
 1. Create `ui` via `createUi()`.
 2. Create `api` via `createAdminApi(...)`.
@@ -120,11 +136,30 @@ Structured plugin panel refs from the composition are not active immediately.
 - enables the matching tab
 - replaces the temporary loading label with the discovered title
 - stores the mount metadata in `pluginPanelTabMap`
+- calls `normalizePluginPanel(contrib, ref)` and `registerPanelDescriptor(descriptor)` so that `panelDescriptors` in `layout.js` is populated before the user first activates a plugin tab
 
 Actual plugin bundle mounting is lazy by default, but `boot.js` also mounts a plugin panel immediately when it
 became active during boot before the later `msghub:tabSwitch` listener could observe that activation.
 
-### 5) Own connection and health-state behavior for the shell
+`hydratePluginPanels()` is also reused in the Single-Panel-Mode plugin path (see above) to populate
+`pluginPanelTabMap` via the same mechanism. In that context the tab DOM elements do not exist, but
+`hydratePluginPanels` handles absent `tabEl` results gracefully — the `if (tabEl)` block is skipped
+and `pluginPanelTabMap.set(...)` still executes. The bundle is then mounted immediately after.
+
+### 5) Handle `panel=` Single-Panel-Mode
+
+When `args.panel` is set, `ensureBooted()` calls `resolvePanelMode()` and takes an early-return
+path before composition resolution begins. This path produces a minimal single-panel shell:
+
+- no `<nav class="msghub-tabs">` tab strip
+- no `msghub:tabSwitch` listener
+- no composition CSS, no wildcard discover, no layout-building from the registry
+- `api.host.viewId` is `null`, `api.host.layout` is `'single'`, `api.host.panels` is a single-element array
+
+A hard error is rendered (and boot stops) when the target panel cannot be resolved from the
+registry (core) or from discover results (plugin).
+
+### 6) Own connection and health-state behavior for the shell
 
 `boot.js` is also responsible for shell-level connection UX:
 
@@ -139,7 +174,7 @@ The UI is treated as online only after a successful ping, not just after a trans
 On mobile/browser resume, `boot.js` first nudges the socket transport and then runs delayed recovery checks,
 so normal initial page load is not treated like a resume event.
 
-### 6) Provide the global editable-field context menu
+### 7) Provide the global editable-field context menu
 
 Inside `.msghub-root`, `boot.js` replaces the browser context menu with the shell menu from [`./tab-ui.md`](./tab-ui.md).
 For text-like inputs, textareas, and `contenteditable` elements it adds standard actions:
@@ -161,7 +196,7 @@ Touch long-presses are handled by the shell polyfill in [`./tab-ui.md`](./tab-ui
 
 ### Panel initialization contract
 
-Each native panel definition in the registry names an `initGlobal`, for example:
+Each native panel definition in the registry carries `ui.initGlobal`, for example:
 
 ```js
 window.MsghubAdminTabMessages.init(ctx)
@@ -191,7 +226,7 @@ Panels receive:
 - socket `connect`
 - socket `disconnect`
 - periodic ping timers
-- `msghub:tabSwitch` for later plugin-panel lazy mounting
+- `msghub:tabSwitch` for later plugin-panel lazy mounting (composition path only — not registered in `panel=` Single-Panel-Mode)
 
 It also triggers an unconditional initial `sendPing()` during module load, before any socket event arrives.
 
@@ -200,6 +235,9 @@ It also triggers an unconditional initial `sendPing()` during module load, befor
 ## Design notes / invariants
 
 - `ensureBooted()` is idempotent. A cached `bootPromise` prevents duplicate boot sequences.
+- The boot flow is not purely composition-driven. `ensureBooted()` calls `resolvePanelMode()` first; if `args.panel` is set the composition path is bypassed entirely and a minimal single-panel shell is built instead.
+- In `panel=` Single-Panel-Mode, `hydratePluginPanels()` is reused for plugin targets so that `pluginPanelTabMap` is populated via the same mechanism as in composition mode. The mount container div must already exist (created by `buildSinglePanelShell`) before `hydratePluginPanels` is called.
+- In `panel=` Single-Panel-Mode, i18n is loaded before any error message is rendered so that `t()` produces a translated string rather than a raw key.
 - Plugin tabs start disabled. They are enabled only when a matching discover contribution and DOM mount container both exist.
 - Initial panel activation is layout-aware: tabbed compositions use `initTabs()`, single compositions call the shared `activatePanel(...)` path directly.
 - `ctx` is frozen before it is handed to panels. Panels should treat it as read-only runtime state.
@@ -209,7 +247,7 @@ It also triggers an unconditional initial `sendPing()` during module load, befor
 - Resume recovery is armed only after the page was actually backgrounded; a normal reload/open must not trigger that path.
 - Reconnect warmup is centralized here. Panels are not expected to implement their own retry loop for core shell availability.
 - Clearly broken core boot states (for example failed core CSS loads or recorded panel boot errors) may escalate to one guarded hard reload per tab session window.
-- `pickText()` is the shell-side text normalizer for plain strings, admin i18n keys, and language maps such as `{ en, de }`.
+- `pickText()` is the shell-side text normalizer for plain strings, admin i18n keys, and language maps such as `{ en, de }`. It is defined in `runtime.js` (loads before `layout.js` and `boot.js`) and consumed as a global by both `layout.js` and `boot.js`.
 - Shell-wide timezone fallback warning is intentionally shown only once per page lifetime.
 - The connection panel reports the effective frontend format locale shown to the shell. When `args.locale` is present and valid, that value is shown instead of the old ambient browser-locale source.
 - The global `contextmenu` listener is intentionally shared between mouse right-click and the synthetic long-press flow. It is the fallback path for both mouse and touch.

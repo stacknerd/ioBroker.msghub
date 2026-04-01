@@ -1,4 +1,4 @@
-/* global window, document, location, HTMLElement, HTMLInputElement, HTMLTextAreaElement, hasAdminKey, t, lang, createUi, createAdminApi, msghubRequest, msghubSocket, adapterInstance, args, h, getPanelDefinition, win, loadJsFilesSequential, renderPanelBootError, buildLayoutFromRegistry, getActiveComposition, computeAssetsForComposition, ensureAdminI18nLoaded, loadCssFiles, initTabs, activatePanel, updateDocumentTitle, isEmbeddedInAdmin, overrideLang, createMsghubPluginUiHost */
+/* global window, document, location, HTMLElement, HTMLInputElement, HTMLTextAreaElement, t, lang, pickText, createUi, createAdminApi, msghubRequest, msghubSocket, adapterInstance, args, h, getPanelDefinition, win, loadJsFilesSequential, renderPanelBootError, buildLayoutFromRegistry, getActiveComposition, computeAssetsForComposition, ensureAdminI18nLoaded, loadCssFiles, initTabs, activatePanel, updateDocumentTitle, isEmbeddedInAdmin, overrideLang, createMsghubPluginUiHost, normalizePluginPanel, registerPanelDescriptor, resolvePanelMode, buildSinglePanelShell, renderPanelModeError */
 'use strict';
 
 /**
@@ -20,31 +20,6 @@
  * - No exported module object; it works through event handlers and the global boot sequence.
  * - Panels receive their runtime via the frozen `ctx`.
  */
-
-/**
- * Resolves localizable text values defensively.
- *
- * Supports:
- * - direct strings, including i18n keys
- * - language-mapped objects such as `{ en: "...", de: "..." }`
- *
- * @param {any} value - Source value.
- * @returns {string} Resolved text.
- */
-function pickText(value) {
-	if (typeof value === 'string') {
-		const s = value;
-		return s.startsWith('msghub.i18n.') || hasAdminKey(s) ? t(s) : s;
-	}
-	if (!value || typeof value !== 'object') {
-		return '';
-	}
-	const v = value[lang] ?? value.en ?? value.de;
-	if (typeof v === 'string') {
-		return v.startsWith('msghub.i18n.') || hasAdminKey(v) ? t(v) : v;
-	}
-	return '';
-}
 
 const elements = Object.freeze({
 	get connection() {
@@ -791,9 +766,9 @@ function initPanelById(panelId) {
 	if (!def) {
 		throw new Error(`Unknown panel '${id}'`);
 	}
-	const initGlobal = String(def.initGlobal || '').trim();
+	const initGlobal = String(def.ui?.initGlobal || '').trim();
 	if (!initGlobal) {
-		throw new Error(`Panel '${id}' is missing initGlobal`);
+		throw new Error(`Panel '${id}' is missing ui.initGlobal`);
 	}
 
 	const panelApi = win[initGlobal];
@@ -801,10 +776,11 @@ function initPanelById(panelId) {
 		throw new Error(`Panel '${id}' did not register '${initGlobal}.init'`);
 	}
 
-	const mountId = String(def.mountId || '').trim();
+	// Mount container id is derived deterministically from the canonical panel id.
+	const mountId = def.id ? `${def.id.slice('tab-'.length)}-root` : '';
 	const mountEl = mountId ? document.getElementById(mountId) : null;
 	if (mountId && !mountEl) {
-		throw new Error(`Panel '${id}' mountId '${mountId}' is missing in DOM`);
+		throw new Error(`Panel '${id}' mount container '${mountId}' is missing in DOM`);
 	}
 
 	const section = panelApi.init(ctx);
@@ -825,8 +801,7 @@ async function initPanelsForComposition(panelIds) {
 		if (!def) {
 			continue;
 		}
-		const assets = def.assets && typeof def.assets === 'object' ? def.assets : null;
-		const jsList = Array.isArray(assets?.js) ? assets.js : [];
+		const jsList = Array.isArray(def.ui?.js) ? def.ui.js : [];
 
 		try {
 			await loadJsFilesSequential(jsList);
@@ -917,6 +892,12 @@ async function hydratePluginPanels(refs, host, knownContributions = null) {
 				host,
 				mountHandle: null,
 			});
+
+			// Register canonical descriptor so activatePanel / updateDocumentTitle can
+			// resolve the panel title without querying DOM tab text.
+			const descriptor = normalizePluginPanel(contrib, ref);
+			registerPanelDescriptor(descriptor);
+
 			enabledTabIds.push(tabId);
 		} catch {
 			// Isolate per-slot failures — other slots continue.
@@ -997,6 +978,82 @@ function ensureBooted() {
 	bootFatalErrorMessage = '';
 	bootPromise = Promise.resolve()
 		.then(async () => {
+			// Panel mode: args.panel targets a specific panel — bypass composition entirely.
+			const panelMode = resolvePanelMode();
+			if (panelMode.active) {
+				if (panelMode.error) {
+					// Load i18n before rendering so t() produces a translated string, not a raw key.
+					await ensureAdminI18nLoaded();
+					renderPanelModeError('msghub.i18n.core.admin.ui.panel.error.unknownTarget.text');
+					return;
+				}
+				if (!panelMode.isPlugin) {
+					const { descriptor, registryKey } = panelMode;
+					buildSinglePanelShell(descriptor);
+					setConnLayout('single', 'pc');
+					await ensureAdminI18nLoaded();
+					const assets = computeAssetsForComposition([registryKey]);
+					const cssRes = await loadCssFiles(assets.css);
+					if (cssRes?.failed?.length) {
+						ui?.toast?.({ text: `Failed to load CSS: ${cssRes.failed.join(', ')}`, variant: 'danger' });
+					}
+					applyStaticI18n();
+					updateConnectionPanel();
+					initConnectionPanelInteraction();
+					activatePanel(descriptor.id);
+					await initPanelsForComposition([registryKey]);
+					return;
+				}
+				// Plugin single-panel path.
+				const { pluginRef, tabId } = panelMode;
+
+				setConnLayout('single', 'pc');
+				await ensureAdminI18nLoaded();
+				applyStaticI18n();
+				updateConnectionPanel();
+				initConnectionPanelInteraction();
+
+				const pluginUiHost = createMsghubPluginUiHost({ request: msghubRequest, api });
+				ui?.spinner?.show?.({ blocking: true });
+
+				const rawContribs = await msghubRequest('admin.pluginUi.discover', {}).catch(() => null);
+				const contributions = Array.isArray(rawContribs) ? rawContribs : [];
+				const contrib = contributions.find(
+					c =>
+						c.pluginType === pluginRef.pluginType &&
+						String(c.instanceId) === String(pluginRef.instanceId) &&
+						c.panelId === pluginRef.panelId,
+				);
+
+				ui?.spinner?.hide?.();
+
+				if (!contrib) {
+					renderPanelModeError('msghub.i18n.core.admin.ui.panel.error.unavailableTarget.text');
+					return;
+				}
+
+				const descriptor = normalizePluginPanel(contrib, pluginRef);
+				buildSinglePanelShell(descriptor);
+				// Shell creates the mount container div — hydratePluginPanels looks it up via
+				// document.getElementById(key), so it must be called after buildSinglePanelShell.
+
+				// Reuse hydratePluginPanels to populate pluginPanelTabMap via the standard mechanism.
+				// Derive the ref from contrib so instanceId type matches contrib exactly — hydratePluginPanels
+				// uses strict equality for the internal find; URL parsing yields string instanceId while
+				// contrib may carry a numeric value.
+				const hydrateRef = {
+					pluginType: contrib.pluginType,
+					instanceId: contrib.instanceId,
+					panelId: contrib.panelId,
+				};
+				await hydratePluginPanels([hydrateRef], pluginUiHost, [contrib]);
+
+				activatePanel(tabId);
+				mountPluginPanelIfNeeded(tabId, pluginUiHost);
+				// No msghub:tabSwitch listener — single-panel shell has no tab switches.
+				return;
+			}
+
 			// Wildcard: discover must run before buildLayoutFromRegistry so tab list is known.
 			const comp = getActiveComposition();
 			const isWildcard = Array.isArray(comp?.panels) && comp.panels.length === 1 && comp.panels[0] === '*';

@@ -97,7 +97,31 @@ function createElement(tagName) {
 		get firstChild() {
 			return this.children[0] || null;
 		},
-		remove() {},
+		remove() {
+			if (this.parentNode && Array.isArray(this.parentNode.children)) {
+				const idx = this.parentNode.children.indexOf(this);
+				if (idx >= 0) {
+					this.parentNode.children.splice(idx, 1);
+				}
+			}
+		},
+		querySelector(selector) {
+			const attrMatch = String(selector).match(/^(\w+)\[(\w[\w-]*)\s*=\s*["']([^"']*)["']\]$/);
+			if (attrMatch) {
+				const [, tag, attr, val] = attrMatch;
+				for (const child of this.children) {
+					if (
+						child &&
+						String(child.tagName || '').toLowerCase() === tag.toLowerCase() &&
+						child.getAttribute(attr) === val
+					) {
+						return child;
+					}
+				}
+				return null;
+			}
+			return null;
+		},
 	};
 	return element;
 }
@@ -143,11 +167,16 @@ async function loadLayoutSandbox(options = {}) {
 		getActiveComposition,
 		buildLayoutFromRegistry,
 		loadCssFiles,
-	loadJsFilesSequential,
-	computeAssetsForComposition,
-	getPanelDefinition,
-	renderPanelBootError
-};
+		loadJsFilesSequential,
+		computeAssetsForComposition,
+		getPanelDefinition,
+		renderPanelBootError,
+		normalizePluginPanel,
+		registerPanelDescriptor,
+		resolvePanelMode,
+		buildSinglePanelShell,
+		renderPanelModeError
+	};
 	`;
 
 	const headElement = createElement('head');
@@ -256,14 +285,14 @@ async function loadLayoutSandbox(options = {}) {
 			MsghubAdminTabRegistry: {
 				panels: {
 					stats: {
-						mountId: 'stats-root',
-						titleKey: 'stats.key',
-						assets: { css: ['tab/panels/stats/styles.css'], js: ['tab/panels/stats/index.js'] },
+						id: 'tab-stats',
+						label: 'stats.key',
+						ui: { kind: 'core', loader: 'globals', initGlobal: 'MsghubAdminTabStats', css: ['tab/panels/stats/styles.css'], js: ['tab/panels/stats/index.js'] },
 					},
 					messages: {
-						mountId: 'messages-root',
-						titleKey: 'messages.key',
-						assets: { css: ['tab/panels/messages/styles.css'], js: ['tab/panels/messages/index.js'] },
+						id: 'tab-messages',
+						label: 'messages.key',
+						ui: { kind: 'core', loader: 'globals', initGlobal: 'MsghubAdminTabMessages', css: ['tab/panels/messages/styles.css'], js: ['tab/panels/messages/index.js'] },
 					},
 				},
 				compositions: {
@@ -281,6 +310,11 @@ async function loadLayoutSandbox(options = {}) {
 		detectTheme: options.detectTheme || (() => 'light'),
 		readThemeFromTopWindow: options.readThemeFromTopWindow || (() => null),
 		t: options.t || (key => key),
+		pickText: options.pickText || (value => {
+			if (typeof value === 'string') { return value; }
+			if (value && typeof value === 'object') { return value.en || value.de || ''; }
+			return '';
+		}),
 		MutationObserver: class {
 			constructor(callback) {
 				this.callback = callback;
@@ -431,7 +465,7 @@ describe('admin/tab/layout.js', function () {
 		// Override registry with a mixed composition: one native panel + one plugin panel ref.
 		sandbox.win.MsghubAdminTabRegistry = {
 			panels: {
-				messages: { mountId: 'messages-root', titleKey: 'messages.key', assets: { css: [], js: [] } },
+				messages: { id: 'tab-messages', label: 'messages.key', ui: { kind: 'core', loader: 'globals', initGlobal: 'MsghubAdminTabMessages', css: [], js: [] } },
 			},
 			compositions: {
 				adminTab: {
@@ -495,7 +529,7 @@ describe('admin/tab/layout.js', function () {
 
 		sandbox.win.MsghubAdminTabRegistry = {
 			panels: {
-				messages: { mountId: 'messages-root', titleKey: 'messages.key', assets: { css: [], js: [] } },
+				messages: { id: 'tab-messages', label: 'messages.key', ui: { kind: 'core', loader: 'globals', initGlobal: 'MsghubAdminTabMessages', css: [], js: [] } },
 			},
 			compositions: {
 				adminTab: {
@@ -613,28 +647,52 @@ describe('admin/tab/layout.js', function () {
 		await loadJsFilesSequential(['a.js', 'b.js', 'a.js']);
 	});
 
-	it('updateDocumentTitle() uses the active tab label when tab navigation is present', async function () {
-		const { sandbox } = await loadLayoutSandbox();
-		const tab = createElement('a');
-		tab.setAttribute('href', '#tab-messages');
-		tab.textContent = 'Messages';
-		sandbox.document.querySelector = selector => {
-			if (selector === '.msghub-tab[href="#tab-messages"]') {
-				return tab;
-			}
-			if (selector === '.msghub-tab.is-active') {
-				return tab;
-			}
-			return null;
-		};
-
-		sandbox.window.__layoutFns.updateDocumentTitle('tab-messages');
-		assert.equal(sandbox.document.title, 'Messages — Message Hub');
-	});
-
-	it('activatePanel() sets title from the registry in single layout mode', async function () {
+	it('updateDocumentTitle() resolves descriptor label via pickText and uses hyphen-MessageHub format', async function () {
 		const { sandbox } = await loadLayoutSandbox({
 			t: key => (key === 'messages.key' ? 'Messages' : key),
+			pickText: value => {
+				if (typeof value === 'string') { return value === 'messages.key' ? 'Messages' : value; }
+				if (value && typeof value === 'object') { return value.en || ''; }
+				return '';
+			},
+		});
+
+		sandbox.window.__layoutFns.updateDocumentTitle({ id: 'tab-messages', label: 'messages.key' });
+		assert.equal(sandbox.document.title, 'Messages - MessageHub');
+	});
+
+	it('updateDocumentTitle() falls back to plain MessageHub when descriptor is undefined', async function () {
+		const { sandbox } = await loadLayoutSandbox();
+
+		sandbox.window.__layoutFns.updateDocumentTitle(undefined);
+		assert.equal(sandbox.document.title, 'MessageHub');
+	});
+
+	it('updateDocumentTitle() uses panelDescriptors default lookup when called with no args', async function () {
+		const { sandbox } = await loadLayoutSandbox({
+			pickText: value => (typeof value === 'string' ? (value === 'messages.key' ? 'Messages' : value) : ''),
+		});
+		const { registerPanelDescriptor, activatePanel, updateDocumentTitle } = sandbox.window.__layoutFns;
+
+		// Register descriptor and set the active panel id via activatePanel (needs panel in DOM).
+		const panel = createElement('div');
+		panel.id = 'tab-messages';
+		panel.classList = createClassList('msghub-panel');
+		sandbox.document.querySelectorAll = selector => (selector === '.msghub-panel' ? [panel] : []);
+
+		registerPanelDescriptor({ id: 'tab-messages', label: 'messages.key' });
+		activatePanel('tab-messages');
+
+		// Now reset the title to verify the no-arg call re-applies it.
+		sandbox.document.title = '';
+		updateDocumentTitle();
+		assert.equal(sandbox.document.title, 'Messages - MessageHub');
+	});
+
+	it('activatePanel() sets title from panelDescriptors via updateDocumentTitle', async function () {
+		const { sandbox } = await loadLayoutSandbox({
+			t: key => (key === 'messages.key' ? 'Messages' : key),
+			pickText: value => (typeof value === 'string' ? (value === 'messages.key' ? 'Messages' : value) : ''),
 		});
 		const activePanel = createElement('div');
 		activePanel.id = 'tab-messages';
@@ -653,66 +711,485 @@ describe('admin/tab/layout.js', function () {
 		};
 
 		sandbox.document.querySelectorAll = selector => {
-			if (selector === '.msghub-tab') {
-				return [];
-			}
-			if (selector === '.msghub-panel') {
-				return [activePanel, inactivePanel];
-			}
+			if (selector === '.msghub-tab') { return []; }
+			if (selector === '.msghub-panel') { return [activePanel, inactivePanel]; }
 			return [];
 		};
-		sandbox.document.querySelector = selector => {
-			if (selector === '.msghub-root') {
-				return null;
-			}
-			if (selector === '.msghub-tab.is-active') {
-				return null;
-			}
-			if (selector === '.msghub-tab[href="#tab-messages"]') {
-				return null;
-			}
-			return null;
-		};
 
+		// Register descriptor so activatePanel can resolve the title.
+		sandbox.window.__layoutFns.registerPanelDescriptor({ id: 'tab-messages', label: 'messages.key' });
 		sandbox.window.__layoutFns.activatePanel('tab-messages');
-		assert.equal(sandbox.document.title, 'Messages — Message Hub');
+
+		assert.equal(sandbox.document.title, 'Messages - MessageHub');
 		assert.deepEqual(JSON.parse(JSON.stringify(toggleCalls)), [
 			{ id: 'tab-messages', name: 'hidden', force: false },
 			{ id: 'tab-stats', name: 'hidden', force: true },
 		]);
 	});
 
-	it('initTabs() reflects the active panel label in document.title', async function () {
-		const { sandbox } = await loadLayoutSandbox();
+	it('initTabs() activates first panel and resolves title via panelDescriptors', async function () {
+		const { sandbox } = await loadLayoutSandbox({
+			pickText: value => (typeof value === 'string' ? (value === 'messages.key' ? 'Messages' : value) : ''),
+		});
 		const tab = createElement('a');
 		tab.setAttribute('href', '#tab-messages');
-		tab.textContent = 'Messages';
 		tab.classList = createClassList('msghub-tab');
 		const panel = createElement('div');
 		panel.id = 'tab-messages';
 		panel.classList = createClassList('msghub-panel');
 
 		sandbox.document.querySelectorAll = selector => {
-			if (selector === '.msghub-tab') {
-				return [tab];
-			}
-			if (selector === '.msghub-panel') {
-				return [panel];
-			}
+			if (selector === '.msghub-tab') { return [tab]; }
+			if (selector === '.msghub-panel') { return [panel]; }
 			return [];
 		};
 		sandbox.document.getElementById = id => (id === 'tab-messages' ? panel : null);
-		sandbox.document.querySelector = selector => {
-			if (selector === '.msghub-tab[href="#tab-messages"]') {
-				return tab;
-			}
-			if (selector === '.msghub-tab.is-active') {
-				return tab.classList.contains('is-active') ? tab : null;
-			}
-			return null;
+
+		// Register descriptor before initTabs so the first activation resolves the title.
+		sandbox.window.__layoutFns.registerPanelDescriptor({ id: 'tab-messages', label: 'messages.key' });
+		sandbox.window.__layoutFns.initTabs({ defaultPanelId: 'messages' });
+
+		assert.equal(sandbox.document.title, 'Messages - MessageHub');
+	});
+
+	it('buildLayoutFromRegistry() stores correct core panel descriptor — verified via activatePanel and computeAssetsForComposition', async function () {
+		// normalizeCorePanel is layout-internal. Its effects are tested through real consumers:
+		// - activatePanel resolves title via panelDescriptors (proves id + label were stored correctly)
+		// - computeAssetsForComposition returns the correct assets (proves ui.css/js were stored)
+		// - the panel container and mount div ids prove the canonical id and mountId derivation
+		const { sandbox, layoutHost } = await loadLayoutSandbox({
+			pickText: value => (typeof value === 'string' ? value : ''),
+		});
+		const { buildLayoutFromRegistry, activatePanel, computeAssetsForComposition } = sandbox.window.__layoutFns;
+
+		buildLayoutFromRegistry();
+
+		// id + label: panelDescriptors.get('tab-messages') must exist and carry label 'messages.key'.
+		// If id normalization were wrong, the lookup would miss and title would be 'MessageHub'.
+		activatePanel('tab-messages');
+		assert.equal(sandbox.document.title, 'messages.key - MessageHub');
+
+		// ui.css / ui.js: computeAssetsForComposition reads def.ui.css/js via getPanelDefinition.
+		const assets = computeAssetsForComposition(['messages']);
+		assert.deepEqual(JSON.parse(JSON.stringify(assets.css)), ['tab/panels/messages/styles.css']);
+		assert.deepEqual(JSON.parse(JSON.stringify(assets.js)), ['tab/panels/messages/index.js']);
+
+		// Mount container derivation: buildLayoutFromRegistry creates a div[id="messages-root"]
+		// inside the panel container, derived via def.id.slice('tab-'.length) + '-root'.
+		const fragment = layoutHost.children[0];
+		const messagesPanel = fragment?.children?.find(c => c?.getAttribute?.('id') === 'tab-messages');
+		assert.ok(messagesPanel, 'panel container div with id="tab-messages" must be created');
+		const mountDiv = messagesPanel?.children?.find(c => c?.getAttribute?.('id') === 'messages-root');
+		assert.ok(mountDiv, 'mount container with id="messages-root" must exist inside the panel div');
+	});
+
+	it('buildLayoutFromRegistry() passes surface and category from core panel def through to stored descriptors', async function () {
+		const { sandbox } = await loadLayoutSandbox({
+			pickText: value => (typeof value === 'string' ? value : ''),
+		});
+		const { buildLayoutFromRegistry, activatePanel } = sandbox.window.__layoutFns;
+
+		// Add surface + category to the mutable messages panel stub.
+		sandbox.win.MsghubAdminTabRegistry.panels.messages = {
+			...sandbox.win.MsghubAdminTabRegistry.panels.messages,
+			surface: 'admin',
+			category: 'dashboard',
 		};
 
-		sandbox.window.__layoutFns.initTabs({ defaultPanelId: 'messages' });
-		assert.equal(sandbox.document.title, 'Messages — Message Hub');
+		// Spy: buildLayoutFromRegistry resolves registerPanelDescriptor via the sandbox global.
+		// Replacing it after load intercepts the internal call without altering the stored result.
+		const registeredDescriptors = [];
+		const originalRegister = sandbox.registerPanelDescriptor;
+		sandbox.registerPanelDescriptor = d => {
+			registeredDescriptors.push(d);
+			originalRegister(d);
+		};
+
+		buildLayoutFromRegistry();
+
+		// Non-regression: title resolves correctly after normalization.
+		activatePanel('tab-messages');
+		assert.equal(sandbox.document.title, 'messages.key - MessageHub');
+
+		// surface + category must survive normalizeCorePanel and reach the stored descriptor.
+		const messageDescriptor = registeredDescriptors.find(d => d.id === 'tab-messages');
+		assert.ok(messageDescriptor, 'descriptor for tab-messages must have been registered');
+		assert.equal(messageDescriptor.surface, 'admin', 'surface must be passed through from panel def');
+		assert.equal(messageDescriptor.category, 'dashboard', 'category must be passed through from panel def');
+	});
+
+	it('resolvePanelMode() returns { active: false } when args.panel is absent', async function () {
+		const { sandbox } = await loadLayoutSandbox({ args: {} });
+		const result = sandbox.window.__layoutFns.resolvePanelMode();
+		assert.equal(result.active, false);
+	});
+
+	it('resolvePanelMode() resolves a known core panel and returns descriptor + registryKey', async function () {
+		const { sandbox } = await loadLayoutSandbox({ args: { panel: 'tab-messages' } });
+		const result = sandbox.window.__layoutFns.resolvePanelMode();
+		assert.equal(result.active, true);
+		assert.equal(result.isPlugin, false);
+		assert.equal(result.registryKey, 'messages');
+		assert.equal(result.descriptor.id, 'tab-messages');
+		assert.equal(result.descriptor.label, 'messages.key');
+		assert.ok(result.descriptor.ui && typeof result.descriptor.ui === 'object');
+	});
+
+	it('resolvePanelMode() returns unknownTarget error for a tab-prefixed id that has no registry match', async function () {
+		const { sandbox } = await loadLayoutSandbox({ args: { panel: 'tab-unknown' } });
+		const result = sandbox.window.__layoutFns.resolvePanelMode();
+		assert.equal(result.active, true);
+		assert.equal(result.error, 'unknownTarget');
+	});
+
+	it('resolvePanelMode() returns unknownTarget error when panel arg has no tab- prefix', async function () {
+		const { sandbox } = await loadLayoutSandbox({ args: { panel: 'noprefixvalue' } });
+		const result = sandbox.window.__layoutFns.resolvePanelMode();
+		assert.equal(result.active, true);
+		assert.equal(result.error, 'unknownTarget');
+	});
+
+	it('resolvePanelMode() identifies a plugin panel id and parses pluginRef', async function () {
+		const { sandbox } = await loadLayoutSandbox({ args: { panel: 'tab-plugin-IngestStates-0-presets' } });
+		const result = sandbox.window.__layoutFns.resolvePanelMode();
+		assert.equal(result.active, true);
+		assert.equal(result.isPlugin, true);
+		assert.equal(result.tabId, 'tab-plugin-IngestStates-0-presets');
+		assert.equal(result.pluginRef.pluginType, 'IngestStates');
+		assert.equal(result.pluginRef.instanceId, '0');
+		assert.equal(result.pluginRef.panelId, 'presets');
+	});
+
+	it('resolvePanelMode() parses a plugin panel id with a hyphenated panelId correctly', async function () {
+		const { sandbox } = await loadLayoutSandbox({ args: { panel: 'tab-plugin-IngestStates-0-bulk-apply' } });
+		const result = sandbox.window.__layoutFns.resolvePanelMode();
+		assert.equal(result.isPlugin, true);
+		assert.equal(result.pluginRef.panelId, 'bulk-apply');
+	});
+
+	it('resolvePanelMode() returns unknownTarget error for a plugin id with fewer than 3 segments', async function () {
+		const { sandbox } = await loadLayoutSandbox({ args: { panel: 'tab-plugin-X-0' } });
+		const result = sandbox.window.__layoutFns.resolvePanelMode();
+		assert.equal(result.active, true);
+		assert.equal(result.error, 'unknownTarget');
+	});
+
+	it('buildSinglePanelShell() renders panel div and mount div without a tab strip', async function () {
+		const { sandbox, layoutHost } = await loadLayoutSandbox();
+		const descriptor = { id: 'tab-messages', label: 'messages.key', ui: { kind: 'core' } };
+		sandbox.window.__layoutFns.buildSinglePanelShell(descriptor);
+
+		assert.equal(layoutHost.children.length, 1, 'layout host must have exactly one child (the panel)');
+		const panelEl = layoutHost.children[0];
+		assert.equal(panelEl.getAttribute('id'), 'tab-messages', 'panel div must use descriptor.id');
+		assert.ok(String(panelEl.className || '').includes('msghub-panel'), 'panel div must carry msghub-panel class');
+		// length === 1 proves no nav strip was created alongside the panel.
+
+		// Mount container uses core derivation: id.slice('tab-'.length) + '-root'.
+		const mountDiv = panelEl.children.find(c => c.getAttribute('id') === 'messages-root');
+		assert.ok(mountDiv, 'core panel mount container id must be messages-root');
+	});
+
+	it('buildSinglePanelShell() derives plugin mount id without -root suffix', async function () {
+		const { sandbox, layoutHost } = await loadLayoutSandbox();
+		const descriptor = { id: 'tab-plugin-IngestStates-0-presets', ui: { kind: 'plugin' } };
+		sandbox.window.__layoutFns.buildSinglePanelShell(descriptor);
+
+		const panelEl = layoutHost.children[0];
+		const mountDiv = panelEl.children.find(c => c.getAttribute('id') === 'plugin-IngestStates-0-presets');
+		assert.ok(mountDiv, 'plugin panel mount container id must be plugin-IngestStates-0-presets (no -root suffix)');
+	});
+
+	it('buildSinglePanelShell() calls registerPanelDescriptor with the descriptor', async function () {
+		const { sandbox } = await loadLayoutSandbox();
+		const registered = [];
+		const original = sandbox.registerPanelDescriptor;
+		sandbox.registerPanelDescriptor = d => { registered.push(d); original(d); };
+
+		const descriptor = { id: 'tab-messages', label: 'messages.key', ui: { kind: 'core' } };
+		sandbox.window.__layoutFns.buildSinglePanelShell(descriptor);
+
+		assert.equal(registered.length, 1, 'registerPanelDescriptor must be called exactly once');
+		assert.strictEqual(registered[0], descriptor, 'the original descriptor must be registered');
+	});
+
+	it('renderPanelModeError() uses t() to resolve the error key and renders it', async function () {
+		const tCalls = [];
+		const { sandbox, layoutHost } = await loadLayoutSandbox({
+			t: key => { tCalls.push(key); return `TRANSLATED:${key}`; },
+		});
+		sandbox.window.__layoutFns.renderPanelModeError('msghub.i18n.core.admin.ui.panel.error.unknownTarget.text');
+
+		assert.ok(
+			tCalls.includes('msghub.i18n.core.admin.ui.panel.error.unknownTarget.text'),
+			't() must be called with the error key',
+		);
+		assert.equal(layoutHost.children.length, 1, 'layout host must contain the error element');
+		const errorEl = layoutHost.children[0];
+		assert.ok(String(errorEl.className || '').includes('msghub-panel-mode-error'), 'error element must carry msghub-panel-mode-error class');
+		assert.equal(
+			errorEl.getAttribute('text') || errorEl.textContent || '',
+			'TRANSLATED:msghub.i18n.core.admin.ui.panel.error.unknownTarget.text',
+			'error text must come from t(), not a raw string',
+		);
+	});
+
+	it('normalizePluginPanel() produces a canonical PanelDescriptor for a plugin contribution', async function () {
+		const { sandbox } = await loadLayoutSandbox();
+		const { normalizePluginPanel } = sandbox.window.__layoutFns;
+
+		const contrib = { pluginType: 'IngestStates', instanceId: 0, panelId: 'presets', title: { en: 'Presets', de: 'Vorlagen' } };
+		const pluginRef = { pluginType: 'IngestStates', instanceId: 0, panelId: 'presets' };
+		const descriptor = normalizePluginPanel(contrib, pluginRef);
+
+		assert.equal(descriptor.id, 'tab-plugin-IngestStates-0-presets');
+		assert.deepEqual(descriptor.label, { en: 'Presets', de: 'Vorlagen' });
+		assert.equal(descriptor.ui.kind, 'plugin');
+		assert.equal(descriptor.ui.loader, 'esm');
+		// ui.entry is undefined — known gap (discover does not return bundle.entry).
+		assert.equal(descriptor.ui.entry, undefined);
+	});
+
+	it('normalizePluginPanel() passes contrib.app through to descriptor', async function () {
+		const { sandbox } = await loadLayoutSandbox();
+		const { normalizePluginPanel } = sandbox.window.__layoutFns;
+
+		const app = { name: 'Test App', url: 'https://example.com' };
+		const contrib = { pluginType: 'IngestStates', instanceId: 0, panelId: 'presets', title: 'key', app };
+		const descriptor = normalizePluginPanel(contrib, { pluginType: 'IngestStates', instanceId: 0, panelId: 'presets' });
+
+		assert.strictEqual(descriptor.app, app);
+	});
+
+	it('normalizePluginPanel() with no contrib.app yields descriptor.app === undefined', async function () {
+		const { sandbox } = await loadLayoutSandbox();
+		const { normalizePluginPanel } = sandbox.window.__layoutFns;
+
+		const contrib = { pluginType: 'IngestStates', instanceId: 0, panelId: 'presets', title: 'key' };
+		const descriptor = normalizePluginPanel(contrib, { pluginType: 'IngestStates', instanceId: 0, panelId: 'presets' });
+
+		assert.equal(descriptor.app, undefined, 'descriptor.app must be undefined when contrib carries no app block');
+	});
+
+	it('normalizePluginPanel() passes contrib.surface through to descriptor', async function () {
+		const { sandbox } = await loadLayoutSandbox();
+		const { normalizePluginPanel } = sandbox.window.__layoutFns;
+
+		const contrib = { pluginType: 'IngestStates', instanceId: 0, panelId: 'presets', title: 'key', surface: 'web' };
+		const descriptor = normalizePluginPanel(contrib, { pluginType: 'IngestStates', instanceId: 0, panelId: 'presets' });
+
+		assert.equal(descriptor.surface, 'web');
+	});
+
+	it('normalizePluginPanel() passes contrib.category through to descriptor', async function () {
+		const { sandbox } = await loadLayoutSandbox();
+		const { normalizePluginPanel } = sandbox.window.__layoutFns;
+
+		const contrib = { pluginType: 'IngestStates', instanceId: 0, panelId: 'presets', title: 'key', category: 'dashboard' };
+		const descriptor = normalizePluginPanel(contrib, { pluginType: 'IngestStates', instanceId: 0, panelId: 'presets' });
+
+		assert.equal(descriptor.category, 'dashboard');
+	});
+
+	it('normalizePluginPanel() leaves surface and category undefined when absent from contrib', async function () {
+		const { sandbox } = await loadLayoutSandbox();
+		const { normalizePluginPanel } = sandbox.window.__layoutFns;
+
+		const contrib = { pluginType: 'IngestStates', instanceId: 0, panelId: 'presets', title: 'key' };
+		const descriptor = normalizePluginPanel(contrib, { pluginType: 'IngestStates', instanceId: 0, panelId: 'presets' });
+
+		assert.equal(descriptor.surface, undefined);
+		assert.equal(descriptor.category, undefined);
+	});
+
+	it('registerPanelDescriptor() + updateDocumentTitle() round-trip (panelDescriptors map verified indirectly)', async function () {
+		const { sandbox } = await loadLayoutSandbox({
+			pickText: value => (typeof value === 'string' ? (value === 'presets.label' ? 'Presets' : value) : ''),
+		});
+		const { registerPanelDescriptor, activatePanel, updateDocumentTitle } = sandbox.window.__layoutFns;
+
+		const panel = createElement('div');
+		panel.id = 'tab-plugin-IngestStates-0-presets';
+		panel.classList = createClassList('msghub-panel');
+		sandbox.document.querySelectorAll = selector => (selector === '.msghub-panel' ? [panel] : []);
+
+		registerPanelDescriptor({ id: 'tab-plugin-IngestStates-0-presets', label: 'presets.label' });
+		activatePanel('tab-plugin-IngestStates-0-presets');
+
+		// Verify round-trip: no-arg updateDocumentTitle resolves registered descriptor.
+		sandbox.document.title = '';
+		updateDocumentTitle();
+		assert.equal(sandbox.document.title, 'Presets - MessageHub');
+	});
+
+	it('buildLayoutFromRegistry() registers descriptors and sets data-i18n to label', async function () {
+		const { sandbox, layoutHost } = await loadLayoutSandbox({
+			pickText: value => (typeof value === 'string' ? value : ''),
+		});
+		const { buildLayoutFromRegistry, updateDocumentTitle, activatePanel } = sandbox.window.__layoutFns;
+
+		buildLayoutFromRegistry();
+
+		// After build, activating a native panel should resolve title via registered descriptor.
+		const panel = layoutHost.children[0]?.children[1]; // nav[0], first panel[1]
+		if (panel) {
+			panel.classList = createClassList('msghub-panel');
+			sandbox.document.querySelectorAll = selector => (selector === '.msghub-panel' ? [panel] : []);
+		}
+
+		activatePanel('tab-stats');
+		assert.equal(sandbox.document.title, 'stats.key - MessageHub');
+	});
+
+	it('updateDocumentTitle() sets theme-color meta when descriptor.app.themeColor is present', async function () {
+		const { sandbox } = await loadLayoutSandbox({
+			pickText: value => (typeof value === 'string' ? value : ''),
+		});
+		const { updateDocumentTitle } = sandbox.window.__layoutFns;
+
+		updateDocumentTitle({ id: 'tab-messages', label: 'messages.key', app: { themeColor: '#1f6a53', name: 'App' } });
+
+		const meta = sandbox.document.head.querySelector('meta[name="theme-color"]');
+		assert.ok(meta, 'theme-color meta must exist in head after applyAppHeadMeta');
+		assert.equal(meta.getAttribute('content'), '#1f6a53');
+	});
+
+	it('updateDocumentTitle() sets application-name meta with pickText-resolved name', async function () {
+		const { sandbox } = await loadLayoutSandbox({
+			pickText: value => (typeof value === 'string' ? (value === 'some.name.key' ? 'App Name' : value) : ''),
+		});
+		const { updateDocumentTitle } = sandbox.window.__layoutFns;
+
+		updateDocumentTitle({ id: 'tab-messages', label: 'messages.key', app: { name: 'some.name.key' } });
+
+		const meta = sandbox.document.head.querySelector('meta[name="application-name"]');
+		assert.ok(meta, 'application-name meta must exist');
+		assert.equal(meta.getAttribute('content'), 'App Name');
+	});
+
+	it('updateDocumentTitle() uses shortName for apple-mobile-web-app-title when present', async function () {
+		const { sandbox } = await loadLayoutSandbox({
+			pickText: value => {
+				if (value === 'short.key') return 'Short';
+				if (value === 'name.key') return 'Name';
+				return typeof value === 'string' ? value : '';
+			},
+		});
+		const { updateDocumentTitle } = sandbox.window.__layoutFns;
+
+		updateDocumentTitle({
+			id: 'tab-messages',
+			label: 'messages.key',
+			app: { name: 'name.key', shortName: 'short.key' },
+		});
+
+		const meta = sandbox.document.head.querySelector('meta[name="apple-mobile-web-app-title"]');
+		assert.ok(meta, 'apple-mobile-web-app-title meta must exist');
+		assert.equal(meta.getAttribute('content'), 'Short');
+	});
+
+	it('updateDocumentTitle() falls back apple-mobile-web-app-title to name when shortName absent', async function () {
+		const { sandbox } = await loadLayoutSandbox({
+			pickText: value => (typeof value === 'string' ? (value === 'name.key' ? 'Name' : value) : ''),
+		});
+		const { updateDocumentTitle } = sandbox.window.__layoutFns;
+
+		updateDocumentTitle({ id: 'tab-messages', label: 'messages.key', app: { name: 'name.key' } });
+
+		const meta = sandbox.document.head.querySelector('meta[name="apple-mobile-web-app-title"]');
+		assert.ok(meta, 'apple-mobile-web-app-title meta must exist');
+		assert.equal(meta.getAttribute('content'), 'Name');
+	});
+
+	it('updateDocumentTitle() removes all three meta tags when descriptor has no app block', async function () {
+		const { sandbox } = await loadLayoutSandbox({
+			pickText: value => (typeof value === 'string' ? value : ''),
+		});
+		const { updateDocumentTitle } = sandbox.window.__layoutFns;
+
+		// First apply meta tags via a descriptor with app.
+		updateDocumentTitle({ id: 'tab-messages', label: 'messages.key', app: { themeColor: '#1f6a53', name: 'App' } });
+		assert.ok(
+			sandbox.document.head.querySelector('meta[name="theme-color"]'),
+			'theme-color must exist before panel switch',
+		);
+
+		// Switch to a descriptor without app — all three managed meta tags must be removed.
+		updateDocumentTitle({ id: 'tab-stats', label: 'stats.key' });
+
+		assert.equal(sandbox.document.head.querySelector('meta[name="theme-color"]'), null, 'theme-color must be removed');
+		assert.equal(
+			sandbox.document.head.querySelector('meta[name="application-name"]'),
+			null,
+			'application-name must be removed',
+		);
+		assert.equal(
+			sandbox.document.head.querySelector('meta[name="apple-mobile-web-app-title"]'),
+			null,
+			'apple-mobile-web-app-title must be removed',
+		);
+	});
+
+	it('applyAppHeadMeta is idempotent: repeated calls overwrite without creating duplicate tags', async function () {
+		const { sandbox } = await loadLayoutSandbox({
+			pickText: value => (typeof value === 'string' ? value : ''),
+		});
+		const { updateDocumentTitle } = sandbox.window.__layoutFns;
+
+		updateDocumentTitle({ id: 'tab-messages', label: 'messages.key', app: { themeColor: '#111', name: 'First' } });
+		updateDocumentTitle({ id: 'tab-messages', label: 'messages.key', app: { themeColor: '#222', name: 'Second' } });
+
+		const metas = sandbox.document.head.children.filter(c => c.getAttribute('name') === 'theme-color');
+		assert.equal(metas.length, 1, 'must have exactly one theme-color meta tag after two calls');
+		assert.equal(metas[0].getAttribute('content'), '#222', 'content must be from the second call');
+	});
+
+	it('resetAppHeadMeta() is idempotent: no error when meta tags are absent', async function () {
+		const { sandbox } = await loadLayoutSandbox({
+			pickText: value => (typeof value === 'string' ? value : ''),
+		});
+		const { updateDocumentTitle } = sandbox.window.__layoutFns;
+
+		// Call with no app block on a fresh head — tags are absent; must not throw.
+		assert.doesNotThrow(() => {
+			updateDocumentTitle({ id: 'tab-messages', label: 'messages.key' });
+		});
+	});
+
+	it('updateDocumentTitle() handles Altbestand {en, de} app.name via pickText bridge and removes tags on panel switch', async function () {
+		const { sandbox } = await loadLayoutSandbox({
+			pickText: value => {
+				if (typeof value === 'string') return value;
+				if (value && typeof value === 'object') return value.en || value.de || '';
+				return '';
+			},
+		});
+		const { updateDocumentTitle } = sandbox.window.__layoutFns;
+
+		// Activate a plugin panel with Altbestand {en,de} in label and app.name.
+		updateDocumentTitle({
+			id: 'tab-plugin-IngestStates-0-presets',
+			label: { en: 'Presets', de: 'Vorlagen' },
+			app: { name: { en: 'Ingest States', de: 'Ingest States DE' }, themeColor: '#333' },
+		});
+
+		assert.equal(sandbox.document.title, 'Presets - MessageHub');
+		const nameMeta = sandbox.document.head.querySelector('meta[name="application-name"]');
+		assert.ok(nameMeta, 'application-name meta must exist');
+		assert.equal(nameMeta.getAttribute('content'), 'Ingest States');
+
+		// Switch to a no-app panel — all three tags must be removed.
+		updateDocumentTitle({ id: 'tab-messages', label: 'messages.key' });
+
+		assert.equal(
+			sandbox.document.head.querySelector('meta[name="theme-color"]'),
+			null,
+			'theme-color must be removed after panel switch',
+		);
+		assert.equal(
+			sandbox.document.head.querySelector('meta[name="application-name"]'),
+			null,
+			'application-name must be removed after panel switch',
+		);
 	});
 });

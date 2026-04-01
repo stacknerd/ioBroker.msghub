@@ -7,7 +7,18 @@
  * Docs: ../../docs/ui/tab-registry.md
  *
  * Contents:
- * - `panels`: technical panel definitions (mount-id, title-key, assets, init-global).
+ * - `panels`: canonical PanelDescriptor definitions (`id`, `label`, `ui.kind`, `ui.loader`,
+ *   `ui.initGlobal`, `ui.css`, `ui.js`). Optional semantic fields: `surface` ('admin'|'web'|'both'
+ *   — eligibility gate, not a security concept) and `category` ('dashboard'|'user'|'admin'|...
+ *   — semantic group, basis for future accent coding; not a styling field). Both fields are
+ *   optional and without default; absence means unrestricted / unclassified.
+ *   Optional `app` block for panels that are installable as a PWA or surfaced in a standalone
+ *   web context. Required within `app`: `name` (i18n key string), `url` (canonical URL string).
+ *   Optional within `app`: `shortName` (falls back to `name` when absent), `themeColor` (CSS
+ *   color string for the theme-color meta tag), `icons` (array; paths are package-root-relative
+ *   per RFC-0012 — no host-side path assumptions). No existing core panel carries an `app`
+ *   block; the field is reserved for future installable app panels. Object keys remain the
+ *   short names used for composition references and asset loading (e.g. `'messages'`, `'plugins'`).
  * - `compositions`: composed views (layout, panel order, default panel).
  *
  * Integration:
@@ -29,11 +40,12 @@
 
 	const panels = Object.freeze({
 		messages: Object.freeze({
-			id: 'messages',
-			mountId: 'messages-root',
-			titleKey: 'msghub.i18n.core.admin.ui.tabs.messages.label',
-			initGlobal: 'MsghubAdminTabMessages',
-			assets: Object.freeze({
+			id: 'tab-messages',
+			label: 'msghub.i18n.core.admin.ui.tabs.messages.label',
+			ui: Object.freeze({
+				kind: 'core',
+				loader: 'globals',
+				initGlobal: 'MsghubAdminTabMessages',
 				css: Object.freeze(['tab/table.css', 'tab/panels/messages/styles.css']),
 				js: Object.freeze([
 					'tab/panels/messages/state.js',
@@ -52,11 +64,12 @@
 		}),
 
 		plugins: Object.freeze({
-			id: 'plugins',
-			mountId: 'plugins-root',
-			titleKey: 'msghub.i18n.core.admin.ui.tabs.plugins.label',
-			initGlobal: 'MsghubAdminTabPlugins',
-			assets: Object.freeze({
+			id: 'tab-plugins',
+			label: 'msghub.i18n.core.admin.ui.tabs.plugins.label',
+			ui: Object.freeze({
+				kind: 'core',
+				loader: 'globals',
+				initGlobal: 'MsghubAdminTabPlugins',
 				css: Object.freeze(['tab/panels/plugins/styles.css']),
 				js: Object.freeze([
 					'tab/panels/plugins/state.js',
