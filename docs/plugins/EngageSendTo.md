@@ -34,7 +34,7 @@ sendTo(
 	{
 		ref: 'demo.0.task.1',
 		kind: 'task',
-		level: 10, // notice
+		level: 10, // info
 		title: 'Laundry',
 		text: 'Empty the washing machine',
 		origin: { type: 'manual', system: 'javascript.0', id: 'demo' },
@@ -121,7 +121,7 @@ Error:
 Current values are defined in `src/MsgConstants.js`:
 
 - kinds: `task`, `status`, `appointment`, `shoppinglist`, `inventorylist`
-- levels: `0` (none), `10` (notice), `20` (warning), `30` (error)
+- levels: `0` (none), `10` (info), `20` (notice), `30` (warning), `40` (error), `50` (critical)
 
 ### Map encoding (`metrics`)
 
@@ -130,6 +130,16 @@ Responses are JSON-safe. If internal data contains `Map` values (for example `me
 ```js
 { "__msghubType": "Map", "value": [["k", {"val":1,"unit":"x","ts":1}]] }
 ```
+
+Request-side behavior:
+
+- `create` / `createIfAbsent` / `upsert` accept `metrics` either as:
+  - a plain object convenience form: `{ temperature: { val: 21.7, unit: 'C', ts } }`
+  - or the explicit encoded Map form shown above
+- `patch` / `patchIfPresent` support:
+  - `metrics: { set: {...}, delete: [...] }` for partial updates by key
+  - `metrics: { "__msghubType": "Map", value: [...] }` for full replacement
+- Internally, MsgHub still stores `metrics` as a real `Map`.
 
 ---
 
@@ -244,7 +254,9 @@ sendTo(
 					]
 				: undefined,
 
-		// Metrics are stored as a Map in MsgHub. Over `sendTo`, patch them after create (see `patch` below).
+		metrics: {
+			temperature: { val: 21.7, unit: 'C', ts: now },
+		},
 	},
 	res => console.log(JSON.stringify(res, null, 2)),
 );
@@ -330,6 +342,59 @@ Errors:
 
 - `BAD_REQUEST`: payload is missing / not an object / `ref` missing
 - `NOT_FOUND`: message does not exist
+- `VALIDATION_FAILED`: patch rejected by store/factory
+
+---
+
+### `createIfAbsent`
+
+Creates a message only when the `ref` does not exist yet.
+
+Request payload:
+
+- same message object as `create`
+
+Response `data`:
+
+```js
+{ ref: string, created: boolean, message?: object }
+```
+
+Semantics:
+
+- when `ref` did not exist: `{ created: true, message }`
+- when `ref` already exists: `{ created: false }` (no error, no mutation)
+
+Errors:
+
+- `BAD_REQUEST`: payload is not an object
+- `VALIDATION_FAILED`: invalid message payload
+- `CONFLICT`: message could not be added (for example normalized `ref` collision)
+
+---
+
+### `patchIfPresent`
+
+Patches an existing message only when the `ref` exists.
+
+Request payload:
+
+- same payload as `patch`
+
+Response `data`:
+
+```js
+{ ref: string, patched: boolean, message?: object }
+```
+
+Semantics:
+
+- when `ref` exists: `{ patched: true, message }`
+- when `ref` does not exist: `{ patched: false }` (no error, no mutation)
+
+Errors:
+
+- `BAD_REQUEST`: payload is missing / not an object / `ref` missing
 - `VALIDATION_FAILED`: patch rejected by store/factory
 
 ---
