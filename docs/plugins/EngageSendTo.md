@@ -274,6 +274,12 @@ Errors:
 - `VALIDATION_FAILED`: invalid message payload
 - `CONFLICT`: message could not be added (duplicate `ref` after normalization)
 
+Semantics note:
+
+- `create` returns the newly active (`quasiOpen`) message in `data.message`.
+- If the same `ref` exists only in a quasi-deleted lifecycle state (`deleted` / `closed` / `expired`),
+  the core may recreate it instead of treating it as a hard duplicate.
+
 ---
 
 ### `patch`
@@ -362,8 +368,10 @@ Response `data`:
 
 Semantics:
 
-- when `ref` did not exist: `{ created: true, message }`
-- when `ref` already exists: `{ created: false }` (no error, no mutation)
+- when no `quasiOpen` message with that `ref` exists: `{ created: true, message }`
+- when a `quasiOpen` message with that `ref` already exists: `{ created: false }` (no error, no mutation)
+- if the same `ref` exists only in a quasi-deleted lifecycle state (`deleted` / `closed` / `expired`),
+  the message is recreated and returned as `{ created: true, message }`
 
 Errors:
 
@@ -389,8 +397,13 @@ Response `data`:
 
 Semantics:
 
-- when `ref` exists: `{ patched: true, message }`
-- when `ref` does not exist: `{ patched: false }` (no error, no mutation)
+- when a stored message with `ref` exists: `{ patched: true, message }`
+- when no stored message with `ref` exists: `{ patched: false }` (no error, no mutation)
+
+Note:
+
+- `patchIfPresent` currently checks store presence, not only `quasiOpen` presence. This means it may still
+  patch messages that are present in quasi-deleted lifecycle states.
 
 Errors:
 
@@ -403,8 +416,12 @@ Errors:
 
 Upsert logic:
 
-- if `ref` exists → patch
-- if `ref` does not exist → create
+- if a `quasiOpen` message with `ref` exists → patch
+- otherwise → create
+
+This means:
+
+- a soft-deleted / closed / expired message with the same `ref` is recreated, not patched
 
 Request payload:
 
