@@ -170,12 +170,18 @@ registry (core) or from discover results (plugin).
 - connection info panel contents
 - disconnect/reconnect toasts
 - periodic `admin.ping`
-- resume-triggered recovery after a real background/return cycle (`visibilitychange -> visible`) and `pageshow` from bfcache (`event.persisted === true`)
+- one shared reconnect recovery runner for disconnect, ping-failure, and resume/browser-return triggers
+- resume-triggered restart of that runner after a real background/return cycle (`visibilitychange -> visible`) and `pageshow` from bfcache (`event.persisted === true`)
 - reconnect warmup that waits until `api.constants.get()` succeeds again
+- one guarded hard reload for late critical boot failures after a previously healthy shell
 
 The UI is treated as online only after a successful ping, not just after a transport-level socket reconnect.
-On mobile/browser resume, `boot.js` first nudges the socket transport and then runs delayed recovery checks,
-so normal initial page load is not treated like a resume event.
+When the shell is offline, `boot.js` starts an immediate reconnect attempt and then keeps retrying with
+bounded backoff until a successful ping marks the shell online again.
+Critical boot failures are classified at the boot layer (for example failed core CSS loads, panel
+script load/init failures, or a fatal top-level boot error), not at toast rendering. When the shell
+had already been healthy for more than three minutes, `boot.js` may spend exactly one hard reload
+to recover from such a late failure.
 
 ### 7) Provide the global editable-field context menu
 
@@ -246,10 +252,11 @@ It also triggers an unconditional initial `sendPing()` during module load, befor
 - `ctx` is frozen before it is handed to panels. Panels should treat it as read-only runtime state.
 - `ctx.elements` exposes getters for `connection`, `pluginsRoot`, `messagesRoot`, and `statsRoot`. In the current shell, `statsRoot` has no matching mount point in [`admin/tab.html`](../../admin/tab.html) and currently resolves to `null`.
 - Transport reconnect is not treated as sufficient proof of health. The shell waits for a successful ping before switching to online UX.
+- The healthy-shell marker is written only after `ensureBooted()` completed and the first successful ping marked the shell online.
 - Resume recovery is shell-owned and stays internal to `boot.js`; native panels do not receive a dedicated `onResume()` hook.
-- Resume recovery is armed only after the page was actually backgrounded; a normal reload/open must not trigger that path.
+- Resume recovery is armed only after the page was actually backgrounded; a normal reload/open must not trigger the resume restart path.
 - Reconnect warmup is centralized here. Panels are not expected to implement their own retry loop for core shell availability.
-- Clearly broken core boot states (for example failed core CSS loads or recorded panel boot errors) may escalate to one guarded hard reload per tab session window.
+- Early boot failures remain visible; only late critical failures after a previously healthy shell may trigger one guarded hard reload.
 - `pickText()` still exists in `runtime.js`, but hard-migrated panel/app metadata in the shell path no longer use it. `boot.js` resolves `data-i18n` nodes and plugin panel labels key-strict via `t(...)`.
 - Shell-wide timezone fallback warning is intentionally shown only once per page lifetime.
 - The connection panel reports the effective frontend format locale shown to the shell. When `args.locale` is present and valid, that value is shown instead of the old ambient browser-locale source.

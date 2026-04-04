@@ -498,28 +498,36 @@ let connPanelData = {};
 const CONN_TOAST_ID = 'msghub-connection-status';
 /** True while the "connection lost" toast is active; guards the reconnect toast. */
 let connLostToastActive = false;
-/** Core CSS assets that failed during boot. */
-let bootCssFailures = [];
-/** Per-panel fatal boot errors, keyed by panel id. */
-const bootPanelFailures = new Map();
-/** Fatal boot error outside panel-local failures. */
-let bootFatalErrorMessage = '';
-/** Session storage key guarding automatic reload loops. */
-const AUTO_RELOAD_SESSION_KEY = 'msghub.adminTab.autoReloadAt';
-/** Minimum time between automatic broken-boot reloads in one tab session. */
-const AUTO_RELOAD_COOLDOWN_MS = 2 * 60_000;
-/** Delayed recovery checks after a real resume/background return. */
-const RESUME_RECOVERY_BURSTS_MS = Object.freeze([1200, 4000]);
-/** Delay before a broken boot is escalated to a hard reload. */
-const RESUME_RELOAD_DELAY_MS = 2500;
-/** Debounce window for clustered resume/browser events. */
+/** Debounce window for clustered resume/browser-return events. */
 const RESUME_RECOVERY_DEBOUNCE_MS = 750;
-/** Monotonic token cancelling outdated resume-recovery timers. */
-let resumeRecoveryToken = 0;
+/** Progressive reconnect recovery delays after the immediate first nudge. */
+const RECONNECT_RECOVERY_DELAYS_MS = Object.freeze([1000, 4000, 10000]);
+/** Steady-state reconnect retry delay once the initial backoff sequence is exhausted. */
+const RECONNECT_RECOVERY_MAX_DELAY_MS = 15000;
+/** Current reconnect recovery attempt index. */
+let reconnectRecoveryAttempt = 0;
+/** Active reconnect recovery timer, or null when no runner is armed. */
+let reconnectRecoveryTimer = null;
 /** Last time a resume-recovery burst was started. */
 let lastResumeRecoveryAt = 0;
 /** True after the page was backgrounded at least once and is eligible for resume recovery. */
 let resumeRecoveryArmed = false;
+/** Core CSS assets that failed during the current boot. */
+let bootCssFailures = [];
+/** Per-panel fatal boot errors for the current boot, keyed by panel id. */
+const bootPanelFailures = new Map();
+/** Fatal boot error outside panel-local failures for the current boot. */
+let bootFatalErrorMessage = '';
+/** Minimum age of a previously healthy shell before a late critical failure may trigger one hard reload. */
+const CRITICAL_BOOT_RELOAD_MIN_AGE_MS = 3 * 60_000;
+/** Persistent storage key for the first healthy shell timestamp. */
+const HEALTHY_SHELL_SINCE_STORAGE_KEY = 'msghub.adminTab.healthyShellSince';
+/** Session guard key that prevents hard-reload loops after a late critical boot failure. */
+const CRITICAL_BOOT_RELOAD_USED_SESSION_KEY = 'msghub.adminTab.criticalBootReloadUsed';
+/** In-memory mirror of the stored healthy-shell timestamp. */
+let healthyShellSinceMs = 0;
+/** True after the current page lifetime recorded its first healthy shell state. */
+let healthyShellMarked = false;
 
 /**
  * Applies `data-i18n` text to static DOM nodes.
@@ -536,7 +544,119 @@ function applyStaticI18n() {
 }
 
 /**
- * Records a fatal panel boot failure for later recovery decisions.
+ * Returns the delay before the next reconnect recovery tick.
+ *
+ * @param {number} attemptIndex - Zero-based recovery attempt index.
+ * @returns {number} Delay in milliseconds.
+ */
+function getReconnectRecoveryDelay(attemptIndex) {
+	const index = Math.max(0, Math.trunc(Number(attemptIndex) || 0));
+	if (index < RECONNECT_RECOVERY_DELAYS_MS.length) {
+		return RECONNECT_RECOVERY_DELAYS_MS[index];
+	}
+	return RECONNECT_RECOVERY_MAX_DELAY_MS;
+}
+
+/**
+ * Stops the reconnect recovery runner and resets its backoff state.
+ */
+function stopReconnectRecovery() {
+	if (reconnectRecoveryTimer != null) {
+		clearTimeout(reconnectRecoveryTimer);
+		reconnectRecoveryTimer = null;
+	}
+	reconnectRecoveryAttempt = 0;
+}
+
+/**
+ * Actively nudges the socket transport to reconnect after a connection loss.
+ *
+ * @returns {boolean} `true` when a reconnect/open call was attempted.
+ */
+function attemptSocketReconnect() {
+	try {
+		if (!msghubSocket || msghubSocket.connected) {
+			return !!msghubSocket?.connected;
+		}
+		if (typeof msghubSocket.connect === 'function') {
+			msghubSocket.connect();
+			return true;
+		}
+		if (typeof msghubSocket.open === 'function') {
+			msghubSocket.open();
+			return true;
+		}
+		if (typeof msghubSocket.io?.open === 'function') {
+			msghubSocket.io.open();
+			return true;
+		}
+	} catch {
+		// ignore
+	}
+	return false;
+}
+
+/**
+ * Executes one reconnect recovery tick and re-arms the next backoff step when still offline.
+ *
+ * @param {string} _reason - Human-readable trigger source.
+ */
+function runReconnectRecoveryStep(_reason) {
+	if (connOnline) {
+		stopReconnectRecovery();
+		return;
+	}
+	reconnectRecoveryTimer = null;
+	if (msghubSocket?.connected) {
+		void sendPing();
+	} else {
+		attemptSocketReconnect();
+	}
+	const delayMs = getReconnectRecoveryDelay(reconnectRecoveryAttempt);
+	reconnectRecoveryAttempt += 1;
+	reconnectRecoveryTimer = setTimeout(() => runReconnectRecoveryStep(_reason), delayMs);
+}
+
+/**
+ * Starts or restarts the reconnect recovery runner.
+ *
+ * The runner is shared by disconnect, ping-failure, and resume paths. It performs an
+ * immediate first nudge and then keeps retrying with bounded backoff until a ping marks
+ * the shell online again.
+ *
+ * @param {string} reason - Human-readable trigger source.
+ * @param {{ restart?: boolean }} [options] - Runner options.
+ */
+function startReconnectRecovery(reason, options = {}) {
+	const normalizedReason = String(reason || 'unknown').trim() || 'unknown';
+	if (connOnline) {
+		stopReconnectRecovery();
+		return;
+	}
+	if (options.restart === true) {
+		stopReconnectRecovery();
+	} else if (reconnectRecoveryTimer != null) {
+		return;
+	}
+	runReconnectRecoveryStep(normalizedReason);
+}
+
+/**
+ * Restarts reconnect recovery after a debounced resume/browser-return event.
+ *
+ * @param {string} reason - Resume trigger source.
+ */
+function requestResumeRecovery(reason) {
+	const now = Date.now();
+	if (now - lastResumeRecoveryAt < RESUME_RECOVERY_DEBOUNCE_MS) {
+		return;
+	}
+	lastResumeRecoveryAt = now;
+	startReconnectRecovery(reason, { restart: true });
+}
+
+/**
+ * Records a fatal panel boot failure for later shell-health decisions.
  *
  * @param {string} panelId - Panel id.
  * @param {any} err - Error object or value.
@@ -563,58 +683,81 @@ function clearPanelBootFailure(panelId) {
 }
 
 /**
- * Detects whether the current boot state is clearly broken and should be healed.
+ * Detects whether the current boot is in a clearly broken state.
  *
- * Only hard invariants are considered here: failed core CSS assets, explicit panel
- * boot failures, or a top-level boot error.
- *
- * @returns {boolean} `true` when the boot is in a clearly broken state.
+ * @returns {boolean} `true` when critical boot errors are still present.
  */
 function hasCriticalBootFailure() {
 	return bootCssFailures.length > 0 || bootPanelFailures.size > 0 || !!bootFatalErrorMessage;
 }
 
 /**
- * Checks and records whether a hard auto-reload is allowed in this tab session.
+ * Marks the shell as healthy after boot completed and the first online state was confirmed.
  *
- * @returns {boolean} `true` when an auto-reload may proceed now.
+ * The timestamp is stored once per page lifetime and survives a browser/app reopen via localStorage,
+ * while the one-shot reload guard is reset for the new healthy session.
  */
-function acquireAutoReloadLease() {
+function markShellHealthy() {
+	if (healthyShellMarked || hasCriticalBootFailure()) {
+		return;
+	}
+	const now = Date.now();
+	healthyShellMarked = true;
+	healthyShellSinceMs = now;
 	try {
-		const storage = window?.sessionStorage;
-		if (!storage || typeof storage.getItem !== 'function' || typeof storage.setItem !== 'function') {
-			return true;
-		}
-		const now = Date.now();
-		const raw = storage.getItem(AUTO_RELOAD_SESSION_KEY);
-		const lastAt = raw == null ? Number.NaN : Number(raw);
-		if (Number.isFinite(lastAt) && now - lastAt < AUTO_RELOAD_COOLDOWN_MS) {
-			return false;
-		}
-		storage.setItem(AUTO_RELOAD_SESSION_KEY, String(now));
-		return true;
+		window.localStorage?.setItem?.(HEALTHY_SHELL_SINCE_STORAGE_KEY, String(now));
+		window.sessionStorage?.removeItem?.(CRITICAL_BOOT_RELOAD_USED_SESSION_KEY);
 	} catch {
-		return true;
+		// ignore storage access failures
 	}
 }
 
 /**
- * Reloads the page when the boot is clearly broken and the session budget allows it.
+ * Performs one guarded hard reload for late critical boot failures after a previously healthy shell.
  *
- * @param {string} reason - Human-readable recovery reason for logs.
- * @returns {boolean} `true` when a reload was triggered.
+ * Early boot failures stay visible. The helper only spends a hard reload when the shell had already
+ * been healthy for more than three minutes and the current browser session has not already used the
+ * reload budget.
+ *
+ * @param {string} _reason - Human-readable failure source for future diagnostics.
+ * @returns {boolean} `true` when a hard reload was triggered.
  */
-function reloadForCriticalBoot(reason) {
-	if (!hasCriticalBootFailure() || !acquireAutoReloadLease()) {
+function maybeHardReloadForLateCriticalBootFailure(_reason) {
+	if (!hasCriticalBootFailure()) {
 		return false;
 	}
-	try {
-		api?.log?.warn?.(`AdminTab auto-reload due to broken boot: ${String(reason || 'unknown_reason')}`);
-	} catch {
-		// ignore
+
+	let effectiveHealthySinceMs = healthyShellSinceMs;
+	if (!(effectiveHealthySinceMs > 0)) {
+		try {
+			const raw = window.localStorage?.getItem?.(HEALTHY_SHELL_SINCE_STORAGE_KEY) || '';
+			const parsed = Math.trunc(Number(raw));
+			if (parsed > 0) {
+				effectiveHealthySinceMs = parsed;
+				healthyShellSinceMs = parsed;
+			}
+		} catch {
+			// ignore storage access failures
+		}
 	}
+	if (!(effectiveHealthySinceMs > 0)) {
+		return false;
+	}
+	if (Date.now() - effectiveHealthySinceMs < CRITICAL_BOOT_RELOAD_MIN_AGE_MS) {
+		return false;
+	}
+
 	try {
-		window.location.reload();
+		if (window.sessionStorage?.getItem?.(CRITICAL_BOOT_RELOAD_USED_SESSION_KEY) === '1') {
+			return false;
+		}
+		window.sessionStorage?.setItem?.(CRITICAL_BOOT_RELOAD_USED_SESSION_KEY, '1');
+	} catch {
+		// ignore storage access failures and still try the reload once
+	}
+
+	try {
+		window.location?.reload?.();
 		return true;
 	} catch {
 		return false;
@@ -830,6 +973,9 @@ async function initPanelsForComposition(panelIds) {
 			} catch {
 				// ignore
 			}
+			if (maybeHardReloadForLateCriticalBootFailure(`panel-js:${panelId}`)) {
+				return;
+			}
 			continue;
 		}
 
@@ -846,6 +992,9 @@ async function initPanelsForComposition(panelIds) {
 				ui?.toast?.({ text: String(err?.message || err), variant: 'danger' });
 			} catch {
 				// ignore
+			}
+			if (maybeHardReloadForLateCriticalBootFailure(`panel-init:${panelId}`)) {
+				return;
 			}
 		}
 	}
@@ -1023,8 +1172,12 @@ function ensureBooted() {
 					await ensureAdminI18nLoaded();
 					const assets = computeAssetsForComposition([registryKey]);
 					const cssRes = await loadCssFiles(assets.css);
+					bootCssFailures = Array.isArray(cssRes?.failed) ? cssRes.failed.slice() : [];
 					if (cssRes?.failed?.length) {
 						ui?.toast?.({ text: `Failed to load CSS: ${cssRes.failed.join(', ')}`, variant: 'danger' });
+						if (maybeHardReloadForLateCriticalBootFailure(`css:${cssRes.failed.join(',')}`)) {
+							return;
+						}
 					}
 					applyStaticI18n();
 					updateConnectionPanel();
@@ -1103,6 +1256,9 @@ function ensureBooted() {
 			bootCssFailures = Array.isArray(cssRes?.failed) ? cssRes.failed.slice() : [];
 			if (cssRes?.failed?.length) {
 				ui?.toast?.({ text: `Failed to load CSS: ${cssRes.failed.join(', ')}`, variant: 'danger' });
+				if (maybeHardReloadForLateCriticalBootFailure(`css:${cssRes.failed.join(',')}`)) {
+					return;
+				}
 			}
 
 			applyStaticI18n();
@@ -1181,6 +1337,7 @@ function ensureBooted() {
 			} catch {
 				// ignore
 			}
+			void maybeHardReloadForLateCriticalBootFailure('boot-catch');
 		});
 	return bootPromise;
 }
@@ -1201,13 +1358,13 @@ document.addEventListener('visibilitychange', () => {
 		return;
 	}
 	resumeRecoveryArmed = false;
-	triggerResumeRecovery('visibilitychange');
+	requestResumeRecovery('visibilitychange');
 });
 window.addEventListener('pageshow', event => {
 	if (!event?.persisted) {
 		return;
 	}
-	triggerResumeRecovery('pageshow');
+	requestResumeRecovery('pageshow');
 });
 
 let connectWarmupToken = 0;
@@ -1278,73 +1435,14 @@ const PING_TIMEOUT_MS = 5_000;
 let pingToken = 0;
 
 /**
- * Actively nudges the socket transport to reconnect after mobile suspend/resume.
- *
- * @returns {boolean} `true` when a reconnect/open call was attempted.
- */
-function attemptSocketReconnect() {
-	try {
-		if (!msghubSocket || msghubSocket.connected) {
-			return !!msghubSocket?.connected;
-		}
-		if (typeof msghubSocket.connect === 'function') {
-			msghubSocket.connect();
-			return true;
-		}
-		if (typeof msghubSocket.open === 'function') {
-			msghubSocket.open();
-			return true;
-		}
-		if (typeof msghubSocket.io?.open === 'function') {
-			msghubSocket.io.open();
-			return true;
-		}
-	} catch {
-		// ignore
-	}
-	return false;
-}
-
-/**
- * Starts an aggressive reconnect burst when the tab/browser becomes active again.
- *
- * @param {string} reason - Resume trigger source (`focus`, `pageshow`, ...).
- */
-function triggerResumeRecovery(reason) {
-	const now = Date.now();
-	if (now - lastResumeRecoveryAt < RESUME_RECOVERY_DEBOUNCE_MS) {
-		return;
-	}
-	lastResumeRecoveryAt = now;
-	const token = ++resumeRecoveryToken;
-	attemptSocketReconnect();
-	for (const delayMs of RESUME_RECOVERY_BURSTS_MS) {
-		setTimeout(() => {
-			if (resumeRecoveryToken !== token) {
-				return;
-			}
-			if (!msghubSocket?.connected) {
-				attemptSocketReconnect();
-				return;
-			}
-			void sendPing();
-		}, delayMs);
-	}
-	setTimeout(() => {
-		if (resumeRecoveryToken !== token) {
-			return;
-		}
-		reloadForCriticalBoot(reason);
-	}, RESUME_RELOAD_DELAY_MS);
-}
-
-/**
  * Transitions to online state and notifies all panels.
  */
 function onBecomeOnline() {
 	connOnline = true;
+	stopReconnectRecovery();
 	setConnStatus(true);
 	void ensureBooted().then(() => {
+		markShellHealthy();
 		void refreshRuntimeAbout();
 		applyStaticI18n();
 		updateConnectionPanel();
@@ -1371,6 +1469,7 @@ function onBecomeOffline() {
 	setConnStatus(false);
 	connectWarmupToken++;
 	connectWarmupPromise = null;
+	startReconnectRecovery('offline');
 	void ensureAdminI18nLoaded().then(() => {
 		applyStaticI18n();
 		updateConnectionPanel();
@@ -1415,6 +1514,8 @@ async function sendPing() {
 		lastPingLatencyMs = null;
 		if (connOnline) {
 			onBecomeOffline();
+		} else {
+			startReconnectRecovery('ping-failure');
 		}
 	}
 	// Keep the connection panel fresh after every non-superseded ping
@@ -1432,6 +1533,7 @@ msghubSocket.on('disconnect', () => {
 	if (connOnline) {
 		onBecomeOffline();
 	}
+	startReconnectRecovery('disconnect');
 });
 
 // Periodic health check — catches backend-dead / silently-broken socket scenarios.

@@ -198,6 +198,15 @@ globalThis.__execCommandSafe = execCommandSafe;
 		assert.match(source, /pageshow/);
 	});
 
+	it('routes late critical boot failures through the shell-level hard-reload helper', async function () {
+		const source = await readRepoFile('admin/tab/boot.js');
+		assert.match(source, /function maybeHardReloadForLateCriticalBootFailure\(_reason\)/);
+		assert.match(source, /Failed to load CSS:[\s\S]*maybeHardReloadForLateCriticalBootFailure\(`css:/);
+		assert.match(source, /renderPanelBootError\(panelId, err\);[\s\S]*maybeHardReloadForLateCriticalBootFailure\(`panel-js:/);
+		assert.match(source, /renderPanelBootError\(panelId, err\);[\s\S]*maybeHardReloadForLateCriticalBootFailure\(`panel-init:/);
+		assert.match(source, /catch\(err => \{[\s\S]*maybeHardReloadForLateCriticalBootFailure\('boot-catch'\)/);
+	});
+
 	it('keeps composition resolution delegated to shared layout helpers', async function () {
 		const source = await readRepoFile('admin/tab/boot.js');
 		assert.match(source, /\bgetActiveComposition\s*\(/);
@@ -718,6 +727,39 @@ globalThis.__getLatency = () => lastPingLatencyMs;
 		assert.equal(offlineCalls.length, 1);
 	});
 
+	it('sendPing starts reconnect recovery when health checks fail while already offline', async function () {
+		const source = await readRepoFile('admin/tab/boot.js');
+		const fnSource = 'async ' + extractFunctionSource(source, 'sendPing');
+		const recoveryReasons = [];
+		const sandbox = runInSandbox(
+			`
+let pingToken = 0;
+let connOnline = false;
+let lastPingLatencyMs = 50;
+const PING_TIMEOUT_MS = 5000;
+${fnSource}
+globalThis.__sendPing = sendPing;
+globalThis.__getLatency = () => lastPingLatencyMs;
+`,
+			{
+				msghubRequest: () => Promise.reject(new Error('fail')),
+				onBecomeOnline: () => {},
+				onBecomeOffline: () => {},
+				startReconnectRecovery: reason => recoveryReasons.push(String(reason)),
+				updateConnectionPanel: () => {},
+				Promise,
+				setTimeout,
+				clearTimeout,
+				Date,
+			},
+			'boot-sendPing-offline-recovery.js',
+		);
+
+		await sandbox.__sendPing();
+		assert.equal(sandbox.__getLatency(), null, 'RTT should be cleared on ping failure');
+		assert.deepEqual(recoveryReasons, ['ping-failure']);
+	});
+
 	it('attemptSocketReconnect actively reconnects a disconnected socket', async function () {
 		const source = await readRepoFile('admin/tab/boot.js');
 		const fnSource = extractFunctionSource(source, 'attemptSocketReconnect');
@@ -742,110 +784,189 @@ globalThis.__fn = attemptSocketReconnect;
 		assert.equal(connectCalls, 1);
 	});
 
-	it('acquireAutoReloadLease throttles automatic reloads per tab session', async function () {
+	it('getReconnectRecoveryDelay returns bounded progressive backoff', async function () {
 		const source = await readRepoFile('admin/tab/boot.js');
-		const fnSource = extractFunctionSource(source, 'acquireAutoReloadLease');
-		const sessionStorage = createStorage();
+		const fnSource = extractFunctionSource(source, 'getReconnectRecoveryDelay');
 		const sandbox = runInSandbox(
 			`
-const AUTO_RELOAD_SESSION_KEY = 'msghub.adminTab.autoReloadAt';
-const AUTO_RELOAD_COOLDOWN_MS = 120000;
+const RECONNECT_RECOVERY_DELAYS_MS = Object.freeze([1000, 4000, 10000]);
+const RECONNECT_RECOVERY_MAX_DELAY_MS = 15000;
 ${fnSource}
-globalThis.__fn = acquireAutoReloadLease;
+globalThis.__fn = getReconnectRecoveryDelay;
 `,
 			{
-				window: { sessionStorage },
-				Date: { now: () => 1000 },
+				Math,
 				Number,
+				Object,
 			},
-			'boot-acquireAutoReloadLease.js',
+			'boot-getReconnectRecoveryDelay.js',
 		);
 
-		assert.equal(sandbox.__fn(), true);
-		assert.equal(sandbox.__fn(), false);
+		assert.equal(sandbox.__fn(0), 1000);
+		assert.equal(sandbox.__fn(1), 4000);
+		assert.equal(sandbox.__fn(2), 10000);
+		assert.equal(sandbox.__fn(99), 15000);
 	});
 
-	it('reloadForCriticalBoot reloads only for hard boot failures within the budget', async function () {
+	it('startReconnectRecovery keeps restart and dedupe guards in the source contract', async function () {
 		const source = await readRepoFile('admin/tab/boot.js');
-		const fnSource = extractFunctionSource(source, 'reloadForCriticalBoot');
-		let reloadCalls = 0;
-		const warnings = [];
-		const sandbox = runInSandbox(
-			`
-${fnSource}
-globalThis.__fn = reloadForCriticalBoot;
-`,
-			{
-				hasCriticalBootFailure: () => true,
-				acquireAutoReloadLease: () => true,
-				api: { log: { warn: msg => warnings.push(String(msg)) } },
-				window: { location: { reload: () => reloadCalls++ } },
-			},
-			'boot-reloadForCriticalBoot.js',
-		);
-
-		assert.equal(sandbox.__fn('resume'), true);
-		assert.equal(reloadCalls, 1);
-		assert.equal(warnings.length, 1);
+		assert.match(source, /function startReconnectRecovery\(reason, options = \{\}\)/);
+		assert.match(source, /options\.restart === true/);
+		assert.match(source, /reconnectRecoveryTimer != null/);
+		assert.match(source, /runReconnectRecoveryStep\(normalizedReason\)/);
 	});
 
-	it('triggerResumeRecovery debounces clustered resume events and schedules delayed resume checks', async function () {
+	it('requestResumeRecovery debounces clustered resume events and restarts the runner', async function () {
 		const source = await readRepoFile('admin/tab/boot.js');
-		const fnSource = extractFunctionSource(source, 'triggerResumeRecovery');
-		const timers = [];
-		let reconnectCalls = 0;
-		let pingCalls = 0;
-		let reloadChecks = 0;
+		const fnSource = extractFunctionSource(source, 'requestResumeRecovery');
+		let now = 1000;
+		const starts = [];
 		const sandbox = runInSandbox(
 			`
 let lastResumeRecoveryAt = 0;
-let resumeRecoveryToken = 0;
 const RESUME_RECOVERY_DEBOUNCE_MS = 750;
-const RESUME_RECOVERY_BURSTS_MS = Object.freeze([1200, 4000]);
-const RESUME_RELOAD_DELAY_MS = 2500;
 ${fnSource}
-globalThis.__fn = triggerResumeRecovery;
+globalThis.__fn = requestResumeRecovery;
 `,
 			{
-				Date: { now: (() => {
-					let now = 1000;
-					return () => now;
-				})() },
-				setTimeout: (fn, delay) => {
-					timers.push({ fn, delay });
-					return timers.length;
-				},
-				attemptSocketReconnect: () => {
-					reconnectCalls++;
-				},
-				msghubSocket: { connected: true },
-				sendPing: () => {
-					pingCalls++;
-					return Promise.resolve();
-				},
-				reloadForCriticalBoot: () => {
-					reloadChecks++;
-					return false;
-				},
-				Object,
-				Promise,
+				Date: { now: () => now },
+				startReconnectRecovery: (reason, options) => starts.push([String(reason), options?.restart === true]),
 			},
-			'boot-triggerResumeRecovery.js',
+			'boot-requestResumeRecovery.js',
 		);
 
 		sandbox.__fn('visibilitychange');
 		sandbox.__fn('pageshow');
+		now = 2000;
+		sandbox.__fn('pageshow');
 
-		assert.deepEqual(
-			timers.map(t => t.delay),
-			[1200, 4000, 2500],
+		assert.deepEqual(starts, [
+			['visibilitychange', true],
+			['pageshow', true],
+		]);
+	});
+
+	it('markShellHealthy stores the first healthy timestamp and clears the session reload guard', async function () {
+		const source = await readRepoFile('admin/tab/boot.js');
+		const fnSource = extractFunctionSource(source, 'markShellHealthy');
+		const localStorage = createStorage();
+		const sessionStorage = createStorage({
+			'msghub.adminTab.criticalBootReloadUsed': '1',
+		});
+		let now = 123456;
+		const sandbox = runInSandbox(
+			`
+let healthyShellSinceMs = 0;
+let healthyShellMarked = false;
+const HEALTHY_SHELL_SINCE_STORAGE_KEY = 'msghub.adminTab.healthyShellSince';
+const CRITICAL_BOOT_RELOAD_USED_SESSION_KEY = 'msghub.adminTab.criticalBootReloadUsed';
+${fnSource}
+globalThis.__fn = markShellHealthy;
+globalThis.__state = () => ({ healthyShellSinceMs, healthyShellMarked });
+`,
+			{
+				Date: { now: () => now },
+				hasCriticalBootFailure: () => false,
+				window: { localStorage, sessionStorage },
+			},
+			'boot-markShellHealthy.js',
 		);
-		for (const timer of timers) {
-			timer.fn();
-		}
-		assert.equal(reconnectCalls, 1);
-		assert.equal(pingCalls, 2);
-		assert.equal(reloadChecks, 1);
+
+		sandbox.__fn();
+		now = 999999;
+		sandbox.__fn();
+
+		assert.deepEqual(JSON.parse(JSON.stringify(sandbox.__state())), {
+			healthyShellSinceMs: 123456,
+			healthyShellMarked: true,
+		});
+		assert.equal(localStorage.getItem('msghub.adminTab.healthyShellSince'), '123456');
+		assert.equal(sessionStorage.getItem('msghub.adminTab.criticalBootReloadUsed'), null);
+	});
+
+	it('maybeHardReloadForLateCriticalBootFailure reloads once after a healthy shell older than three minutes', async function () {
+		const source = await readRepoFile('admin/tab/boot.js');
+		const fnSource = extractFunctionSource(source, 'maybeHardReloadForLateCriticalBootFailure');
+		const localStorage = createStorage({
+			'msghub.adminTab.healthyShellSince': String(500000 - (3 * 60 * 1000 + 1)),
+		});
+		const sessionStorage = createStorage();
+		let reloadCalls = 0;
+		const sandbox = runInSandbox(
+			`
+let healthyShellSinceMs = 0;
+const CRITICAL_BOOT_RELOAD_MIN_AGE_MS = 3 * 60_000;
+const HEALTHY_SHELL_SINCE_STORAGE_KEY = 'msghub.adminTab.healthyShellSince';
+const CRITICAL_BOOT_RELOAD_USED_SESSION_KEY = 'msghub.adminTab.criticalBootReloadUsed';
+${fnSource}
+globalThis.__fn = maybeHardReloadForLateCriticalBootFailure;
+globalThis.__state = () => ({ healthyShellSinceMs });
+`,
+			{
+				Date: { now: () => 500000 },
+				hasCriticalBootFailure: () => true,
+				window: {
+					localStorage,
+					sessionStorage,
+					location: {
+						reload: () => {
+							reloadCalls++;
+						},
+					},
+				},
+			},
+			'boot-maybeHardReloadForLateCriticalBootFailure-aged.js',
+		);
+
+		assert.equal(sandbox.__fn('panel-init:messages'), true);
+		assert.equal(sandbox.__fn('panel-init:messages'), false);
+		assert.equal(reloadCalls, 1);
+		assert.equal(sessionStorage.getItem('msghub.adminTab.criticalBootReloadUsed'), '1');
+		assert.deepEqual(JSON.parse(JSON.stringify(sandbox.__state())), {
+			healthyShellSinceMs: 319999,
+		});
+	});
+
+	it('maybeHardReloadForLateCriticalBootFailure stays inactive before the three-minute gate', async function () {
+		const source = await readRepoFile('admin/tab/boot.js');
+		const fnSource = extractFunctionSource(source, 'maybeHardReloadForLateCriticalBootFailure');
+		const localStorage = createStorage({
+			'msghub.adminTab.healthyShellSince': String(600000 - 179999),
+		});
+		const sessionStorage = createStorage();
+		let reloadCalls = 0;
+		const sandbox = runInSandbox(
+			`
+let healthyShellSinceMs = 0;
+const CRITICAL_BOOT_RELOAD_MIN_AGE_MS = 3 * 60_000;
+const HEALTHY_SHELL_SINCE_STORAGE_KEY = 'msghub.adminTab.healthyShellSince';
+const CRITICAL_BOOT_RELOAD_USED_SESSION_KEY = 'msghub.adminTab.criticalBootReloadUsed';
+${fnSource}
+globalThis.__fn = maybeHardReloadForLateCriticalBootFailure;
+globalThis.__state = () => ({ healthyShellSinceMs });
+`,
+			{
+				Date: { now: () => 600000 },
+				hasCriticalBootFailure: () => true,
+				window: {
+					localStorage,
+					sessionStorage,
+					location: {
+						reload: () => {
+							reloadCalls++;
+						},
+					},
+				},
+			},
+			'boot-maybeHardReloadForLateCriticalBootFailure-young.js',
+		);
+
+		assert.equal(sandbox.__fn('css:tab/table.css'), false);
+		assert.equal(reloadCalls, 0);
+		assert.equal(sessionStorage.getItem('msghub.adminTab.criticalBootReloadUsed'), null);
+		assert.deepEqual(JSON.parse(JSON.stringify(sandbox.__state())), {
+			healthyShellSinceMs: 420001,
+		});
 	});
 
 	it('initConnectionPanelInteraction registers hover, touch, and outside-click handlers', async function () {
@@ -1419,6 +1540,7 @@ globalThis.__ensureBooted = ensureBooted;
 				activatePanel: id => {
 					activatePanelCalls.push(id);
 				},
+				maybeHardReloadForLateCriticalBootFailure: () => false,
 				initPanelsForComposition: async keys => {
 					initPanelsForCompositionCalls.push([...keys]);
 				},
@@ -1503,6 +1625,7 @@ globalThis.__ensureBooted = ensureBooted;
 				activatePanel: id => {
 					activatePanelCalls.push(id);
 				},
+				maybeHardReloadForLateCriticalBootFailure: () => false,
 				getActiveComposition: () => {
 					getActiveCompositionCalls.push(true);
 					return null;
@@ -1588,6 +1711,7 @@ globalThis.__ensureBooted = ensureBooted;
 				hydratePluginPanels: async () => {},
 				mountPluginPanelIfNeeded: () => {},
 				activatePanel: () => {},
+				maybeHardReloadForLateCriticalBootFailure: () => false,
 				getActiveComposition: () => null,
 				createMsghubPluginUiHost: () => ({}),
 				msghubRequest: async cmd => {
@@ -1650,6 +1774,7 @@ globalThis.__ensureBooted = ensureBooted;
 					if (cmd === 'admin.pluginUi.discover') return []; // no matching contrib
 					return null;
 				},
+				maybeHardReloadForLateCriticalBootFailure: () => false,
 				hydratePluginPanels: async () => {
 					throw new Error('hydratePluginPanels must not be called when contrib is not found');
 				},
@@ -1719,6 +1844,7 @@ globalThis.__ensureBooted = ensureBooted;
 				hydratePluginPanels: async () => {},
 				mountPluginPanelIfNeeded: () => {},
 				activatePanel: () => {},
+				maybeHardReloadForLateCriticalBootFailure: () => false,
 				getActiveComposition: () => {
 					getActiveCompositionCalls.push(true);
 					return null;
@@ -1882,6 +2008,7 @@ globalThis.__ensureBooted = ensureBooted;
 				buildSinglePanelShell: () => {
 					buildSinglePanelShellCalls.push(true);
 				},
+				maybeHardReloadForLateCriticalBootFailure: () => false,
 				ui: null,
 			},
 			'boot-panel-mode-error.js',
