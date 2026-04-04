@@ -1,4 +1,4 @@
-/* global window, document, location, HTMLElement, HTMLInputElement, HTMLTextAreaElement, t, lang, pickText, createUi, createAdminApi, msghubRequest, msghubSocket, adapterInstance, args, h, getPanelDefinition, win, loadJsFilesSequential, renderPanelBootError, buildLayoutFromRegistry, getActiveComposition, computeAssetsForComposition, ensureAdminI18nLoaded, loadCssFiles, initTabs, activatePanel, updateDocumentTitle, isEmbeddedInAdmin, overrideLang, createMsghubPluginUiHost, normalizePluginPanel, registerPanelDescriptor, resolvePanelMode, buildSinglePanelShell, renderPanelModeError */
+/* global window, document, location, HTMLElement, HTMLInputElement, HTMLTextAreaElement, t, lang, createUi, createAdminApi, msghubRequest, msghubSocket, adapterInstance, args, h, getPanelDefinition, win, loadJsFilesSequential, renderPanelBootError, buildLayoutFromRegistry, getActiveComposition, computeAssetsForComposition, ensureAdminI18nLoaded, loadCssFiles, initTabs, activatePanel, updateDocumentTitle, isEmbeddedInAdmin, overrideLang, createMsghubPluginUiHost, normalizePluginPanel, registerPanelDescriptor, resolvePanelMode, buildSinglePanelShell, renderPanelModeError, applyCategoryMarker, mergePluginI18n, pickText */
 'use strict';
 
 /**
@@ -89,7 +89,23 @@ function applyRuntimeAboutPayload(payload) {
 				: '';
 		if (remoteLang) {
 			overrideLang(remoteLang);
-			void ensureAdminI18nLoaded().then(() => applyStaticI18n());
+			void ensureAdminI18nLoaded()
+				.then(() =>
+					msghubRequest('admin.pluginUi.discover', { lang })
+						.catch(() => null)
+						.then(contributions => {
+							for (const contrib of Array.isArray(contributions) ? contributions : []) {
+								const pluginType =
+									typeof contrib?.pluginType === 'string' ? contrib.pluginType.trim() : '';
+								if (!pluginType || !contrib?.i18n?.translations) {
+									continue;
+								}
+								mergePluginI18n(pluginType, contrib.i18n.translations);
+							}
+						}),
+				)
+				.catch(() => undefined)
+				.then(() => applyStaticI18n());
 		}
 	}
 
@@ -514,9 +530,9 @@ function applyStaticI18n() {
 		if (!key) {
 			continue;
 		}
-		el.textContent = pickText(key);
+		el.textContent = t(key);
 	}
-	updateDocumentTitle();
+	void updateDocumentTitle();
 }
 
 /**
@@ -776,8 +792,9 @@ function initPanelById(panelId) {
 		throw new Error(`Panel '${id}' did not register '${initGlobal}.init'`);
 	}
 
-	// Mount container id is derived deterministically from the canonical panel id.
-	const mountId = def.id ? `${def.id.slice('tab-'.length)}-root` : '';
+	// Mount container id is derived deterministically from the producer-local core panel id.
+	const localPanelId = typeof def.id === 'string' ? def.id.trim() : String(id || '').trim();
+	const mountId = localPanelId ? `${localPanelId}-root` : '';
 	const mountEl = mountId ? document.getElementById(mountId) : null;
 	if (mountId && !mountEl) {
 		throw new Error(`Panel '${id}' mount container '${mountId}' is missing in DOM`);
@@ -852,8 +869,15 @@ async function hydratePluginPanels(refs, host, knownContributions = null) {
 	if (knownContributions !== null) {
 		contributions = knownContributions;
 	} else {
-		const r = await msghubRequest('admin.pluginUi.discover', {}).catch(() => null);
+		const r = await msghubRequest('admin.pluginUi.discover', { lang }).catch(() => null);
 		contributions = Array.isArray(r) ? r : [];
+	}
+	for (const contrib of Array.isArray(contributions) ? contributions : []) {
+		const pluginType = typeof contrib?.pluginType === 'string' ? contrib.pluginType.trim() : '';
+		if (!pluginType || !contrib?.i18n?.translations) {
+			continue;
+		}
+		mergePluginI18n(pluginType, contrib.i18n.translations);
 	}
 
 	const enabledTabIds = [];
@@ -862,6 +886,7 @@ async function hydratePluginPanels(refs, host, knownContributions = null) {
 			const key = `plugin-${ref.pluginType}-${ref.instanceId}-${ref.panelId}`;
 			const tabId = `tab-${key}`;
 			const container = document.getElementById(key);
+			const panelEl = document.getElementById(tabId);
 			const contrib = Array.isArray(contributions)
 				? contributions.find(
 						c =>
@@ -879,7 +904,10 @@ async function hydratePluginPanels(refs, host, knownContributions = null) {
 			if (tabEl) {
 				tabEl.removeAttribute('aria-disabled');
 				tabEl.classList.remove('is-disabled');
-				const label = api.i18n.pickText(contrib.title);
+				if (typeof contrib.label === 'string' && contrib.label.trim()) {
+					tabEl.setAttribute('data-i18n', contrib.label);
+				}
+				const label = typeof contrib.label === 'string' ? t(contrib.label) : '';
 				if (label) {
 					tabEl.textContent = label;
 				}
@@ -897,6 +925,7 @@ async function hydratePluginPanels(refs, host, knownContributions = null) {
 			// resolve the panel title without querying DOM tab text.
 			const descriptor = normalizePluginPanel(contrib, ref);
 			registerPanelDescriptor(descriptor);
+			applyCategoryMarker(panelEl, descriptor.category);
 
 			enabledTabIds.push(tabId);
 		} catch {
@@ -1016,7 +1045,7 @@ function ensureBooted() {
 				const pluginUiHost = createMsghubPluginUiHost({ request: msghubRequest, api });
 				ui?.spinner?.show?.({ blocking: true });
 
-				const rawContribs = await msghubRequest('admin.pluginUi.discover', {}).catch(() => null);
+				const rawContribs = await msghubRequest('admin.pluginUi.discover', { lang }).catch(() => null);
 				const contributions = Array.isArray(rawContribs) ? rawContribs : [];
 				const contrib = contributions.find(
 					c =>
@@ -1059,7 +1088,7 @@ function ensureBooted() {
 			const isWildcard = Array.isArray(comp?.panels) && comp.panels.length === 1 && comp.panels[0] === '*';
 			let prefetchedContributions = null;
 			if (isWildcard) {
-				const r = await msghubRequest('admin.pluginUi.discover', {}).catch(() => null);
+				const r = await msghubRequest('admin.pluginUi.discover', { lang }).catch(() => null);
 				prefetchedContributions = Array.isArray(r) ? r : [];
 			}
 

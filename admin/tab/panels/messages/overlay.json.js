@@ -303,6 +303,7 @@
 			 */
 			function renderAnnotated(value, pathParts = [], indent = 0) {
 				const IND = '  ';
+				const branchObjects = [];
 
 				/**
 				 * Creates one output line.
@@ -500,58 +501,74 @@
 						return { tailValueEl: targetEl };
 					}
 					if (Array.isArray(val)) {
+						if (branchObjects.includes(val)) {
+							throw new TypeError('Converting circular structure to JSON');
+						}
 						if (val.length === 0) {
 							appendSpan(targetEl, 'msghub-json-punct', '[]');
 							return { tailValueEl: targetEl };
 						}
+						branchObjects.push(val);
 						appendSpan(targetEl, 'msghub-json-punct', '[');
 						// Detect actions/actionsInactive arrays at root level for action buttons.
 						const isActionsArray =
 							currentPath.length === 1 &&
 							(currentPath[0] === 'actions' || currentPath[0] === 'actionsInactive');
 						const isInactiveArray = isActionsArray && currentPath[0] === 'actionsInactive';
-						for (let i = 0; i < val.length; i++) {
-							const line = createLine(level + 1);
-							const rendered = renderValue(
-								val[i],
-								currentPath.concat(String(i)),
-								level + 1,
-								line.valueEl,
-							);
-							if (i < val.length - 1) {
-								appendSpan(rendered.tailValueEl, 'msghub-json-punct', ',');
+						try {
+							for (let i = 0; i < val.length; i++) {
+								const line = createLine(level + 1);
+								const rendered = renderValue(
+									val[i],
+									currentPath.concat(String(i)),
+									level + 1,
+									line.valueEl,
+								);
+								if (i < val.length - 1) {
+									appendSpan(rendered.tailValueEl, 'msghub-json-punct', ',');
+								}
+								if (isActionsArray && isCoreActionItem(val[i])) {
+									appendActionButton(val[i].id, val[i].type, isInactiveArray, level + 2);
+								}
+								if (isActionsArray && !isInactiveArray && isLinkActionItem(val[i])) {
+									appendLinkButton(val[i].payload, level + 2);
+								}
 							}
-							if (isActionsArray && isCoreActionItem(val[i])) {
-								appendActionButton(val[i].id, val[i].type, isInactiveArray, level + 2);
-							}
-							if (isActionsArray && !isInactiveArray && isLinkActionItem(val[i])) {
-								appendLinkButton(val[i].payload, level + 2);
-							}
+						} finally {
+							branchObjects.pop();
 						}
 						const closeLine = createLine(level);
 						appendSpan(closeLine.valueEl, 'msghub-json-punct', ']');
 						return { tailValueEl: closeLine.valueEl };
 					}
 					if (val && typeof val === 'object') {
+						if (branchObjects.includes(val)) {
+							throw new TypeError('Converting circular structure to JSON');
+						}
 						const entries = Object.entries(val);
 						if (entries.length === 0) {
 							appendSpan(targetEl, 'msghub-json-punct', '{}');
 							return { tailValueEl: targetEl };
 						}
+						branchObjects.push(val);
 						appendSpan(targetEl, 'msghub-json-punct', '{');
-						for (let i = 0; i < entries.length; i++) {
-							const [key, nested] = entries[i];
-							const line = createLine(level + 1);
-							appendSpan(line.prefixEl, 'msghub-json-key', JSON.stringify(key));
-							appendSpan(line.prefixEl, 'msghub-json-punct', ': ');
-							const rendered = renderValue(nested, currentPath.concat(key), level + 1, line.valueEl);
-							const comment = resolveAnnotation(currentPath, key, nested);
-							if (i < entries.length - 1) {
-								appendSpan(rendered.tailValueEl, 'msghub-json-punct', ',');
+						try {
+							for (let i = 0; i < entries.length; i++) {
+								const [key, nested] = entries[i];
+								const line = createLine(level + 1);
+								appendSpan(line.prefixEl, 'msghub-json-key', JSON.stringify(key));
+								appendSpan(line.prefixEl, 'msghub-json-punct', ': ');
+								const rendered = renderValue(nested, currentPath.concat(key), level + 1, line.valueEl);
+								const comment = resolveAnnotation(currentPath, key, nested);
+								if (i < entries.length - 1) {
+									appendSpan(rendered.tailValueEl, 'msghub-json-punct', ',');
+								}
+								if (comment) {
+									appendSpan(line.valueEl, 'msghub-json-comment', ` // ${comment}`);
+								}
 							}
-							if (comment) {
-								appendSpan(line.valueEl, 'msghub-json-comment', ` // ${comment}`);
-							}
+						} finally {
+							branchObjects.pop();
 						}
 						const closeLine = createLine(level);
 						appendSpan(closeLine.valueEl, 'msghub-json-punct', '}');

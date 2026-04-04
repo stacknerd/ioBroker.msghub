@@ -21,7 +21,8 @@ It depends on:
 
 The main consumer is `boot.js`, which calls `resolveViewId()`, `getActiveComposition()`,
 `buildLayoutFromRegistry()`, `initTabs()`, `activatePanel()`, `updateDocumentTitle()`,
-`computeAssetsForComposition()`, `loadCssFiles()`, and `loadJsFilesSequential()`.
+`computeAssetsForComposition()`, `loadCssFiles()`, `loadJsFilesSequential()`, and
+`resolveIconUrl()`.
 
 `api.js` also depends on the same composition resolution helpers so that `api.host.*` metadata and the
 visible shell use the same final view/composition decision.
@@ -93,9 +94,10 @@ That event is used by other shell code, especially plugin-panel lazy mounting an
 
 `updateDocumentTitle()` follows the active panel descriptor:
 
-- `pickText(descriptor.label)` resolves the label from the `PanelDescriptor` stored at boot/hydration time
+- `t(descriptor.label)` resolves the label from the `PanelDescriptor` stored at boot/hydration time
 - format: `'<label> - MessageHub'`; when no descriptor is available: `'MessageHub'`
 - calling with no arguments re-derives title from `panelDescriptors.get(currentActivePanelId)`, enabling i18n resync after a language change without passing an explicit descriptor
+- the function returns a `Promise<void>` because app-head output may need async icon resolution
 
 ### 3) Load panel assets in a predictable way
 
@@ -160,22 +162,43 @@ Passes the `PanelDescriptor` for `panelId` explicitly to `updateDocumentTitle`.
 
 ### `updateDocumentTitle(descriptor?)`
 
-Derives `document.title` from a `PanelDescriptor` and manages PWA/install head meta tags.
+Derives `document.title` from a `PanelDescriptor` and manages PWA/install head metadata.
 Format: `'<label> - MessageHub'` when a label is resolved, or `'MessageHub'` when no descriptor is available.
-Label resolution goes through `pickText(descriptor.label)`, which handles i18n keys and legacy `{en, de}` language maps.
+Label resolution is key-strict and goes through `t(descriptor.label)`. Hard-migrated panel metadata must already be i18n-key strings; legacy language maps are not bridged here.
 
 When called with no argument, falls back to `panelDescriptors.get(currentActivePanelId)`. This allows
 `applyStaticI18n()` to call `updateDocumentTitle()` with no args after a language change and still
 re-derive the correct title for the currently active panel.
 
-When `descriptor.app` is present, `applyAppHeadMeta(descriptor.app)` sets or updates:
+For plugin panels, the shell consumes the same runtime dictionary that already contains the
+discover-time plugin admin-ui translations. `document.title`, app head meta, and manifest text
+all resolve through the same key-strict consumer contract, so once discover i18n is merged there is
+no separate legacy text path for head versus manifest output.
+
+When `descriptor.app` is present, `applyAppHeadMeta(descriptor)` runs asynchronously and sets or updates:
 - `<meta name="theme-color">` (when `app.themeColor` is a string)
-- `<meta name="application-name">` (when `app.name` is present, resolved via `pickText`)
-- `<meta name="apple-mobile-web-app-title">` (`app.shortName ?? app.name`, resolved via `pickText`)
+- `<meta name="application-name">` (when `app.name` is present, resolved via `t`)
+- `<meta name="apple-mobile-web-app-title">` (`app.shortName ?? app.name`, resolved via `t`)
+- `<meta name="apple-mobile-web-app-capable" content="yes">`
+- `<link rel="apple-touch-icon">` from the resolved `apple180` slot
+- `<link rel="manifest">` with a runtime-generated `blob:` manifest URL whose icon entries point at static host URLs
+
+`layout.js` resolves app icons generically for both descriptor kinds:
+
+- core panels: static admin-host paths `icons/<ownerPanelKey>/<filename>`
+- plugin panels: static admin-host paths `icons/pluginUI/<filename>` from the generic host icon set
+
+For the generated manifest, icon entries are emitted as browser-loadable runtime URLs:
+
+- core panels: absolute runtime URLs derived from the current shell entry plus `icons/<ownerPanelKey>/<filename>`
+- plugin panels: absolute runtime URLs derived from the current shell entry plus `icons/pluginUI/<filename>`
+
+This avoids inline data URIs and keeps manifest icon loading
+separate from the blob manifest document itself.
 
 When `descriptor.app` is absent (including on every panel switch away from an app-panel),
-`resetAppHeadMeta()` fully removes all three managed meta tags from `document.head`. Tags are
-removed rather than emptied, because an empty `theme-color` would still override browser defaults.
+`resetAppHeadMeta()` fully removes the two managed links plus all four managed meta tags from `document.head`.
+The runtime-generated manifest object URL is revoked before removal so panel switches do not leak browser resources.
 
 Both `applyAppHeadMeta` and `resetAppHeadMeta` are idempotent: calling them multiple times without
 intermediate DOM changes produces the same state as a single call.
@@ -183,17 +206,18 @@ intermediate DOM changes produces the same state as a single call.
 ### `normalizeCorePanel(registryKey, def)`
 
 Converts a raw native panel definition from `registry.panels` into a canonical `PanelDescriptor`.
-The resulting object has: `id`, `label`, `ui` (kind, loader, initGlobal, css, js), optional `surface`,
-optional `category`, and an optional `app` block. Also sets the private `_registryKey` field used by
+The producer now stores owner-local ids (`'messages'`, `'plugins'`). `normalizeCorePanel(...)`
+derives the canonical external/runtime id as `tab-<ownerLocalId>`, passes through `surface`,
+`category`, and the optional `app` block, and also sets the private `_registryKey` field used by
 `computeAssetsForComposition`.
 
 ### `normalizePluginPanel(contrib, pluginRef)`
 
 Converts a plugin contribution object and its structured registry ref into a canonical `PanelDescriptor`.
 The resulting id follows the pattern `tab-plugin-<pluginType>-<instanceId>-<panelId>`.
-`ui.kind` is `'plugin'`, `ui.loader` is `'esm'`. `label` and `description` carry legacy `{en, de}`
-objects from the manifest (current IngestStates format) and are bridged via `pickText()`. `ui.entry` is not populated — the current
-discover RPC returns only `bundle.hash`, not `bundle.entry`.
+`ui.kind` is `'plugin'`, `ui.loader` is `'esm'`. `label` is a plugin-owned admin-ui i18n key string,
+`description` is an optional string. `ui.entry` is intentionally absent from the frontend
+descriptor contract; bundle loading is host-owned via `admin.pluginUi.bundle.get` plus `bundle.hash`.
 
 Optional fields are passed through from `contrib` when present:
 
@@ -202,8 +226,13 @@ Optional fields are passed through from `contrib` when present:
 - `category` (`'dashboard' | 'user' | 'admin' | ...`) — semantic group of the panel; basis for future
   accent-bar / color coding. Not a styling field and carries no color values.
 - `app` — optional PWA / install metadata block (same `AppBlock` schema as core panels).
-  Required within `app`: `name` (i18n key string), `url` (canonical URL string). Optional: `shortName`,
-  `themeColor`, `icons` (paths package-root-relative per RFC-0012). When present,
+  Required within `app`: `name` (i18n key string), `url` (host-neutral single-panel target string,
+  currently stable query params such as `?panel=tab-plugin-IngestStates-0-presets`). Manifest
+  `start_url` / `id` are resolved later from the current shell entry URL (`origin + pathname`)
+  plus that target, so the generated blob manifest carries installable absolute `http(s)` URLs.
+  Optional: `shortName`, `display`, `themeColor`, and `backgroundColor`. In the current
+  AdminTab installability/head path, plugin panels do not consume plugin-owned `app.icons`;
+  the fixed icon slots are resolved from the generic host set `admin/icons/pluginUI/*`. When present,
   `updateDocumentTitle` will call `applyAppHeadMeta` with it. When absent, the field is `undefined`
   on the descriptor — no error, no head-meta update.
 
@@ -212,6 +241,17 @@ Optional fields are passed through from `contrib` when present:
 Stores a `PanelDescriptor` in the module-private `panelDescriptors` map keyed by `descriptor.id`.
 Called from `buildLayoutFromRegistry` for native panels and from `hydratePluginPanels` (boot.js) for plugin panels.
 Provides the lookup needed by the no-arg form of `updateDocumentTitle`.
+
+### `resolveIconUrl(descriptor, slot)`
+
+Resolves one app-icon URL from a canonical `PanelDescriptor`.
+
+- core panels: returns a static admin-host path `icons/<ownerPanelKey>/<filename>`
+- plugin panels: returns a static admin-host path `icons/pluginUI/<filename>` from the generic host icon set
+- missing core `app.icons`, unsupported slots, or malformed descriptors return `null`
+
+This function is the only place where core and plugin icon ownership differs. Callers receive the
+same `Promise<string|null>` contract for both descriptor kinds.
 
 ### `buildLayoutFromRegistry({ contributions })`
 
@@ -227,6 +267,14 @@ Builds the current composition and returns:
 ```
 
 Wildcard compositions (`panels: ['*']`) use `contributions` to materialize plugin panel slots.
+When a panel descriptor or contribution carries `category`, the rendered panel container gets a semantic
+marker element:
+
+```html
+<span class="msghub-paneltype-<category>" aria-hidden="true"></span>
+```
+
+The marker is host-rendered only; this block introduces no styling policy for it.
 
 ### `computeAssetsForComposition(panelIds)`
 
@@ -249,11 +297,13 @@ Writes a visible error state directly into the affected panel container.
 - Plugin tabs render in a disabled placeholder state until discover hydration confirms availability.
 - `activatePanel(...)` is the shared activation path for both `tabs` and `single` layouts.
 - `initTabs()` skips disabled tabs when resolving the initial active panel from hash, markup, and fallback defaults.
-- `document.title` is derived from the active panel via its `PanelDescriptor.label` resolved through `pickText()`. Format: `'<label> - MessageHub'`.
-- `applyAppHeadMeta` / `resetAppHeadMeta` manage exactly three head meta tags (`theme-color`, `application-name`, `apple-mobile-web-app-title`). Tags are fully removed (not emptied) on panel switch so no stale values override browser defaults. `<link rel="manifest">` is out of scope for this layer.
+- `document.title` is derived from the active panel via its `PanelDescriptor.label` resolved through `t(...)`. Format: `'<label> - MessageHub'`.
+- `applyAppHeadMeta` / `resetAppHeadMeta` manage four head meta tags (`theme-color`, `application-name`, `apple-mobile-web-app-title`, `apple-mobile-web-app-capable`) plus the managed links `rel="manifest"` and `rel="apple-touch-icon"`. Managed object URLs are revoked on cleanup.
+- `generateManifest(descriptor, resolvedIcons)` is data-driven and panel-generic. It reads only `descriptor.app` plus the pre-resolved icon payloads, resolves manifest `start_url` / `id` from the current shell entry URL (`origin + pathname`) plus the host-neutral `app.url` target, and contains no pilot-specific branch for `messages` or `presets`.
+- Runtime panel ids (`tab-...`) are never used as icon directory names. Core icon paths are always built from the owner-local panel key, and manifest icons are emitted as runtime-loadable URLs rather than runtime-id-derived paths or inline data URIs.
 - `panelDescriptors` is a module-private `Map<tabId, PanelDescriptor>`. It is not a global; `const` at script top-level does not become `window.*`.
 - `normalizeCorePanel` is layout-internal and not a global. Only `normalizePluginPanel`, `registerPanelDescriptor` are exposed as globals (implicit via top-level function declarations).
-- `pickText` is provided by `runtime.js` (loaded before `layout.js`). `layout.js` consumes it as a global without redeclaring it.
+- `t` is provided by `runtime.js` (loaded before `layout.js`). Hard-migrated panel/app metadata in the shell path are resolved key-strict through `t(...)`; `layout.js` intentionally does not bridge legacy language maps there.
 - `loadCssFiles()` deduplicates URLs and reports failures instead of throwing.
 - `loadJsFilesSequential()` preserves script order and throws on the first failed script, because many panel files depend on earlier globals.
 - Theme syncing is intentionally redundant: message, storage, polling, and mutation observation all feed the same final theme setter.

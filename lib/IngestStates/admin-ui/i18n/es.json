@@ -1,4 +1,10 @@
 {
+	"msghub.i18n.IngestStates.ui.panels.bulkapply.description.text": "Apply the same CustomSettings (IngestStates) to many ioBroker states.",
+	"msghub.i18n.IngestStates.ui.panels.bulkapply.label": "Bulk Tool",
+	"msghub.i18n.IngestStates.ui.panels.presets.app.name": "CustomSettings Preset Editor",
+	"msghub.i18n.IngestStates.ui.panels.presets.app.shortName": "Preset Editor",
+	"msghub.i18n.IngestStates.ui.panels.presets.description.text": "Manage presets for CustomSettings (IngestStates) on ioBroker states.",
+	"msghub.i18n.IngestStates.ui.panels.presets.label": "Preset Editor",
 	"msghub.i18n.IngestStates.ui.presets.allowedTemplates.empty.text": "No rule-specific templates available.",
 	"msghub.i18n.IngestStates.ui.presets.allowedTemplates.label": "Allowed templates",
 	"msghub.i18n.IngestStates.ui.presets.bootstrap.missingConstants.text": "Preset editor unavailable: IngestStates constants not loaded.",

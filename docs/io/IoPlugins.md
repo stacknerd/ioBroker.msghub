@@ -223,8 +223,49 @@ Important detail:
 
 - returned contributions always contain `bundle.hash: ''`
 - callers must obtain the authoritative bundle hash separately via `computeAdminUiBundleHash({ type, panelId })`
+- plugin-owned Admin-UI i18n is not embedded here; `IoAdminTab` enriches the raw contribution list during `admin.pluginUi.discover({ lang })` via `readAdminUiTranslations({ type, lang })` so the shell can resolve labels/head metadata before bundle mount
+- each contribution carries producer-owned panel metadata:
+  - `label` — plugin-owned admin-ui i18n key string
+  - `description` — optional string
+  - optional `surface`, `category`, and `app`
+
+The current manifest-side declaration shape is:
+
+```js
+plugin.adminUi = {
+  apiVersion: '1',
+  panels: [
+    {
+      id: 'presets',
+      label: 'msghub.i18n.IngestStates.ui.panels.presets.label',
+      description: 'msghub.i18n.IngestStates.ui.panels.presets.description.text',
+      surface: 'admin',
+      category: 'user',
+      app: {
+        name: 'msghub.i18n.IngestStates.ui.panels.presets.app.name',
+        shortName: 'msghub.i18n.IngestStates.ui.panels.presets.app.shortName',
+        url: '?panel=tab-plugin-IngestStates-0-presets',
+        display: 'standalone',
+        themeColor: '#1f6a53',
+        backgroundColor: '#ffffff',
+      },
+      bundle: { entry: 'admin-ui/dist/presets.esm.js' },
+    },
+  ],
+};
+```
 
 ### `readAdminUiBundle({ type, panelId, lang })`
+
+### `readAdminUiTranslations({ type, lang })`
+
+Reads plugin-owned Admin UI translations from `admin-ui/i18n/<lang>.json` with `en` fallback.
+
+Soft-failure behavior matches `readAdminUiBundle()`:
+
+- missing files return `null`
+- invalid or oversized files are skipped with a warning
+- path traversal is rejected
 
 Reads:
 
@@ -242,9 +283,19 @@ plugin.adminUi = {
   panels: [
     {
       id: 'presets',
+      label: 'msghub.i18n.IngestStates.ui.panels.presets.label',
+      description: 'msghub.i18n.IngestStates.ui.panels.presets.description.text',
+      surface: 'admin',
+      category: 'user',
+      app: {
+        name: 'msghub.i18n.IngestStates.ui.panels.presets.app.name',
+        shortName: 'msghub.i18n.IngestStates.ui.panels.presets.app.shortName',
+        url: '?panel=tab-plugin-IngestStates-0-presets',
+        display: 'standalone',
+        themeColor: '#1f6a53',
+        backgroundColor: '#ffffff',
+      },
       bundle: { entry: 'admin-ui/dist/presets.esm.js' },
-      title: { en: 'Presets' },
-      description: { en: 'Manage message presets' },
     },
   ],
 };

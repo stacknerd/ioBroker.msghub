@@ -1,4 +1,4 @@
-/* global window, document, location, history, MutationObserver, win, args, applyTheme, detectTheme, readThemeFromTopWindow, urlThemeLocked, t, pickText */
+/* global window, document, location, history, MutationObserver, win, args, applyTheme, detectTheme, readThemeFromTopWindow, urlThemeLocked, t */
 'use strict';
 
 /**
@@ -26,6 +26,35 @@ let currentActivePanelId = '';
 
 // Maps panel tab ids (e.g. 'tab-messages') to their PanelDescriptor.
 const panelDescriptors = new Map();
+const APP_ICON_SLOTS = new Set(['any192', 'any512', 'maskable192', 'maskable512', 'apple180']);
+const MANIFEST_ICON_SLOT_CONFIG = Object.freeze({
+	any192: Object.freeze({ sizes: '192x192' }),
+	any512: Object.freeze({ sizes: '512x512' }),
+	maskable192: Object.freeze({ sizes: '192x192', purpose: 'maskable' }),
+	maskable512: Object.freeze({ sizes: '512x512', purpose: 'maskable' }),
+});
+const GENERIC_PLUGIN_UI_ICON_FILES = Object.freeze({
+	any192: 'pluginUI-192.png',
+	any512: 'pluginUI-512.png',
+	maskable192: 'pluginUI-maskable-192.png',
+	maskable512: 'pluginUI-maskable-512.png',
+	apple180: 'pluginUI-apple-180.png',
+});
+
+let appHeadVersion = 0;
+let activeManifestUrl = '';
+
+/**
+ * Returns the producer-local id of a core panel.
+ *
+ * @param {string} registryKey - JS object key in registry.panels.
+ * @param {object} def - Raw panel definition.
+ * @returns {string} Local core panel id without the `tab-` prefix.
+ */
+function getCorePanelLocalId(registryKey, def) {
+	const localId = typeof def?.id === 'string' ? def.id.trim() : '';
+	return localId || String(registryKey || '').trim();
+}
 
 /**
  * Builds a canonical PanelDescriptor from a core panel registry entry.
@@ -35,8 +64,9 @@ const panelDescriptors = new Map();
  * @returns {object} Canonical PanelDescriptor.
  */
 function normalizeCorePanel(registryKey, def) {
+	const localId = getCorePanelLocalId(registryKey, def);
 	return {
-		id: def.id,
+		id: `tab-${localId}`,
 		label: def.label,
 		description: def.description,
 		surface: def.surface,
@@ -50,14 +80,10 @@ function normalizeCorePanel(registryKey, def) {
 /**
  * Builds a canonical PanelDescriptor from a plugin discover contribution and a plugin ref.
  *
- * Note: `contrib.title` and `contrib.description` may be `{en, de}` objects from the
- * Altbestand manifest shape — bridged via `pickText()`. New contract requires i18n-key
- * strings; migration to i18n keys in the manifest is deferred.
+ * `ui.entry` is intentionally absent from the frontend descriptor contract.
+ * Bundle loading runs through `admin.pluginUi.bundle.get` RPC plus `bundle.hash`.
  *
- * Note: `ui.entry` is not populated because discover returns only `bundle.hash`, not the
- * entry path. Bundle loading uses `admin.pluginUi.bundle.get` RPC. This is a known gap.
- *
- * @param {object} contrib - Discover contribution (`{ pluginType, instanceId, panelId, title, description, bundle, surface?, category?, app? }`).
+ * @param {object} contrib - Discover contribution (`{ pluginType, instanceId, panelId, label, description, bundle, surface?, category?, app? }`).
  * @param {object} pluginRef - Plugin reference (`{ pluginType, instanceId, panelId }`).
  * @returns {object} Canonical PanelDescriptor.
  */
@@ -65,19 +91,34 @@ function normalizePluginPanel(contrib, pluginRef) {
 	const key = `plugin-${pluginRef.pluginType}-${pluginRef.instanceId}-${pluginRef.panelId}`;
 	return {
 		id: `tab-${key}`,
-		label: contrib.title,
+		label: contrib.label,
 		description: contrib.description,
 		surface: contrib.surface,
 		category: contrib.category,
 		ui: {
 			kind: 'plugin',
 			loader: 'esm',
-			// ui.entry: target-contract field per Concept Doc Appendix C.
-			// Not populated: discover returns bundle.hash only, not bundle.entry.
-			// Bundle is loaded via admin.pluginUi.bundle.get RPC.
+			// Bundle loading is host-owned via admin.pluginUi.bundle.get RPC.
+			// `ui.entry` is intentionally not part of the frontend descriptor.
 		},
 		app: contrib.app,
 	};
+}
+
+/**
+ * Resolves hard-migrated panel/app metadata keys to translated text.
+ *
+ * Panel and app metadata in the shell path must already be i18n-key strings.
+ * Legacy language-map payloads are intentionally not bridged here.
+ *
+ * @param {any} key - Expected i18n key string.
+ * @returns {string} Translated text, or an empty string for non-string input.
+ */
+function resolvePanelI18nKey(key) {
+	if (typeof key !== 'string') {
+		return '';
+	}
+	return t(key);
 }
 
 /**
@@ -92,50 +133,473 @@ function registerPanelDescriptor(descriptor) {
 }
 
 /**
- * Applies PWA/install head meta tags from an `app` descriptor block.
- * Sets or updates each supported tag; removes tags for absent fields so that switching
- * between two panels with different `app` blocks leaves no stale values behind.
- * No link tags — manifest and icon routes are deferred.
+ * Returns whether the given value is one of the fixed app icon slots.
  *
- * @param {object} app - Panel app block.
+ * @param {string} slot Candidate slot name.
+ * @returns {boolean} True when the slot is supported.
  */
-function applyAppHeadMeta(app) {
-	/**
-	 * Sets the named meta tag to `content` (creating it if absent), or removes it when
-	 * `content` is falsy.
-	 *
-	 * @param {string} name - Meta name attribute value.
-	 * @param {string} content - Meta content value; falsy triggers removal.
-	 */
-	function setOrRemove(name, content) {
-		const existing = document.head.querySelector(`meta[name="${name}"]`);
-		if (!content) {
-			existing?.remove();
-			return;
-		}
-		if (existing) {
-			existing.setAttribute('content', content);
-		} else {
-			const meta = document.createElement('meta');
-			meta.setAttribute('name', name);
-			meta.setAttribute('content', content);
-			document.head.appendChild(meta);
-		}
-	}
-	setOrRemove('theme-color', typeof app.themeColor === 'string' ? app.themeColor : '');
-	setOrRemove('application-name', app.name ? pickText(app.name) : '');
-	setOrRemove('apple-mobile-web-app-title', (app.shortName ?? app.name) ? pickText(app.shortName ?? app.name) : '');
+function isSupportedAppIconSlot(slot) {
+	return APP_ICON_SLOTS.has(String(slot || '').trim());
 }
 
 /**
- * Removes PWA/install head meta tags left by a previous panel.
- * Fully removes all three managed meta tags — not just empties them —
- * so no stale meta values override browser defaults after a panel switch.
+ * Returns the owner-local key that determines the icon directory for a core panel.
+ *
+ * @param {object} descriptor Canonical panel descriptor.
+ * @returns {string} Owner-local panel key or an empty string.
+ */
+function getOwnerPanelKey(descriptor) {
+	if (typeof descriptor?._registryKey === 'string' && descriptor._registryKey.trim()) {
+		return descriptor._registryKey.trim();
+	}
+	if (typeof descriptor?.id === 'string' && descriptor.id.startsWith('tab-')) {
+		return descriptor.id.slice('tab-'.length);
+	}
+	return '';
+}
+
+/**
+ * Builds the static admin-host URL for a core panel icon.
+ *
+ * @param {object} descriptor Canonical panel descriptor.
+ * @param {string} fileName Owner-local icon file name.
+ * @returns {string|null} Static icon URL or null.
+ */
+function buildCoreIconUrl(descriptor, fileName) {
+	const ownerPanelKey = getOwnerPanelKey(descriptor);
+	if (!ownerPanelKey || !fileName) {
+		return null;
+	}
+	return `icons/${encodeURIComponent(ownerPanelKey)}/${encodeURIComponent(fileName)}`;
+}
+
+/**
+ * Builds the static admin-host URL for a generic plugin panel icon.
+ *
+ * @param {string} slot Fixed app icon slot name.
+ * @returns {string|null} Static icon URL or null.
+ */
+function buildPluginIconUrl(slot) {
+	const fileName =
+		typeof GENERIC_PLUGIN_UI_ICON_FILES[slot] === 'string' ? GENERIC_PLUGIN_UI_ICON_FILES[slot].trim() : '';
+	if (!fileName) {
+		return null;
+	}
+	return `icons/pluginUI/${encodeURIComponent(fileName)}`;
+}
+
+/**
+ * Derives a MIME type from an icon filename extension.
+ *
+ * @param {string} fileName Icon filename.
+ * @returns {string} Best-effort MIME type.
+ */
+function detectIconMimeType(fileName) {
+	const normalized = String(fileName || '').toLowerCase();
+	if (normalized.endsWith('.png')) {
+		return 'image/png';
+	}
+	if (normalized.endsWith('.svg')) {
+		return 'image/svg+xml';
+	}
+	if (normalized.endsWith('.webp')) {
+		return 'image/webp';
+	}
+	if (normalized.endsWith('.jpg') || normalized.endsWith('.jpeg')) {
+		return 'image/jpeg';
+	}
+	if (normalized.endsWith('.gif')) {
+		return 'image/gif';
+	}
+	if (normalized.endsWith('.ico')) {
+		return 'image/x-icon';
+	}
+	return 'application/octet-stream';
+}
+
+/**
+ * Revokes an object URL when the environment supports it.
+ *
+ * @param {string} href Candidate URL to revoke.
+ */
+function revokeObjectUrl(href) {
+	if (typeof href === 'string' && href.startsWith('blob:') && typeof URL?.revokeObjectURL === 'function') {
+		URL.revokeObjectURL(href);
+	}
+}
+
+/**
+ * Sets or removes a managed head meta tag.
+ *
+ * @param {string} name Meta name attribute value.
+ * @param {string} content Meta content value; falsy removes the tag.
+ */
+function setOrRemoveHeadMeta(name, content) {
+	const existing = document.head.querySelector(`meta[name="${name}"]`);
+	if (!content) {
+		existing?.remove();
+		return;
+	}
+	if (existing) {
+		existing.setAttribute('content', content);
+		return;
+	}
+	const meta = document.createElement('meta');
+	meta.setAttribute('name', name);
+	meta.setAttribute('content', content);
+	document.head.appendChild(meta);
+}
+
+/**
+ * Sets or removes a managed head link element.
+ *
+ * @param {string} rel Link relation value.
+ * @param {string} href Link target; falsy removes the link.
+ */
+function setOrRemoveHeadLink(rel, href) {
+	const existing = document.head.querySelector(`link[rel="${rel}"]`);
+	if (!href) {
+		existing?.remove();
+		return;
+	}
+	if (existing) {
+		existing.setAttribute('href', href);
+		return;
+	}
+	const link = document.createElement('link');
+	link.setAttribute('rel', rel);
+	link.setAttribute('href', href);
+	document.head.appendChild(link);
+}
+
+/**
+ * Removes a managed category marker from a panel container.
+ *
+ * @param {HTMLElement|Element|null|undefined} panelEl Panel element.
+ */
+function removeCategoryMarker(panelEl) {
+	if (!panelEl?.children?.length) {
+		return;
+	}
+	const marker = Array.from(panelEl.children).find(child =>
+		String(child?.className || '')
+			.split(/\s+/g)
+			.some(token => token.startsWith('msghub-paneltype-')),
+	);
+	marker?.remove?.();
+}
+
+/**
+ * Applies the semantic category marker to a panel container.
+ *
+ * @param {HTMLElement|Element|null|undefined} panelEl Panel element.
+ * @param {string} category Semantic category string.
+ */
+function applyCategoryMarker(panelEl, category) {
+	if (!panelEl) {
+		return;
+	}
+	removeCategoryMarker(panelEl);
+	const normalizedCategory = typeof category === 'string' ? category.trim() : '';
+	if (!normalizedCategory) {
+		return;
+	}
+	panelEl.appendChild(
+		h('span', {
+			class: `msghub-paneltype-${normalizedCategory}`,
+			'aria-hidden': 'true',
+		}),
+	);
+}
+
+/**
+ * Creates the mutable icon map used while building one manifest payload.
+ *
+ * @returns {Record<string, { url?: string, src?: string, mimeType?: string, content?: string }>} Empty icon map.
+ */
+function createResolvedIconMap() {
+	return {};
+}
+
+/**
+ * Resolves the complete icon asset metadata for one app slot.
+ *
+ * This AdminTab consumer knows exactly two static icon sources:
+ * core panels keep their owner-local `admin/icons/<panel>/...` files, while
+ * plugin panels always map to the generic host-owned `admin/icons/pluginUI/...` set.
+ *
+ * @param {object} descriptor Canonical panel descriptor.
+ * @param {string} slot Fixed app icon slot name.
+ * @returns {Promise<{ url: string, mimeType: string }|null>} Resolved icon asset or null.
+ */
+async function resolveIconAsset(descriptor, slot) {
+	const normalizedSlot = typeof slot === 'string' ? slot.trim() : '';
+	if (!isSupportedAppIconSlot(normalizedSlot)) {
+		return null;
+	}
+
+	let fileName = '';
+	let url = null;
+	if (descriptor?.ui?.kind === 'core') {
+		fileName =
+			typeof descriptor?.app?.icons?.[normalizedSlot] === 'string'
+				? descriptor.app.icons[normalizedSlot].trim()
+				: '';
+		if (!fileName) {
+			return null;
+		}
+		url = buildCoreIconUrl(descriptor, fileName);
+	} else if (descriptor?.ui?.kind === 'plugin') {
+		fileName = GENERIC_PLUGIN_UI_ICON_FILES[normalizedSlot];
+		url = buildPluginIconUrl(normalizedSlot);
+	}
+	if (!fileName || !url) {
+		return null;
+	}
+	return {
+		url,
+		mimeType: detectIconMimeType(fileName),
+	};
+}
+
+/**
+ * Resolves an app icon URL for a canonical panel descriptor.
+ *
+ * Core panels resolve to their existing static admin-host paths.
+ * Plugin panels resolve to the generic static host-owned `admin/icons/pluginUI/*` set.
+ * Missing core app metadata or unsupported slots degrade to `null`.
+ *
+ * @param {object} descriptor Canonical panel descriptor.
+ * @param {string} slot Fixed app icon slot name.
+ * @returns {Promise<string|null>} Resolved URL or null.
+ */
+async function resolveIconUrl(descriptor, slot) {
+	const asset = await resolveIconAsset(descriptor, slot);
+	return asset?.url || null;
+}
+
+/**
+ * Returns the current shell entry URL as an absolute runtime base when available.
+ *
+ * Blob-served manifests cannot safely resolve install targets against their own object
+ * URL. The consumer therefore anchors host-neutral `app.url` targets against the
+ * current shell entry (`origin + pathname`) before writing manifest `start_url` / `id`.
+ *
+ * @returns {string} Absolute runtime entry URL, or a path-only fallback.
+ */
+function getRuntimeEntryUrl() {
+	const href = typeof location?.href === 'string' ? location.href.trim() : '';
+	if (href) {
+		try {
+			const entryUrl = new URL(href);
+			entryUrl.search = '';
+			entryUrl.hash = '';
+			return entryUrl.href;
+		} catch {
+			// Fall through to origin/path handling.
+		}
+	}
+
+	const currentPath =
+		typeof location?.pathname === 'string' && location.pathname.trim() ? location.pathname.trim() : '/tab.html';
+	const origin = typeof location?.origin === 'string' ? location.origin.trim() : '';
+	if (origin) {
+		try {
+			return new URL(currentPath, origin).href;
+		} catch {
+			// Fall through to the path-only fallback below.
+		}
+	}
+
+	return currentPath;
+}
+
+/**
+ * Resolves the runtime app URL from a host-neutral producer target.
+ *
+ * Current producer contract stores only stable single-panel target params (for example
+ * `?panel=tab-messages`). The shell composes the install URL at runtime from the
+ * current shell entry plus that target string.
+ *
+ * @param {string} appUrl Host-neutral app target from the producer contract.
+ * @returns {string} Runtime URL for manifest `start_url` / `id`, or an empty string.
+ */
+function resolveRuntimeAppUrl(appUrl) {
+	const raw = typeof appUrl === 'string' ? appUrl.trim() : '';
+	if (!raw) {
+		return '';
+	}
+
+	const runtimeEntryUrl = getRuntimeEntryUrl();
+	try {
+		return new URL(raw, runtimeEntryUrl).href;
+	} catch {
+		if (raw.startsWith('?') || raw.startsWith('#')) {
+			return `${runtimeEntryUrl}${raw}`;
+		}
+		return raw;
+	}
+}
+
+/**
+ * Resolves one manifest icon source into a browser-loadable runtime URL.
+ *
+ * Relative core icon paths must not stay relative inside a blob-served manifest because
+ * they would resolve against the blob URL instead of the current shell entry.
+ *
+ * @param {string} iconUrl Runtime icon URL candidate.
+ * @returns {string} Absolute/browser-loadable manifest icon URL, or an empty string.
+ */
+function resolveManifestIconUrl(iconUrl) {
+	const raw = typeof iconUrl === 'string' ? iconUrl.trim() : '';
+	if (!raw) {
+		return '';
+	}
+
+	const runtimeEntryUrl = getRuntimeEntryUrl();
+	try {
+		return new URL(raw, runtimeEntryUrl).href;
+	} catch {
+		return raw;
+	}
+}
+
+/**
+ * Resolves the shared head/manifest consumer contract for one panel descriptor.
+ *
+ * Title, app head meta, and manifest generation must consume the same translated
+ * text fields and the same runtime-composed app target URL.
+ *
+ * @param {object} descriptor Canonical panel descriptor.
+ * @returns {{ label: string, appName: string, appShortName: string, runtimeAppUrl: string }} Resolved consumer values.
+ */
+function resolveHeadManifestContract(descriptor) {
+	const app = descriptor?.app;
+	return {
+		label: resolvePanelI18nKey(descriptor?.label),
+		appName: resolvePanelI18nKey(app?.name),
+		appShortName: resolvePanelI18nKey(app?.shortName ?? app?.name),
+		runtimeAppUrl: resolveRuntimeAppUrl(app?.url),
+	};
+}
+
+/**
+ * Builds a manifest object for one installable panel descriptor.
+ *
+ * @param {object} descriptor Canonical panel descriptor.
+ * @param {Record<string, { src?: string, mimeType?: string }>} resolvedIcons Resolved icon payloads.
+ * @returns {object|null} Manifest object or null when no app block is present.
+ */
+function generateManifest(descriptor, resolvedIcons) {
+	const app = descriptor?.app;
+	if (!app) {
+		return null;
+	}
+	const contract = resolveHeadManifestContract(descriptor);
+	const manifest = {
+		name: contract.appName,
+		short_name: contract.appShortName,
+		start_url: contract.runtimeAppUrl,
+		id: contract.runtimeAppUrl,
+	};
+	if (typeof app.display === 'string' && app.display.trim()) {
+		manifest.display = app.display.trim();
+	}
+	if (typeof app.themeColor === 'string' && app.themeColor.trim()) {
+		manifest.theme_color = app.themeColor.trim();
+	}
+	if (typeof app.backgroundColor === 'string' && app.backgroundColor.trim()) {
+		manifest.background_color = app.backgroundColor.trim();
+	}
+	const icons = [];
+	for (const [slot, config] of Object.entries(MANIFEST_ICON_SLOT_CONFIG)) {
+		const icon = resolvedIcons?.[slot];
+		if (!icon?.src) {
+			continue;
+		}
+		const entry = {
+			src: icon.src,
+			sizes: config.sizes,
+			type:
+				typeof icon.mimeType === 'string' && icon.mimeType.trim()
+					? icon.mimeType.trim()
+					: 'application/octet-stream',
+		};
+		const purpose = 'purpose' in config ? config.purpose : '';
+		if (purpose) {
+			entry.purpose = purpose;
+		}
+		icons.push(entry);
+	}
+	manifest.icons = icons;
+	return manifest;
+}
+
+/**
+ * Applies PWA/install head metadata for a descriptor with an `app` block.
+ *
+ * The operation is async because the shared title/head pipeline is async, even though
+ * icon resolution for this consumer now uses only static host assets.
+ *
+ * @param {object} descriptor Canonical panel descriptor.
+ * @returns {Promise<void>} Promise that settles after head metadata has been updated.
+ */
+async function applyAppHeadMeta(descriptor) {
+	const app = descriptor?.app;
+	if (!app) {
+		return;
+	}
+	const version = appHeadVersion;
+	const contract = resolveHeadManifestContract(descriptor);
+	setOrRemoveHeadMeta('theme-color', typeof app.themeColor === 'string' ? app.themeColor : '');
+	setOrRemoveHeadMeta('application-name', contract.appName);
+	setOrRemoveHeadMeta('apple-mobile-web-app-title', contract.appShortName);
+	setOrRemoveHeadMeta('apple-mobile-web-app-capable', 'yes');
+
+	const slots = ['any192', 'any512', 'maskable192', 'maskable512', 'apple180'];
+	const assets = await Promise.all(slots.map(slot => resolveIconAsset(descriptor, slot)));
+	if (version !== appHeadVersion) {
+		return;
+	}
+
+	const resolvedIcons = createResolvedIconMap();
+	for (let i = 0; i < slots.length; i++) {
+		const asset = assets[i];
+		if (!asset) {
+			continue;
+		}
+		resolvedIcons[slots[i]] = {
+			...asset,
+			src: resolveManifestIconUrl(asset.url),
+		};
+	}
+
+	setOrRemoveHeadLink('apple-touch-icon', resolvedIcons.apple180?.url || '');
+
+	const manifest = generateManifest(descriptor, resolvedIcons);
+	if (manifest) {
+		const manifestBlob = new Blob([JSON.stringify(manifest)], { type: 'application/manifest+json' });
+		activeManifestUrl = URL.createObjectURL(manifestBlob);
+		setOrRemoveHeadLink('manifest', activeManifestUrl);
+	}
+}
+
+/**
+ * Removes all managed app/install metadata from the document head.
+ *
+ * Revokes the manifest object URL before removing the managed links so repeated panel
+ * switches do not leak browser resources.
  */
 function resetAppHeadMeta() {
-	document.head.querySelector('meta[name="theme-color"]')?.remove();
-	document.head.querySelector('meta[name="application-name"]')?.remove();
-	document.head.querySelector('meta[name="apple-mobile-web-app-title"]')?.remove();
+	appHeadVersion += 1;
+	revokeObjectUrl(activeManifestUrl);
+	activeManifestUrl = '';
+	setOrRemoveHeadLink('manifest', '');
+	setOrRemoveHeadLink('apple-touch-icon', '');
+	setOrRemoveHeadMeta('theme-color', '');
+	setOrRemoveHeadMeta('application-name', '');
+	setOrRemoveHeadMeta('apple-mobile-web-app-title', '');
+	setOrRemoveHeadMeta('apple-mobile-web-app-capable', '');
 }
 
 /**
@@ -156,16 +620,17 @@ function getTabTargetId(tab) {
  * or with no arguments from `applyStaticI18n()` for language-resync (uses the default
  * parameter to look up the active panel's descriptor).
  *
- * @param {object} [descriptor] - PanelDescriptor for the active panel. Defaults to the
+ * @param {object} [descriptor] PanelDescriptor for the active panel. Defaults to the
  *   descriptor of the currently active panel from `panelDescriptors`.
+ * @returns {Promise<void>} Promise that settles after head metadata is synchronized.
  */
-function updateDocumentTitle(descriptor = panelDescriptors.get(currentActivePanelId)) {
-	const label = descriptor ? pickText(descriptor.label) : '';
+async function updateDocumentTitle(descriptor = panelDescriptors.get(currentActivePanelId)) {
+	const contract = resolveHeadManifestContract(descriptor);
+	const label = contract.label;
 	document.title = label ? `${label} - MessageHub` : 'MessageHub';
+	resetAppHeadMeta();
 	if (descriptor?.app) {
-		applyAppHeadMeta(descriptor.app);
-	} else {
-		resetAppHeadMeta();
+		await applyAppHeadMeta(descriptor);
 	}
 }
 
@@ -180,7 +645,7 @@ function updateDocumentTitle(descriptor = panelDescriptors.get(currentActivePane
 function activatePanel(id) {
 	const panelId = typeof id === 'string' ? id.trim() : '';
 	if (!panelId) {
-		updateDocumentTitle(undefined);
+		void updateDocumentTitle(undefined);
 		return '';
 	}
 
@@ -208,7 +673,7 @@ function activatePanel(id) {
 		}
 	}
 	currentActivePanelId = panelId;
-	updateDocumentTitle(panelDescriptors.get(panelId));
+	void updateDocumentTitle(panelDescriptors.get(panelId));
 	return panelId;
 }
 
@@ -507,7 +972,9 @@ function resolvePanelMode() {
 	const registry = getRegistry();
 	const panels = registry?.panels && typeof registry.panels === 'object' ? registry.panels : {};
 	// Try to find a core panel entry whose canonical id matches.
-	const coreEntry = Object.entries(panels).find(([, def]) => def && def.id === panelArg);
+	const coreEntry = Object.entries(panels).find(
+		([registryKey, def]) => def && `tab-${getCorePanelLocalId(registryKey, def)}` === panelArg,
+	);
 	if (coreEntry) {
 		const [registryKey, def] = coreEntry;
 		return { active: true, isPlugin: false, descriptor: normalizeCorePanel(registryKey, def), registryKey };
@@ -544,7 +1011,8 @@ function buildSinglePanelShell(descriptor) {
 	const panelId = typeof descriptor?.id === 'string' ? descriptor.id : '';
 	const panelKey = panelId.startsWith('tab-') ? panelId.slice('tab-'.length) : panelId;
 	const mountId = isPlugin ? panelKey : `${panelKey}-root`;
-	const panelEl = h('div', { id: panelId, class: 'msghub-panel', role: 'tabpanel' });
+	const panelEl = h('div', { id: panelId, class: `msghub-panel msghub-${panelKey}`, role: 'tabpanel' });
+	applyCategoryMarker(panelEl, descriptor?.category);
 	panelEl.appendChild(h('div', { id: mountId }));
 	if (layoutHost) {
 		layoutHost.replaceChildren(panelEl);
@@ -610,6 +1078,21 @@ function buildLayoutFromRegistry({ contributions = [] } = {}) {
 	const panelIds = [];
 	const pluginPanelRefs = [];
 	const allEntries = [];
+	const availableContributions = Array.isArray(contributions) ? contributions : [];
+
+	/**
+	 * Finds the matching discover contribution for a structured plugin panel reference.
+	 *
+	 * @param {object} pluginRef Structured plugin panel reference.
+	 * @returns {object|null} Matching discover contribution or null.
+	 */
+	const findContribution = pluginRef =>
+		availableContributions.find(
+			contrib =>
+				contrib?.pluginType === pluginRef?.pluginType &&
+				String(contrib?.instanceId) === String(pluginRef?.instanceId) &&
+				contrib?.panelId === pluginRef?.panelId,
+		) || null;
 
 	if (isWildcard) {
 		const regPanels = registry?.panels && typeof registry.panels === 'object' ? registry.panels : {};
@@ -620,8 +1103,7 @@ function buildLayoutFromRegistry({ contributions = [] } = {}) {
 				allEntries.push({ kind: 'native', id: pid, def });
 			}
 		}
-		const contribs = Array.isArray(contributions) ? contributions : [];
-		for (const c of contribs) {
+		for (const c of availableContributions) {
 			if (!c || typeof c !== 'object') {
 				continue;
 			}
@@ -632,7 +1114,7 @@ function buildLayoutFromRegistry({ contributions = [] } = {}) {
 				panelId: c.panelId,
 			});
 			pluginPanelRefs.push(ref);
-			allEntries.push({ kind: 'plugin', ref });
+			allEntries.push({ kind: 'plugin', ref, contrib: c });
 		}
 	} else {
 		const panels = Array.isArray(comp.panels) ? comp.panels : [];
@@ -645,7 +1127,7 @@ function buildLayoutFromRegistry({ contributions = [] } = {}) {
 				}
 			} else if (entry && typeof entry === 'object' && entry.type === 'pluginPanel') {
 				pluginPanelRefs.push(entry);
-				allEntries.push({ kind: 'plugin', ref: entry });
+				allEntries.push({ kind: 'plugin', ref: entry, contrib: findContribution(entry) });
 			}
 		}
 	}
@@ -686,7 +1168,9 @@ function buildLayoutFromRegistry({ contributions = [] } = {}) {
 						role: 'tab',
 						'aria-controls': tabId,
 						'aria-disabled': 'true',
-						text: t('msghub.i18n.core.admin.ui.panel.loading.text'),
+						'data-i18n': 'msghub.i18n.core.admin.ui.panel.loading.text',
+						// Keep the first paint neutral until admin i18n has loaded; never expose raw keys.
+						text: '...',
 					}),
 				);
 			}
@@ -700,22 +1184,24 @@ function buildLayoutFromRegistry({ contributions = [] } = {}) {
 			const { id, def } = entry;
 			const tabId = `tab-${id}`;
 			// Mount container id is derived deterministically from the canonical panel id.
-			const mountId = def.id ? `${def.id.slice('tab-'.length)}-root` : '';
+			const localPanelId = getCorePanelLocalId(String(id || ''), def);
+			const mountId = localPanelId ? `${localPanelId}-root` : '';
+			const descriptor = normalizeCorePanel(String(id), def);
 			const panel = h('div', {
 				id: tabId,
 				class: `msghub-panel msghub-${id}`,
 				role: 'tabpanel',
 			});
+			applyCategoryMarker(panel, descriptor.category);
 			if (mountId) {
 				panel.appendChild(h('div', { id: mountId }));
 			}
 			// Register descriptor so activatePanel and updateDocumentTitle can resolve titles.
-			const descriptor = normalizeCorePanel(String(id), def);
 			registerPanelDescriptor(descriptor);
 			fragment.appendChild(panel);
 		} else {
 			// Plugin panel: container with data attributes for boot.js discover wiring.
-			const { ref } = entry;
+			const { ref, contrib } = entry;
 			const key = `plugin-${ref.pluginType}-${ref.instanceId}-${ref.panelId}`;
 			const tabId = `tab-${key}`;
 			const panel = h('div', {
@@ -727,6 +1213,9 @@ function buildLayoutFromRegistry({ contributions = [] } = {}) {
 				'data-plugin-instance-id': String(ref.instanceId),
 				'data-panel-id': ref.panelId,
 			});
+			if (contrib) {
+				applyCategoryMarker(panel, normalizePluginPanel(contrib, ref).category);
+			}
 			// Mount container: this element is passed to pluginUiHost.mount().
 			panel.appendChild(h('div', { id: key }));
 			fragment.appendChild(panel);
@@ -897,6 +1386,9 @@ void computeAssetsForComposition;
 void getPanelDefinition;
 void renderPanelBootError;
 void normalizePluginPanel;
+void resolvePanelI18nKey;
+void resolveIconUrl;
+void generateManifest;
 void resolvePanelMode;
 void buildSinglePanelShell;
 void renderPanelModeError;

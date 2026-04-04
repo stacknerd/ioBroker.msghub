@@ -31,39 +31,47 @@ The current native panels are:
 - `messages`
 - `plugins`
 
-Each native panel definition follows the canonical `PanelDescriptor` shape:
+Each native panel definition follows the producer-side core-panel shape:
 
-- `id` — canonical `tab-...` identifier (e.g. `'tab-messages'`)
+- `id` — owner-local panel key (for example `'messages'` or `'plugins'`)
 - `label` — i18n key string for the panel label
 - `ui.kind` — always `'core'` for native panels
 - `ui.loader` — always `'globals'` for native panels
 - `ui.initGlobal` — name of the global init object (e.g. `'MsghubAdminTabMessages'`)
 - `ui.css` — array of CSS asset paths relative to `admin/`
 - `ui.js` — array of JS asset paths relative to `admin/`
-- `surface?` — optional; `'admin' | 'web' | 'both'` — eligibility gate (not a security concept)
-- `category?` — optional; semantic group (not a styling field; carries no color values)
+- `surface` — `'admin' | 'web' | 'both'` — eligibility gate (not a security concept)
+- `category` — semantic group (not a styling field; carries no color values)
 - `app?` — optional; PWA / install metadata (see below)
 
 That gives the shell enough information to render the panel container, label the tab,
-load the panel assets, and call the panel's `init(ctx)` entrypoint.
+load the panel assets, and call the panel's `init(ctx)` entrypoint. `layout.js` derives the
+canonical external/runtime id (`tab-...`) later from the owner-local `id`.
 
 #### Optional `app` block
 
 When a panel is intended to be installable as a PWA or surfaced in a standalone web context,
-its descriptor may carry an `app` block. No existing core panel has an `app` block; the field
-is reserved for future installable app panels.
+its descriptor may carry an `app` block. The current core pilot is `messages`; `plugins`
+does not carry `app`.
 
 Required fields within `app`:
 
 - `name` — i18n key string; used for `application-name` meta and install dialog
-- `url` — canonical URL string for the standalone PWA entry point
+- `url` — host-neutral single-panel target string. Current contract stores only the stable
+  target params, for example `?panel=tab-messages`. The shell resolves that target against
+  the current entry path at runtime when it builds manifest `start_url` / `id`.
 
 Optional fields within `app`:
 
 - `shortName` — shorter variant; falls back to `name` when absent
+- `display` — install/display hint such as `'standalone'`
 - `themeColor` — CSS color string for the `theme-color` meta tag
-- `icons` — array of icon descriptors; paths are package-root-relative per RFC-0012
-  (no host-side path assumptions)
+- `backgroundColor` — background color hint for install surfaces
+- `icons` — fixed slot-to-filename mapping with `any192`, `any512`, `maskable192`,
+  `maskable512`, and `apple180`
+
+The producer stores filenames only. The host owns deterministic path resolution from panel ownership
+and slot; the producer does not embed host-facing paths.
 
 ### 2) Define view compositions
 
@@ -121,7 +129,7 @@ Consumers:
 - The exported object and its nested panel/composition definitions are frozen.
 - `registry.panels` is native-only. Structured plugin panel refs belong in `composition.panels`, not in `registry.panels`.
 - Asset paths are stored relative to `admin/`, because the shell asset loaders append them directly as page URLs.
-- `defaultPanel` is a plain string. It may resolve either to a native panel ID or to a plugin panel DOM key such as `plugin-...`.
+- `defaultPanel` is a plain string. Native defaults use the owner-local panel key (`'messages'`, `'plugins'`); plugin defaults may still resolve to a plugin panel DOM key such as `plugin-...`.
 
 ---
 

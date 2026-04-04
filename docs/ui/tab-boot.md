@@ -39,7 +39,7 @@ modules and then starts the actual runtime on `DOMContentLoaded`.
 2. `resolvePanelMode()` resolves the target panel descriptor (or returns an error result).
 3. If the target is unresolvable: load i18n, render a hard error message, and stop.
 4. For a **core panel** target: call `buildSinglePanelShell(descriptor)`, load i18n and CSS, activate the panel, and initialize native panel assets — no tab strip.
-5. For a **plugin panel** target: load i18n, call `admin.pluginUi.discover`, match the contribution, call `buildSinglePanelShell(descriptor)`, reuse `hydratePluginPanels` to populate `pluginPanelTabMap`, activate the panel, and mount the plugin bundle immediately.
+5. For a **plugin panel** target: load i18n, call `admin.pluginUi.discover({ lang })`, match the contribution, call `buildSinglePanelShell(descriptor)`, reuse `hydratePluginPanels` to populate `pluginPanelTabMap`, activate the panel, and mount the plugin bundle immediately.
 6. Keep connection state current (same as the composition path).
 
 No `msghub:tabSwitch` listener is registered in Single-Panel-Mode because there are no tab switches.
@@ -100,7 +100,8 @@ Important: panels are expected to work against this frozen `ctx`, not against ad
 - embedded-admin language override via `backendTextLanguage` when the tab is actually embedded in the admin host (`isEmbeddedInAdmin`)
 
 If the backend does not provide a valid timezone, the shell falls back to UTC and shows a warning toast once.
-When static i18n text is refreshed afterwards, `applyStaticI18n()` also resynchronizes the derived document title.
+When static i18n text is refreshed afterwards, `applyStaticI18n()` also resynchronizes the derived document title via
+the async `updateDocumentTitle()` path.
 
 ### 3) Initialize native panels from the registry
 
@@ -133,10 +134,12 @@ This keeps initial visibility and document-title derivation on the same activati
 Structured plugin panel refs from the composition are not active immediately.
 `hydratePluginPanels()` matches them against `admin.pluginUi.discover` results, then:
 
+- merges plugin-owned Admin-UI i18n from discover into the runtime dictionary before any shell metadata is resolved
 - enables the matching tab
-- replaces the temporary loading label with the discovered title
+- stores `data-i18n=contrib.label` on the tab and replaces the temporary loading label with `t(contrib.label)`
 - stores the mount metadata in `pluginPanelTabMap`
 - calls `normalizePluginPanel(contrib, ref)` and `registerPanelDescriptor(descriptor)` so that `panelDescriptors` in `layout.js` is populated before the user first activates a plugin tab
+- mirrors `descriptor.category` to the plugin panel container as `span.msghub-paneltype-<category>` when present
 
 Actual plugin bundle mounting is lazy by default, but `boot.js` also mounts a plugin panel immediately when it
 became active during boot before the later `msghub:tabSwitch` listener could observe that activation.
@@ -247,7 +250,7 @@ It also triggers an unconditional initial `sendPing()` during module load, befor
 - Resume recovery is armed only after the page was actually backgrounded; a normal reload/open must not trigger that path.
 - Reconnect warmup is centralized here. Panels are not expected to implement their own retry loop for core shell availability.
 - Clearly broken core boot states (for example failed core CSS loads or recorded panel boot errors) may escalate to one guarded hard reload per tab session window.
-- `pickText()` is the shell-side text normalizer for plain strings, admin i18n keys, and language maps such as `{ en, de }`. It is defined in `runtime.js` (loads before `layout.js` and `boot.js`) and consumed as a global by both `layout.js` and `boot.js`.
+- `pickText()` still exists in `runtime.js`, but hard-migrated panel/app metadata in the shell path no longer use it. `boot.js` resolves `data-i18n` nodes and plugin panel labels key-strict via `t(...)`.
 - Shell-wide timezone fallback warning is intentionally shown only once per page lifetime.
 - The connection panel reports the effective frontend format locale shown to the shell. When `args.locale` is present and valid, that value is shown instead of the old ambient browser-locale source.
 - The global `contextmenu` listener is intentionally shared between mouse right-click and the synthetic long-press flow. It is the fallback path for both mouse and touch.

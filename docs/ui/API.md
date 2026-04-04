@@ -65,7 +65,7 @@ panel/plugin contract in this reference.
 
 | Entry | Contract | Owner | Reference |
 | --- | --- | --- | --- |
-| `registry.panels[panelId]` | Native panel definition with `id`, `mountId`, `titleKey`, `initGlobal`, and `assets`. `assets` may contain `css[]` and `js[]`. | Registry runtime | `admin/tab/registry.js` |
+| `registry.panels[panelId]` | Native producer definition with owner-local `id`, `label`, `surface`, `category`, `ui`, and optional `app`. Canonical external ids (`tab-...`) are derived later by `normalizeCorePanel(...)`. | Registry runtime | `admin/tab/registry.js` |
 | `registry.compositions[viewId]` | Composition definition with `id`, `layout`, `panels`, `defaultPanel`, and `deviceMode`. | Registry runtime | `admin/tab/registry.js` |
 | Native composition panel entry | String panel id such as `'messages'` or `'plugins'`. | Registry runtime | `admin/tab/registry.js`, `admin/tab/layout.js` |
 | Plugin composition panel entry | Structured ref `{ type: 'pluginPanel', pluginType, instanceId, panelId }`. | Registry runtime | `admin/tab/registry.js`, `admin/tab/layout.js` |
@@ -280,7 +280,7 @@ panel/plugin contract in this reference.
 
 | Command | Request contract | Response contract | Owner | Reference |
 | --- | --- | --- | --- | --- |
-| `admin.pluginUi.discover` | No payload fields are used. | `PluginUiContribution[]` with authoritative content hash filled into `bundle.hash` by `IoAdminTab._pluginUiDiscover()`. Hash failures degrade to `''` per panel. | Admin runtime for UI host | `lib/IoAdminTab.js`, `lib/IoPlugins.js` |
+| `admin.pluginUi.discover` | `{ lang? }` where `lang` is the active shell language used for plugin-owned Admin-UI i18n lookup. | `PluginUiContribution[]` with authoritative content hash filled into `bundle.hash` by `IoAdminTab._pluginUiDiscover()`. Hash failures degrade to `''` per panel. Each contribution may additionally carry `i18n: { lang, translations }` for the requested shell language, with `en` fallback and `null` on soft read failure. | Admin runtime for UI host | `lib/IoAdminTab.js`, `lib/IoPlugins.js` |
 | `admin.pluginUi.bundle.get` | `{ pluginType, instanceId?, panelId, lang? }` | `{ apiVersion, moduleFormat: 'esm', hash, js, css?, i18n }` | Admin runtime for UI host | `lib/IoAdminTab.js`, `lib/IoPlugins.js` |
 | `admin.pluginUi.rpc` | `{ pluginType, instanceId?, panelId, command, payload? }` | Plugin-defined `{ ok, data }` or `{ ok: false, error: { code, message } }` at the backend boundary. `msghubRequest` rejects any `ok: false` response as `Error(message)`, so `error.code` is already absent before the host rejection handler runs. Bundle code always receives the normalized envelope described below. | Admin runtime for UI host | `lib/IoAdminTab.js`, `admin/tab/plugin-ui-host.js` |
 
@@ -288,7 +288,7 @@ panel/plugin contract in this reference.
 
 | DTO | Contract | Owner | Reference |
 | --- | --- | --- | --- |
-| `PluginUiContribution` | `{ pluginType, instanceId, panelId, title, description, apiVersion, bundle: { hash } }` | Admin runtime surfaced from plugin manifests | `lib/IoPlugins.js`, `lib/IoAdminTab.js` |
+| `PluginUiContribution` | `{ pluginType, instanceId, panelId, label, description, surface?, category?, app?, apiVersion, bundle: { hash }, i18n?: { lang, translations }\|null }` | Admin runtime surfaced from plugin manifests and enriched by `admin.pluginUi.discover` with discover-time shell i18n for the requested language. | `lib/IoPlugins.js`, `lib/IoAdminTab.js` |
 | `bundle.get` response | `{ apiVersion, moduleFormat: 'esm', hash, js, css?, i18n }` | Admin runtime | `lib/IoAdminTab.js`, `lib/IoPlugins.js` |
 | `bundle.get.i18n` | `{ lang, translations }` or `null`. `translations` is the parsed plugin-owned language file. | Admin runtime | `lib/IoPlugins.js`, `lib/IoAdminTab.js` |
 | `bundle.get.css` | Optional companion CSS from `<bundle.entry>.css`. | Admin runtime | `lib/IoPlugins.js`, `lib/IoAdminTab.js` |
@@ -332,8 +332,10 @@ panel/plugin contract in this reference.
 | `manifest.adminUi.apiVersion` | API version string for plugin-owned Admin UI. `IoPlugins.getAdminUiContributions()` defaults to `'1'` when absent. | Plugin-owned, consumed by UI path | `lib/IngestStates/manifest.js`, `lib/IoPlugins.js` |
 | `manifest.adminUi.panels[]` | Flat panel list. Only running plugin instances with declared panels are discoverable. | Plugin-owned, consumed by UI path | `lib/IngestStates/manifest.js`, `lib/IoPlugins.js` |
 | `panel.id` | Panel id unique within one plugin type. | Plugin-owned | `lib/IngestStates/manifest.js` |
-| `panel.title` | Translated title object surfaced by `discover` and used by the shell to label the tab when a matching slot is hydrated. | Plugin-owned | `lib/IngestStates/manifest.js`, `admin/tab/boot.js` |
-| `panel.description` | Translated description object surfaced by `discover`. | Plugin-owned | `lib/IngestStates/manifest.js`, `lib/IoPlugins.js` |
+| `panel.label` | Plugin-owned admin-ui i18n key surfaced by `discover` and resolved by the shell via `t(...)` when a matching slot is hydrated. | Plugin-owned | `lib/IngestStates/manifest.js`, `admin/tab/boot.js` |
+| `panel.description` | Optional string surfaced by `discover`. Built-in plugin manifests currently also use plugin-owned i18n keys here. | Plugin-owned | `lib/IngestStates/manifest.js`, `lib/IoPlugins.js` |
+| `panel.surface` / `panel.category` | Optional discover metadata for panel eligibility and semantic grouping. | Plugin-owned | `lib/IngestStates/manifest.js`, `lib/IoPlugins.js` |
+| `panel.app` | Optional install/PWA metadata block. Text fields are i18n keys. `app.url` is a host-neutral single-panel target string (current producer contract: stable query params such as `?panel=tab-...`). In the current AdminTab installability/head path, plugin panels do not provide or consume plugin-owned `app.icons`; the shell resolves those slots from the generic host set `admin/icons/pluginUI/*`. | Plugin-owned metadata, host-owned AdminTab icon consumer | `lib/IngestStates/manifest.js`, `lib/IoPlugins.js`, `admin/tab/layout.js` |
 | `panel.bundle.entry` | Relative ESM bundle path inside the plugin directory. Required for `discover`, `bundle.get`, and hash computation. | Plugin-owned | `lib/IngestStates/manifest.js`, `lib/IoPlugins.js` |
 | Companion CSS convention | Optional stylesheet loaded from the same bundle path with `.js` replaced by `.css`. No separate manifest field exists. | UI path convention | `lib/IoPlugins.js`, `admin/tab/plugin-ui-host.js` |
 | Plugin-owned Admin UI i18n | Optional JSON files at `admin-ui/i18n/<lang>.json`. `readAdminUiBundle(...)` falls back from the requested safe language to `en` when needed. | Plugin-owned, consumed by UI path | `lib/IoPlugins.js` |

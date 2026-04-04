@@ -88,7 +88,7 @@ Those responsibilities belong to `IoAdminConfig`, resolver/startup wiring, and t
 
 ### Plugin Admin UI host
 
-- `admin.pluginUi.discover` → discovers all Admin UI contributions from running plugins
+- `admin.pluginUi.discover` → `{ lang? }` → discovers all Admin UI contributions from running plugins and enriches them with computed bundle hashes plus plugin-owned Admin-UI i18n for the requested shell language
 - `admin.pluginUi.bundle.get` → `{ pluginType, instanceId, panelId, lang }` → `{ apiVersion, moduleFormat, hash, js, css?, i18n|null }`
 - `admin.pluginUi.rpc` → `{ pluginType, instanceId, panelId, command, payload? }` → dispatches to plugin's `handleAdminUiRpc`
 
@@ -127,6 +127,13 @@ Typical error codes:
 - `REJECTED`
 - `UNKNOWN_COMMAND`
 - `FORBIDDEN`
+
+Discover DTO shape:
+
+- `{ pluginType, instanceId, panelId, label, description, surface?, category?, app?, apiVersion, bundle: { hash }, i18n?: { lang, translations }|null }`
+- `label` is the plugin-owned admin-ui i18n key for the panel/tab label
+- `i18n`, when present, already carries the plugin-owned Admin-UI translations for the requested shell language and is consumed by the shell before first plugin-panel mount
+- `app`, when present, is forwarded from the plugin manifest for text/url/display metadata; the current AdminTab installability/head path resolves plugin panel icons from the generic host set `admin/icons/pluginUI/*`
 
 ---
 

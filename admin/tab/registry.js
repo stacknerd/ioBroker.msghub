@@ -7,18 +7,15 @@
  * Docs: ../../docs/ui/tab-registry.md
  *
  * Contents:
- * - `panels`: canonical PanelDescriptor definitions (`id`, `label`, `ui.kind`, `ui.loader`,
- *   `ui.initGlobal`, `ui.css`, `ui.js`). Optional semantic fields: `surface` ('admin'|'web'|'both'
- *   — eligibility gate, not a security concept) and `category` ('dashboard'|'user'|'admin'|...
- *   — semantic group, basis for future accent coding; not a styling field). Both fields are
- *   optional and without default; absence means unrestricted / unclassified.
- *   Optional `app` block for panels that are installable as a PWA or surfaced in a standalone
- *   web context. Required within `app`: `name` (i18n key string), `url` (canonical URL string).
- *   Optional within `app`: `shortName` (falls back to `name` when absent), `themeColor` (CSS
- *   color string for the theme-color meta tag), `icons` (array; paths are package-root-relative
- *   per RFC-0012 — no host-side path assumptions). No existing core panel carries an `app`
- *   block; the field is reserved for future installable app panels. Object keys remain the
- *   short names used for composition references and asset loading (e.g. `'messages'`, `'plugins'`).
+ * - `panels`: producer-side panel definitions (`id`, `label`, `ui.kind`, `ui.loader`,
+ *   `ui.initGlobal`, `ui.css`, `ui.js`). `id` is owner-local (`'messages'`, `'plugins'`), while
+ *   the canonical external `tab-...` id is derived later by layout normalization.
+ *   Semantic fields `surface` ('admin'|'web'|'both') and `category` ('dashboard'|'user'|'admin'|...)
+ *   are carried directly by the producer. Optional `app` data is also producer-owned:
+ *   all text fields are i18n keys, `url` is the host-neutral single-panel target string
+ *   (current contract: stable query params only), and `icons` contains slot -> filename
+ *   mappings. Icon ownership stays panel-owned; the host resolves the final path
+ *   deterministically from panel ownership + slot.
  * - `compositions`: composed views (layout, panel order, default panel).
  *
  * Integration:
@@ -40,13 +37,30 @@
 
 	const panels = Object.freeze({
 		messages: Object.freeze({
-			id: 'tab-messages',
+			id: 'messages',
 			label: 'msghub.i18n.core.admin.ui.tabs.messages.label',
+			surface: 'both',
+			category: 'dashboard',
+			app: Object.freeze({
+				name: 'msghub.i18n.core.admin.panels.messages.app.name',
+				shortName: 'msghub.i18n.core.admin.panels.messages.app.shortName',
+				url: '?panel=tab-messages',
+				display: 'standalone',
+				themeColor: '#1f6a53',
+				backgroundColor: '#ffffff',
+				icons: Object.freeze({
+					any192: 'messages-192.png',
+					any512: 'messages-512.png',
+					maskable192: 'messages-maskable-192.png',
+					maskable512: 'messages-maskable-512.png',
+					apple180: 'messages-apple-180.png',
+				}),
+			}),
 			ui: Object.freeze({
 				kind: 'core',
 				loader: 'globals',
 				initGlobal: 'MsghubAdminTabMessages',
-				css: Object.freeze(['tab/table.css', 'tab/panels/messages/styles.css']),
+				css: Object.freeze(['tab/panels/messages/styles.css']),
 				js: Object.freeze([
 					'tab/panels/messages/state.js',
 					'tab/panels/messages/data.messages.js',
@@ -64,8 +78,10 @@
 		}),
 
 		plugins: Object.freeze({
-			id: 'tab-plugins',
+			id: 'plugins',
 			label: 'msghub.i18n.core.admin.ui.tabs.plugins.label',
+			surface: 'admin',
+			category: 'admin',
 			ui: Object.freeze({
 				kind: 'core',
 				loader: 'globals',

@@ -29,9 +29,21 @@ describe('admin/tab/registry.js', function () {
 
 		for (const panelId of panelIds) {
 			const panel = registry.panels[panelId];
-			// id must be the canonical tab-id form, not the short registry key.
-			assert.equal(panel.id, `tab-${panelId}`);
+			// Producer contract: id is owner-local; canonical tab ids are derived later.
+			assert.equal(panel.id, panelId);
+			assert.equal(
+				panel.id.startsWith('tab-'),
+				false,
+				`panel '${panelId}': producer-owned id must stay owner-local, not tab-*`,
+			);
 			assert.ok(typeof panel.label === 'string' && panel.label.trim());
+			assert.equal(
+				typeof panel.label === 'object' && panel.label !== null,
+				false,
+				`panel '${panelId}': label must be an i18n-key string, not a language map`,
+			);
+			assert.ok(typeof panel.surface === 'string' && panel.surface.trim());
+			assert.ok(typeof panel.category === 'string' && panel.category.trim());
 			assert.ok(panel.ui && typeof panel.ui === 'object');
 			assert.equal(panel.ui.kind, 'core');
 			assert.equal(panel.ui.loader, 'globals');
@@ -42,10 +54,6 @@ describe('admin/tab/registry.js', function () {
 			assert.ok(Object.isFrozen(panel.ui));
 			assert.ok(Object.isFrozen(panel.ui.css));
 			assert.ok(Object.isFrozen(panel.ui.js));
-			// Old fields must be absent.
-			assert.equal(panel.mountId, undefined);
-			assert.equal(panel.titleKey, undefined);
-			assert.equal(panel.assets, undefined);
 			assert.equal(panel.initGlobal, undefined);
 
 			// If panel carries an optional app block, validate its required and optional fields.
@@ -59,10 +67,21 @@ describe('admin/tab/registry.js', function () {
 					typeof panel.app.url === 'string' && panel.app.url.trim(),
 					`panel '${panelId}': app.url must be a non-empty string`,
 				);
+				assert.equal(
+					panel.app.url.startsWith('?panel=tab-'),
+					true,
+					`panel '${panelId}': app.url must be a host-neutral single-panel target`,
+				);
 				if (panel.app.shortName !== undefined) {
 					assert.ok(
 						typeof panel.app.shortName === 'string' && panel.app.shortName.trim(),
 						`panel '${panelId}': app.shortName must be a non-empty string when present`,
+					);
+				}
+				if (panel.app.display !== undefined) {
+					assert.ok(
+						typeof panel.app.display === 'string' && panel.app.display.trim(),
+						`panel '${panelId}': app.display must be a non-empty string when present`,
 					);
 				}
 				if (panel.app.themeColor !== undefined) {
@@ -71,12 +90,22 @@ describe('admin/tab/registry.js', function () {
 						`panel '${panelId}': app.themeColor must be a string when present`,
 					);
 				}
+				if (panel.app.backgroundColor !== undefined) {
+					assert.ok(
+						typeof panel.app.backgroundColor === 'string',
+						`panel '${panelId}': app.backgroundColor must be a string when present`,
+					);
+				}
 				if (panel.app.icons !== undefined) {
-					assert.ok(Array.isArray(panel.app.icons), `panel '${panelId}': app.icons must be an array when present`);
-					for (const icon of panel.app.icons) {
+					assert.ok(
+						panel.app.icons && typeof panel.app.icons === 'object' && !Array.isArray(panel.app.icons),
+						`panel '${panelId}': app.icons must be an object when present`,
+					);
+					for (const [slot, fileName] of Object.entries(panel.app.icons)) {
+						assert.ok(slot && typeof slot === 'string', `panel '${panelId}': app.icons slot must be a string`);
 						assert.ok(
-							icon && typeof icon === 'object' && typeof icon.src === 'string' && icon.src.trim(),
-							`panel '${panelId}': each app.icons entry must have a non-empty src string`,
+							typeof fileName === 'string' && fileName.trim(),
+							`panel '${panelId}': app.icons.${slot} must be a non-empty filename string`,
 						);
 					}
 				}
@@ -160,6 +189,30 @@ describe('admin/tab/registry.js', function () {
 		assert.equal(composition.defaultPanel, 'messages');
 	});
 
+	it('ships a full pilot app block for messages', async function () {
+		const source = await readRepoFile('admin/tab/registry.js');
+		const sandbox = { window: {} };
+		sandbox.win = sandbox.window;
+		vm.runInNewContext(source, sandbox, { filename: 'admin/tab/registry.js' });
+		const panel = sandbox.window.MsghubAdminTabRegistry.panels.messages;
+
+		assert.equal(panel.surface, 'both');
+		assert.equal(panel.category, 'dashboard');
+		assert.equal(panel.app.name, 'msghub.i18n.core.admin.panels.messages.app.name');
+		assert.equal(panel.app.shortName, 'msghub.i18n.core.admin.panels.messages.app.shortName');
+		assert.equal(panel.app.url, '?panel=tab-messages');
+		assert.equal(panel.app.display, 'standalone');
+		assert.equal(panel.app.themeColor, '#1f6a53');
+		assert.equal(panel.app.backgroundColor, '#ffffff');
+		assert.deepEqual(JSON.parse(JSON.stringify(panel.app.icons)), {
+			any192: 'messages-192.png',
+			any512: 'messages-512.png',
+			maskable192: 'messages-maskable-192.png',
+			maskable512: 'messages-maskable-512.png',
+			apple180: 'messages-apple-180.png',
+		});
+	});
+
 	describe('app block schema validator', function () {
 		/**
 		 * Applies the same validation rules as the panel loop above.
@@ -178,9 +231,17 @@ describe('admin/tab/registry.js', function () {
 			if (typeof panel.app.url !== 'string' || !panel.app.url.trim()) {
 				throw new Error('app.url is required and must be a non-empty string');
 			}
+			if (!panel.app.url.startsWith('?panel=tab-')) {
+				throw new Error('app.url must be a host-neutral single-panel target');
+			}
 			if (panel.app.shortName !== undefined) {
 				if (typeof panel.app.shortName !== 'string' || !panel.app.shortName.trim()) {
 					throw new Error('app.shortName must be a non-empty string when present');
+				}
+			}
+			if (panel.app.display !== undefined) {
+				if (typeof panel.app.display !== 'string' || !panel.app.display.trim()) {
+					throw new Error('app.display must be a non-empty string when present');
 				}
 			}
 			if (panel.app.themeColor !== undefined) {
@@ -188,21 +249,28 @@ describe('admin/tab/registry.js', function () {
 					throw new Error('app.themeColor must be a string when present');
 				}
 			}
-			if (panel.app.icons !== undefined) {
-				if (!Array.isArray(panel.app.icons)) {
-					throw new Error('app.icons must be an array when present');
+			if (panel.app.backgroundColor !== undefined) {
+				if (typeof panel.app.backgroundColor !== 'string') {
+					throw new Error('app.backgroundColor must be a string when present');
 				}
-				for (const icon of panel.app.icons) {
-					if (!icon || typeof icon !== 'object' || typeof icon.src !== 'string' || !icon.src.trim()) {
-						throw new Error('each app.icons entry must have a non-empty src string');
+			}
+			if (panel.app.icons !== undefined) {
+				if (!panel.app.icons || typeof panel.app.icons !== 'object' || Array.isArray(panel.app.icons)) {
+					throw new Error('app.icons must be an object when present');
+				}
+				for (const fileName of Object.values(panel.app.icons)) {
+					if (typeof fileName !== 'string' || !fileName.trim()) {
+						throw new Error('each app.icons slot must have a non-empty filename string');
 					}
 				}
 			}
 		}
 
 		const basePanel = {
-			id: 'tab-test',
+			id: 'test',
 			label: 'msghub.i18n.some.label',
+			surface: 'admin',
+			category: 'admin',
 			ui: { kind: 'core', loader: 'globals', initGlobal: 'MsghubAdminTabTest', css: [], js: [] },
 		};
 
@@ -211,12 +279,12 @@ describe('admin/tab/registry.js', function () {
 		});
 
 		it('panel with a valid app block (name + url) passes', function () {
-			const panel = { ...basePanel, app: { name: 'msghub.i18n.some.label', url: 'https://example.com' } };
+			const panel = { ...basePanel, app: { name: 'msghub.i18n.some.label', url: '?panel=tab-test' } };
 			assert.doesNotThrow(() => validateAppBlock(panel));
 		});
 
 		it('app block without name is rejected', function () {
-			const panel = { ...basePanel, app: { url: 'https://example.com' } };
+			const panel = { ...basePanel, app: { url: '?panel=tab-test' } };
 			assert.throws(() => validateAppBlock(panel), /name/);
 		});
 
@@ -227,7 +295,7 @@ describe('admin/tab/registry.js', function () {
 
 		it('app block without shortName passes (shortName is optional)', function () {
 			// Valid app block with name and url only; absence of shortName must not throw.
-			const panel = { ...basePanel, app: { name: 'msghub.i18n.some.label', url: 'https://example.com' } };
+			const panel = { ...basePanel, app: { name: 'msghub.i18n.some.label', url: '?panel=tab-test' } };
 			assert.doesNotThrow(() => validateAppBlock(panel));
 		});
 
@@ -236,36 +304,46 @@ describe('admin/tab/registry.js', function () {
 				...basePanel,
 				app: {
 					name: 'msghub.i18n.some.label',
-					url: 'https://example.com',
+					url: '?panel=tab-test',
 					shortName: 'msghub.i18n.some.short',
+					display: 'standalone',
 					themeColor: '#1f6a53',
-					icons: [{ src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png' }],
+					backgroundColor: '#ffffff',
+					icons: { any192: 'icon-192.png', apple180: 'icon-180.png' },
 				},
 			};
 			assert.doesNotThrow(() => validateAppBlock(panel));
 		});
 
 		it('app.shortName present but empty is rejected', function () {
-			const panel = { ...basePanel, app: { name: 'msghub.i18n.some.label', url: 'https://example.com', shortName: '  ' } };
+			const panel = { ...basePanel, app: { name: 'msghub.i18n.some.label', url: '?panel=tab-test', shortName: '  ' } };
 			assert.throws(() => validateAppBlock(panel), /shortName/);
 		});
 
 		it('app.themeColor present but non-string is rejected', function () {
-			const panel = { ...basePanel, app: { name: 'msghub.i18n.some.label', url: 'https://example.com', themeColor: 42 } };
+			const panel = { ...basePanel, app: { name: 'msghub.i18n.some.label', url: '?panel=tab-test', themeColor: 42 } };
 			assert.throws(() => validateAppBlock(panel), /themeColor/);
 		});
 
-		it('app.icons present but not an array is rejected', function () {
-			const panel = { ...basePanel, app: { name: 'msghub.i18n.some.label', url: 'https://example.com', icons: 'bad' } };
+		it('app.backgroundColor present but non-string is rejected', function () {
+			const panel = {
+				...basePanel,
+				app: { name: 'msghub.i18n.some.label', url: '?panel=tab-test', backgroundColor: 42 },
+			};
+			assert.throws(() => validateAppBlock(panel), /backgroundColor/);
+		});
+
+		it('app.icons present but not an object is rejected', function () {
+			const panel = { ...basePanel, app: { name: 'msghub.i18n.some.label', url: '?panel=tab-test', icons: 'bad' } };
 			assert.throws(() => validateAppBlock(panel), /icons/);
 		});
 
-		it('app.icons element without src is rejected', function () {
+		it('app.icons slot without filename is rejected', function () {
 			const panel = {
 				...basePanel,
-				app: { name: 'msghub.i18n.some.label', url: 'https://example.com', icons: [{ sizes: '192x192' }] },
+				app: { name: 'msghub.i18n.some.label', url: '?panel=tab-test', icons: { any192: '' } },
 			};
-			assert.throws(() => validateAppBlock(panel), /src/);
+			assert.throws(() => validateAppBlock(panel), /filename/);
 		});
 	});
 

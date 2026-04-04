@@ -222,6 +222,8 @@ globalThis.__applyRuntimeAboutPayload = applyRuntimeAboutPayload;
 				isEmbeddedInAdmin: false,
 				overrideLang: () => {},
 				ensureAdminI18nLoaded: () => Promise.resolve(),
+				msghubRequest: () => Promise.resolve([]),
+				mergePluginI18n: () => {},
 				applyStaticI18n: () => {},
 				updateConnectionPanel: () => {},
 				api: {
@@ -277,6 +279,8 @@ globalThis.__applyRuntimeAboutPayload = applyRuntimeAboutPayload;
 				isEmbeddedInAdmin: false,
 				overrideLang: () => {},
 				ensureAdminI18nLoaded: () => Promise.resolve(),
+				msghubRequest: () => Promise.resolve([]),
+				mergePluginI18n: () => {},
 				applyStaticI18n: () => {},
 				updateConnectionPanel: () => {},
 				api: {
@@ -309,6 +313,8 @@ globalThis.__applyRuntimeAboutPayload = applyRuntimeAboutPayload;
 		const applyRuntimeAboutPayloadSource = extractFunctionSource(source, 'applyRuntimeAboutPayload');
 		const overrideCalls = [];
 		const i18nCalls = [];
+		const requestCalls = [];
+		const mergeCalls = [];
 		const sandbox = runInSandbox(
 			`
 let timezoneFallbackToastShown = false;
@@ -318,8 +324,22 @@ globalThis.__applyRuntimeAboutPayload = applyRuntimeAboutPayload;
 `,
 			{
 				isEmbeddedInAdmin: true,
+				lang: 'de',
 				overrideLang: lang => overrideCalls.push(lang),
 				ensureAdminI18nLoaded: () => { i18nCalls.push(1); return Promise.resolve(); },
+				msghubRequest: (command, payload) => {
+					requestCalls.push({ command, payload });
+					return Promise.resolve([
+						{
+							pluginType: 'IngestStates',
+							i18n: {
+								lang: 'de',
+								translations: { 'msghub.i18n.IngestStates.ui.panels.presets.label': 'Vorgaben' },
+							},
+						},
+					]);
+				},
+				mergePluginI18n: (pluginType, translations) => mergeCalls.push({ pluginType, translations }),
 				applyStaticI18n: () => {},
 				updateConnectionPanel: () => {},
 				api: { time: { setPolicy: () => ({ isFallbackUtc: false }) }, log: { warn() {} } },
@@ -338,6 +358,16 @@ globalThis.__applyRuntimeAboutPayload = applyRuntimeAboutPayload;
 		assert.equal(overrideCalls.length, 1);
 		assert.equal(overrideCalls[0], 'de');
 		assert.equal(i18nCalls.length, 1);
+		await new Promise(resolve => setTimeout(resolve, 0));
+		assert.deepEqual(JSON.parse(JSON.stringify(requestCalls)), [
+			{ command: 'admin.pluginUi.discover', payload: { lang: 'de' } },
+		]);
+		assert.deepEqual(mergeCalls, [
+			{
+				pluginType: 'IngestStates',
+				translations: { 'msghub.i18n.IngestStates.ui.panels.presets.label': 'Vorgaben' },
+			},
+		]);
 	});
 
 	it('updateConnectionPanel fills value spans from current state', async function () {
@@ -567,7 +597,7 @@ ${applyStaticI18nSource}
 globalThis.__applyStaticI18n = applyStaticI18n;
 `,
 			{
-				pickText: key => `T:${key}`,
+				t: key => `T:${key}`,
 				updateDocumentTitle: () => updateDocumentTitleCalls.push(1),
 				document: { querySelectorAll: () => i18nElements },
 			},
@@ -839,10 +869,13 @@ globalThis.__fn = triggerResumeRecovery;
 
 		const removedAttrs = [];
 		const removedClasses = [];
+		const setAttrs = [];
+		const mergeCalls = [];
 		let tabLabel = '';
 		const tabEl = {
 			removeAttribute: attr => removedAttrs.push(attr),
 			classList: { remove: cls => removedClasses.push(cls) },
+			setAttribute: (name, value) => setAttrs.push([name, value]),
 			get textContent() {
 				return tabLabel;
 			},
@@ -861,13 +894,18 @@ globalThis.__fn = hydratePluginPanels;
 globalThis.__map = pluginPanelTabMap;
 `,
 			{
+				lang: 'en',
 				msghubRequest: () =>
 					Promise.resolve([
 						{
 							pluginType: 'IngestStates',
 							instanceId: 0,
 							panelId: 'presets',
-							title: { en: 'Presets', de: 'Vorlagen' },
+							label: 'msghub.i18n.IngestStates.ui.panels.presets.label',
+							i18n: {
+								lang: 'en',
+								translations: { 'msghub.i18n.IngestStates.ui.panels.presets.label': 'Presets' },
+							},
 							bundle: { hash: 'abc123' },
 						},
 					]),
@@ -875,10 +913,12 @@ globalThis.__map = pluginPanelTabMap;
 					getElementById: id => (id === 'plugin-IngestStates-0-presets' ? container : null),
 					querySelector: () => tabEl,
 				},
-				api: { i18n: { pickText: v => (v && typeof v === 'object' ? v.en || '' : String(v || '')) } },
+				mergePluginI18n: (pluginType, translations) => mergeCalls.push({ pluginType, translations }),
+				t: key => (key === 'msghub.i18n.IngestStates.ui.panels.presets.label' ? 'Presets' : String(key || '')),
+				applyCategoryMarker: () => {},
 				normalizePluginPanel: (contrib, ref) => ({
 					id: `tab-plugin-${ref.pluginType}-${ref.instanceId}-${ref.panelId}`,
-					label: contrib.title,
+					label: contrib.label,
 					ui: { kind: 'plugin', loader: 'esm' },
 				}),
 				registerPanelDescriptor: d => registeredDescriptors.push(d),
@@ -893,7 +933,14 @@ globalThis.__map = pluginPanelTabMap;
 		assert.deepEqual(JSON.parse(JSON.stringify(enabledTabIds)), ['tab-plugin-IngestStates-0-presets']);
 		assert.ok(removedAttrs.includes('aria-disabled'), 'aria-disabled must be removed from enabled tab');
 		assert.ok(removedClasses.includes('is-disabled'), 'is-disabled class must be removed from enabled tab');
-		assert.equal(tabLabel, 'Presets', 'tab text must be updated from contribution title');
+		assert.deepEqual(setAttrs, [['data-i18n', 'msghub.i18n.IngestStates.ui.panels.presets.label']]);
+		assert.equal(tabLabel, 'Presets', 'tab text must be translated from the contribution i18n key');
+		assert.deepEqual(mergeCalls, [
+			{
+				pluginType: 'IngestStates',
+				translations: { 'msghub.i18n.IngestStates.ui.panels.presets.label': 'Presets' },
+			},
+		]);
 		assert.ok(sandbox.__map.has('tab-plugin-IngestStates-0-presets'), 'entry must be registered in pluginPanelTabMap');
 		const entry = sandbox.__map.get('tab-plugin-IngestStates-0-presets');
 		assert.equal(entry.hash, 'abc123');
@@ -916,13 +963,15 @@ globalThis.__fn = hydratePluginPanels;
 globalThis.__map = pluginPanelTabMap;
 `,
 			{
+				lang: 'en',
 				msghubRequest: () =>
 					Promise.resolve([
 						// instanceId: 99 does not match ref.instanceId: 0
-						{ pluginType: 'IngestStates', instanceId: 99, panelId: 'presets', title: { en: 'Presets' }, bundle: { hash: 'x' } },
+						{ pluginType: 'IngestStates', instanceId: 99, panelId: 'presets', label: 'presets.label', bundle: { hash: 'x' } },
 					]),
 				document: { getElementById: () => ({}), querySelector: () => null },
-				api: { i18n: { pickText: v => String(v || '') } },
+				mergePluginI18n: () => {},
+				t: key => String(key || ''),
 				normalizePluginPanel: () => ({}),
 				registerPanelDescriptor: () => {},
 				Promise,
@@ -949,9 +998,11 @@ ${fnSource}
 globalThis.__fn = hydratePluginPanels;
 `,
 			{
+				lang: 'en',
 				msghubRequest: () => Promise.resolve([]),
 				document: { getElementById: () => null, querySelector: () => null },
-				api: { i18n: { pickText: () => '' } },
+				mergePluginI18n: () => {},
+				t: () => '',
 				normalizePluginPanel: () => ({}),
 				registerPanelDescriptor: () => {},
 				Promise,
@@ -977,9 +1028,11 @@ ${fnSource}
 globalThis.__fn = hydratePluginPanels;
 `,
 			{
+				lang: 'en',
 				msghubRequest: () => Promise.reject(new Error('network error')),
 				document: { getElementById: () => null, querySelector: () => null },
-				api: { i18n: { pickText: () => '' } },
+				mergePluginI18n: () => {},
+				t: () => '',
 				normalizePluginPanel: () => ({}),
 				registerPanelDescriptor: () => {},
 				Promise,
@@ -1003,7 +1056,7 @@ globalThis.__fn = hydratePluginPanels;
 			pluginType: 'IngestStates',
 			instanceId: 0,
 			panelId: 'presets',
-			title: { en: 'Presets', de: 'Vorlagen' },
+			label: 'msghub.i18n.IngestStates.ui.panels.presets.label',
 			bundle: { hash: 'abc123' },
 			app,
 		};
@@ -1018,15 +1071,17 @@ globalThis.__fn = hydratePluginPanels;
 `,
 			{
 				Promise,
+				lang: 'en',
 				msghubRequest: () => Promise.resolve([contrib]),
 				document: {
 					getElementById: id => (id === 'plugin-IngestStates-0-presets' ? {} : null),
 					querySelector: () => null,
 				},
-				api: { i18n: { pickText: v => (v && typeof v === 'object' ? v.en || '' : String(v || '')) } },
+				mergePluginI18n: () => {},
+				t: key => String(key || ''),
 				normalizePluginPanel: (c, ref) => ({
 					id: `tab-plugin-${ref.pluginType}-${ref.instanceId}-${ref.panelId}`,
-					label: c.title,
+					label: c.label,
 					ui: { kind: 'plugin', loader: 'esm' },
 					app: c.app,
 				}),
@@ -1051,7 +1106,7 @@ globalThis.__fn = hydratePluginPanels;
 			pluginType: 'IngestStates',
 			instanceId: 0,
 			panelId: 'presets',
-			title: { en: 'Presets', de: 'Vorlagen' },
+			label: 'msghub.i18n.IngestStates.ui.panels.presets.label',
 			bundle: { hash: 'abc123' },
 			// no app field
 		};
@@ -1065,15 +1120,17 @@ globalThis.__fn = hydratePluginPanels;
 `,
 			{
 				Promise,
+				lang: 'en',
 				msghubRequest: () => Promise.resolve([contrib]),
 				document: {
 					getElementById: id => (id === 'plugin-IngestStates-0-presets' ? {} : null),
 					querySelector: () => null,
 				},
-				api: { i18n: { pickText: v => (v && typeof v === 'object' ? v.en || '' : String(v || '')) } },
+				mergePluginI18n: () => {},
+				t: key => String(key || ''),
 				normalizePluginPanel: (c, ref) => ({
 					id: `tab-plugin-${ref.pluginType}-${ref.instanceId}-${ref.panelId}`,
-					label: c.title,
+					label: c.label,
 					ui: { kind: 'plugin', loader: 'esm' },
 					app: c.app,
 				}),
@@ -1211,6 +1268,7 @@ globalThis.__map = pluginPanelTabMap;
 		const tabEl = {
 			removeAttribute: () => {},
 			classList: { remove: () => {} },
+			setAttribute: () => {},
 			querySelector: () => null,
 		};
 		const sandbox = runInSandbox(
@@ -1234,13 +1292,14 @@ globalThis.__test = async function() {
 	return enabledTabIds;
 };`,
 			{
+				lang: 'en',
 				msghubRequest: () =>
 					Promise.resolve([
 						{
 							pluginType: 'IngestStates',
 							instanceId: 0,
 							panelId: 'presets',
-							title: { en: 'Presets' },
+							label: 'msghub.i18n.IngestStates.ui.panels.presets.label',
 							bundle: { hash: 'h1' },
 						},
 					]),
@@ -1249,17 +1308,19 @@ globalThis.__test = async function() {
 					querySelector: () => tabEl,
 				},
 				location: { hash: '#tab-plugin-IngestStates-0-presets' },
-				api: { i18n: { pickText: v => (v && typeof v === 'object' ? v.en || '' : String(v || '')) } },
+				mergePluginI18n: () => {},
+				t: key => (key === 'msghub.i18n.IngestStates.ui.panels.presets.label' ? 'Presets' : String(key || '')),
 				pluginUiHost: {
 					mount(opts) {
 						mountCalls.push(opts);
 						return { mounted: true };
 					},
 				},
+				applyCategoryMarker: () => {},
 				tabSetActive: id => activatedIds.push(id),
 				normalizePluginPanel: (contrib, ref) => ({
 					id: `tab-plugin-${ref.pluginType}-${ref.instanceId}-${ref.panelId}`,
-					label: contrib.title,
+					label: contrib.label,
 					ui: { kind: 'plugin', loader: 'esm' },
 				}),
 				registerPanelDescriptor: () => {},
@@ -1402,10 +1463,10 @@ globalThis.__ensureBooted = ensureBooted;
 			pluginType: 'IngestStates',
 			instanceId: 0, // numeric from discover — hydrateRef must use this type
 			panelId: 'presets',
-			title: { en: 'Presets', de: 'Templates' },
+			label: 'msghub.i18n.IngestStates.ui.panels.presets.label',
 			bundle: { hash: 'abc123' },
 		};
-		const descriptor = { id: tabId, label: contrib.title, ui: { kind: 'plugin', loader: 'esm' } };
+		const descriptor = { id: tabId, label: contrib.label, ui: { kind: 'plugin', loader: 'esm' } };
 
 		const sandbox = runInSandbox(
 			`
@@ -1425,6 +1486,7 @@ globalThis.__ensureBooted = ensureBooted;
 `,
 			{
 				Promise,
+				lang: 'en',
 				resolvePanelMode: () => ({ active: true, isPlugin: true, pluginRef, tabId }),
 				normalizePluginPanel: () => descriptor,
 				buildSinglePanelShell: d => {
@@ -1487,7 +1549,7 @@ globalThis.__ensureBooted = ensureBooted;
 			pluginType: 'IngestStates',
 			instanceId: 0,
 			panelId: 'presets',
-			title: { en: 'Presets', de: 'Vorlagen' },
+			label: 'msghub.i18n.IngestStates.ui.panels.presets.label',
 			bundle: { hash: 'abc123' },
 			app,
 		};
@@ -1512,10 +1574,11 @@ globalThis.__ensureBooted = ensureBooted;
 `,
 			{
 				Promise,
+				lang: 'en',
 				resolvePanelMode: () => ({ active: true, isPlugin: true, pluginRef, tabId }),
 				normalizePluginPanel: (c, ref) => ({
 					id: `tab-plugin-${ref.pluginType}-${ref.instanceId}-${ref.panelId}`,
-					label: c.title,
+					label: c.label,
 					ui: { kind: 'plugin', loader: 'esm' },
 					app: c.app,
 				}),
@@ -1574,6 +1637,7 @@ globalThis.__ensureBooted = ensureBooted;
 `,
 			{
 				Promise,
+				lang: 'en',
 				resolvePanelMode: () => ({ active: true, isPlugin: true, pluginRef, tabId }),
 				buildSinglePanelShell: () => {
 					buildSinglePanelShellCalls.push(true);
@@ -1627,7 +1691,7 @@ globalThis.__ensureBooted = ensureBooted;
 			pluginType: 'IngestStates',
 			instanceId: 0,
 			panelId: 'presets',
-			title: { en: 'Presets' },
+			label: 'msghub.i18n.IngestStates.ui.panels.presets.label',
 			bundle: { hash: 'abc123' },
 		};
 
@@ -1650,7 +1714,7 @@ globalThis.__ensureBooted = ensureBooted;
 			{
 				Promise,
 				resolvePanelMode: () => ({ active: true, isPlugin: true, pluginRef, tabId }),
-				normalizePluginPanel: () => ({ id: tabId, label: contrib.title, ui: { kind: 'plugin' } }),
+				normalizePluginPanel: () => ({ id: tabId, label: contrib.label, ui: { kind: 'plugin' } }),
 				buildSinglePanelShell: () => {},
 				hydratePluginPanels: async () => {},
 				mountPluginPanelIfNeeded: () => {},
@@ -1667,6 +1731,7 @@ globalThis.__ensureBooted = ensureBooted;
 					if (cmd === 'admin.pluginUi.discover') return [contrib];
 					return null;
 				},
+				mergePluginI18n: () => {},
 				document: {
 					addEventListener: (event, _handler) => {
 						addEventListenerCalls.push(event);
@@ -1708,7 +1773,7 @@ globalThis.__ensureBooted = ensureBooted;
 			pluginType: 'IngestStates',
 			instanceId: 0, // numeric — strict-equality match inside hydratePluginPanels requires hydrateRef to use same type
 			panelId: 'presets',
-			title: { en: 'Presets', de: 'Templates' },
+			label: 'msghub.i18n.IngestStates.ui.panels.presets.label',
 			bundle: { hash: 'abc123' },
 		};
 
@@ -1735,10 +1800,10 @@ globalThis.__pluginPanelTabMap = pluginPanelTabMap;
 					getElementById: id => (id === key ? container : null),
 					querySelector: () => null,
 				},
-				api: {
-					i18n: { pickText: v => (typeof v === 'string' ? v : (v?.en ?? '')) },
-				},
-				normalizePluginPanel: (c, ref) => ({ id: tabId, label: c.title, ui: { kind: 'plugin' } }),
+				mergePluginI18n: () => {},
+				t: key => String(key || ''),
+				applyCategoryMarker: () => {},
+				normalizePluginPanel: (c, ref) => ({ id: tabId, label: c.label, ui: { kind: 'plugin' } }),
 				registerPanelDescriptor: d => {
 					descriptorCalls.push(d);
 				},

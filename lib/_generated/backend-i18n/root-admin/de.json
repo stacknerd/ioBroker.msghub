@@ -184,6 +184,8 @@
 	"msghub.i18n.core.admin.jsonCustom.managedNotice.managedText.help": "Zusätzliche Informationen aus der Quelle, die dieses Objekt verwaltet.",
 	"msghub.i18n.core.admin.jsonCustom.managedNotice.managedText.label": "Notiz (vom System)",
 	"msghub.i18n.core.admin.jsonCustom.managedNotice.panel.label": "Hinweis",
+	"msghub.i18n.core.admin.panels.messages.app.name": "MessageHub Messages",
+	"msghub.i18n.core.admin.panels.messages.app.shortName": "Messages",
 	"msghub.i18n.core.admin.panels.messages.loading.text": "Aktualisiere Nachrichten…",
 	"msghub.i18n.core.admin.panels.plugins.loading.text": "Aktualisiere Plugins…",
 	"msghub.i18n.core.admin.ui.action.cancel": "Abbrechen",
