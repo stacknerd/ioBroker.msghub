@@ -69,7 +69,6 @@ function normalizeCorePanel(registryKey, def) {
 		id: `tab-${localId}`,
 		label: def.label,
 		description: def.description,
-		surface: def.surface,
 		category: def.category,
 		ui: def.ui ? { ...def.ui } : {},
 		app: def.app,
@@ -83,7 +82,7 @@ function normalizeCorePanel(registryKey, def) {
  * `ui.entry` is intentionally absent from the frontend descriptor contract.
  * Bundle loading runs through `admin.pluginUi.bundle.get` RPC plus `bundle.hash`.
  *
- * @param {object} contrib - Discover contribution (`{ pluginType, instanceId, panelId, label, description, bundle, surface?, category?, app? }`).
+ * @param {object} contrib - Discover contribution (`{ pluginType, instanceId, panelId, label, description, bundle, category?, app? }`).
  * @param {object} pluginRef - Plugin reference (`{ pluginType, instanceId, panelId }`).
  * @returns {object} Canonical PanelDescriptor.
  */
@@ -93,7 +92,6 @@ function normalizePluginPanel(contrib, pluginRef) {
 		id: `tab-${key}`,
 		label: contrib.label,
 		description: contrib.description,
-		surface: contrib.surface,
 		category: contrib.category,
 		ui: {
 			kind: 'plugin',

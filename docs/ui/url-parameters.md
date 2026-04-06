@@ -1,6 +1,7 @@
 # Admin Tab URL Parameters
 
 This page documents the supported URL and hash inputs for `admin/tab.html` as implemented today.
+The same canonical query targets are also the source for the prepared Public-Web URLs introduced by the `web` composition contract.
 
 ## Supported query parameters
 
@@ -99,3 +100,13 @@ Today, the Messages panel uses expert mode to enable multi-selection and bulk de
 /admin/tab.html?instance=1&expert=1#tab-messages
 /admin/tab.html?instance=1&react=dark
 ```
+
+## Prepared Public-Web mapping
+
+This package does not turn the Public-Web host on.
+It only fixes the canonical target mapping that later host-specific routing must use:
+
+- Admin-shell single-panel target: `?panel=tab-messages`
+- Later canonical Public-Web app URL: `/msghubUi/<instance>/tab-messages/`
+- Admin-shell web-root target: `?composition=web`
+- Later canonical Public-Web root URL: `/msghubUi/<instance>/`

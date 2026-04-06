@@ -42,7 +42,7 @@ describe('admin/tab/registry.js', function () {
 				false,
 				`panel '${panelId}': label must be an i18n-key string, not a language map`,
 			);
-			assert.ok(typeof panel.surface === 'string' && panel.surface.trim());
+			assert.equal(panel.surface, undefined, `panel '${panelId}': surface must not exist in the producer contract`);
 			assert.ok(typeof panel.category === 'string' && panel.category.trim());
 			assert.ok(panel.ui && typeof panel.ui === 'object');
 			assert.equal(panel.ui.kind, 'core');
@@ -196,7 +196,7 @@ describe('admin/tab/registry.js', function () {
 		vm.runInNewContext(source, sandbox, { filename: 'admin/tab/registry.js' });
 		const panel = sandbox.window.MsghubAdminTabRegistry.panels.messages;
 
-		assert.equal(panel.surface, 'both');
+		assert.equal(panel.surface, undefined);
 		assert.equal(panel.category, 'dashboard');
 		assert.equal(panel.app.name, 'msghub.i18n.core.admin.panels.messages.app.name');
 		assert.equal(panel.app.shortName, 'msghub.i18n.core.admin.panels.messages.app.shortName');
@@ -210,6 +210,38 @@ describe('admin/tab/registry.js', function () {
 			maskable192: 'messages-maskable-192.png',
 			maskable512: 'messages-maskable-512.png',
 			apple180: 'messages-apple-180.png',
+		});
+	});
+
+	it('ships a dedicated web composition with the only composition-level app exception', async function () {
+		const source = await readRepoFile('admin/tab/registry.js');
+		const sandbox = { window: {} };
+		sandbox.win = sandbox.window;
+		vm.runInNewContext(source, sandbox, { filename: 'admin/tab/registry.js' });
+		const composition = sandbox.window.MsghubAdminTabRegistry.compositions.web;
+
+		assert.ok(composition, 'web composition must exist');
+		assert.equal(composition.id, 'web');
+		assert.equal(composition.layout, 'tabs');
+		assert.deepEqual(
+			JSON.parse(JSON.stringify(composition.panels)),
+			['messages', { type: 'pluginPanel', pluginType: 'IngestStates', instanceId: 0, panelId: 'presets' }],
+		);
+		assert.equal(composition.defaultPanel, 'messages');
+		assert.equal(composition.deviceMode, 'pc');
+		assert.ok(composition.app && typeof composition.app === 'object');
+		assert.equal(composition.app.name, 'msghub.i18n.core.admin.webRoot.app.name');
+		assert.equal(composition.app.shortName, 'msghub.i18n.core.admin.webRoot.app.shortName');
+		assert.equal(composition.app.url, '?composition=web');
+		assert.equal(composition.app.display, 'standalone');
+		assert.equal(composition.app.themeColor, '#1f6a53');
+		assert.equal(composition.app.backgroundColor, '#ffffff');
+		assert.deepEqual(JSON.parse(JSON.stringify(composition.app.icons)), {
+			any192: 'web-192.png',
+			any512: 'web-512.png',
+			maskable192: 'web-maskable-192.png',
+			maskable512: 'web-maskable-512.png',
+			apple180: 'web-apple-180.png',
 		});
 	});
 
@@ -269,7 +301,6 @@ describe('admin/tab/registry.js', function () {
 		const basePanel = {
 			id: 'test',
 			label: 'msghub.i18n.some.label',
-			surface: 'admin',
 			category: 'admin',
 			ui: { kind: 'core', loader: 'globals', initGlobal: 'MsghubAdminTabTest', css: [], js: [] },
 		};

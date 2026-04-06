@@ -227,7 +227,7 @@ Important detail:
 - each contribution carries producer-owned panel metadata:
   - `label` — plugin-owned admin-ui i18n key string
   - `description` — optional string
-  - optional `surface`, `category`, and `app`
+  - optional `category` and `app`
 
 The current manifest-side declaration shape is:
 
@@ -239,7 +239,6 @@ plugin.adminUi = {
       id: 'presets',
       label: 'msghub.i18n.IngestStates.ui.panels.presets.label',
       description: 'msghub.i18n.IngestStates.ui.panels.presets.description.text',
-      surface: 'admin',
       category: 'user',
       app: {
         name: 'msghub.i18n.IngestStates.ui.panels.presets.app.name',
@@ -285,7 +284,6 @@ plugin.adminUi = {
       id: 'presets',
       label: 'msghub.i18n.IngestStates.ui.panels.presets.label',
       description: 'msghub.i18n.IngestStates.ui.panels.presets.description.text',
-      surface: 'admin',
       category: 'user',
       app: {
         name: 'msghub.i18n.IngestStates.ui.panels.presets.app.name',

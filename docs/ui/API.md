@@ -65,8 +65,8 @@ panel/plugin contract in this reference.
 
 | Entry | Contract | Owner | Reference |
 | --- | --- | --- | --- |
-| `registry.panels[panelId]` | Native producer definition with owner-local `id`, `label`, `surface`, `category`, `ui`, and optional `app`. Canonical external ids (`tab-...`) are derived later by `normalizeCorePanel(...)`. | Registry runtime | `admin/tab/registry.js` |
-| `registry.compositions[viewId]` | Composition definition with `id`, `layout`, `panels`, `defaultPanel`, and `deviceMode`. | Registry runtime | `admin/tab/registry.js` |
+| `registry.panels[panelId]` | Native producer definition with owner-local `id`, `label`, `category`, `ui`, and optional `app`. Canonical external ids (`tab-...`) are derived later by `normalizeCorePanel(...)`. | Registry runtime | `admin/tab/registry.js` |
+| `registry.compositions[viewId]` | Composition definition with `id`, `layout`, `panels`, `defaultPanel`, and `deviceMode`. The only allowed composition-level `app` block is the special-case `registry.compositions.web.app` for the prepared Public-Web root contract. | Registry runtime | `admin/tab/registry.js` |
 | Native composition panel entry | String panel id such as `'messages'` or `'plugins'`. | Registry runtime | `admin/tab/registry.js`, `admin/tab/layout.js` |
 | Plugin composition panel entry | Structured ref `{ type: 'pluginPanel', pluginType, instanceId, panelId }`. | Registry runtime | `admin/tab/registry.js`, `admin/tab/layout.js` |
 | Wildcard composition | `panels: ['*']`. Native registry panels are rendered first, then all discover contributions as plugin-panel refs. | Layout runtime | `admin/tab/layout.js` |
@@ -288,7 +288,7 @@ panel/plugin contract in this reference.
 
 | DTO | Contract | Owner | Reference |
 | --- | --- | --- | --- |
-| `PluginUiContribution` | `{ pluginType, instanceId, panelId, label, description, surface?, category?, app?, apiVersion, bundle: { hash }, i18n?: { lang, translations }\|null }` | Admin runtime surfaced from plugin manifests and enriched by `admin.pluginUi.discover` with discover-time shell i18n for the requested language. | `lib/IoPlugins.js`, `lib/IoAdminTab.js` |
+| `PluginUiContribution` | `{ pluginType, instanceId, panelId, label, description, category?, app?, apiVersion, bundle: { hash }, i18n?: { lang, translations }\|null }` | Admin runtime surfaced from plugin manifests and enriched by `admin.pluginUi.discover` with discover-time shell i18n for the requested language. | `lib/IoPlugins.js`, `lib/IoAdminTab.js` |
 | `bundle.get` response | `{ apiVersion, moduleFormat: 'esm', hash, js, css?, i18n }` | Admin runtime | `lib/IoAdminTab.js`, `lib/IoPlugins.js` |
 | `bundle.get.i18n` | `{ lang, translations }` or `null`. `translations` is the parsed plugin-owned language file. | Admin runtime | `lib/IoPlugins.js`, `lib/IoAdminTab.js` |
 | `bundle.get.css` | Optional companion CSS from `<bundle.entry>.css`. | Admin runtime | `lib/IoPlugins.js`, `lib/IoAdminTab.js` |
@@ -334,7 +334,7 @@ panel/plugin contract in this reference.
 | `panel.id` | Panel id unique within one plugin type. | Plugin-owned | `lib/IngestStates/manifest.js` |
 | `panel.label` | Plugin-owned admin-ui i18n key surfaced by `discover` and resolved by the shell via `t(...)` when a matching slot is hydrated. | Plugin-owned | `lib/IngestStates/manifest.js`, `admin/tab/boot.js` |
 | `panel.description` | Optional string surfaced by `discover`. Built-in plugin manifests currently also use plugin-owned i18n keys here. | Plugin-owned | `lib/IngestStates/manifest.js`, `lib/IoPlugins.js` |
-| `panel.surface` / `panel.category` | Optional discover metadata for panel eligibility and semantic grouping. | Plugin-owned | `lib/IngestStates/manifest.js`, `lib/IoPlugins.js` |
+| `panel.category` | Optional discover metadata for semantic grouping. | Plugin-owned | `lib/IngestStates/manifest.js`, `lib/IoPlugins.js` |
 | `panel.app` | Optional install/PWA metadata block. Text fields are i18n keys. `app.url` is a host-neutral single-panel target string (current producer contract: stable query params such as `?panel=tab-...`). In the current AdminTab installability/head path, plugin panels do not provide or consume plugin-owned `app.icons`; the shell resolves those slots from the generic host set `admin/icons/pluginUI/*`. | Plugin-owned metadata, host-owned AdminTab icon consumer | `lib/IngestStates/manifest.js`, `lib/IoPlugins.js`, `admin/tab/layout.js` |
 | `panel.bundle.entry` | Relative ESM bundle path inside the plugin directory. Required for `discover`, `bundle.get`, and hash computation. | Plugin-owned | `lib/IngestStates/manifest.js`, `lib/IoPlugins.js` |
 | Companion CSS convention | Optional stylesheet loaded from the same bundle path with `.js` replaced by `.css`. No separate manifest field exists. | UI path convention | `lib/IoPlugins.js`, `admin/tab/plugin-ui-host.js` |

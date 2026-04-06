@@ -207,8 +207,8 @@ intermediate DOM changes produces the same state as a single call.
 
 Converts a raw native panel definition from `registry.panels` into a canonical `PanelDescriptor`.
 The producer now stores owner-local ids (`'messages'`, `'plugins'`). `normalizeCorePanel(...)`
-derives the canonical external/runtime id as `tab-<ownerLocalId>`, passes through `surface`,
-`category`, and the optional `app` block, and also sets the private `_registryKey` field used by
+derives the canonical external/runtime id as `tab-<ownerLocalId>`, passes through `category`
+and the optional `app` block, and also sets the private `_registryKey` field used by
 `computeAssetsForComposition`.
 
 ### `normalizePluginPanel(contrib, pluginRef)`
@@ -221,8 +221,6 @@ descriptor contract; bundle loading is host-owned via `admin.pluginUi.bundle.get
 
 Optional fields are passed through from `contrib` when present:
 
-- `surface` (`'admin' | 'web' | 'both'`) — eligibility gate: where may this panel appear. Not a
-  security concept.
 - `category` (`'dashboard' | 'user' | 'admin' | ...`) — semantic group of the panel; basis for future
   accent-bar / color coding. Not a styling field and carries no color values.
 - `app` — optional PWA / install metadata block (same `AppBlock` schema as core panels).

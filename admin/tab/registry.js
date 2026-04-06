@@ -10,8 +10,8 @@
  * - `panels`: producer-side panel definitions (`id`, `label`, `ui.kind`, `ui.loader`,
  *   `ui.initGlobal`, `ui.css`, `ui.js`). `id` is owner-local (`'messages'`, `'plugins'`), while
  *   the canonical external `tab-...` id is derived later by layout normalization.
- *   Semantic fields `surface` ('admin'|'web'|'both') and `category` ('dashboard'|'user'|'admin'|...)
- *   are carried directly by the producer. Optional `app` data is also producer-owned:
+ *   Semantic field `category` ('dashboard'|'user'|'admin'|...) is carried directly by the
+ *   producer. Optional `app` data is also producer-owned:
  *   all text fields are i18n keys, `url` is the host-neutral single-panel target string
  *   (current contract: stable query params only), and `icons` contains slot -> filename
  *   mappings. Icon ownership stays panel-owned; the host resolves the final path
@@ -39,7 +39,6 @@
 		messages: Object.freeze({
 			id: 'messages',
 			label: 'msghub.i18n.core.admin.ui.tabs.messages.label',
-			surface: 'both',
 			category: 'dashboard',
 			app: Object.freeze({
 				name: 'msghub.i18n.core.admin.panels.messages.app.name',
@@ -80,7 +79,6 @@
 		plugins: Object.freeze({
 			id: 'plugins',
 			label: 'msghub.i18n.core.admin.ui.tabs.plugins.label',
-			surface: 'admin',
 			category: 'admin',
 			ui: Object.freeze({
 				kind: 'core',
@@ -119,6 +117,31 @@
 			panels: Object.freeze(['*']),
 			defaultPanel: 'messages',
 			deviceMode: 'pc',
+		}),
+		web: Object.freeze({
+			id: 'web',
+			layout: 'tabs',
+			panels: Object.freeze([
+				'messages',
+				Object.freeze({ type: 'pluginPanel', pluginType: 'IngestStates', instanceId: 0, panelId: 'presets' }),
+			]),
+			defaultPanel: 'messages',
+			deviceMode: 'pc',
+			app: Object.freeze({
+				name: 'msghub.i18n.core.admin.webRoot.app.name',
+				shortName: 'msghub.i18n.core.admin.webRoot.app.shortName',
+				url: '?composition=web',
+				display: 'standalone',
+				themeColor: '#1f6a53',
+				backgroundColor: '#ffffff',
+				icons: Object.freeze({
+					any192: 'web-192.png',
+					any512: 'web-512.png',
+					maskable192: 'web-maskable-192.png',
+					maskable512: 'web-maskable-512.png',
+					apple180: 'web-apple-180.png',
+				}),
+			}),
 		}),
 		messagesSingle: Object.freeze({
 			id: 'messagesSingle',

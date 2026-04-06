@@ -40,7 +40,6 @@ Each native panel definition follows the producer-side core-panel shape:
 - `ui.initGlobal` — name of the global init object (e.g. `'MsghubAdminTabMessages'`)
 - `ui.css` — array of CSS asset paths relative to `admin/`
 - `ui.js` — array of JS asset paths relative to `admin/`
-- `surface` — `'admin' | 'web' | 'both'` — eligibility gate (not a security concept)
 - `category` — semantic group (not a styling field; carries no color values)
 - `app?` — optional; PWA / install metadata (see below)
 
@@ -79,13 +78,27 @@ The current registry exposes these compositions:
 
 - `adminTab`
 - `full`
+- `web`
 - `messagesSingle`
 
 Their current roles are:
 
 - `adminTab`: default tabbed admin view with native panels plus selected plugin panel slots
 - `full`: wildcard tabbed view that renders all native panels and all discovered plugin panel contributions
+- `web`: manually curated composition that is the prepared source of truth for the future Public-Web root
 - `messagesSingle`: dedicated single-layout view for the native `messages` panel
+
+### Special-case `app` block on composition `web`
+
+Normally, `app` belongs to panel descriptors.
+The only deliberate exception is the composition `web`.
+
+Its `app` block does not make the Public-Web root live in the Admin host.
+It only fixes the canonical metadata source for the later web root:
+
+- canonical composition target: `?composition=web`
+- later canonical public root: `/msghubUi/<instance>/`
+- later internal resolution on that host: `/msghubUi/<instance>/tab.html?composition=web`
 
 ### 3) Declare plugin panel slots without turning them into native panels
 
@@ -128,6 +141,7 @@ Consumers:
 - The registry is created once inside an IIFE. If `window.MsghubAdminTabRegistry` already exists, the module leaves it unchanged.
 - The exported object and its nested panel/composition definitions are frozen.
 - `registry.panels` is native-only. Structured plugin panel refs belong in `composition.panels`, not in `registry.panels`.
+- `surface` is no longer part of the active producer contract for panels or compositions.
 - Asset paths are stored relative to `admin/`, because the shell asset loaders append them directly as page URLs.
 - `defaultPanel` is a plain string. Native defaults use the owner-local panel key (`'messages'`, `'plugins'`); plugin defaults may still resolve to a plugin panel DOM key such as `plugin-...`.
 

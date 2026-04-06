@@ -1079,13 +1079,12 @@ describe('admin/tab/layout.js', function () {
 		assert.ok(mountDiv, 'mount container with id="messages-root" must exist inside the panel div');
 	});
 
-	it('buildLayoutFromRegistry() passes surface and category from core panel def through to stored descriptors', async function () {
+	it('buildLayoutFromRegistry() passes category from core panel def through to stored descriptors but strips surface', async function () {
 		const { sandbox } = await loadLayoutSandbox({
 			t: key => (key === 'messages.key' ? 'Messages' : key),
 		});
 		const { buildLayoutFromRegistry, activatePanel } = sandbox.window.__layoutFns;
 
-		// Add surface + category to the mutable messages panel stub.
 		sandbox.win.MsghubAdminTabRegistry.panels.messages = {
 			...sandbox.win.MsghubAdminTabRegistry.panels.messages,
 			surface: 'admin',
@@ -1107,10 +1106,9 @@ describe('admin/tab/layout.js', function () {
 		activatePanel('tab-messages');
 		assert.equal(sandbox.document.title, 'Messages - MessageHub');
 
-		// surface + category must survive normalizeCorePanel and reach the stored descriptor.
 		const messageDescriptor = registeredDescriptors.find(d => d.id === 'tab-messages');
 		assert.ok(messageDescriptor, 'descriptor for tab-messages must have been registered');
-		assert.equal(messageDescriptor.surface, 'admin', 'surface must be passed through from panel def');
+		assert.equal(messageDescriptor.surface, undefined, 'surface must not be normalized into panel descriptors');
 		assert.equal(messageDescriptor.category, 'dashboard', 'category must be passed through from panel def');
 	});
 
@@ -1265,14 +1263,14 @@ describe('admin/tab/layout.js', function () {
 		assert.equal(descriptor.app, undefined, 'descriptor.app must be undefined when contrib carries no app block');
 	});
 
-	it('normalizePluginPanel() passes contrib.surface through to descriptor', async function () {
+	it('normalizePluginPanel() strips contrib.surface from the descriptor', async function () {
 		const { sandbox } = await loadLayoutSandbox();
 		const { normalizePluginPanel } = sandbox.window.__layoutFns;
 
 		const contrib = { pluginType: 'IngestStates', instanceId: 0, panelId: 'presets', label: 'key', surface: 'web' };
 		const descriptor = normalizePluginPanel(contrib, { pluginType: 'IngestStates', instanceId: 0, panelId: 'presets' });
 
-		assert.equal(descriptor.surface, 'web');
+		assert.equal(descriptor.surface, undefined);
 	});
 
 	it('normalizePluginPanel() passes contrib.category through to descriptor', async function () {
@@ -1285,14 +1283,13 @@ describe('admin/tab/layout.js', function () {
 		assert.equal(descriptor.category, 'dashboard');
 	});
 
-	it('normalizePluginPanel() leaves surface and category undefined when absent from contrib', async function () {
+	it('normalizePluginPanel() leaves category undefined when absent from contrib', async function () {
 		const { sandbox } = await loadLayoutSandbox();
 		const { normalizePluginPanel } = sandbox.window.__layoutFns;
 
 		const contrib = { pluginType: 'IngestStates', instanceId: 0, panelId: 'presets', label: 'key' };
 		const descriptor = normalizePluginPanel(contrib, { pluginType: 'IngestStates', instanceId: 0, panelId: 'presets' });
 
-		assert.equal(descriptor.surface, undefined);
 		assert.equal(descriptor.category, undefined);
 	});
 

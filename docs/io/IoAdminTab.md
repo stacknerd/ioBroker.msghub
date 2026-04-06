@@ -130,7 +130,7 @@ Typical error codes:
 
 Discover DTO shape:
 
-- `{ pluginType, instanceId, panelId, label, description, surface?, category?, app?, apiVersion, bundle: { hash }, i18n?: { lang, translations }|null }`
+- `{ pluginType, instanceId, panelId, label, description, category?, app?, apiVersion, bundle: { hash }, i18n?: { lang, translations }|null }`
 - `label` is the plugin-owned admin-ui i18n key for the panel/tab label
 - `i18n`, when present, already carries the plugin-owned Admin-UI translations for the requested shell language and is consumed by the shell before first plugin-panel mount
 - `app`, when present, is forwarded from the plugin manifest for text/url/display metadata; the current AdminTab installability/head path resolves plugin panel icons from the generic host set `admin/icons/pluginUI/*`

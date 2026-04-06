@@ -105,7 +105,6 @@ declare global {
 
 	type PanelDescriptorLike = {
 		id?: string;
-		surface?: 'admin' | 'web' | 'both';
 		category?: string;
 		/** Optional PWA/install metadata; when present, applyAppHeadMeta manages head meta tags. */
 		app?: AppBlockBase | CoreAppBlock;
@@ -127,7 +126,6 @@ declare global {
 		bundle?: { hash?: string };
 		/** Optional plugin-owned Admin UI translations for the active shell language. */
 		i18n?: { lang?: string; translations?: Record<string, unknown> } | null;
-		surface?: 'admin' | 'web' | 'both';
 		category?: string;
 		/** Optional PWA / install metadata. Plugin app icons are not consumed in this AdminTab path. */
 		app?: PluginAppBlock;
