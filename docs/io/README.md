@@ -179,6 +179,7 @@ Then continue based on your question:
 - `IoManagedMeta`: [`./IoManagedMeta.md`](./IoManagedMeta.md)
 - `IoPluginGuards`: [`./IoPluginGuards.md`](./IoPluginGuards.md)
 - `IoPluginResources`: [`./IoPluginResources.md`](./IoPluginResources.md)
+- `IoPluginUiRpc`: [`./IoPluginUiRpc.md`](./IoPluginUiRpc.md)
 - `IoPlugins`: [`./IoPlugins.md`](./IoPlugins.md)
 - `IoRuntimeI18n`: [`./IoRuntimeI18n.md`](./IoRuntimeI18n.md)
 - `IoStorageIobroker`: [`./IoStorageIobroker.md`](./IoStorageIobroker.md)

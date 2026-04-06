@@ -40,7 +40,11 @@ Simple flow for this package:
    - `web.messages.query`
    - `web.messages.action`
    - `web.ping`
-3. Consistent response envelopes (`ok/data/error`) for the web-safe runtime commands.
+3. Shared-safe plugin UI backend commands:
+   - `web.pluginUi.discover`
+   - `web.pluginUi.bundle.get`
+   - `web.pluginUi.rpc`
+4. Consistent response envelopes (`ok/data/error`) for the web-safe runtime commands.
 
 ---
 
@@ -51,7 +55,7 @@ Simple flow for this package:
 1. Admin-only command handling (`admin.*`).
 2. Config command handling (`config.*`).
 3. Neutral bootstrap handling (`ui.bootstrap`).
-4. Plugin Admin UI host commands (`admin.pluginUi.*` in AP4).
+4. Admin-host-only plugin UI RPC (`admin.pluginUi.rpc`).
 5. Express/WebExtension mount handling.
 6. Static asset, manifest, or icon serving.
 7. Host-specific route resolution or HTML serving.
@@ -67,6 +71,9 @@ Those responsibilities remain outside this facade in AP4.
 - `web.constants.get`
 - `web.messages.query`
 - `web.messages.action`
+- `web.pluginUi.discover`
+- `web.pluginUi.bundle.get`
+- `web.pluginUi.rpc`
 
 ---
 
@@ -92,6 +99,8 @@ Behavior notes:
 - `web.messages.action` requires `ref` and `actionId` and returns `REJECTED` when the executor returns false.
 - `web.constants.get` returns only `kind`, `lifecycle.state`, `level`, and `notfication.events`.
 - `web.ping` always returns `{ ok: true, data: 'pong' }`.
+- `web.pluginUi.discover` and `web.pluginUi.bundle.get` are the exclusive shared-safe/plugin-web-safe discovery and bundle delivery commands.
+- `web.pluginUi.rpc` delegates host-bound RPC validation and dispatch to `IoPluginUiRpc`, which then calls the plugin's `handleWebUiRpc`.
 
 ---
 
@@ -112,6 +121,7 @@ Covered areas include:
 
 - `web.*` command dispatch
 - store-backed query/action/constants/stats behavior
+- plugin UI discover/bundle/RPC behavior
 - unknown-command rejection
 
 ---

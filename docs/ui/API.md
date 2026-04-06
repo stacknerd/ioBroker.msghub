@@ -280,18 +280,18 @@ panel/plugin contract in this reference.
 
 | Command | Request contract | Response contract | Owner | Reference |
 | --- | --- | --- | --- | --- |
-| `admin.pluginUi.discover` | `{ lang? }` where `lang` is the active shell language used for plugin-owned Admin-UI i18n lookup. | `PluginUiContribution[]` with authoritative content hash filled into `bundle.hash` by `IoAdminTab._pluginUiDiscover()`. Hash failures degrade to `''` per panel. Each contribution may additionally carry `i18n: { lang, translations }` for the requested shell language, with `en` fallback and `null` on soft read failure. | Admin runtime for UI host | `lib/IoAdminTab.js`, `lib/IoPlugins.js` |
-| `admin.pluginUi.bundle.get` | `{ pluginType, instanceId?, panelId, lang? }` | `{ apiVersion, moduleFormat: 'esm', hash, js, css?, i18n }` | Admin runtime for UI host | `lib/IoAdminTab.js`, `lib/IoPlugins.js` |
-| `admin.pluginUi.rpc` | `{ pluginType, instanceId?, panelId, command, payload? }` | Plugin-defined `{ ok, data }` or `{ ok: false, error: { code, message } }` at the backend boundary. `msghubRequest` rejects any `ok: false` response as `Error(message)`, so `error.code` is already absent before the host rejection handler runs. Bundle code always receives the normalized envelope described below. | Admin runtime for UI host | `lib/IoAdminTab.js`, `admin/tab/plugin-ui-host.js` |
+| `admin.pluginUi.discover` | `{ lang? }` where `lang` is the active shell language used for plugin-owned Admin-UI i18n lookup. | Current AdminTab browser code still calls this command, but after AP5 the backend target contract has moved to `web.pluginUi.discover`. This stale browser-side call path is rewired only in AP6. | Admin runtime for UI host | `admin/tab/boot.js` |
+| `admin.pluginUi.bundle.get` | `{ pluginType, instanceId?, panelId, lang? }` | Current AdminTab browser code still calls this command, but after AP5 the backend target contract has moved to `web.pluginUi.bundle.get`. This stale browser-side call path is rewired only in AP6. | Admin runtime for UI host | `admin/tab/plugin-ui-host.js` |
+| `admin.pluginUi.rpc` | `{ pluginType, instanceId?, panelId, command, payload? }` | Admin-host RPC path. Plugin-defined `{ ok, data }` or `{ ok: false, error: { code, message } }` at the backend boundary. `msghubRequest` rejects any `ok: false` response as `Error(message)`, so `error.code` is already absent before the host rejection handler runs. Bundle code always receives the normalized envelope described below. | Admin runtime for UI host | `lib/IoAdminTab.js`, `lib/IoPluginUiRpc.js`, `admin/tab/plugin-ui-host.js` |
 
 ### Plugin-owned Admin UI DTOs
 
 | DTO | Contract | Owner | Reference |
 | --- | --- | --- | --- |
-| `PluginUiContribution` | `{ pluginType, instanceId, panelId, label, description, category?, app?, apiVersion, bundle: { hash }, i18n?: { lang, translations }\|null }` | Admin runtime surfaced from plugin manifests and enriched by `admin.pluginUi.discover` with discover-time shell i18n for the requested language. | `lib/IoPlugins.js`, `lib/IoAdminTab.js` |
-| `bundle.get` response | `{ apiVersion, moduleFormat: 'esm', hash, js, css?, i18n }` | Admin runtime | `lib/IoAdminTab.js`, `lib/IoPlugins.js` |
-| `bundle.get.i18n` | `{ lang, translations }` or `null`. `translations` is the parsed plugin-owned language file. | Admin runtime | `lib/IoPlugins.js`, `lib/IoAdminTab.js` |
-| `bundle.get.css` | Optional companion CSS from `<bundle.entry>.css`. | Admin runtime | `lib/IoPlugins.js`, `lib/IoAdminTab.js` |
+| `PluginUiContribution` | `{ pluginType, instanceId, panelId, label, description, category?, app?, apiVersion, bundle: { hash }, i18n?: { lang, translations }\|null }` | Runtime DTO surfaced from plugin manifests and enriched by the backend discover path with discover-time shell i18n for the requested language. | `lib/IoPlugins.js`, `lib/IoWebUi.js` |
+| `bundle.get` response | `{ apiVersion, moduleFormat: 'esm', hash, js, css?, i18n }` | Admin runtime | `lib/IoWebUi.js`, `lib/IoPlugins.js` |
+| `bundle.get.i18n` | `{ lang, translations }` or `null`. `translations` is the parsed plugin-owned language file. | Admin runtime | `lib/IoPlugins.js`, `lib/IoWebUi.js` |
+| `bundle.get.css` | Optional companion CSS from `<bundle.entry>.css`. | Admin runtime | `lib/IoPlugins.js`, `lib/IoWebUi.js` |
 
 ### Plugin UI host surface
 
@@ -323,7 +323,7 @@ panel/plugin contract in this reference.
 | `ctx.api.ui.spinner.show/hide/isOpen` | Narrowed access to shell spinner helpers. | Plugin UI host | `admin/tab/plugin-ui-host.js` |
 | `ctx.api.ui.dialog.confirm(opts)` | Narrowed access to the shell confirm dialog. There is no plugin bundle `dialog.close()` or `dialog.isOpen()`. | Plugin UI host | `admin/tab/plugin-ui-host.js` |
 | `ctx.api.ui.overlayLarge.open/close` | Narrowed access to the large overlay. There is no plugin bundle `overlayLarge.isOpen()`. | Plugin UI host | `admin/tab/plugin-ui-host.js` |
-| `ctx.api.request(command, payload?)` | Bundle-side RPC wrapper for `admin.pluginUi.rpc`. The wrapper always resolves. On successful transport where the backend returns `{ ok: true }`, it resolves with `{ ok: true, data }`. On transport failure or backend `{ ok: false }` (which `msghubRequest` already rejects as `Error(message)`), resolves with `{ ok: false, error: { message } }`. `error.code` is dropped at the `msghubRequest` layer and is never available to the bundle. | Plugin UI host | `admin/tab/plugin-ui-host.js`, `admin/tab/runtime.js`, `lib/IoAdminTab.js` |
+| `ctx.api.request(command, payload?)` | Bundle-side RPC wrapper for the current Admin-host path `admin.pluginUi.rpc`. A future web host uses the same bundle contract against `web.pluginUi.rpc`. The wrapper always resolves. On successful transport where the backend returns `{ ok: true }`, it resolves with `{ ok: true, data }`. On transport failure or backend `{ ok: false }` (which `msghubRequest` already rejects as `Error(message)`), resolves with `{ ok: false, error: { message } }`. `error.code` is dropped at the `msghubRequest` layer and is never available to the bundle. | Plugin UI host | `admin/tab/plugin-ui-host.js`, `admin/tab/runtime.js`, `lib/IoAdminTab.js`, `lib/IoPluginUiRpc.js` |
 
 ### Plugin-owned Admin UI manifest fields consumed by the UI path
 
@@ -357,8 +357,8 @@ panel/plugin contract in this reference.
 | `runtime.about` updates shell-wide policy | `boot.js` uses `runtime.about` to update branding text, timezone policy, cached connection metadata, and embedded-admin language override. The connection panel still reports the frontend format locale locally, with `args.locale` able to override that browser-side source when valid. | Boot runtime | `admin/tab/boot.js`, `main.js` |
 | Timezone fallback is explicit | Missing or invalid runtime timezone metadata becomes a UTC fallback policy and may trigger one warning toast. | Browser API layer / boot runtime | `admin/tab/api.js`, `admin/tab/boot.js` |
 | Plugin bundle cache key includes language | Bundle cache identity is `(pluginType, instanceId, panelId, hash, lang)` because the bundle response may contain language-specific i18n payloads. | Plugin UI host | `admin/tab/plugin-ui-host.js` |
-| `discover` hash is advisory, `bundle.get` hash is authoritative | `IoAdminTab._pluginUiDiscover()` best-effort computes hashes, but `bundle.get` recomputes the authoritative content hash. | Admin runtime | `lib/IoAdminTab.js` |
-| `bundle.get` enforces size limits | JS is limited to 512 KiB. CSS and plugin i18n payloads are limited to 64 KiB each. | Admin runtime | `lib/IoAdminTab.js`, `lib/IoPlugins.js` |
+| `discover` hash is advisory, `bundle.get` hash is authoritative | The backend discover path best-effort computes hashes, but `bundle.get` recomputes the authoritative content hash. | Admin runtime | `lib/IoWebUi.js` |
+| `bundle.get` enforces size limits | JS is limited to 512 KiB. CSS and plugin i18n payloads are limited to 64 KiB each. | Admin runtime | `lib/IoWebUi.js`, `lib/IoPlugins.js` |
 | Plugin UI uses Light DOM only | There is no Shadow DOM contract for plugin panels. Companion CSS is injected as a sibling of `ctx.root`, not into `ctx.root` itself. | Plugin UI host | `admin/tab/plugin-ui-host.js` |
 | Admin-UI i18n stays separate from backend/runtime i18n | Shell text dictionaries come from `admin/i18n/*`. The repo-root `i18n/*` tree is a separate backend/runtime catalog and is not the source of Admin Tab text. | Browser runtime | `admin/tab/runtime.js` |
 | Plugin-panel tabs start disabled | `buildLayoutFromRegistry(...)` renders plugin-panel tabs with `aria-disabled="true"` until `hydratePluginPanels(...)` finds a matching discover contribution. | Layout runtime / boot runtime | `admin/tab/layout.js`, `admin/tab/boot.js` |

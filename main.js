@@ -214,6 +214,7 @@ class Msghub extends utils.Adapter {
 		this._adminTab = new IoAdminTab(this, this._msgPlugins, { msgStore: this.msgStore });
 		this._webUi = new IoWebUi(this, {
 			msgStore: this.msgStore,
+			ioPlugins: this._msgPlugins,
 		});
 		this._adminConfig = new IoAdminConfig(this, {
 			ai: msgAi,

@@ -612,7 +612,7 @@ In both cases, the safe wiring helper is `MsgBridge` (see [`docs/modules/MsgBrid
 Plugins can contribute dedicated tab panels to the Message Hub Admin Tab.
 This is declared in `manifest.adminUi.panels[]` and implemented via two entry points:
 
-- **Backend hook**: `handleAdminUiRpc(request)` — handles RPC calls from the panel bundle.
+- **Backend hooks**: `handleAdminUiRpc(request)` and `handleWebUiRpc(request)` — host-specific RPC entry points for the panel bundle.
 - **Frontend ESM bundle**: `lib/<TypeName>/admin-ui/dist/<panelId>.esm.js` — loaded and mounted by the Admin Tab host.
 
 ### Manifest declaration
@@ -637,6 +637,14 @@ manifest.adminUi = {
 ```js
 // inside the plugin handler object
 async handleAdminUiRpc(request) {
+  return handleSharedUiRpc(request);
+}
+
+async handleWebUiRpc(request) {
+  return handleSharedUiRpc(request);
+}
+
+async function handleSharedUiRpc(request) {
   const { panelId, command, payload } = request;
   if (panelId === 'presets' && command === 'presets.list') {
     return { ok: true, data: await getPresets() };
@@ -664,7 +672,7 @@ export async function unmount(ctx) {
 
 | Entry | Description |
 |---|---|
-| `ctx.api.request(command, payload)` | RPC call → `admin.pluginUi.rpc` → `handleAdminUiRpc` |
+| `ctx.api.request(command, payload)` | Host-bound RPC call. Today on the AdminTab path: `admin.pluginUi.rpc` → `handleAdminUiRpc`. Future web-host path: `web.pluginUi.rpc` → `handleWebUiRpc`. |
 | `ctx.api.i18n.t(key, ...args)` | Plugin-owned i18n (loaded from `lib/<Type>/admin-ui/i18n/<lang>.json`) |
 | `ctx.api.ui.toast(opts)` | Toast notification |
 | `ctx.api.ui.dialog.confirm(opts)` | Confirmation dialog |
@@ -713,7 +721,7 @@ unregister. Plugins without either directory run normally without backend i18n (
 |---|---|---|
 | File | `lib/<Type>/admin-ui/i18n/<lang>.json` | `lib/<Type>/i18n/<lang>.json` |
 | Namespace | `msghub.i18n.<TypeName>.ui.*` | `msghub.i18n.<TypeName>.*` |
-| Transport | Via `admin.pluginUi.bundle.get` and via `IoRuntimeI18n` registry (runtime load) | Via `IoRuntimeI18n` registry (runtime load) |
+| Transport | Via the host-bound `bundle.get` command (shared-safe target contract: `web.pluginUi.bundle.get`) and via `IoRuntimeI18n` registry (runtime load) | Via `IoRuntimeI18n` registry (runtime load) |
 | Guard | Host-side (admin/tab/runtime.js) | IoPlugins `_loadPluginI18n()` |
 
 ### Reference implementation

@@ -266,7 +266,8 @@
 
 | Entry | Availability | Contract | Owner | Reference |
 | --- | --- | --- | --- | --- |
-| `handleAdminUiRpc({ panelId, command, payload }, ctx?)` | Optional plugin runtime method | Backend hook for panel RPC. The current host call path supplies only the request argument. Return contract: `Promise<{ ok: true, data: any } | { ok: false, error: { code: string, message: string } }>` | Plugin-owned, called by UI/IO runtime | `lib/IngestStates/index.js`, `lib/IngestStates/admin-ui/rpc.js` |
+| `handleAdminUiRpc({ panelId, command, payload }, ctx?)` | Optional plugin runtime method | Admin-host backend hook for panel RPC. Return contract: `Promise<{ ok: true, data: any } | { ok: false, error: { code: string, message: string } }>` | Plugin-owned, called by UI/IO runtime | `lib/IngestStates/index.js`, `lib/IngestStates/admin-ui/rpc.js` |
+| `handleWebUiRpc({ panelId, command, payload }, ctx?)` | Optional plugin runtime method | Web-host backend hook for panel RPC. Return contract matches `handleAdminUiRpc`. Plugins may share an internal dispatcher, but the public hook split is explicit. | Plugin-owned, called by UI/IO runtime | `lib/IngestStates/index.js`, `lib/IngestStates/admin-ui/rpc.js` |
 
 ### Current `IngestStates` Admin UI RPC commands
 
@@ -302,7 +303,7 @@
 | `ctx.host.adapterInstance` | Adapter instance id such as `msghub.0`. | UI host | `admin/tab/plugin-ui-host.js` |
 | `ctx.host.uiTextLanguage` | Active Admin Tab language. | UI host | `admin/tab/plugin-ui-host.js` |
 | `ctx.dom.h` | DOM helper function exposed from the Admin Tab runtime. | UI host | `admin/tab/plugin-ui-host.js` |
-| `ctx.api.request(command, payload?)` | Promise-based RPC helper. The bundle-side wrapper always resolves. On successful transport where the backend returns `{ ok: true }`, it resolves with `{ ok: true, data }`. On transport failure or any backend `{ ok: false }` response, it resolves with `{ ok: false, error: { message } }`. `error.code` is not forwarded to the bundle. | UI host | `admin/tab/plugin-ui-host.js`, `admin/tab/runtime.js` |
+| `ctx.api.request(command, payload?)` | Promise-based host-bound RPC helper. The AdminTab host currently routes this to `admin.pluginUi.rpc`; a future web host routes the same bundle contract to `web.pluginUi.rpc`. The wrapper always resolves. On successful transport where the backend returns `{ ok: true }`, it resolves with `{ ok: true, data }`. On transport failure or any backend `{ ok: false }` response, it resolves with `{ ok: false, error: { message } }`. `error.code` is not forwarded to the bundle. | UI host | `admin/tab/plugin-ui-host.js`, `admin/tab/runtime.js` |
 | `ctx.api.i18n.t(key, ...args)` | Admin runtime translator after plugin-owned Admin UI translations have been merged. | UI host / runtime | `admin/tab/plugin-ui-host.js`, `admin/tab/runtime.js` |
 | `ctx.api.ui.toast(opts)` | Forwards to the Admin UI toast helper. | UI host | `admin/tab/plugin-ui-host.js` |
 | `ctx.api.ui.spinner.show(opts?)` | Opens the Admin UI spinner. | UI host | `admin/tab/plugin-ui-host.js` |
@@ -319,7 +320,7 @@
 | Only running plugin instances contribute panels | `getAdminUiContributions()` only includes currently registered runtime handlers with declared `adminUi.panels[]`. | `IoPlugins` | `lib/IoPlugins.js` |
 | `panel.bundle.entry` is path-constrained to the plugin package root | Asset resolution is relative to the resolved descriptor `packageRoot`; escapes outside that package root are rejected. | `IoPlugins` | `lib/IoPlugins.js` |
 | Bundle hash is artifact-based | The hash is computed from JS bundle content, optional companion CSS content, and every `admin-ui/i18n/*.json` filename and file content. | `IoPlugins` | `lib/IoPlugins.js` |
-| Bundle size limits are enforced by the Admin Tab host path | JS is limited to `512 KiB`; companion CSS and each i18n payload are limited to `64 KiB`. | `IoAdminTab` / `IoPlugins` | `lib/IoAdminTab.js`, `lib/IoPlugins.js` |
+| Bundle size limits are enforced by the shared-safe backend bundle path | JS is limited to `512 KiB`; companion CSS and each i18n payload are limited to `64 KiB`. | `IoWebUi` / `IoPlugins` | `lib/IoWebUi.js`, `lib/IoPlugins.js` |
 | Plugin Admin UI i18n is namespace-limited | Only keys under `msghub.i18n.<PluginType>.ui.*` are merged into the runtime dictionary. Existing keys are never overwritten. | Admin runtime | `admin/tab/runtime.js` |
 | Admin UI i18n fallback is language then `en` | `readAdminUiBundle(...)` first tries the requested language, then `en`. | `IoPlugins` | `lib/IoPlugins.js` |
 | Companion CSS is discovered by filename convention, not by manifest field | The host looks for `<bundle.entry>.css` automatically. | `IoPlugins` / UI host | `lib/IoPlugins.js`, `admin/tab/plugin-ui-host.js` |
