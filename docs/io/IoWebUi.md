@@ -40,11 +40,12 @@ Simple flow for this package:
    - `web.messages.query`
    - `web.messages.action`
    - `web.ping`
-3. Shared-safe plugin UI backend commands:
+3. Canonical web-token validation via `IoAdminCapabilities` before business execution.
+4. Shared-safe plugin UI backend commands:
    - `web.pluginUi.discover`
    - `web.pluginUi.bundle.get`
    - `web.pluginUi.rpc`
-4. Consistent response envelopes (`ok/data/error`) for the web-safe runtime commands.
+5. Consistent response envelopes (`ok/data/error`) for the web-safe runtime commands.
 
 ---
 
@@ -65,6 +66,8 @@ Those responsibilities remain outside this facade in AP4.
 ---
 
 ## Authoritative command contract
+
+All `web.*` commands require `payload.token` and validate it centrally via `IoAdminCapabilities` before execution.
 
 - `web.ping`
 - `web.stats.get`
@@ -91,6 +94,7 @@ Typical error codes:
 - `INTERNAL`
 - `REJECTED`
 - `UNKNOWN_COMMAND`
+- `FORBIDDEN`
 
 Behavior notes:
 
@@ -107,8 +111,9 @@ Behavior notes:
 ## Guardrails
 
 1. Scope guardrail: `web.*` only.
-2. No WebExtension mount/routing/asset logic.
-3. No plugin UI backend migration in this package.
+2. Token validation is centralized in `IoAdminCapabilities`; IoWebUi does not implement local token logic.
+3. No WebExtension mount/routing/asset logic.
+4. No plugin UI backend migration in this package.
 
 ---
 
@@ -120,6 +125,7 @@ Behavior notes:
 Covered areas include:
 
 - `web.*` command dispatch
+- token-required backend gating for `web.*`
 - store-backed query/action/constants/stats behavior
 - plugin UI discover/bundle/RPC behavior
 - unknown-command rejection

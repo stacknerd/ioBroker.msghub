@@ -48,7 +48,8 @@ References:
 3. Store-backed admin delete flow (`admin.messages.delete`).
 4. Admin-host plugin UI RPC (`admin.pluginUi.rpc`) as a thin facade over the shared dispatcher `IoPluginUiRpc`.
 5. Thin pass-through for `admin.ingestStates.presets.selectOptions*` (delegated to IngestStates runtime — no domain logic in IoAdminTab).
-6. Consistent response envelopes (`ok/data/error`) for admin runtime commands.
+6. Canonical admin-token validation via `IoAdminCapabilities` before business execution.
+7. Consistent response envelopes (`ok/data/error`) for admin runtime commands.
 
 ---
 
@@ -69,6 +70,8 @@ Those responsibilities belong to `IoAdminConfig`, resolver/startup wiring, and t
 ## Authoritative command contract (`admin.*`)
 
 ### Plugin runtime
+
+All normal `admin.*` commands require `payload.token` and validate it centrally via `IoAdminCapabilities` before execution.
 
 - `admin.plugins.getCatalog`
 - `admin.plugins.listInstances`
@@ -95,6 +98,7 @@ Not owned by `IoAdminTab` anymore:
 
 - `admin.ingestStates.presets.selectOptions*` — thin pass-through only; delegated to `IngestStates.getPresetSelectOptions(...)`.
   Used by `admin/jsonCustom.json` (selectSendTo fields). No IoAdminTab-owned domain logic.
+  This is the only documented backend exception that does not require `payload.token`; if a token is supplied, IoAdminTab may still validate and strip it.
 
 Intentionally incompatible:
 
@@ -115,6 +119,7 @@ Default responses for runtime commands:
 Special case:
 
 - `admin.ingestStates.presets.selectOptions*` returns an array (`[{ value, label }, ...]`) without an `ok` envelope — required by `jsonCustom` selectSendTo contract.
+- Missing or invalid `payload.token` on normal `admin.*` commands returns `FORBIDDEN` before business execution.
 
 Typical error codes:
 
@@ -139,7 +144,8 @@ Discover DTO shape:
 ## Guardrails
 
 1. Scope guardrail: `admin.*` only; no config mutation semantics.
-2. Select options are read-only and never write runtime/native state.
+2. Token validation is centralized in `IoAdminCapabilities`; IoAdminTab does not implement local token logic.
+3. Select options are read-only and never write runtime/native state.
 
 ---
 
@@ -150,10 +156,11 @@ Discover DTO shape:
 Covered areas include:
 
 - plugin UI RPC routing (`admin.pluginUi.rpc` command dispatch via `IoPluginUiRpc`)
+- token-required backend gating for normal `admin.*` commands
 - rejection of migrated web-safe commands on `admin.*`
 - rejection of removed `admin.pluginUi.discover` / `admin.pluginUi.bundle.get`
 - rejection of config-scope commands on admin scope
-- `admin.ingestStates.presets.selectOptions*` pass-through behavior (delegation to IngestStates runtime)
+- `admin.ingestStates.presets.selectOptions*` pass-through behavior, including the documented token exception
 - `admin.messages.delete`
 
 ---

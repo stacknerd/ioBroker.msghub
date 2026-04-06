@@ -211,14 +211,19 @@ class Msghub extends utils.Adapter {
 
 		// Keep AdminTab operational even if plugin wiring fails,
 		// so Stats/Messages diagnostics remain available.
-		this._adminTab = new IoAdminTab(this, this._msgPlugins, { msgStore: this.msgStore });
+		this._adminTab = new IoAdminTab(this, this._msgPlugins, {
+			msgStore: this.msgStore,
+			adminCapabilities: this._adminCapabilities,
+		});
 		this._webUi = new IoWebUi(this, {
 			msgStore: this.msgStore,
 			ioPlugins: this._msgPlugins,
+			adminCapabilities: this._adminCapabilities,
 		});
 		this._adminConfig = new IoAdminConfig(this, {
 			ai: msgAi,
 			msgStore: this.msgStore,
+			adminCapabilities: this._adminCapabilities,
 		});
 
 		// Always start ingestion (even when some plugins failed to wire),

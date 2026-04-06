@@ -20,6 +20,7 @@ Without a dedicated config facade, risks include:
 - poor testability of security boundaries.
 
 `IoAdminConfig` encapsulates this path with explicit allowlist filtering and reproducible error semantics.
+It now also enforces the canonical config-token contract through `IoAdminCapabilities` before any business execution starts.
 
 ---
 
@@ -30,7 +31,7 @@ Simple flow:
 1. ioBroker sends `sendTo(..., command='config.*', payload)`.
 2. `main.js` routes to `_handleConfigCommand(...)`.
 3. `_handleConfigCommand(...)` delegates to `IoAdminConfig.handleCommand(...)`.
-4. `IoAdminConfig` executes the config operation and returns a response (including optional allowlist-filtered `native` patch fields).
+4. `IoAdminConfig` validates `payload.token` centrally via `IoAdminCapabilities`, strips it from the business payload, then executes the config operation and returns a response (including optional allowlist-filtered `native` patch fields).
 
 References:
 
@@ -49,7 +50,8 @@ References:
    - native retry/lock intent (`config.archive.retryNative`)
    - iobroker lock intent (`config.archive.forceIobroker`)
 3. AI connectivity test (`config.ai.test`).
-4. Hard filtering of all `native` patch payloads through an explicit allowlist.
+4. Canonical config-token validation via `IoAdminCapabilities` before business execution.
+5. Hard filtering of all `native` patch payloads through an explicit allowlist.
 
 ---
 
@@ -65,6 +67,8 @@ References:
 ---
 
 ## Authoritative command contract (`config.*`)
+
+All active `config.*` commands require `payload.token` and validate it centrally via `IoAdminCapabilities` before execution.
 
 The following commands are compatible and active:
 
@@ -153,9 +157,15 @@ Default responses:
 Typical error codes:
 
 - `BAD_REQUEST`
+- `FORBIDDEN`
 - `NOT_READY`
 - `NATIVE_PROBE_FAILED`
 - `UNKNOWN_COMMAND`
+
+Token semantics:
+
+- missing or invalid `payload.token` returns `FORBIDDEN` before business execution
+- command handlers receive the cleaned payload without `token`
 
 ---
 
@@ -178,6 +188,8 @@ Covered areas include:
 - native probe success/failure for `config.archive.retryNative`
 - lock patch for `config.archive.forceIobroker`
 - runtime transparency for `config.archive.status`
+- token-required backend gating for `config.*`
+- payload-token stripping before business execution
 - allowlist filtering for disallowed native keys
 
 ---

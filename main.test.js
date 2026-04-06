@@ -106,6 +106,56 @@ function loadMainFactoryForTest() {
 	}
 }
 
+/**
+ * Load `main.js` with a local `@iobroker/adapter-core` stub plus optional module stubs.
+ *
+ * This is used for focused composition-root tests that need to drive `onReady()`
+ * without the real runtime graph.
+ *
+ * @param {Record<string, any>} stubMap Module stubs keyed by request string suffix.
+ * @returns {(options?: object) => any} Factory exported by `main.js`.
+ */
+function loadMainFactoryWithModuleStubs(stubMap) {
+	const originalLoad = Module._load;
+
+	class AdapterStub {
+		constructor(options = {}) {
+			this.namespace = options.namespace || 'msghub.0';
+			this.name = options.name || 'msghub';
+			this.config = {};
+			this.log = { silly() {}, debug() {}, info() {}, warn() {}, error() {} };
+		}
+
+		on() {
+			return this;
+		}
+	}
+
+	try {
+		Module._load = function patchedLoad(request, parent, isMain) {
+			if (request === '@iobroker/adapter-core') {
+				return {
+					Adapter: AdapterStub,
+					getAbsoluteInstanceDataDir() {
+						return '';
+					},
+				};
+			}
+			for (const [suffix, stub] of Object.entries(stubMap || {})) {
+				if (request === suffix || request.endsWith(suffix)) {
+					return stub;
+				}
+			}
+			return originalLoad.call(this, request, parent, isMain);
+		};
+
+		delete require.cache[require.resolve('./main')];
+		return require('./main');
+	} finally {
+		Module._load = originalLoad;
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Paths to real i18n directories
 // ---------------------------------------------------------------------------
@@ -369,6 +419,163 @@ describe('_i18ninit live-binding (A8 integration)', () => {
 });
 
 describe('main.js message routing (AP3 bootstrap)', () => {
+	it('wires the shared IoAdminCapabilities instance into all three AP15 facades during onReady', async () => {
+		const captured = {};
+		class MsgStoreStub {
+			constructor() {
+				this.msgIngest = { start() {}, dispatchStateChange() {}, dispatchObjectChange() {} };
+				this.msgNotify = {};
+				this.msgArchive = { getStatus: () => null };
+			}
+
+			async init() {}
+		}
+		const createAdapter = loadMainFactoryWithModuleStubs({
+			'/src/MsgFactory': { MsgFactory: class MsgFactoryStub {} },
+			'/src/MsgConfig': {
+				MsgConfig: {
+					schemaVersion: 'test-schema',
+					normalize() {
+						return {
+							pluginPublic: {},
+							corePrivate: {
+								general: {
+									coreFormatLocale: 'de-DE',
+									coreTextLanguage: 'en',
+									backendTextLanguage: 'en',
+								},
+								ai: {},
+								store: {},
+								storage: {},
+								archive: {},
+								stats: {},
+								quietHours: {},
+								render: {},
+							},
+						};
+					},
+				},
+			},
+			'/src/MsgStore': { MsgStore: MsgStoreStub },
+			'/src/MsgAi': { MsgAi: class MsgAiStub {} },
+			'/lib/IoArchiveResolver': {
+				IoArchiveResolver: {
+					async resolveFor() {
+						return {
+							createStorageBackend() {
+								return {};
+							},
+							archiveRuntime: {},
+						};
+					},
+				},
+			},
+			'/lib/IoCoreConnection': {
+				IoCoreConnection: class IoCoreConnectionStub {
+					async init() {}
+					checkHealthLocal() {
+						return { connected: true, mode: 'local' };
+					}
+					async markFromHealth() {}
+				},
+			},
+			'/lib/IoPlugins': {
+				IoPlugins: {
+					async create() {
+						return {
+							getIngestMeta() {
+								return {};
+							},
+							clearMessageboxHandler() {},
+						};
+					},
+				},
+			},
+			'/lib/IoAdminTab': {
+				IoAdminTab: class IoAdminTabStub {
+					constructor(_adapter, _ioPlugins, options) {
+						captured.adminTabOptions = options;
+					}
+				},
+			},
+			'/lib/IoWebUi': {
+				IoWebUi: class IoWebUiStub {
+					constructor(_adapter, options) {
+						captured.webUiOptions = options;
+					}
+				},
+			},
+			'/lib/IoAdminConfig': {
+				IoAdminConfig: class IoAdminConfigStub {
+					constructor(_adapter, options) {
+						captured.adminConfigOptions = options;
+					}
+				},
+			},
+		});
+		const adapter = createAdapter();
+		adapter._resolveBackendTextLanguage = async () => 'en';
+		adapter._i18ninit = () => {
+			adapter._i18nRegistry = { kind: 'i18n-registry' };
+			adapter.i18nBackend = Object.freeze({ t: s => s, getTranslatedObject: s => ({ en: s }) });
+			adapter.i18nCore = Object.freeze({ t: s => s, getTranslatedObject: s => ({ en: s }) });
+		};
+		adapter._syncArchiveRuntimeNativeFields = async () => {};
+		const originalLoad = Module._load;
+		try {
+			Module._load = function patchedLoad(request, parent, isMain) {
+				for (const [suffix, stub] of Object.entries({
+					'/lib/IoPlugins': {
+						IoPlugins: {
+							async create() {
+								return {
+									getIngestMeta() {
+										return {};
+									},
+									clearMessageboxHandler() {},
+								};
+							},
+						},
+					},
+					'/lib/IoAdminTab': {
+						IoAdminTab: class IoAdminTabStub {
+							constructor(_adapter, _ioPlugins, options) {
+								captured.adminTabOptions = options;
+							}
+						},
+					},
+					'/lib/IoWebUi': {
+						IoWebUi: class IoWebUiStub {
+							constructor(_adapter, options) {
+								captured.webUiOptions = options;
+							}
+						},
+					},
+					'/lib/IoAdminConfig': {
+						IoAdminConfig: class IoAdminConfigStub {
+							constructor(_adapter, options) {
+								captured.adminConfigOptions = options;
+							}
+						},
+					},
+				})) {
+					if (request === suffix || request.endsWith(suffix)) {
+						return stub;
+					}
+				}
+				return originalLoad.call(this, request, parent, isMain);
+			};
+
+			await adapter.onReady();
+		} finally {
+			Module._load = originalLoad;
+		}
+
+		expect(captured.adminTabOptions.adminCapabilities).to.equal(adapter._adminCapabilities);
+		expect(captured.webUiOptions.adminCapabilities).to.equal(adapter._adminCapabilities);
+		expect(captured.adminConfigOptions.adminCapabilities).to.equal(adapter._adminCapabilities);
+	});
+
 	it('routes web.* through IoWebUi', async () => {
 		const createAdapter = loadMainFactoryForTest();
 		const sent = [];
