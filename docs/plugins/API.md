@@ -126,7 +126,7 @@
 
 | Entry | Contract | Owner | Reference |
 | --- | --- | --- | --- |
-| Plugin directory | Runtime discovery scans `lib/<PluginDir>/manifest.js`. | `lib/index.js` | `lib/index.js` |
+| Builtin package discovery | Builtin runtime discovery scans `lib/*/manifest.js` and resolves plugin package descriptors with `sourceKind`, `sourceId`, and `packageRoot`. Host-side consumers work against those resolved descriptors, not against repo-path assumptions. | `lib/index.js` | `lib/index.js` |
 | Manifest export | `manifest.js` must export `{ manifest }`. | `lib/index.js` | `lib/index.js` |
 | Factory export | The plugin module must export a factory function named exactly like `manifest.type`. | `lib/index.js` | `lib/index.js` |
 | Category resolution | `manifest.category` is used when present. Otherwise the category is inferred from the `type` prefix: `Ingest*`, `Notify*`, `Bridge*`, `Engage*`. Even when `manifest.category` is set explicitly, the `type` must still start with the expected prefix for that category; `IoPlugins` enforces this during runtime initialization. | `lib/index.js` / `IoPlugins` | `lib/index.js`, `lib/IoPlugins.js` |
@@ -250,10 +250,10 @@
 | `panel.id` | Panel id, unique within the plugin type. | Plugin-owned | `lib/IngestStates/manifest.js` |
 | `panel.title` | Optional translated title object shown in the Admin Tab when present. | Plugin-owned | `lib/IngestStates/manifest.js` |
 | `panel.description` | Optional translated description object shown in host DTOs when present. | Plugin-owned | `lib/IngestStates/manifest.js` |
-| `panel.bundle.entry` | Relative path to the ESM bundle inside the plugin directory. Required. | Plugin-owned, consumed by IO/UI runtime | `lib/IngestStates/manifest.js`, `lib/IoPlugins.js` |
+| `panel.bundle.entry` | Relative path to the ESM bundle inside the plugin package root (`packageRoot`). Required. | Plugin-owned, consumed by IO/UI runtime | `lib/IngestStates/manifest.js`, `lib/IoPlugins.js` |
 | Companion CSS | Optional stylesheet at the same path as `panel.bundle.entry` with `.js` replaced by `.css`. There is no separate manifest field for CSS. | UI host convention | `lib/IoPlugins.js`, `admin/tab/plugin-ui-host.js` |
 | Plugin-owned Admin UI i18n | Optional files under `admin-ui/i18n/<lang>.json`. Loaded by the browser runtime for plugin UI bundles and also visible to backend runtime i18n when the keys use the plugin namespace. | Plugin-owned, consumed by IO/UI runtime | `lib/IoPlugins.js`, `admin/tab/runtime.js` |
-| Plugin-owned Backend i18n | Optional files under `lib/<TypeName>/i18n/<lang>.json`. Keys must use prefix `msghub.i18n.<TypeName>.*`; foreign keys are rejected with warn. Loaded together with optional `admin-ui/i18n` files by `IoPlugins` on register; removed on unregister. | Plugin-owned, consumed by IoRuntimeI18n | `lib/IoPlugins.js`, `lib/IoRuntimeI18n.js` |
+| Plugin-owned Backend i18n | Optional files under `packageRoot/i18n/<lang>.json`. Keys must use prefix `msghub.i18n.<TypeName>.*`; foreign keys are rejected with warn. Loaded together with optional `packageRoot/admin-ui/i18n` files by `IoPlugins` on register; removed on unregister. | Plugin-owned, consumed by IoRuntimeI18n | `lib/IoPlugins.js`, `lib/IoRuntimeI18n.js` |
 
 ### Current plugin-owned Admin UI contributors
 
@@ -317,7 +317,7 @@
 | Contract | Notes | Owner | Reference |
 | --- | --- | --- | --- |
 | Only running plugin instances contribute panels | `getAdminUiContributions()` only includes currently registered runtime handlers with declared `adminUi.panels[]`. | `IoPlugins` | `lib/IoPlugins.js` |
-| `panel.bundle.entry` is path-constrained to the plugin directory | Escaping the plugin directory is rejected. | `IoPlugins` | `lib/IoPlugins.js` |
+| `panel.bundle.entry` is path-constrained to the plugin package root | Asset resolution is relative to the resolved descriptor `packageRoot`; escapes outside that package root are rejected. | `IoPlugins` | `lib/IoPlugins.js` |
 | Bundle hash is artifact-based | The hash is computed from JS bundle content, optional companion CSS content, and every `admin-ui/i18n/*.json` filename and file content. | `IoPlugins` | `lib/IoPlugins.js` |
 | Bundle size limits are enforced by the Admin Tab host path | JS is limited to `512 KiB`; companion CSS and each i18n payload are limited to `64 KiB`. | `IoAdminTab` / `IoPlugins` | `lib/IoAdminTab.js`, `lib/IoPlugins.js` |
 | Plugin Admin UI i18n is namespace-limited | Only keys under `msghub.i18n.<PluginType>.ui.*` are merged into the runtime dictionary. Existing keys are never overwritten. | Admin runtime | `admin/tab/runtime.js` |

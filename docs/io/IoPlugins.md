@@ -13,11 +13,11 @@ It owns plugin instance objects and enable states, wires plugin factories into t
 
 - the adapter runtime in `main.js`,
 - the core plugin hosts in `src/` (`MsgIngest`, `MsgNotify`, `MsgBridge`, `MsgEngage`),
-- plugin implementations in `lib/<PluginType>/`.
+- plugin implementations provided by resolved plugin packages (builtins currently come from `lib/<PluginType>/`).
 
 Conceptually:
 
-1. the catalog in `lib/index.js` defines available plugins,
+1. the catalog in `lib/index.js` defines available plugins plus resolved package metadata,
 2. `IoPlugins` creates/loads plugin instances from that catalog,
 3. plugin instances are registered into the correct host,
 4. `IoPlugins` decorates plugin ctx with runtime-owned helpers and metadata,
@@ -80,7 +80,7 @@ Relevant options include:
 
 - `options.instanceId`
 - `options.catalog`
-- `options.pluginDirs` (`Map<string, string>`)
+- `options.pluginDescriptors` (`Map<string, { packageRoot: string, ... }>` for resolved package descriptors)
 
 ### `IoPlugins.create(adapter, msgStore, options?)`
 
@@ -272,7 +272,8 @@ Reads:
 - optional companion CSS
 - requested plugin-owned i18n file (with `en` fallback)
 
-Path traversal is explicitly guarded.
+All plugin-owned assets are resolved relative to the plugin descriptor `packageRoot`.
+Path traversal outside that package root is explicitly guarded.
 
 These Admin UI methods expect the manifest-side declaration shape:
 

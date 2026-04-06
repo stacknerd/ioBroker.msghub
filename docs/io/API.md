@@ -49,8 +49,8 @@
 
 | Entry | Contract | Owner | Reference |
 | --- | --- | --- | --- |
-| Runtime catalog source | Available plugins come from `IoPluginsCatalog`, which is built by scanning `lib/<PluginDir>/manifest.js`. | IO runtime | `lib/index.js`, `lib/IoPlugins.js` |
-| Manifest export contract | Each plugin directory must export `{ manifest }` from `manifest.js`, and the module root must export a factory function named exactly like `manifest.type`. | IO runtime | `lib/index.js` |
+| Runtime catalog source | Available plugins come from `IoPluginsCatalog`, which is built from builtin package discovery under `lib/` and carries resolved package metadata (`sourceKind`, `sourceId`, `packageRoot`) for host-side asset consumers. | IO runtime | `lib/index.js`, `lib/IoPlugins.js` |
+| Manifest export contract | Each builtin package must export `{ manifest }` from `manifest.js`, and the module root must export a factory function named exactly like `manifest.type`. | IO runtime | `lib/index.js` |
 | Category resolution | `manifest.category` is used when present; otherwise category is inferred from the `type` prefix (`Ingest*`, `Notify*`, `Bridge*`, `Engage*`). Registration still enforces the category-specific prefix. | IO runtime | `lib/index.js`, `lib/IoPlugins.js` |
 | Discovery exclusion | `manifest.hidden === true` or `manifest.discoverable === false` excludes a plugin from runtime discovery. | IO runtime | `lib/index.js` |
 | Plugin instance base object | Each instance owns a base object `<Type>.<instanceId>` of type `channel`. `object.native` stores raw plugin options. | IO runtime | `lib/IoPlugins.js` |
@@ -99,7 +99,7 @@
 | `createOptionsApi(manifest).resolveString(key, value)` | Returns the manifest default for `undefined`, `null`, or non-strings. Trims by default unless `spec.trim === false`. | IO runtime | `lib/IoPlugins.js` |
 | Messagebox ownership | Exactly one Engage plugin instance may own the adapter messagebox handler at a time. Ownership is tracked by registration id. | IO runtime | `lib/IoPlugins.js` |
 | Admin UI bundle hash cache | Cached per process as `${type}:${panelId}` and intentionally never invalidated mid-process. | IO runtime | `lib/IoPlugins.js` |
-| Admin UI path traversal guard | Both bundle reading and bundle hashing reject `bundle.entry` or i18n paths that escape the plugin directory with `FORBIDDEN`. | IO runtime | `lib/IoPlugins.js` |
+| Admin UI package-root guard | Both bundle reading and bundle hashing resolve paths relative to the descriptor `packageRoot` and reject escapes with `FORBIDDEN`. | IO runtime | `lib/IoPlugins.js` |
 
 ### `IoPluginResources`
 
