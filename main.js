@@ -99,6 +99,7 @@ class Msghub extends utils.Adapter {
 
 		// AdminTab command facade (initialized in onReady)
 		this._adminTab = null;
+		this._webUi = null;
 
 		// Official platform-side core-link connection state.
 		this._coreConnection = null;
@@ -196,6 +197,7 @@ class Msghub extends utils.Adapter {
 
 		const { IoAdminTab } = require(`${__dirname}/lib/IoAdminTab`);
 		const { IoAdminConfig } = require(`${__dirname}/lib/IoAdminConfig`);
+		const { IoWebUi } = require(`${__dirname}/lib/IoWebUi`);
 
 		try {
 			const { IoPlugins } = require(`${__dirname}/lib/IoPlugins`);
@@ -210,6 +212,9 @@ class Msghub extends utils.Adapter {
 		// Keep AdminTab operational even if plugin wiring fails,
 		// so Stats/Messages diagnostics remain available.
 		this._adminTab = new IoAdminTab(this, this._msgPlugins, { msgStore: this.msgStore });
+		this._webUi = new IoWebUi(this, {
+			msgStore: this.msgStore,
+		});
 		this._adminConfig = new IoAdminConfig(this, {
 			ai: msgAi,
 			msgStore: this.msgStore,
@@ -318,6 +323,8 @@ class Msghub extends utils.Adapter {
 		try {
 			if (typeof cmd === 'string' && cmd.startsWith('admin.')) {
 				result = await this._handleAdminCommand(cmd, payload);
+			} else if (typeof cmd === 'string' && cmd.startsWith('web.')) {
+				result = await this._handleWebCommand(cmd, payload);
 			} else if (typeof cmd === 'string' && cmd.startsWith('config.')) {
 				result = await this._handleConfigCommand(cmd, payload);
 			} else if (cmd === 'ui.bootstrap') {
@@ -354,6 +361,13 @@ class Msghub extends utils.Adapter {
 			return { ok: false, error: { code: 'NOT_READY', message: 'AdminTab runtime not ready' } };
 		}
 		return await this._adminTab.handleCommand(cmd, payload);
+	}
+
+	async _handleWebCommand(cmd, payload) {
+		if (!this._webUi) {
+			return { ok: false, error: { code: 'NOT_READY', message: 'Web UI runtime not ready' } };
+		}
+		return await this._webUi.handleCommand(cmd, payload);
 	}
 
 	async _handleConfigCommand(cmd, payload) {

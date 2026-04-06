@@ -45,7 +45,7 @@ References:
 
 1. Admin command routing for the `admin.*` namespace.
 2. Runtime read/write calls for plugin instances (`admin.plugins.*`).
-3. Store-backed admin reads and actions (`admin.stats.get`, `admin.messages.query`, `admin.messages.delete`, `admin.messages.action`, `admin.constants.get`).
+3. Store-backed admin delete flow (`admin.messages.delete`).
 4. Plugin Admin UI host commands (`admin.pluginUi.discover`, `admin.pluginUi.bundle.get`, `admin.pluginUi.rpc`).
 5. Thin pass-through for `admin.ingestStates.presets.selectOptions*` (delegated to IngestStates runtime — no domain logic in IoAdminTab).
 6. Consistent response envelopes (`ok/data/error`) for admin runtime commands.
@@ -79,12 +79,7 @@ Those responsibilities belong to `IoAdminConfig`, resolver/startup wiring, and t
 
 ### Store/admin reads
 
-- `admin.stats.get`
-- `admin.messages.query`
 - `admin.messages.delete`
-- `admin.messages.action`
-- `admin.constants.get`
-- `admin.ping`
 
 ### Plugin Admin UI host
 
@@ -151,10 +146,10 @@ Discover DTO shape:
 Covered areas include:
 
 - plugin UI RPC routing (`admin.pluginUi.*` command dispatch)
+- rejection of migrated web-safe commands on `admin.*`
 - rejection of config-scope commands on admin scope
 - `admin.ingestStates.presets.selectOptions*` pass-through behavior (delegation to IngestStates runtime)
-- `admin.messages.action`
-- `admin.ping`
+- `admin.messages.delete`
 
 ---
 

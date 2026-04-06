@@ -107,6 +107,8 @@ Typical examples are:
   - central bootstrap/about contract builder for host-facing UI entry points
 - `IoAdminTab`
   - adapter-side bridge for Admin UI/backend commands
+- `IoWebUi`
+  - adapter-side bridge for web-safe runtime/backend commands
 - `IoPlugins`
   - adapter-side plugin runtime orchestration
 - `IoPluginResources`
@@ -180,4 +182,5 @@ Then continue based on your question:
 - `IoPlugins`: [`./IoPlugins.md`](./IoPlugins.md)
 - `IoRuntimeI18n`: [`./IoRuntimeI18n.md`](./IoRuntimeI18n.md)
 - `IoStorageIobroker`: [`./IoStorageIobroker.md`](./IoStorageIobroker.md)
+- `IoWebUi`: [`./IoWebUi.md`](./IoWebUi.md)
 <!-- AUTO-GENERATED:IO-INDEX:END -->

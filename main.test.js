@@ -369,6 +369,38 @@ describe('_i18ninit live-binding (A8 integration)', () => {
 });
 
 describe('main.js message routing (AP3 bootstrap)', () => {
+	it('routes web.* through IoWebUi', async () => {
+		const createAdapter = loadMainFactoryForTest();
+		const sent = [];
+		const adapter = createAdapter();
+		adapter._webUi = {
+			handleCommand: async (command, payload) => {
+				expect(command).to.equal('web.ping');
+				expect(payload).to.deep.equal({ hello: 'world' });
+				return { ok: true, data: 'pong' };
+			},
+		};
+		adapter.sendTo = function sendTo(from, command, result, callback) {
+			sent.push({ from, command, result, callback });
+		};
+
+		await adapter.onMessage({
+			from: 'system.adapter.test',
+			command: 'web.ping',
+			message: { hello: 'world' },
+			callback: 'cb0',
+		});
+
+		expect(sent).to.deep.equal([
+			{
+				from: 'system.adapter.test',
+				command: 'web.ping',
+				result: { ok: true, data: 'pong' },
+				callback: 'cb0',
+			},
+		]);
+	});
+
 	it('routes ui.bootstrap through IoAdminCapabilities for the admin host', async () => {
 		const createAdapter = loadMainFactoryForTest();
 		const sent = [];

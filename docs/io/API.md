@@ -5,13 +5,13 @@
 | Scope | IO-/runtime-facing contracts only. |
 | In scope | Adapter-side runtime bridges, plugin orchestration, platform-side state surfaces, UI/backend command routers, IO-brokered bundle/RPC paths, and IO-owned helper contracts exposed across layer boundaries. |
 | Out of scope | Browser-only shell contracts (`docs/ui/API.md`), plugin-facing ctx details (`docs/plugins/API.md`), core-internal DTO semantics owned by `src/`, and archive/storage backend implementation APIs except where they surface through IO-owned commands or status payloads. |
-| Source of truth | `main.js`, `lib/index.js`, `lib/IoAdminCapabilities.js`, `lib/IoAdminTab.js`, `lib/IoAdminConfig.js`, `lib/IoCoreConnection.js`, `lib/IoPlugins.js`, `lib/IoPluginResources.js`, `lib/IoManagedMeta.js`, `lib/IngestStates/manifest.js`, `src/MsgStore.js`, `src/MsgStats.js`. |
+| Source of truth | `main.js`, `lib/index.js`, `lib/IoAdminCapabilities.js`, `lib/IoAdminTab.js`, `lib/IoWebUi.js`, `lib/IoAdminConfig.js`, `lib/IoCoreConnection.js`, `lib/IoPlugins.js`, `lib/IoPluginResources.js`, `lib/IoManagedMeta.js`, `lib/IngestStates/manifest.js`, `src/MsgStore.js`, `src/MsgStats.js`. |
 
 | Area | Owned by | Use this file for |
 | --- | --- | --- |
-| IO <> Core | `main.js`, `lib/IoCoreConnection.js`, `lib/IoPlugins.js`, `lib/IoAdminCapabilities.js`, `lib/IoAdminTab.js`, `lib/IoAdminConfig.js` | Adapter/runtime bridge entry points and the composition-root routing boundary. |
+| IO <> Core | `main.js`, `lib/IoCoreConnection.js`, `lib/IoPlugins.js`, `lib/IoAdminCapabilities.js`, `lib/IoAdminTab.js`, `lib/IoWebUi.js`, `lib/IoAdminConfig.js` | Adapter/runtime bridge entry points and the composition-root routing boundary. |
 | IO <> Plugins | `lib/index.js`, `lib/IoPlugins.js`, `lib/IoPluginResources.js`, `lib/IoManagedMeta.js` | Catalog, instance tree, enable-state orchestration, messagebox ownership, bundle brokering, tracked resources, managed metadata. |
-| IO <> UI | `main.js`, `lib/IoAdminCapabilities.js`, `lib/IoAdminTab.js`, `lib/IoAdminConfig.js` | `ui.bootstrap`, `admin.*`, `config.*`, and the shared `about` payload used by legacy `runtime.about`. |
+| IO <> UI | `main.js`, `lib/IoAdminCapabilities.js`, `lib/IoAdminTab.js`, `lib/IoWebUi.js`, `lib/IoAdminConfig.js` | `ui.bootstrap`, `admin.*`, `web.*`, `config.*`, and the shared `about` payload used by legacy `runtime.about`. |
 
 ## IO <> Core
 
@@ -29,6 +29,8 @@
 | `IoPlugins.getIngestMeta()` | Returns the meta bundle passed into `MsgIngest.start(...)`. Current implementation returns `{}`. | `MsgIngest` startup | IO runtime | `lib/IoPlugins.js`, `main.js` |
 | `new IoAdminTab(adapter, ioPlugins, { msgStore? })` | Requires `adapter.namespace`. Binds the Admin runtime facade to optional `IoPlugins` and `MsgStore` services. | Admin command router | IO runtime | `lib/IoAdminTab.js` |
 | `IoAdminTab.handleCommand(cmd, payload)` | Main backend entry point for `admin.*` commands. Returns an `{ ok, data|error }` envelope, except for `admin.ingestStates.presets.selectOptions*`, which returns a bare options array. | Admin UI/backend bridge | IO runtime | `lib/IoAdminTab.js` |
+| `new IoWebUi(adapter, { msgStore? })` | Requires `adapter.namespace`. Binds the web-safe runtime facade to optional `MsgStore` services. | Web command router | IO runtime | `lib/IoWebUi.js` |
+| `IoWebUi.handleCommand(cmd, payload)` | Main backend entry point for `web.*`. Returns an `{ ok, data|error }` envelope. | Web UI/backend bridge | IO runtime | `lib/IoWebUi.js` |
 | `new IoAdminCapabilities(adapter, { ioPackage? })` | Requires `adapter.namespace`. Centralizes the host-aware bootstrap/about payload for UI entry points. | UI bootstrap bridge | IO runtime | `lib/IoAdminCapabilities.js`, `main.js` |
 | `IoAdminCapabilities.buildBootstrap({ host })` | Returns the stable bootstrap payload `{ capabilities, about }`. In AP3, `capabilities` is always `{}` for both supported host classes (`admin`, `webExtension`). | `ui.bootstrap` router | IO runtime | `lib/IoAdminCapabilities.js`, `main.js` |
 | `IoAdminCapabilities.buildAbout()` | Returns the shared `about` payload `{ title, version, time, lang, connection }` currently reused by legacy `runtime.about`. | Shared about payload | IO runtime | `lib/IoAdminCapabilities.js`, `main.js` |
@@ -39,11 +41,11 @@
 
 | Entry | Contract | Owner | Reference |
 | --- | --- | --- | --- |
-| `onReady()` IO bootstrap | Creates `IoCoreConnection`, initializes `MsgStore`, marks core health, creates `IoPlugins`, then creates `IoAdminTab` and `IoAdminConfig`. `main.js` is composition root only, not a separate API owner. | Composition root | `main.js` |
+| `onReady()` IO bootstrap | Creates `IoCoreConnection`, initializes `MsgStore`, marks core health, creates `IoPlugins`, then creates `IoAdminTab`, `IoWebUi`, and `IoAdminConfig`. `main.js` is composition root only, not a separate API owner. | Composition root | `main.js` |
 | `onStateChange(id, state)` | Calls `IoPlugins.handleStateChange(...)` first. When that returns `true`, the event is consumed as a plugin enable toggle and is not forwarded to ingest plugins. For non-null states that were not consumed, `main.js` then calls `IoPlugins.handleGateStateChange(...)` and finally forwards the raw event to `msgStore.msgIngest.dispatchStateChange(...)`. | Composition root | `main.js`, `lib/IoPlugins.js` |
 | `onObjectChange(id, obj)` | Forwards object changes directly to `msgStore.msgIngest.dispatchObjectChange(...)`. | Composition root | `main.js` |
-| `onMessage(obj)` routing | `admin.*` routes to `IoAdminTab`; `config.*` routes to `IoAdminConfig`; `ui.bootstrap` delegates to `IoAdminCapabilities`; legacy `runtime.about` reuses the same shared `about` payload; all other commands are passed to `IoPlugins.dispatchMessagebox(obj)`. | Composition root | `main.js` |
-| Missing router service | `_handleAdminCommand` returns `NOT_READY` when `_adminTab` is absent. `_handleConfigCommand` returns `NOT_READY` when `_adminConfig` is absent. Messagebox dispatch returns `NOT_READY` when no handler is registered. | Composition root | `main.js` |
+| `onMessage(obj)` routing | `admin.*` routes to `IoAdminTab`; `web.*` routes to `IoWebUi`; `config.*` routes to `IoAdminConfig`; `ui.bootstrap` delegates to `IoAdminCapabilities`; legacy `runtime.about` reuses the same shared `about` payload; all other commands are passed to `IoPlugins.dispatchMessagebox(obj)`. | Composition root | `main.js` |
+| Missing router service | `_handleAdminCommand` returns `NOT_READY` when `_adminTab` is absent. `_handleWebCommand` returns `NOT_READY` when `_webUi` is absent. `_handleConfigCommand` returns `NOT_READY` when `_adminConfig` is absent. Messagebox dispatch returns `NOT_READY` when no handler is registered. | Composition root | `main.js` |
 | Uncaught message-route exception | `main.js` wraps uncaught `onMessage` errors as `{ ok: false, error: { code: 'INTERNAL', message } }`. | Composition root | `main.js` |
 
 ## IO <> Plugins
@@ -137,6 +139,7 @@
 | --- | --- | --- | --- | --- |
 | `ui.bootstrap` | `IoAdminCapabilities.buildBootstrap({ host: 'admin' })` | Neutral bootstrap endpoint. Admin-host AP3 response is always `{ ok: true, data: { capabilities: {}, about } }`. No token/TTL/expiry/gates are introduced in this package. | Composition root / IO runtime | `main.js`, `lib/IoAdminCapabilities.js` |
 | `admin.*` | `IoAdminTab.handleCommand(cmd, payload)` | Requires `_adminTab`; otherwise returns `NOT_READY`. | Composition root / IO runtime | `main.js`, `lib/IoAdminTab.js` |
+| `web.*` | `IoWebUi.handleCommand(cmd, payload)` | Requires `_webUi`; otherwise returns `NOT_READY`. | Composition root / IO runtime | `main.js`, `lib/IoWebUi.js` |
 | `config.*` | `IoAdminConfig.handleCommand(cmd, payload)` | Requires `_adminConfig`; otherwise returns `NOT_READY`. | Composition root / IO runtime | `main.js`, `lib/IoAdminConfig.js` |
 | `runtime.about` | `IoAdminCapabilities.buildAbout()` via `main.js` | Legacy/shared about payload. Returns `{ ok: true, data: { title, version, time, lang, connection } }`. It is no longer the target bootstrap contract; `ui.bootstrap` owns that role. | Composition root / IO runtime | `main.js`, `lib/IoAdminCapabilities.js`, `lib/IoCoreConnection.js` |
 | Any other command | `IoPlugins.dispatchMessagebox(obj)` | Engage/messagebox escape hatch. `null` becomes `NOT_READY`. | Composition root / IO runtime | `main.js`, `lib/IoPlugins.js` |
@@ -154,15 +157,22 @@
 | `admin.pluginUi.discover` | `ioPlugins.getAdminUiContributions()`, `ioPlugins.computeAdminUiBundleHash(...)`, `ioPlugins.readAdminUiTranslations(...)` | Normalizes optional `lang` to a safe base tag or `'en'`. Best-effort per-panel hash computation. Hash failures degrade to `bundle.hash = ''` with a warning log. Plugin-owned Admin-UI i18n is read once per plugin type and attached as `i18n`; read failures degrade to `null` with a warning log. | `{ ok, data: PluginUiContribution[] }` | `lib/IoAdminTab.js`, `lib/IoPlugins.js` |
 | `admin.pluginUi.bundle.get` | `ioPlugins.getAdminUiContributions()`, `ioPlugins.computeAdminUiBundleHash(...)`, `ioPlugins.readAdminUiBundle(...)` | Validates `pluginType` and `panelId`, normalizes `instanceId` to integer or `0`, normalizes `lang` to a safe base tag or `'en'`, checks that the plugin panel is currently running, caches by `(pluginType, instanceId, panelId, hash, lang)`, enforces JS size `<= 512 KiB` and CSS size `<= 64 KiB`. | `{ ok, data: { apiVersion, moduleFormat: 'esm', hash, js, css?, i18n } }` | `lib/IoAdminTab.js`, `lib/IoPlugins.js` |
 | `admin.pluginUi.rpc` | `ioPlugins.getAdminUiContributions()`, `ioPlugins.callPluginRuntime(...)` | Validates `pluginType`, `panelId`, `command`; validates serialized payload size `<= 64 KiB`; checks that the plugin panel is currently running; binds identity from the host path; applies a 10000 ms timeout; accepts only plugin responses with boolean `ok`. | `{ ok, data|error }` | `lib/IoAdminTab.js` |
-| `admin.stats.get` | `msgStore.getStats({ include })` | Normalizes `include.archiveSize` and non-negative `include.archiveSizeMaxAgeMs`; returns `NOT_READY` when stats runtime is absent. | `{ ok, data: MsgStatsSnapshot }` | `lib/IoAdminTab.js`, `src/MsgStats.js` |
-| `admin.messages.query` | `msgStore.queryMessages(query)` | Passes through only `query.where`, `query.page`, and `query.sort`; serializes maps to JSON-safe objects; attaches `meta.generatedAt` and local `tz`; returns `BAD_REQUEST` on query errors. | `{ ok, data: { meta, items, total?, pages? } }` | `lib/IoAdminTab.js`, `src/MsgStore.js` |
 | `admin.messages.delete` | `msgStore.removeMessage(ref, { actor: 'AdminTab' })` | Trims refs, deduplicates them, rejects zero refs, rejects more than 5000 refs, and returns per-ref misses. | `{ ok, data: { requested, deleted, missing } }` | `lib/IoAdminTab.js` |
-| `admin.messages.action` | `msgStore.msgActions.execute({ ref, actionId, actor: 'AdminTab' })` | Requires `ref` and `actionId`; returns `REJECTED` when the executor returns false. | `{ ok, data: { executed: true } }` or `{ ok: false, error }` | `lib/IoAdminTab.js` |
-| `admin.constants.get` | `msgStore.msgConstants` | Returns only `kind`, `lifecycle.state`, `level`, and `notfication.events`. | `{ ok, data: { kind, lifecycle, level, notfication } }` | `lib/IoAdminTab.js` |
 | `admin.ingestStates.presets.selectOptions*` | `ioPlugins.callPluginRuntime({ type: 'IngestStates', method: 'getPresetSelectOptions', ... })` | Passes command suffix and raw payload through without interpretation. Sanitizes the result to `Array<{ value, label }>` and returns `[]` when the plugin runtime is unavailable. | Bare array, not an `{ ok, data }` envelope | `lib/IoAdminTab.js` |
-| `admin.ping` | none | Fixed health probe command. | `{ ok: true, data: 'pong' }` | `lib/IoAdminTab.js` |
 | empty or non-string `admin.*` command | none | `IoAdminTab.handleCommand(...)` returns `BAD_REQUEST` when `cmd` is blank or not a string. | `{ ok: false, error }` | `lib/IoAdminTab.js` |
 | unknown `admin.*` command | none | `IoAdminTab.handleCommand(...)` returns `UNKNOWN_COMMAND` when no dispatch-table entry matches the command. | `{ ok: false, error }` | `lib/IoAdminTab.js` |
+
+### `IoWebUi` command surface
+
+| Command | Runtime dependency | IO-owned validation / behavior | Response family | Reference |
+| --- | --- | --- | --- | --- |
+| `web.stats.get` | `msgStore.getStats({ include })` | Normalizes `include.archiveSize` and non-negative `include.archiveSizeMaxAgeMs`; returns `NOT_READY` when stats runtime is absent. | `{ ok, data: MsgStatsSnapshot }` | `lib/IoWebUi.js`, `src/MsgStats.js` |
+| `web.messages.query` | `msgStore.queryMessages(query)` | Passes through only `query.where`, `query.page`, and `query.sort`; serializes maps to JSON-safe objects; attaches `meta.generatedAt` and local `tz`; returns `BAD_REQUEST` on query errors. | `{ ok, data: { meta, items, total?, pages? } }` | `lib/IoWebUi.js`, `src/MsgStore.js` |
+| `web.messages.action` | `msgStore.msgActions.execute({ ref, actionId, actor: 'WebUi' })` | Requires `ref` and `actionId`; returns `REJECTED` when the executor returns false. | `{ ok, data: { executed: true } }` or `{ ok: false, error }` | `lib/IoWebUi.js` |
+| `web.constants.get` | `msgStore.msgConstants` | Returns only `kind`, `lifecycle.state`, `level`, and `notfication.events`. | `{ ok, data: { kind, lifecycle, level, notfication } }` | `lib/IoWebUi.js` |
+| `web.ping` | none | Fixed health probe command. | `{ ok: true, data: 'pong' }` | `lib/IoWebUi.js` |
+| empty or non-string web command | none | `IoWebUi.handleCommand(...)` returns `BAD_REQUEST` when `cmd` is blank or not a string. | `{ ok: false, error }` | `lib/IoWebUi.js` |
+| unknown `web.*` command | none | `IoWebUi.handleCommand(...)` returns `UNKNOWN_COMMAND` when no dispatch-table entry matches the command. | `{ ok: false, error }` | `lib/IoWebUi.js` |
 
 ### `IoAdminConfig` command surface
 
@@ -194,6 +204,7 @@
 | Control-state handling short-circuits ingest forwarding | When `IoPlugins.handleStateChange(...)` returns `true`, `main.js` must not forward that state change to ingest plugins. | Composition root / IO runtime | `main.js`, `lib/IoPlugins.js` |
 | Gate watchers are side-channel notifications, not event consumption | `handleGateStateChange(...)` does not stop normal ingest dispatch. `main.js` calls it before forwarding non-null states to ingest plugins. | Composition root / IO runtime | `main.js`, `lib/IoPlugins.js` |
 | `IoAdminTab` owns only `admin.*` | Config commands are explicitly out of scope and belong to `IoAdminConfig`. | IO runtime | `lib/IoAdminTab.js`, `lib/IoAdminConfig.js` |
+| `IoWebUi` owns the migrated web-safe command set | `web.ping`, `web.stats.get`, `web.constants.get`, `web.messages.query`, and `web.messages.action` no longer live under `admin.*`. | IO runtime | `lib/IoWebUi.js`, `lib/IoAdminTab.js` |
 | `IoAdminConfig` native writes are hard-scoped | Any `native.*` keys outside `CONFIG_NATIVE_ALLOWLIST` are dropped before the response leaves `IoAdminConfig`. | IO runtime | `lib/IoAdminConfig.js` |
 | `IoAdminCapabilities` is the single bootstrap/about authority | `main.js` delegates admin-host `ui.bootstrap` to `IoAdminCapabilities`, and legacy `runtime.about` reuses the same `about` builder instead of defining a separate target contract in `main.js`. | Composition root / IO runtime | `main.js`, `lib/IoAdminCapabilities.js` |
 | Plugin Admin UI contributions are runtime-only | `getAdminUiContributions()` includes only currently registered plugin instances with `manifest.adminUi`. Configured but not started plugins are excluded. | IO runtime | `lib/IoPlugins.js` |
