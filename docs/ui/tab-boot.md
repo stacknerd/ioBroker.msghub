@@ -39,7 +39,7 @@ modules and then starts the actual runtime on `DOMContentLoaded`.
 2. `resolvePanelMode()` resolves the target panel descriptor (or returns an error result).
 3. If the target is unresolvable: load i18n, render a hard error message, and stop.
 4. For a **core panel** target: call `buildSinglePanelShell(descriptor)`, load i18n and CSS, activate the panel, and initialize native panel assets — no tab strip.
-5. For a **plugin panel** target: load i18n, call `admin.pluginUi.discover({ lang })`, match the contribution, call `buildSinglePanelShell(descriptor)`, reuse `hydratePluginPanels` to populate `pluginPanelTabMap`, activate the panel, and mount the plugin bundle immediately.
+5. For a **plugin panel** target: load i18n, call `web.pluginUi.discover({ lang })`, match the contribution, call `buildSinglePanelShell(descriptor)`, reuse `hydratePluginPanels` to populate `pluginPanelTabMap`, activate the panel, and mount the plugin bundle immediately.
 6. Keep connection state current (same as the composition path).
 
 No `msghub:tabSwitch` listener is registered in Single-Panel-Mode because there are no tab switches.
@@ -49,7 +49,7 @@ No `msghub:tabSwitch` listener is registered in Single-Panel-Mode because there 
 1. Create `ui` via `createUi()`.
 2. Create `api` via `createAdminApi(...)`.
 3. Build the frozen panel context `ctx`.
-4. Fetch `runtime.about` to update branding, timezone policy, and cached connection metadata.
+4. Fetch `ctx.api.runtime.about()`, which now resolves `ui.bootstrap.about`, to update branding, timezone policy, and cached connection metadata.
 5. On `DOMContentLoaded`, run `ensureBooted()`.
 6. Build the current layout from the registry.
 7. Load composition CSS, activate the initial panel (`initTabs()` for tabbed layouts, `activatePanel(...)` for single layouts), and initialize native panels.
@@ -92,7 +92,7 @@ Important: panels are expected to work against this frozen `ctx`, not against ad
 
 ### 2) Resolve runtime metadata that affects the whole shell
 
-`applyRuntimeAboutPayload()` and `refreshRuntimeAbout()` update shell-wide state from `runtime.about`:
+`applyRuntimeAboutPayload()` and `refreshRuntimeAbout()` update shell-wide state from `ui.bootstrap.about` via `ctx.api.runtime.about()`:
 
 - context-menu branding text
 - timezone formatting policy
@@ -132,7 +132,7 @@ This keeps initial visibility and document-title derivation on the same activati
 ### 4) Hydrate plugin panel tab slots
 
 Structured plugin panel refs from the composition are not active immediately.
-`hydratePluginPanels()` matches them against `admin.pluginUi.discover` results, then:
+`hydratePluginPanels()` matches them against `web.pluginUi.discover` results, then:
 
 - merges plugin-owned Admin-UI i18n from discover into the runtime dictionary before any shell metadata is resolved
 - enables the matching tab
@@ -169,7 +169,7 @@ registry (core) or from discover results (plugin).
 - online/offline classes on the connection bar
 - connection info panel contents
 - disconnect/reconnect toasts
-- periodic `admin.ping`
+- periodic `web.ping`
 - one shared reconnect recovery runner for disconnect, ping-failure, and resume/browser-return triggers
 - resume-triggered restart of that runner after a real background/return cycle (`visibilitychange -> visible`) and `pageshow` from bfcache (`event.persisted === true`)
 - reconnect warmup that waits until `api.constants.get()` succeeds again

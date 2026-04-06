@@ -112,7 +112,7 @@ declare global {
 	};
 
 	/**
-	 * Minimal shape of a plugin panel contribution returned by `admin.pluginUi.discover`.
+	 * Minimal shape of a plugin panel contribution returned by `web.pluginUi.discover`.
 	 * The host passes this contribution through `normalizePluginPanel` to build a PanelDescriptor.
 	 * Full discover response contract defined in AdminTab_Contracts_APIs.md §6.
 	 */

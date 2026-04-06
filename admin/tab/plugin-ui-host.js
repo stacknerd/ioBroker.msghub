@@ -31,6 +31,35 @@ function createMsghubPluginUiHost({ request, api, _importFn = undefined }) {
 	const bundleCache = new Map();
 
 	/**
+	 * Resolve one bundle-side plugin UI RPC command to the host-specific backend path.
+	 *
+	 * @param {string} command - Prefixed bundle command.
+	 * @returns {{ ok: true, rpcCommand: string, panelCommand: string } | { ok: false, error: string }} Routing result.
+	 */
+	function resolvePluginUiRpcCommand(command) {
+		const rawCommand = typeof command === 'string' ? command.trim() : '';
+		if (!rawCommand) {
+			return { ok: false, error: 'Plugin UI RPC command must start with admin. or web.' };
+		}
+		if (rawCommand.startsWith('admin.')) {
+			const panelCommand = rawCommand.slice('admin.'.length).trim();
+			return panelCommand
+				? { ok: true, rpcCommand: 'admin.pluginUi.rpc', panelCommand }
+				: { ok: false, error: 'Plugin UI RPC admin. command must include a panel command.' };
+		}
+		if (rawCommand.startsWith('web.')) {
+			const panelCommand = rawCommand.slice('web.'.length).trim();
+			return panelCommand
+				? { ok: true, rpcCommand: 'web.pluginUi.rpc', panelCommand }
+				: { ok: false, error: 'Plugin UI RPC web. command must include a panel command.' };
+		}
+		if (rawCommand.startsWith('config.')) {
+			return { ok: false, error: 'Plugin UI RPC config. commands are not supported.' };
+		}
+		return { ok: false, error: 'Plugin UI RPC command must start with admin. or web.' };
+	}
+
+	/**
 	 * Imports a JS module from source.
 	 * Uses _importFn (test seam) if provided; otherwise creates a Blob URL,
 	 * imports it via dynamic import, and revokes the URL immediately.
@@ -75,7 +104,7 @@ function createMsghubPluginUiHost({ request, api, _importFn = undefined }) {
 
 		// Fetch bundle metadata and source from backend.
 		// msghubRequest resolves with res.data directly — bundleData is the payload, not an {ok,data} envelope.
-		const bundleData = await request('admin.pluginUi.bundle.get', {
+		const bundleData = await request('web.pluginUi.bundle.get', {
 			pluginType,
 			instanceId,
 			panelId,
@@ -141,16 +170,20 @@ function createMsghubPluginUiHost({ request, api, _importFn = undefined }) {
 				 * Returns a normalized { ok, data } / { ok, error } envelope to the bundle,
 				 * insulating it from the msghubRequest transport (which resolves with res.data directly).
 				 *
-				 * @param {string} command - Panel-scoped RPC command name.
+				 * @param {string} command - Prefixed plugin UI RPC command name.
 				 * @param {any} [payload] - Optional command payload.
 				 * @returns {Promise<{ ok: boolean, data?: any, error?: object }>} Normalized response envelope.
 				 */
 				request(command, payload) {
-					return request('admin.pluginUi.rpc', {
+					const resolved = resolvePluginUiRpcCommand(command);
+					if (!resolved.ok) {
+						return Promise.resolve({ ok: false, error: { message: resolved.error } });
+					}
+					return request(resolved.rpcCommand, {
 						pluginType,
 						instanceId,
 						panelId,
-						command,
+						command: resolved.panelCommand,
 						payload,
 					}).then(
 						data => ({ ok: true, data }),

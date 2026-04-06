@@ -18,11 +18,14 @@ That means the plugin UI path is:
 1. [`./tab-registry.md`](./tab-registry.md) declares plugin panel slots
 2. [`./tab-layout.md`](./tab-layout.md) renders disabled placeholder tabs and containers
 3. [`./tab-boot.md`](./tab-boot.md) hydrates matching slots from discover data
-4. `plugin-ui-host.js` mounts the actual bundle only when `boot.js` observes a later `msghub:tabSwitch` into that plugin tab
+4. `plugin-ui-host.js` mounts the actual bundle when `boot.js` either:
+   - observes a later `msghub:tabSwitch` into that plugin tab, or
+   - calls `mountPluginPanelIfNeeded(...)` immediately after activating an already selected hydrated plugin tab during boot
 
-Important: with the current boot order, the first plugin tab activated automatically during boot can miss this path.
-The host itself is correct, but `boot.js` currently registers the lazy-mount listener only after those early
-`tabSetActive(...)` calls.
+Important: the lazy `msghub:tabSwitch` path is not the only mount path anymore.
+`boot.js` explicitly closes the former boot-order gap by calling `mountPluginPanelIfNeeded(...)` right after
+`tabSetActive(...)` for already chosen hydrated plugin tabs, so the first plugin tab activated during boot
+does not wait for a later tab switch to mount.
 
 ---
 
@@ -33,7 +36,7 @@ The host itself is correct, but `boot.js` currently registers the lazy-mount lis
 `loadBundle(...)` fetches bundle data through:
 
 ```js
-admin.pluginUi.bundle.get
+web.pluginUi.bundle.get
 ```
 
 The cache key includes:
@@ -126,7 +129,16 @@ Inside a plugin bundle, RPC calls are routed through:
 
 ```js
 admin.pluginUi.rpc
+web.pluginUi.rpc
 ```
+
+Bundle commands must be explicitly prefixed:
+
+- `admin.<panel-command>`
+- `web.<panel-command>`
+
+The host strips that prefix again and routes to the matching backend RPC surface.
+`config.<panel-command>` and unprefixed commands are rejected as explicit errors.
 
 The host wraps the result into a normalized plugin-facing envelope:
 

@@ -80,7 +80,7 @@ panel/plugin contract in this reference.
 | `document` event `msghub:contextMenuClose` | Fired when the raw shared context menu closes. No detail payload is attached. | UI runtime | `admin/tab/ui.js` |
 | Global context menu replacement | Inside `.msghub-root`, the shell replaces the native browser context menu. `Ctrl+right-click` bypasses the custom menu. Blocking spinner/dialog/overlay backdrops suppress it. | Boot runtime | `admin/tab/boot.js` |
 | Theme synchronization | `layout.js` reacts to `message`, `storage`, a 1500 ms polling fallback, and top-window mutation observation to keep `data-msghub-theme` synchronized. | Layout runtime | `admin/tab/layout.js`, `admin/tab/runtime.js` |
-| Connection probing | The shell sends `admin.ping` every 15 seconds and also on socket connect. Ping timeout is 5000 ms. Online/offline state is derived from ping success, not from socket connect alone. | Boot runtime | `admin/tab/boot.js`, `lib/IoAdminTab.js` |
+| Connection probing | The shell sends `web.ping` every 15 seconds and also on socket connect. Ping timeout is 5000 ms. Online/offline state is derived from ping success, not from socket connect alone. | Boot runtime | `admin/tab/boot.js`, `lib/IoWebUi.js` |
 | Reconnect warmup | On every online transition, the shell calls each panel's `onConnect()` immediately, then starts a warmup loop that retries `api.constants.get()` for up to 30000 ms. If warmup succeeds and the socket is still connected, `onConnect()` is called a second time through the warmup path. | Boot runtime | `admin/tab/boot.js` |
 
 ## Native Panel Contract
@@ -193,9 +193,9 @@ panel/plugin contract in this reference.
 | `ctx.api.host.adapterInstance` | Same value as `adapterInstance`. | Browser API layer | `admin/tab/api.js` |
 | `ctx.api.host.isConnected()` | Returns `!!msghubSocket.connected`. This is transport state only; it is not the same as the shell ping-derived online flag. | Browser API layer | `admin/tab/api.js` |
 | `ctx.api.host.isExpertMode()` | Native-panel helper with additive expert semantics: `args.expert === true` wins first, otherwise `sessionStorage['App.expertMode'] === 'true'`, otherwise `window._system.expertMode` / `window.top._system.expertMode`. A false URL flag does not disable host expert mode. | Browser API layer | `admin/tab/api.js` |
-| `ctx.api.constants.get()` | Async cached fetch of `admin.constants.get`. Cache age is effectively infinite until invalidated. | Browser API layer | `admin/tab/api.js` |
+| `ctx.api.constants.get()` | Async cached fetch of `web.constants.get`. Cache age is effectively infinite until invalidated. | Browser API layer | `admin/tab/api.js` |
 | `ctx.api.constants.invalidate()` | Clears the constants cache. | Browser API layer | `admin/tab/api.js` |
-| `ctx.api.runtime.about()` | Calls `runtime.about`. Returns the backend payload directly when successful. | Browser API layer | `admin/tab/api.js`, `main.js` |
+| `ctx.api.runtime.about()` | Calls `ui.bootstrap`, then returns only the nested `about` payload. | Browser API layer | `admin/tab/api.js`, `main.js`, `lib/IoAdminCapabilities.js` |
 | `ctx.api.time.getPolicy()` | Returns the current normalized timezone policy `{ timeZone, source, isFallbackUtc, warning }`. | Browser API layer | `admin/tab/api.js` |
 | `ctx.api.time.setPolicy(policy)` | Normalizes the provided policy. Invalid or missing timezones become `{ timeZone: 'UTC', source: 'fallback-utc', isFallbackUtc: true, warning: 'timezone_fallback_utc:<reason>' }`. | Browser API layer | `admin/tab/api.js` |
 | `ctx.api.time.formatTs(ts, options?)` | Formats a finite millisecond timestamp using the current policy timezone. Returns `''` for invalid input and falls back to `String(ts)` on formatting errors. `options.locale` overrides the locale. Otherwise a valid `args.locale` URL override becomes the default frontend format locale; missing or invalid `args.locale` keeps ambient/browser-default behavior. `options.includeTimeZone === true` adds the timezone name. | Browser API layer | `admin/tab/api.js` |
@@ -208,20 +208,20 @@ panel/plugin contract in this reference.
 
 | `ctx.api` method | Backend command | Request contract | Response contract | Owner | Reference |
 | --- | --- | --- | --- | --- | --- |
-| `ctx.api.constants.get()` | `admin.constants.get` | No payload fields are used. | `{ kind, lifecycle: { state }, level, notfication: { events } }` | Admin runtime | `admin/tab/api.js`, `lib/IoAdminTab.js` |
-| `ctx.api.stats.get(params)` | `admin.stats.get` | `params.include.archiveSize?: boolean`, `params.include.archiveSizeMaxAgeMs?: number`. `archiveSizeMaxAgeMs` is normalized to a non-negative integer. | MsgStats snapshot `{ meta, current, schedule, done, io }`. Nested DTO is owned by `MsgStats`. | Admin runtime | `admin/tab/api.js`, `lib/IoAdminTab.js`, `src/MsgStats.js` |
-| `ctx.api.messages.query(params)` | `admin.messages.query` | `params.query.where?: object`, `params.query.page?: object`, `params.query.sort?: object|Array`. Omitted or invalid branches are dropped before forwarding. | `{ meta: { generatedAt, tz }, items, total?, pages? }`. `items` are JSON-safe clones with maps serialized. | Admin runtime | `admin/tab/api.js`, `lib/IoAdminTab.js`, `src/MsgStore.js` |
+| `ctx.api.constants.get()` | `web.constants.get` | No payload fields are used. | `{ kind, lifecycle: { state }, level, notfication: { events } }` | Web runtime | `admin/tab/api.js`, `lib/IoWebUi.js` |
+| `ctx.api.stats.get(params)` | `web.stats.get` | `params.include.archiveSize?: boolean`, `params.include.archiveSizeMaxAgeMs?: number`. `archiveSizeMaxAgeMs` is normalized to a non-negative integer. | MsgStats snapshot `{ meta, current, schedule, done, io }`. Nested DTO is owned by `MsgStats`. | Web runtime | `admin/tab/api.js`, `lib/IoWebUi.js`, `src/MsgStats.js` |
+| `ctx.api.messages.query(params)` | `web.messages.query` | `params.query.where?: object`, `params.query.page?: object`, `params.query.sort?: object|Array`. Omitted or invalid branches are dropped before forwarding. | `{ meta: { generatedAt, tz }, items, total?, pages? }`. `items` are JSON-safe clones with maps serialized. | Web runtime | `admin/tab/api.js`, `lib/IoWebUi.js`, `src/MsgStore.js` |
 | `ctx.api.messages.delete(refs)` | `admin.messages.delete` | Array of refs. The backend trims strings, deduplicates them, rejects empty input, and rejects more than 5000 refs. | `{ requested, deleted, missing }` | Admin runtime | `admin/tab/api.js`, `lib/IoAdminTab.js` |
-| `ctx.api.messages.executeAction(params)` | `admin.messages.action` | `{ ref, actionId }` are required. | `{ executed: true }` on success. Error code `REJECTED` when the action executor returns false. | Admin runtime | `admin/tab/api.js`, `lib/IoAdminTab.js` |
+| `ctx.api.messages.executeAction(params)` | `web.messages.action` | `{ ref, actionId }` are required. | `{ executed: true }` on success. Error code `REJECTED` when the action executor returns false. | Web runtime | `admin/tab/api.js`, `lib/IoWebUi.js` |
 | `ctx.api.plugins.getCatalog()` | `admin.plugins.getCatalog` | No payload fields are used. | `{ plugins: PluginCatalogEntry[] }` | Admin runtime | `admin/tab/api.js`, `lib/IoAdminTab.js`, `lib/IoPlugins.js` |
 | `ctx.api.plugins.listInstances()` | `admin.plugins.listInstances` | No payload fields are used. | `{ instances: PluginInstanceEntry[] }` | Admin runtime | `admin/tab/api.js`, `lib/IoAdminTab.js`, `lib/IoPlugins.js` |
 | `ctx.api.plugins.createInstance(params)` | `admin.plugins.createInstance` | `{ category, type }` are required by the runtime. | `{ instanceId }` | Admin runtime | `admin/tab/api.js`, `lib/IoAdminTab.js`, `lib/IoPlugins.js` |
 | `ctx.api.plugins.updateInstance(params)` | `admin.plugins.updateInstance` | `{ type, instanceId, nativePatch }` are required by the runtime. | `{}` | Admin runtime | `admin/tab/api.js`, `lib/IoAdminTab.js`, `lib/IoPlugins.js` |
 | `ctx.api.plugins.setEnabled(params)` | `admin.plugins.setEnabled` | `{ type, instanceId, enabled }` | `{}` | Admin runtime | `admin/tab/api.js`, `lib/IoAdminTab.js`, `lib/IoPlugins.js` |
 | `ctx.api.plugins.deleteInstance(params)` | `admin.plugins.deleteInstance` | `{ type, instanceId }` | `{}` | Admin runtime | `admin/tab/api.js`, `lib/IoAdminTab.js`, `lib/IoPlugins.js` |
-| `ctx.api.runtime.about()` | `runtime.about` | No payload fields are used. | `{ title, version, time, lang, connection }` | Main runtime command | `admin/tab/api.js`, `main.js` |
+| `ctx.api.runtime.about()` | `ui.bootstrap` | No payload fields are used. `ctx.api` returns only `response.about`. | `{ title, version, time, lang, connection }` | Neutral bootstrap command | `admin/tab/api.js`, `main.js`, `lib/IoAdminCapabilities.js` |
 
-### `admin.constants.get`
+### `web.constants.get`
 
 | Entry | Contract | Owner | Reference |
 | --- | --- | --- | --- |
@@ -230,7 +230,7 @@ panel/plugin contract in this reference.
 | `level` | Full `MsgConstants.level` object. | Admin runtime | `lib/IoAdminTab.js` |
 | `notfication.events` | Full `MsgConstants.notfication.events` object. Spelling is the current code spelling. | Admin runtime | `lib/IoAdminTab.js` |
 
-### `admin.stats.get`
+### `web.stats.get`
 
 | Entry | Contract | Owner | Reference |
 | --- | --- | --- | --- |
@@ -241,7 +241,7 @@ panel/plugin contract in this reference.
 | Response `done` | `{ today, thisWeek, thisMonth, lastClosedAt }` | `MsgStats` via Admin runtime | `src/MsgStats.js` |
 | Response `io` | `{ storage, archive }` from MsgStorage/MsgArchive status getters when present. | `MsgStats` via Admin runtime | `src/MsgStats.js` |
 
-### `admin.messages.query`, `admin.messages.delete`, `admin.messages.action`
+### `web.messages.query`, `admin.messages.delete`, `web.messages.action`
 
 | Entry | Contract | Owner | Reference |
 | --- | --- | --- | --- |
@@ -265,13 +265,13 @@ panel/plugin contract in this reference.
 | `setEnabled` request | `{ type, instanceId, enabled }` | Admin runtime | `lib/IoPlugins.js`, `lib/IoAdminTab.js` |
 | `deleteInstance` request | `{ type, instanceId }` | Admin runtime | `lib/IoPlugins.js`, `lib/IoAdminTab.js` |
 
-### `runtime.about` and auxiliary admin commands
+### `ui.bootstrap.about` and auxiliary admin commands
 
 | Entry | Contract | Owner | Reference |
 | --- | --- | --- | --- |
-| `runtime.about` response | `{ title, version, time: { timeZone, source }, lang: { backendTextLanguage, coreTextLanguage, coreFormatLocale }, connection }` | Main runtime command | `main.js`, `lib/IoCoreConnection.js` |
-| `runtime.about.connection` | `{ scope: 'core-link', connected: boolean, mode: 'local' }` | Core connection runtime | `main.js`, `lib/IoCoreConnection.js` |
-| `admin.ping` | Returns `{ ok: true, data: 'pong' }` on the Admin-runtime path. The shell uses it only for health probing, not through `ctx.api`. | Admin runtime | `lib/IoAdminTab.js`, `admin/tab/boot.js` |
+| `ui.bootstrap.about` response | `{ title, version, time: { timeZone, source }, lang: { backendTextLanguage, coreTextLanguage, coreFormatLocale }, connection }` | Neutral bootstrap payload | `main.js`, `lib/IoAdminCapabilities.js`, `lib/IoCoreConnection.js` |
+| `ui.bootstrap.about.connection` | `{ scope: 'core-link', connected: boolean, mode: 'local' }` | Core connection runtime | `main.js`, `lib/IoAdminCapabilities.js`, `lib/IoCoreConnection.js` |
+| `web.ping` | Returns `{ ok: true, data: 'pong' }` on the Web-runtime path. The shell uses it only for health probing, not through `ctx.api`. | Web runtime | `lib/IoWebUi.js`, `admin/tab/boot.js` |
 | `admin.ingestStates.presets.selectOptions*` | UI-facing Admin/runtime passthrough used outside the Admin Tab shell path. `IoAdminTab` forwards the raw suffix and payload to `IngestStates.getPresetSelectOptions(...)` and returns `Array<{ value, label }>` without an `{ ok, data }` envelope. | Admin runtime | `lib/IoAdminTab.js`, `lib/IngestStates/index.js` |
 
 ## UI <> Plugin-Owned Admin UI
@@ -280,9 +280,10 @@ panel/plugin contract in this reference.
 
 | Command | Request contract | Response contract | Owner | Reference |
 | --- | --- | --- | --- | --- |
-| `admin.pluginUi.discover` | `{ lang? }` where `lang` is the active shell language used for plugin-owned Admin-UI i18n lookup. | Current AdminTab browser code still calls this command, but after AP5 the backend target contract has moved to `web.pluginUi.discover`. This stale browser-side call path is rewired only in AP6. | Admin runtime for UI host | `admin/tab/boot.js` |
-| `admin.pluginUi.bundle.get` | `{ pluginType, instanceId?, panelId, lang? }` | Current AdminTab browser code still calls this command, but after AP5 the backend target contract has moved to `web.pluginUi.bundle.get`. This stale browser-side call path is rewired only in AP6. | Admin runtime for UI host | `admin/tab/plugin-ui-host.js` |
+| `web.pluginUi.discover` | `{ lang? }` where `lang` is the active shell language used for plugin-owned Admin-UI i18n lookup. | Shared/web-safe discover path consumed by the AdminTab browser host after AP6. | Web runtime for UI host | `admin/tab/boot.js`, `lib/IoWebUi.js` |
+| `web.pluginUi.bundle.get` | `{ pluginType, instanceId?, panelId, lang? }` | Shared/web-safe bundle delivery path consumed by the AdminTab browser host after AP6. | Web runtime for UI host | `admin/tab/plugin-ui-host.js`, `lib/IoWebUi.js` |
 | `admin.pluginUi.rpc` | `{ pluginType, instanceId?, panelId, command, payload? }` | Admin-host RPC path. Plugin-defined `{ ok, data }` or `{ ok: false, error: { code, message } }` at the backend boundary. `msghubRequest` rejects any `ok: false` response as `Error(message)`, so `error.code` is already absent before the host rejection handler runs. Bundle code always receives the normalized envelope described below. | Admin runtime for UI host | `lib/IoAdminTab.js`, `lib/IoPluginUiRpc.js`, `admin/tab/plugin-ui-host.js` |
+| `web.pluginUi.rpc` | `{ pluginType, instanceId?, panelId, command, payload? }` | Web-host RPC path with the same backend envelope semantics as `admin.pluginUi.rpc`. | Web runtime for UI host | `lib/IoWebUi.js`, `lib/IoPluginUiRpc.js`, `admin/tab/plugin-ui-host.js` |
 
 ### Plugin-owned Admin UI DTOs
 
@@ -323,7 +324,7 @@ panel/plugin contract in this reference.
 | `ctx.api.ui.spinner.show/hide/isOpen` | Narrowed access to shell spinner helpers. | Plugin UI host | `admin/tab/plugin-ui-host.js` |
 | `ctx.api.ui.dialog.confirm(opts)` | Narrowed access to the shell confirm dialog. There is no plugin bundle `dialog.close()` or `dialog.isOpen()`. | Plugin UI host | `admin/tab/plugin-ui-host.js` |
 | `ctx.api.ui.overlayLarge.open/close` | Narrowed access to the large overlay. There is no plugin bundle `overlayLarge.isOpen()`. | Plugin UI host | `admin/tab/plugin-ui-host.js` |
-| `ctx.api.request(command, payload?)` | Bundle-side RPC wrapper for the current Admin-host path `admin.pluginUi.rpc`. A future web host uses the same bundle contract against `web.pluginUi.rpc`. The wrapper always resolves. On successful transport where the backend returns `{ ok: true }`, it resolves with `{ ok: true, data }`. On transport failure or backend `{ ok: false }` (which `msghubRequest` already rejects as `Error(message)`), resolves with `{ ok: false, error: { message } }`. `error.code` is dropped at the `msghubRequest` layer and is never available to the bundle. | Plugin UI host | `admin/tab/plugin-ui-host.js`, `admin/tab/runtime.js`, `lib/IoAdminTab.js`, `lib/IoPluginUiRpc.js` |
+| `ctx.api.request(command, payload?)` | Bundle-side Plugin-UI-RPC wrapper. `command` must start with `admin.` or `web.`. The host strips that prefix and routes to `admin.pluginUi.rpc` or `web.pluginUi.rpc`. `config.<panel-command>` and unprefixed commands fail explicitly in the host before transport. The wrapper always resolves. On successful transport where the backend returns `{ ok: true }`, it resolves with `{ ok: true, data }`. On transport failure or backend `{ ok: false }` (which `msghubRequest` already rejects as `Error(message)`), resolves with `{ ok: false, error: { message } }`. `error.code` is dropped at the `msghubRequest` layer and is never available to the bundle. | Plugin UI host | `admin/tab/plugin-ui-host.js`, `admin/tab/runtime.js`, `lib/IoAdminTab.js`, `lib/IoWebUi.js`, `lib/IoPluginUiRpc.js` |
 
 ### Plugin-owned Admin UI manifest fields consumed by the UI path
 
@@ -354,7 +355,7 @@ panel/plugin contract in this reference.
 | Native panels and plugin bundles do not get the same boundary strength | Native panels receive raw `msghubRequest`, `msghubSocket`, and `ui` in `ctx`. Plugin bundles receive only the narrowed bundle `ctx`. | Boot runtime / plugin UI host | `admin/tab/boot.js`, `admin/tab/plugin-ui-host.js` |
 | `host.panels` excludes plugin panel refs | Native panel `ctx.api.host.panels` contains string entries from `composition.panels` with non-string plugin-panel refs removed. In wildcard compositions this array may contain `'*'` rather than expanded panel ids. | Browser API layer | `admin/tab/api.js` |
 | `ctx.api.i18n.lang()` is a boot-time snapshot | `createAdminApi(...)` captures `lang` by value. `overrideLang(...)` updates global language state, but existing `ctx.api.i18n.lang()` closures keep the captured value until the API is rebuilt. | Browser API layer | `admin/tab/api.js`, `admin/tab/runtime.js` |
-| `runtime.about` updates shell-wide policy | `boot.js` uses `runtime.about` to update branding text, timezone policy, cached connection metadata, and embedded-admin language override. The connection panel still reports the frontend format locale locally, with `args.locale` able to override that browser-side source when valid. | Boot runtime | `admin/tab/boot.js`, `main.js` |
+| `ui.bootstrap.about` updates shell-wide policy | `boot.js` uses `ctx.api.runtime.about()` to consume `ui.bootstrap.about` for branding text, timezone policy, cached connection metadata, and embedded-admin language override. The connection panel still reports the frontend format locale locally, with `args.locale` able to override that browser-side source when valid. | Boot runtime | `admin/tab/boot.js`, `main.js`, `lib/IoAdminCapabilities.js` |
 | Timezone fallback is explicit | Missing or invalid runtime timezone metadata becomes a UTC fallback policy and may trigger one warning toast. | Browser API layer / boot runtime | `admin/tab/api.js`, `admin/tab/boot.js` |
 | Plugin bundle cache key includes language | Bundle cache identity is `(pluginType, instanceId, panelId, hash, lang)` because the bundle response may contain language-specific i18n payloads. | Plugin UI host | `admin/tab/plugin-ui-host.js` |
 | `discover` hash is advisory, `bundle.get` hash is authoritative | The backend discover path best-effort computes hashes, but `bundle.get` recomputes the authoritative content hash. | Admin runtime | `lib/IoWebUi.js` |

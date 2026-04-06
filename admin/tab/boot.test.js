@@ -213,7 +213,7 @@ globalThis.__execCommandSafe = execCommandSafe;
 		assert.doesNotMatch(source, /data-msghub-view/);
 	});
 
-	it('applies runtime.about payload to branding and timezone policy', async function () {
+	it('applies ui.bootstrap.about payload to branding and timezone policy', async function () {
 		const source = await readRepoFile('admin/tab/boot.js');
 		const applyRuntimeAboutPayloadSource = extractFunctionSource(source, 'applyRuntimeAboutPayload');
 		const toasts = [];
@@ -369,7 +369,7 @@ globalThis.__applyRuntimeAboutPayload = applyRuntimeAboutPayload;
 		assert.equal(i18nCalls.length, 1);
 		await new Promise(resolve => setTimeout(resolve, 0));
 		assert.deepEqual(JSON.parse(JSON.stringify(requestCalls)), [
-			{ command: 'admin.pluginUi.discover', payload: { lang: 'de' } },
+			{ command: 'web.pluginUi.discover', payload: { lang: 'de' } },
 		]);
 		assert.deepEqual(mergeCalls, [
 			{
@@ -1350,7 +1350,7 @@ globalThis.__map = pluginPanelTabMap;
 
 		// Discover hydration is wired.
 		assert.match(source, /\bhydratePluginPanels\s*\(/, 'hydratePluginPanels must be called');
-		assert.match(source, /['"]admin\.pluginUi\.discover['"]/, 'admin.pluginUi.discover must be used');
+		assert.match(source, /['"]web\.pluginUi\.discover['"]/, 'web.pluginUi.discover must be used');
 
 		// Spinner is shown only for plugin-only compositions (initial === null).
 		assert.match(source, /const needsSpinner = initialTabId === null/, 'spinner condition must be initialTabId === null');
@@ -1632,7 +1632,7 @@ globalThis.__ensureBooted = ensureBooted;
 				},
 				createMsghubPluginUiHost: () => ({}),
 				msghubRequest: async cmd => {
-					if (cmd === 'admin.pluginUi.discover') return [contrib];
+					if (cmd === 'web.pluginUi.discover') return [contrib];
 					return null;
 				},
 				renderPanelModeError: () => {
@@ -1715,7 +1715,7 @@ globalThis.__ensureBooted = ensureBooted;
 				getActiveComposition: () => null,
 				createMsghubPluginUiHost: () => ({}),
 				msghubRequest: async cmd => {
-					if (cmd === 'admin.pluginUi.discover') return [contrib];
+					if (cmd === 'web.pluginUi.discover') return [contrib];
 					return null;
 				},
 				renderPanelModeError: () => {
@@ -1771,7 +1771,7 @@ globalThis.__ensureBooted = ensureBooted;
 				},
 				createMsghubPluginUiHost: () => ({}),
 				msghubRequest: async cmd => {
-					if (cmd === 'admin.pluginUi.discover') return []; // no matching contrib
+					if (cmd === 'web.pluginUi.discover') return []; // no matching contrib
 					return null;
 				},
 				maybeHardReloadForLateCriticalBootFailure: () => false,
@@ -1854,7 +1854,7 @@ globalThis.__ensureBooted = ensureBooted;
 				},
 				createMsghubPluginUiHost: () => ({}),
 				msghubRequest: async cmd => {
-					if (cmd === 'admin.pluginUi.discover') return [contrib];
+					if (cmd === 'web.pluginUi.discover') return [contrib];
 					return null;
 				},
 				mergePluginI18n: () => {},

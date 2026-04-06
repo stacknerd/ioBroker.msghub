@@ -57,9 +57,9 @@ const ctx = Object.freeze({
 let timezoneFallbackToastShown = false;
 
 /**
- * Applies runtime metadata (branding + timezone policy) from `runtime.about`.
+ * Applies runtime metadata (branding + timezone policy) from `ui.bootstrap.about`.
  *
- * @param {any} payload - `runtime.about` response payload.
+ * @param {any} payload - `ui.bootstrap.about` payload.
  */
 function applyRuntimeAboutPayload(payload) {
 	const data = payload && typeof payload === 'object' ? payload : null;
@@ -91,7 +91,7 @@ function applyRuntimeAboutPayload(payload) {
 			overrideLang(remoteLang);
 			void ensureAdminI18nLoaded()
 				.then(() =>
-					msghubRequest('admin.pluginUi.discover', { lang })
+					msghubRequest('web.pluginUi.discover', { lang })
 						.catch(() => null)
 						.then(contributions => {
 							for (const contrib of Array.isArray(contributions) ? contributions : []) {
@@ -1018,7 +1018,7 @@ async function hydratePluginPanels(refs, host, knownContributions = null) {
 	if (knownContributions !== null) {
 		contributions = knownContributions;
 	} else {
-		const r = await msghubRequest('admin.pluginUi.discover', { lang }).catch(() => null);
+		const r = await msghubRequest('web.pluginUi.discover', { lang }).catch(() => null);
 		contributions = Array.isArray(r) ? r : [];
 	}
 	for (const contrib of Array.isArray(contributions) ? contributions : []) {
@@ -1198,7 +1198,7 @@ function ensureBooted() {
 				const pluginUiHost = createMsghubPluginUiHost({ request: msghubRequest, api });
 				ui?.spinner?.show?.({ blocking: true });
 
-				const rawContribs = await msghubRequest('admin.pluginUi.discover', { lang }).catch(() => null);
+				const rawContribs = await msghubRequest('web.pluginUi.discover', { lang }).catch(() => null);
 				const contributions = Array.isArray(rawContribs) ? rawContribs : [];
 				const contrib = contributions.find(
 					c =>
@@ -1241,7 +1241,7 @@ function ensureBooted() {
 			const isWildcard = Array.isArray(comp?.panels) && comp.panels.length === 1 && comp.panels[0] === '*';
 			let prefetchedContributions = null;
 			if (isWildcard) {
-				const r = await msghubRequest('admin.pluginUi.discover', { lang }).catch(() => null);
+				const r = await msghubRequest('web.pluginUi.discover', { lang }).catch(() => null);
 				prefetchedContributions = Array.isArray(r) ? r : [];
 			}
 
@@ -1497,7 +1497,7 @@ async function sendPing() {
 	const t0 = Date.now();
 	try {
 		await Promise.race([
-			msghubRequest('admin.ping', null),
+			msghubRequest('web.ping', null),
 			new Promise((_, reject) => setTimeout(() => reject(new Error('ping timeout')), PING_TIMEOUT_MS)),
 		]);
 		if (pingToken !== token) {

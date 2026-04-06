@@ -61,17 +61,18 @@ This is the main panel-facing contract of the shell.
 
 Instead of letting panels call arbitrary `sendTo` commands, `api.js` maps explicit methods to backend commands:
 
-- `stats.get(...)` -> `admin.stats.get`
-- `messages.query(...)` -> `admin.messages.query`
+- `constants.get()` -> `web.constants.get`
+- `stats.get(...)` -> `web.stats.get`
+- `messages.query(...)` -> `web.messages.query`
 - `messages.delete(...)` -> `admin.messages.delete`
-- `messages.executeAction(...)` -> `admin.messages.action`
+- `messages.executeAction(...)` -> `web.messages.action`
 - `plugins.getCatalog()` -> `admin.plugins.getCatalog`
 - `plugins.listInstances()` -> `admin.plugins.listInstances`
 - `plugins.createInstance(...)` -> `admin.plugins.createInstance`
 - `plugins.updateInstance(...)` -> `admin.plugins.updateInstance`
 - `plugins.setEnabled(...)` -> `admin.plugins.setEnabled`
 - `plugins.deleteInstance(...)` -> `admin.plugins.deleteInstance`
-- `runtime.about()` -> `runtime.about`
+- `runtime.about()` -> `ui.bootstrap.about`
 
 ### 3) Provide UI-safe helper behavior
 
@@ -174,7 +175,7 @@ In normal (composition) mode:
 
 ### `api.constants`
 
-Cached access to `admin.constants.get`.
+Cached access to `web.constants.get`.
 The cache is explicit and manually invalidatable.
 
 ### `api.time`

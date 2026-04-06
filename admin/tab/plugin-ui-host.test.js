@@ -115,11 +115,11 @@ function makeRequest({ hash = 'test-hash', js = 'export function mount(){}', css
 	const calls = [];
 	const fn = async (cmd, payload) => {
 		calls.push({ cmd, payload });
-		if (cmd === 'admin.pluginUi.bundle.get') {
+		if (cmd === 'web.pluginUi.bundle.get') {
 			// msghubRequest resolves with res.data directly — return raw payload, not {ok,data} envelope.
 			return { hash, js, css, i18n };
 		}
-		if (cmd === 'admin.pluginUi.rpc') {
+		if (cmd === 'admin.pluginUi.rpc' || cmd === 'web.pluginUi.rpc') {
 			// Same transport convention: return raw data; ctx.api.request wraps it into {ok,data}.
 			return rpcResponse !== _noRpcResponse ? rpcResponse : {};
 		}
@@ -170,7 +170,7 @@ describe('admin/tab/plugin-ui-host.js', function () {
 			});
 
 			assert.equal(request.calls.length, 1);
-			assert.equal(request.calls[0].cmd, 'admin.pluginUi.bundle.get');
+			assert.equal(request.calls[0].cmd, 'web.pluginUi.bundle.get');
 			// JSON round-trip strips VM-realm prototype so deepEqual works across realms.
 			assert.deepEqual(JSON.parse(JSON.stringify(request.calls[0].payload)), {
 				pluginType: 'IngestStates',
@@ -329,7 +329,7 @@ describe('admin/tab/plugin-ui-host.js', function () {
 			sandbox.lang = 'de';
 			await host.mount({ container, pluginType: 'T', instanceId: '0', panelId: 'p', hash: '' });
 
-			assert.equal(request.calls[0].cmd, 'admin.pluginUi.bundle.get');
+			assert.equal(request.calls[0].cmd, 'web.pluginUi.bundle.get');
 			assert.equal(JSON.parse(JSON.stringify(request.calls[0].payload)).lang, 'de');
 		});
 
@@ -471,7 +471,7 @@ describe('admin/tab/plugin-ui-host.js', function () {
 	});
 
 	describe('ctx.api.request()', function () {
-		it('routes through admin.pluginUi.rpc with correct envelope', async function () {
+		it('routes admin-prefixed commands through admin.pluginUi.rpc with correct envelope', async function () {
 			const { createHost } = await loadHostSandbox();
 			const container = createContainer();
 			let capturedCtx = null;
@@ -481,7 +481,7 @@ describe('admin/tab/plugin-ui-host.js', function () {
 				},
 			};
 			// rpcResponse is raw data (transport resolves res.data directly); ctx.api.request wraps it.
-		const request = makeRequest({ rpcResponse: { result: 42 } });
+			const request = makeRequest({ rpcResponse: { result: 42 } });
 			const host = createHost({ request, api: {}, _importFn: async () => mockModule });
 
 			await host.mount({
@@ -492,7 +492,7 @@ describe('admin/tab/plugin-ui-host.js', function () {
 				hash: '',
 			});
 
-			const rpcResult = await capturedCtx.api.request('presets.list', { filter: 'all' });
+			const rpcResult = await capturedCtx.api.request('admin.presets.list', { filter: 'all' });
 
 			const rpcCall = request.calls.find(c => c.cmd === 'admin.pluginUi.rpc');
 			assert.ok(rpcCall, 'rpc call must be made');
@@ -505,6 +505,107 @@ describe('admin/tab/plugin-ui-host.js', function () {
 				payload: { filter: 'all' },
 			});
 			assert.deepEqual(JSON.parse(JSON.stringify(rpcResult)), { ok: true, data: { result: 42 } });
+		});
+
+		it('routes web-prefixed commands through web.pluginUi.rpc', async function () {
+			const { createHost } = await loadHostSandbox();
+			const container = createContainer();
+			let capturedCtx = null;
+			const request = makeRequest({ rpcResponse: { result: 'web' } });
+			const host = createHost({
+				request,
+				api: {},
+				_importFn: async () => ({
+					mount: async ctx => {
+						capturedCtx = ctx;
+					},
+				}),
+			});
+
+			await host.mount({
+				container,
+				pluginType: 'IngestStates',
+				instanceId: '0',
+				panelId: 'presets',
+				hash: '',
+			});
+
+			const rpcResult = await capturedCtx.api.request('web.presets.list', { filter: 'all' });
+			const rpcCall = request.calls.find(c => c.cmd === 'web.pluginUi.rpc');
+			assert.ok(rpcCall, 'web rpc call must be made');
+			assert.deepEqual(JSON.parse(JSON.stringify(rpcCall.payload)), {
+				pluginType: 'IngestStates',
+				instanceId: '0',
+				panelId: 'presets',
+				command: 'presets.list',
+				payload: { filter: 'all' },
+			});
+			assert.deepEqual(JSON.parse(JSON.stringify(rpcResult)), { ok: true, data: { result: 'web' } });
+		});
+
+		it('rejects config-prefixed commands explicitly', async function () {
+			const { createHost } = await loadHostSandbox();
+			const container = createContainer();
+			let capturedCtx = null;
+			const request = makeRequest();
+			const host = createHost({
+				request,
+				api: {},
+				_importFn: async () => ({
+					mount: async ctx => {
+						capturedCtx = ctx;
+					},
+				}),
+			});
+
+			await host.mount({
+				container,
+				pluginType: 'IngestStates',
+				instanceId: '0',
+				panelId: 'presets',
+				hash: '',
+			});
+
+			const rpcResult = await capturedCtx.api.request('config.presets.list', { filter: 'all' });
+			assert.deepEqual(JSON.parse(JSON.stringify(rpcResult)), {
+				ok: false,
+				error: { message: 'Plugin UI RPC config. commands are not supported.' },
+			});
+			assert.equal(
+				request.calls.some(call => call.cmd === 'admin.pluginUi.rpc' || call.cmd === 'web.pluginUi.rpc'),
+				false,
+			);
+		});
+
+		it('rejects unprefixed commands explicitly', async function () {
+			const { createHost } = await loadHostSandbox();
+			const container = createContainer();
+			let capturedCtx = null;
+			const request = makeRequest();
+			const host = createHost({
+				request,
+				api: {},
+				_importFn: async () => ({
+					mount: async ctx => {
+						capturedCtx = ctx;
+					},
+				}),
+			});
+
+			await host.mount({
+				container,
+				pluginType: 'IngestStates',
+				instanceId: '0',
+				panelId: 'presets',
+				hash: '',
+			});
+
+			const rpcResult = await capturedCtx.api.request('presets.list', { filter: 'all' });
+			assert.deepEqual(JSON.parse(JSON.stringify(rpcResult)), {
+				ok: false,
+				error: { message: 'Plugin UI RPC command must start with admin. or web.' },
+			});
+			assert.equal(request.calls.length, 1, 'only bundle.get should have been called');
 		});
 	});
 });

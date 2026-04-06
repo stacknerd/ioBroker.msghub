@@ -214,13 +214,13 @@ describe('admin/tab/api.js', function () {
 		await api.runtime.about();
 
 		const commands = sentCommands.map(entry => entry.command);
-		assert.ok(commands.includes('admin.constants.get'));
-		assert.ok(commands.includes('admin.stats.get'));
-		assert.ok(commands.includes('admin.messages.query'));
+		assert.ok(commands.includes('web.constants.get'));
+		assert.ok(commands.includes('web.stats.get'));
+		assert.ok(commands.includes('web.messages.query'));
 		assert.ok(commands.includes('admin.messages.delete'));
-		assert.ok(commands.includes('admin.messages.action'));
+		assert.ok(commands.includes('web.messages.action'));
 		assert.ok(commands.includes('admin.plugins.listInstances'));
-		assert.ok(commands.includes('runtime.about'));
+		assert.ok(commands.includes('ui.bootstrap'));
 
 		api.ui.contextMenu.open({
 			items: [

@@ -474,7 +474,7 @@ function createAdminApi({ msghubRequest, msghubSocket, adapterInstance, lang, t,
 	};
 
 	// Constants are heavily cached as they rarely change at runtime.
-	const constantsCache = createAsyncCache(() => msghubRequest('admin.constants.get', {}), { maxAgeMs: Infinity });
+	const constantsCache = createAsyncCache(() => msghubRequest('web.constants.get', {}), { maxAgeMs: Infinity });
 
 	const constants = Object.freeze({
 		get: () => constantsCache.get(),
@@ -482,13 +482,13 @@ function createAdminApi({ msghubRequest, msghubSocket, adapterInstance, lang, t,
 	});
 
 	const stats = Object.freeze({
-		get: params => msghubRequest('admin.stats.get', params || {}),
+		get: params => msghubRequest('web.stats.get', params || {}),
 	});
 
 	const messages = Object.freeze({
-		query: params => msghubRequest('admin.messages.query', params || {}),
+		query: params => msghubRequest('web.messages.query', params || {}),
 		delete: refs => msghubRequest('admin.messages.delete', { refs }),
-		executeAction: params => msghubRequest('admin.messages.action', params || {}),
+		executeAction: params => msghubRequest('web.messages.action', params || {}),
 	});
 
 	const plugins = Object.freeze({
@@ -501,7 +501,7 @@ function createAdminApi({ msghubRequest, msghubSocket, adapterInstance, lang, t,
 	});
 
 	const runtime = Object.freeze({
-		about: () => msghubRequest('runtime.about', {}),
+		about: () => msghubRequest('ui.bootstrap', {}).then(data => data?.about || {}),
 	});
 
 	const time = Object.freeze({
