@@ -85,6 +85,16 @@ io.connect('/', { path: '/socket.io' })
 `msghubRequest(command, message)` wraps the `sendTo` pattern and resolves with `res.data` on success.
 If the backend reports an error, the promise rejects with a normal `Error`.
 
+For `admin.*`, `config.*`, and `web.*`, that wrapper also owns the central capability-token flow:
+
+- startup bootstrap via `ui.bootstrap`
+- cached `{ capabilities, about }`
+- automatic `payload.token` injection by namespace
+- refresh when the current grant has less than 15 minutes remaining lifetime
+- exactly one forced re-bootstrap retry on the first token-related command failure of the current browser session
+
+This keeps token logic out of panels, `api.js`, and the plugin UI host.
+
 ### 3) Load and serve the shell i18n dictionary
 
 The module owns the admin dictionary state:
@@ -168,6 +178,7 @@ This module exposes classic-script globals rather than a single exported object.
 ### Transport
 
 - `msghubRequest(command, message)`
+- `sendRawRequest(command, message)` — internal raw transport used only by the bootstrap/token wrapper
 
 ### i18n
 
@@ -201,6 +212,8 @@ Main consumers:
 
 - The socket path is always `/socket.io`, independent of whether the page is served from an admin path or an adapter path.
 - `msghubRequest(...)` resolves with backend payload data, not with the outer `{ ok, data }` transport envelope.
+- `msghubRequest(...)` is the only browser-side token attachment point for `admin.*`, `config.*`, and `web.*`.
+- `ui.bootstrap` itself stays outside the token-protected namespaces but shares the same cached bootstrap state.
 - `ensureAdminI18nLoaded()` caches the load promise. Repeated callers share the same in-flight work.
 - `overrideLang(...)` resets the cached dictionary promise so a later load can fetch the new language.
 - Plugin i18n merging is intentionally one-way and additive. Existing keys are never overwritten.
@@ -209,6 +222,7 @@ Main consumers:
 - `runtime.js` parses `composition`, `panel`, and `expert`, but their consumption happens downstream: composition resolution in [`./tab-layout.md`](./tab-layout.md), panel-mode activation in [`./tab-boot.md`](./tab-boot.md), expert-mode capabilities in panel/API concerns.
 - `panel` activates Single-Panel mode when set; it must carry a `tab-` prefix. Unresolvable targets render a hard error. `panel` takes precedence over `composition` when both are present.
 - `locale` is only a browser-side format-locale override source. It does not change admin i18n loading, text language, plugin bundle language selection, or backend payloads.
+- The token refresh flow does not change the three language/locale channels. `backendTextLanguage`, `coreTextLanguage`, and `coreFormatLocale` remain separate semantics in the bootstrap payload.
 - `urlThemeLocked` is an internal inter-module flag, not a native-panel API and not a plugin-facing contract.
 - The theme is applied immediately at module load to reduce visual flicker.
 - `applyTheme(...)` is idempotent for the current DOM state and optionally writes `window.__msghubAdminTabTheme` when `debugTheme` is enabled.

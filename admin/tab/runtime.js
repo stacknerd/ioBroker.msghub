@@ -129,6 +129,192 @@ const args = parseQuery();
 const adapterInstance = `msghub.${args.instance}`;
 // Expose on a dedicated property that the admin host will not override.
 window.msghubSocket = createSocket();
+const TOKEN_REFRESH_THRESHOLD_MS = 15 * 60 * 1000;
+
+/**
+ * Creates the mutable bootstrap state container.
+ *
+ * @returns {{ payload: object|null, pending: Promise<object>|null, hardRebootstrapConsumed: boolean }} Runtime bootstrap state.
+ */
+function createBootstrapState() {
+	return {
+		payload: null,
+		pending: null,
+		hardRebootstrapConsumed: false,
+	};
+}
+
+let bootstrapState = createBootstrapState();
+
+/**
+ * Sends one raw command to the backend over socket.io without token/bootstrap handling.
+ *
+ * @param {string} command - Backend command (for example `admin.stats.get`).
+ * @param {object} message - Payload for the command.
+ * @returns {Promise<any>} Resolved backend data or error.
+ */
+function sendRawRequest(command, message) {
+	return new Promise((resolve, reject) => {
+		window.msghubSocket.emit('sendTo', adapterInstance, command, message, res => {
+			if (!res) {
+				return reject(new Error('No response'));
+			}
+			if (res.ok) {
+				return resolve(res.data);
+			}
+			const errorCode = typeof res?.error?.code === 'string' ? res.error.code : '';
+			const errorMessage = res?.error?.message || res?.error || 'Unknown error';
+			if (errorCode) {
+				return reject(Object.assign(new Error(String(errorMessage)), { code: errorCode }));
+			}
+			return reject(new Error(String(errorMessage)));
+		});
+	});
+}
+
+/**
+ * Maps one backend command to its capability namespace when token-protected.
+ *
+ * @param {string} command - Backend command.
+ * @returns {'admin'|'config'|'web'|''} Capability namespace or empty string.
+ */
+function resolveCommandCapability(command) {
+	const rawCommand = typeof command === 'string' ? command.trim() : '';
+	if (rawCommand.startsWith('admin.')) {
+		return 'admin';
+	}
+	if (rawCommand.startsWith('config.')) {
+		return 'config';
+	}
+	if (rawCommand.startsWith('web.')) {
+		return 'web';
+	}
+	return '';
+}
+
+/**
+ * Returns the remaining token lifetime in milliseconds.
+ *
+ * @param {string} expiresAt - ISO expiry timestamp.
+ * @returns {number} Remaining lifetime in milliseconds.
+ */
+function getTokenRemainingMs(expiresAt) {
+	const expiresAtMs = Date.parse(typeof expiresAt === 'string' ? expiresAt : '');
+	if (!Number.isFinite(expiresAtMs)) {
+		return 0;
+	}
+	return expiresAtMs - Date.now();
+}
+
+/**
+ * Detects whether an error is plausibly token-related.
+ *
+ * @param {any} error - Error thrown by the raw transport.
+ * @returns {boolean} `true` when the error looks like a token/bootstrap issue.
+ */
+function isTokenError(error) {
+	const code = typeof error?.code === 'string' ? error.code.trim().toUpperCase() : '';
+	if (code === 'FORBIDDEN') {
+		return true;
+	}
+	const message = String(error?.message || error || '').toLowerCase();
+	return /forbidden|token|expired/.test(message);
+}
+
+/**
+ * Loads fresh bootstrap data from the backend and caches it centrally.
+ *
+ * @returns {Promise<{ capabilities?: object, about?: object }>} Bootstrap payload.
+ */
+function fetchBootstrapPayload() {
+	if (bootstrapState.pending) {
+		return bootstrapState.pending;
+	}
+	const pending = sendRawRequest('ui.bootstrap', {})
+		.then(payload => {
+			const safePayload = payload && typeof payload === 'object' ? payload : {};
+			bootstrapState.payload = safePayload;
+			return bootstrapState.payload;
+		})
+		.finally(() => {
+			bootstrapState.pending = null;
+		});
+	bootstrapState.pending = pending;
+	return pending;
+}
+
+/**
+ * Returns cached bootstrap data, optionally forcing a refresh.
+ *
+ * @param {{ force?: boolean }} [options] - Refresh options.
+ * @returns {Promise<{ capabilities?: object, about?: object }>} Bootstrap payload.
+ */
+function ensureBootstrapPayload({ force = false } = {}) {
+	if (force || !bootstrapState.payload) {
+		return fetchBootstrapPayload();
+	}
+	return Promise.resolve(bootstrapState.payload);
+}
+
+/**
+ * Returns one capability grant from the cached bootstrap payload.
+ *
+ * @param {'admin'|'config'|'web'} capability - Capability namespace.
+ * @returns {{ token?: string, expiresAt?: string }} Grant data or empty object.
+ */
+function getCapabilityGrant(capability) {
+	const capabilities =
+		bootstrapState.payload && typeof bootstrapState.payload === 'object'
+			? bootstrapState.payload.capabilities
+			: null;
+	const grant = capabilities && typeof capabilities === 'object' ? capabilities[capability] : null;
+	return grant && typeof grant === 'object' ? grant : {};
+}
+
+/**
+ * Checks whether the cached bootstrap payload should be refreshed soon.
+ *
+ * @returns {boolean} `true` when one known capability grant is close to expiry.
+ */
+function shouldRefreshBootstrapSoon() {
+	const capabilities =
+		bootstrapState.payload && typeof bootstrapState.payload === 'object'
+			? bootstrapState.payload.capabilities
+			: null;
+	if (!capabilities || typeof capabilities !== 'object') {
+		return true;
+	}
+	for (const capability of ['admin', 'config', 'web']) {
+		const grant = capabilities[capability];
+		const expiresAt =
+			grant && typeof grant === 'object' && typeof grant.expiresAt === 'string' ? grant.expiresAt : '';
+		if (grant && typeof grant === 'object' && getTokenRemainingMs(expiresAt) < TOKEN_REFRESH_THRESHOLD_MS) {
+			return true;
+		}
+	}
+	return false;
+}
+
+/**
+ * Ensures that the requested capability token exists and is fresh enough.
+ *
+ * @param {'admin'|'config'|'web'} capability - Capability namespace.
+ * @returns {Promise<string>} Opaque token string.
+ */
+async function ensureCapabilityToken(capability) {
+	await ensureBootstrapPayload();
+	let grant = getCapabilityGrant(capability);
+	const initialExpiresAt = typeof grant.expiresAt === 'string' ? grant.expiresAt : '';
+	if (getTokenRemainingMs(initialExpiresAt) < TOKEN_REFRESH_THRESHOLD_MS) {
+		await ensureBootstrapPayload({ force: true });
+		grant = getCapabilityGrant(capability);
+	}
+	const token = typeof grant?.token === 'string' ? grant.token.trim() : '';
+	if (!token) {
+		throw new Error(`Missing bootstrap token for capability '${capability}'`);
+	}
+	return token;
+}
 
 /**
  * Sends an admin command to the backend over socket.io.
@@ -138,18 +324,29 @@ window.msghubSocket = createSocket();
  * @returns {Promise<any>} Resolved backend data or error.
  */
 function msghubRequest(command, message) {
-	return new Promise((resolve, reject) => {
-		window.msghubSocket.emit('sendTo', adapterInstance, command, message, res => {
-			if (!res) {
-				return reject(new Error('No response'));
+	const payload = message && typeof message === 'object' ? { ...message } : {};
+	const capability = resolveCommandCapability(command);
+	if (!capability) {
+		if (command === 'ui.bootstrap') {
+			const needsRefresh = !bootstrapState.payload || shouldRefreshBootstrapSoon();
+			return ensureBootstrapPayload({ force: needsRefresh });
+		}
+		return sendRawRequest(command, payload);
+	}
+	return ensureCapabilityToken(capability)
+		.then(token => sendRawRequest(command, { ...payload, token }))
+		.catch(async error => {
+			if (!isTokenError(error)) {
+				throw error;
 			}
-			if (res.ok) {
-				return resolve(res.data);
+			if (bootstrapState.hardRebootstrapConsumed) {
+				throw error;
 			}
-			const msg = res?.error?.message || res?.error || 'Unknown error';
-			return reject(new Error(String(msg)));
+			bootstrapState.hardRebootstrapConsumed = true;
+			await ensureBootstrapPayload({ force: true });
+			const token = await ensureCapabilityToken(capability);
+			return sendRawRequest(command, { ...payload, token });
 		});
-	});
 }
 let lang = typeof args.lang === 'string' ? args.lang : 'en';
 const isEmbeddedInAdmin = window !== window.top;
@@ -534,3 +731,4 @@ void urlThemeLocked;
 
 // Apply the theme as early as possible to reduce visual flicker.
 applyTheme(detectTheme());
+void ensureBootstrapPayload().catch(() => undefined);

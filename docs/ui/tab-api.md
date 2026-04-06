@@ -72,7 +72,7 @@ Instead of letting panels call arbitrary `sendTo` commands, `api.js` maps explic
 - `plugins.updateInstance(...)` -> `admin.plugins.updateInstance`
 - `plugins.setEnabled(...)` -> `admin.plugins.setEnabled`
 - `plugins.deleteInstance(...)` -> `admin.plugins.deleteInstance`
-- `runtime.about()` -> `ui.bootstrap.about`
+- `runtime.about()` -> `ui.bootstrap` (returns only `.about`)
 
 ### 3) Provide UI-safe helper behavior
 
@@ -91,6 +91,10 @@ The time helpers now support one more browser-side input source:
 - `options.locale` remains the strongest locale override for `formatTs(...)` / `formatDate(...)`
 - otherwise a valid `args.locale` becomes the default frontend format locale
 - missing or invalid `args.locale` keeps the previous ambient/browser default behavior
+
+All privileged browser commands continue to go through the same `msghubRequest(...)` transport.
+Token attachment is not implemented in `api.js` per method. It is owned centrally by
+[`./tab-runtime.md`](./tab-runtime.md) for every `admin.*`, `config.*`, and `web.*` command.
 
 ---
 
@@ -210,6 +214,7 @@ This is used for API branches that are intentionally unavailable in the current 
 - The context-menu wrapper intentionally does not emit generic fallback toasts when an action rejects. Error handling stays with the caller.
 - In normal mode, `host.panels` is derived from the active composition but keeps only string entries, because structured plugin refs are hosted differently. In `panel=` mode, `host.panels` is a single-element array derived from `args.panel`.
 - `args.locale` affects only the browser-side default format locale for `api.time.*`; it does not change text language, i18n loading, plugin bundle language selection, or backend payloads.
+- `runtime.about()` stays on the API surface, but its data comes from the central `ui.bootstrap` cache in `runtime.js`.
 
 ---
 

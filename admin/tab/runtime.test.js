@@ -33,10 +33,10 @@ async function loadRuntimeSandbox(options = {}) {
 		parseQuery,
 		createSocket,
 		normalizeLang,
-	fetchJson,
-	loadAdminI18nDictionary,
-	ensureAdminI18nLoaded,
-	hasAdminKey,
+		fetchJson,
+		loadAdminI18nDictionary,
+		ensureAdminI18nLoaded,
+		hasAdminKey,
 		mergePluginI18n,
 		t,
 		pickText,
@@ -47,13 +47,20 @@ async function loadRuntimeSandbox(options = {}) {
 		applyTheme,
 		detectTheme,
 		urlThemeLocked,
+		resolveCommandCapability,
+		getTokenRemainingMs,
+		isTokenError,
+		ensureBootstrapPayload,
+		ensureCapabilityToken,
+		sendRawRequest,
+		bootstrapState,
 		args,
 		adapterInstance,
-	msghubSocket: window.msghubSocket,
-	msghubRequest,
-	lang
-};
-`;
+		msghubSocket: window.msghubSocket,
+		msghubRequest,
+		lang
+	};
+	`;
 
 	const attrs = new Map();
 	const documentObject = {
@@ -87,7 +94,30 @@ async function loadRuntimeSandbox(options = {}) {
 	const topDocument = options.topDocument || null;
 
 	const ioCalls = [];
-	const socketEmit = options.socketEmit || function () {};
+	const emitCalls = [];
+	const socketEmit =
+		options.socketEmit ||
+		(function (_eventName, _adapterInstance, command, _payload, callback) {
+			emitCalls.push({ command, payload: _payload });
+			if (typeof callback !== 'function') {
+				return;
+			}
+			if (command === 'ui.bootstrap') {
+				callback({
+					ok: true,
+					data: {
+						capabilities: {
+							admin: { token: 'admin-token', expiresAt: '2999-01-01T00:00:00.000Z' },
+							config: { token: 'config-token', expiresAt: '2999-01-01T00:00:00.000Z' },
+							web: { token: 'web-token', expiresAt: '2999-01-01T00:00:00.000Z' },
+						},
+						about: {},
+					},
+				});
+				return;
+			}
+			callback({ ok: true, data: {} });
+		});
 	const ioMock = {
 		connect: (url, connectOptions) => {
 			ioCalls.push({ url, options: connectOptions });
@@ -120,14 +150,14 @@ async function loadRuntimeSandbox(options = {}) {
 		pathname: options.pathname || '/admin/index_m.html',
 	};
 
-		const windowObject = {
-			location: locationObject,
-			navigator: { language: options.navigatorLanguage || 'en-US' },
-			localStorage,
-			matchMedia: query => ({ matches: query.includes('dark') ? !!options.prefersDark : false }),
-		};
-		windowObject.window = windowObject;
-		windowObject.top = topDocument ? { document: topDocument } : windowObject;
+	const windowObject = {
+		location: locationObject,
+		navigator: { language: options.navigatorLanguage || 'en-US' },
+		localStorage,
+		matchMedia: query => ({ matches: query.includes('dark') ? !!options.prefersDark : false }),
+	};
+	windowObject.window = windowObject;
+	windowObject.top = topDocument ? { document: topDocument } : windowObject;
 
 	const sandbox = {
 		window: windowObject,
@@ -141,7 +171,7 @@ async function loadRuntimeSandbox(options = {}) {
 	};
 
 	vm.runInNewContext(`${source}\n${expose}`, sandbox, { filename: 'admin/tab/runtime.js' });
-	sandbox.__meta = { ioCalls, fetchCalls, attrs };
+	sandbox.__meta = { ioCalls, emitCalls, fetchCalls, attrs };
 	return sandbox;
 }
 
@@ -254,6 +284,253 @@ describe('admin/tab/runtime.js', function () {
 				assert.equal(result.composition, 'adminTab');
 				assert.equal(result.panel, 'tab-messages');
 			});
+		});
+	});
+
+	describe('token bootstrap and request handling', function () {
+		it('loads bootstrap on startup and attaches tokens centrally by namespace', async function () {
+			const emitCalls = [];
+			const sandbox = await loadRuntimeSandbox({
+				socketEmit(_eventName, _adapterInstance, command, payload, callback) {
+					emitCalls.push({ command, payload });
+					if (command === 'ui.bootstrap') {
+						callback({
+							ok: true,
+							data: {
+								capabilities: {
+									admin: { token: 'admin-start', expiresAt: '2999-01-01T00:00:00.000Z' },
+									config: { token: 'config-start', expiresAt: '2999-01-01T00:00:00.000Z' },
+									web: { token: 'web-start', expiresAt: '2999-01-01T00:00:00.000Z' },
+								},
+								about: { title: 'Message Hub' },
+							},
+						});
+						return;
+					}
+					callback({ ok: true, data: { echoed: payload } });
+				},
+			});
+
+			await sandbox.window.__runtime.ensureBootstrapPayload();
+			const adminResult = await sandbox.window.__runtime.msghubRequest('admin.plugins.listInstances', { page: 1 });
+			const configResult = await sandbox.window.__runtime.msghubRequest('config.archive.status', {});
+			const webResult = await sandbox.window.__runtime.msghubRequest('web.messages.query', { query: { page: 1 } });
+
+			assert.equal(emitCalls[0].command, 'ui.bootstrap');
+			assert.deepEqual(JSON.parse(JSON.stringify(adminResult)), { echoed: { page: 1, token: 'admin-start' } });
+			assert.deepEqual(JSON.parse(JSON.stringify(configResult)), { echoed: { token: 'config-start' } });
+			assert.deepEqual(JSON.parse(JSON.stringify(webResult)), {
+				echoed: { query: { page: 1 }, token: 'web-start' },
+			});
+		});
+
+		it('still sends the central admin token for selectOptions exception commands', async function () {
+			const emitCalls = [];
+			const sandbox = await loadRuntimeSandbox({
+				socketEmit(_eventName, _adapterInstance, command, payload, callback) {
+					emitCalls.push({ command, payload });
+					if (command === 'ui.bootstrap') {
+						callback({
+							ok: true,
+							data: {
+								capabilities: {
+									admin: { token: 'admin-select', expiresAt: '2999-01-01T00:00:00.000Z' },
+									config: { token: 'config-select', expiresAt: '2999-01-01T00:00:00.000Z' },
+									web: { token: 'web-select', expiresAt: '2999-01-01T00:00:00.000Z' },
+								},
+								about: {},
+							},
+						});
+						return;
+					}
+					callback({ ok: true, data: [] });
+				},
+			});
+
+			await sandbox.window.__runtime.msghubRequest('admin.ingestStates.presets.selectOptions', { foo: 'bar' });
+
+			const selectCall = emitCalls.find(call => call.command === 'admin.ingestStates.presets.selectOptions');
+			assert.deepEqual(JSON.parse(JSON.stringify(selectCall.payload)), { foo: 'bar', token: 'admin-select' });
+		});
+
+		it('refreshes bootstrap when a token is close to expiry', async function () {
+			const nearExpiry = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+			const emitCalls = [];
+			let bootstrapCount = 0;
+			const sandbox = await loadRuntimeSandbox({
+				socketEmit(_eventName, _adapterInstance, command, payload, callback) {
+					emitCalls.push({ command, payload });
+					if (command === 'ui.bootstrap') {
+						bootstrapCount++;
+						const token = bootstrapCount === 1 ? 'stale-admin' : 'fresh-admin';
+						const expiresAt = bootstrapCount === 1 ? nearExpiry : '2999-01-01T00:00:00.000Z';
+						callback({
+							ok: true,
+							data: {
+								capabilities: {
+									admin: { token, expiresAt },
+									config: { token: 'config-any', expiresAt: '2999-01-01T00:00:00.000Z' },
+									web: { token: 'web-any', expiresAt: '2999-01-01T00:00:00.000Z' },
+								},
+								about: {},
+							},
+						});
+						return;
+					}
+					callback({ ok: true, data: payload });
+				},
+			});
+
+			await sandbox.window.__runtime.ensureBootstrapPayload();
+			const result = await sandbox.window.__runtime.msghubRequest('admin.plugins.getCatalog', {});
+
+			assert.equal(bootstrapCount, 2);
+			assert.deepEqual(JSON.parse(JSON.stringify(result)), { token: 'fresh-admin' });
+			assert.deepEqual(
+				emitCalls.map(call => call.command),
+				['ui.bootstrap', 'ui.bootstrap', 'admin.plugins.getCatalog'],
+			);
+		});
+
+		it('performs one forced re-bootstrap and retries once on token errors', async function () {
+			const emitCalls = [];
+			let bootstrapCount = 0;
+			let adminCalls = 0;
+			const sandbox = await loadRuntimeSandbox({
+				socketEmit(_eventName, _adapterInstance, command, payload, callback) {
+					emitCalls.push({ command, payload });
+					if (command === 'ui.bootstrap') {
+						bootstrapCount++;
+						callback({
+							ok: true,
+							data: {
+								capabilities: {
+									admin: {
+										token: bootstrapCount === 1 ? 'expired-admin' : 'recovered-admin',
+										expiresAt: '2999-01-01T00:00:00.000Z',
+									},
+									config: { token: 'config-any', expiresAt: '2999-01-01T00:00:00.000Z' },
+									web: { token: 'web-any', expiresAt: '2999-01-01T00:00:00.000Z' },
+								},
+								about: {},
+							},
+						});
+						return;
+					}
+					if (command === 'admin.plugins.listInstances') {
+						adminCalls++;
+						if (adminCalls === 1) {
+							callback({ ok: false, error: { code: 'FORBIDDEN', message: 'Invalid or expired token' } });
+							return;
+						}
+						callback({ ok: true, data: { token: payload.token, recovered: true } });
+						return;
+					}
+					callback({ ok: true, data: {} });
+				},
+			});
+
+			const result = await sandbox.window.__runtime.msghubRequest('admin.plugins.listInstances', {});
+
+			assert.deepEqual(result, { token: 'recovered-admin', recovered: true });
+			assert.equal(bootstrapCount, 2);
+			assert.equal(adminCalls, 2);
+			assert.deepEqual(
+				emitCalls.map(call => call.command),
+				['ui.bootstrap', 'admin.plugins.listInstances', 'ui.bootstrap', 'admin.plugins.listInstances'],
+			);
+		});
+
+		it('keeps ui.bootstrap on the cached bootstrap path and refreshes it when near expiry', async function () {
+			const nearExpiry = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+			let bootstrapCount = 0;
+			const sandbox = await loadRuntimeSandbox({
+				socketEmit(_eventName, _adapterInstance, command, _payload, callback) {
+					if (command !== 'ui.bootstrap') {
+						callback({ ok: true, data: {} });
+						return;
+					}
+					bootstrapCount++;
+					callback({
+						ok: true,
+						data: {
+							capabilities: {
+								admin: {
+									token: bootstrapCount === 1 ? 'bootstrap-one' : 'bootstrap-two',
+									expiresAt: bootstrapCount === 1 ? nearExpiry : '2999-01-01T00:00:00.000Z',
+								},
+								config: { token: 'config-any', expiresAt: '2999-01-01T00:00:00.000Z' },
+								web: { token: 'web-any', expiresAt: '2999-01-01T00:00:00.000Z' },
+							},
+							about: { version: String(bootstrapCount) },
+						},
+					});
+				},
+			});
+
+			const first = await sandbox.window.__runtime.msghubRequest('ui.bootstrap', {});
+			const second = await sandbox.window.__runtime.msghubRequest('ui.bootstrap', {});
+
+			assert.equal(first.about.version, '1');
+			assert.equal(second.about.version, '2');
+			assert.equal(bootstrapCount, 2);
+		});
+
+		it('does not perform a second hard re-bootstrap after the first token failure in the same session', async function () {
+			const emitCalls = [];
+			let bootstrapCount = 0;
+			let adminCalls = 0;
+			const sandbox = await loadRuntimeSandbox({
+				socketEmit(_eventName, _adapterInstance, command, payload, callback) {
+					emitCalls.push({ command, payload });
+					if (command === 'ui.bootstrap') {
+						bootstrapCount++;
+						callback({
+							ok: true,
+							data: {
+								capabilities: {
+									admin: {
+										token: bootstrapCount === 1 ? 'initial-admin' : 'refreshed-admin',
+										expiresAt: '2999-01-01T00:00:00.000Z',
+									},
+									config: { token: 'config-any', expiresAt: '2999-01-01T00:00:00.000Z' },
+									web: { token: 'web-any', expiresAt: '2999-01-01T00:00:00.000Z' },
+								},
+								about: {},
+							},
+						});
+						return;
+					}
+					if (command === 'admin.plugins.listInstances') {
+						adminCalls++;
+						callback({ ok: false, error: { code: 'FORBIDDEN', message: `Invalid token ${adminCalls}` } });
+						return;
+					}
+					callback({ ok: true, data: {} });
+				},
+			});
+
+			await assert.rejects(
+				() => sandbox.window.__runtime.msghubRequest('admin.plugins.listInstances', {}),
+				err => err?.message === 'Invalid token 2',
+			);
+			await assert.rejects(
+				() => sandbox.window.__runtime.msghubRequest('admin.plugins.listInstances', {}),
+				err => err?.message === 'Invalid token 3',
+			);
+
+			assert.equal(bootstrapCount, 2);
+			assert.equal(adminCalls, 3);
+			assert.deepEqual(
+				emitCalls.map(call => call.command),
+				[
+					'ui.bootstrap',
+					'admin.plugins.listInstances',
+					'ui.bootstrap',
+					'admin.plugins.listInstances',
+					'admin.plugins.listInstances',
+				],
+			);
 		});
 	});
 
@@ -480,6 +757,20 @@ describe('admin/tab/runtime.js', function () {
 		const sandbox = await loadRuntimeSandbox({
 			search: '?instance=2',
 			socketEmit(event, adapter, command, message, callback) {
+				if (command === 'ui.bootstrap') {
+					callback({
+						ok: true,
+						data: {
+							capabilities: {
+								admin: { token: 'admin-ok', expiresAt: '2999-01-01T00:00:00.000Z' },
+								config: { token: 'config-ok', expiresAt: '2999-01-01T00:00:00.000Z' },
+								web: { token: 'web-ok', expiresAt: '2999-01-01T00:00:00.000Z' },
+							},
+							about: {},
+						},
+					});
+					return;
+				}
 				callback({ ok: true, data: { command, adapter } });
 			},
 		});
