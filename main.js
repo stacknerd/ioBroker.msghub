@@ -17,6 +17,7 @@ const { MsgConfig } = require(`${__dirname}/src/MsgConfig`);
 const { MsgStore } = require(`${__dirname}/src/MsgStore`);
 const { MsgAi } = require(`${__dirname}/src/MsgAi`);
 const { IoArchiveResolver } = require(`${__dirname}/lib/IoArchiveResolver`);
+const { IoAdminCapabilities } = require(`${__dirname}/lib/IoAdminCapabilities`);
 const { IoCoreConnection } = require(`${__dirname}/lib/IoCoreConnection`);
 const { IoStorageIobroker } = require(`${__dirname}/lib/IoStorageIobroker`);
 const { IoRuntimeI18n } = require(`${__dirname}/lib/IoRuntimeI18n`);
@@ -104,6 +105,9 @@ class Msghub extends utils.Adapter {
 
 		// Backend i18n registry — shared between _i18ninit() and IoPlugins (initialized in onReady).
 		this._i18nRegistry = null;
+
+		// Central bootstrap/capability builder for host-facing UI entry points.
+		this._adminCapabilities = new IoAdminCapabilities(this, { ioPackage });
 	}
 
 	/**
@@ -316,37 +320,15 @@ class Msghub extends utils.Adapter {
 				result = await this._handleAdminCommand(cmd, payload);
 			} else if (typeof cmd === 'string' && cmd.startsWith('config.')) {
 				result = await this._handleConfigCommand(cmd, payload);
-			} else if (cmd === 'runtime.about') {
-				const adapterVersion = ioPackage?.common?.version ?? '0.0.0';
-				const adapterTitle =
-					ioPackage?.common?.titleLang?.de ?? ioPackage?.common?.titleLang?.en ?? 'Message Hub';
-				let serverTimeZone = '';
-				try {
-					serverTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
-				} catch {
-					serverTimeZone = '';
-				}
-				const timeZone = typeof serverTimeZone === 'string' ? serverTimeZone.trim() : '';
+			} else if (cmd === 'ui.bootstrap') {
 				result = {
 					ok: true,
-					data: {
-						title: adapterTitle,
-						version: adapterVersion,
-						time: {
-							timeZone: timeZone || 'UTC',
-							source: timeZone ? 'server' : 'fallback-utc',
-						},
-						lang: {
-							backendTextLanguage: this.i18nBackend?.i18nlocale || 'en',
-							coreTextLanguage: this.i18nCore?.i18nlocale || 'en',
-							coreFormatLocale: this.i18nCore?.locale || 'en',
-						},
-						connection: this._coreConnection?.getRuntimeAbout?.() || {
-							scope: 'core-link',
-							connected: false,
-							mode: 'local',
-						},
-					},
+					data: this._adminCapabilities.buildBootstrap({ host: 'admin' }),
+				};
+			} else if (cmd === 'runtime.about') {
+				result = {
+					ok: true,
+					data: this._adminCapabilities.buildAbout(),
 				};
 			} else {
 				result = await this._msgPlugins?.dispatchMessagebox?.(obj);

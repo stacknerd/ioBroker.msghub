@@ -14,6 +14,7 @@
 // Depends on: lib/loadI18nDir.js, lib/IoRuntimeI18n.js, lib/IoPlugins.js
 
 const fs = require('fs');
+const Module = require('module');
 const os = require('os');
 const path = require('path');
 
@@ -62,6 +63,47 @@ function makeStubStore() {
 		msgIngest: { registerPlugin: () => {}, unregisterPlugin: () => {} },
 		msgNotify: { registerPlugin: () => {}, unregisterPlugin: () => {} },
 	};
+}
+
+/**
+ * Load `main.js` with a local `@iobroker/adapter-core` stub so router tests can
+ * instantiate the adapter class without a real js-controller runtime.
+ *
+ * @returns {(options?: object) => any} Factory exported by `main.js`.
+ */
+function loadMainFactoryForTest() {
+	const originalLoad = Module._load;
+
+	class AdapterStub {
+		constructor(options = {}) {
+			this.namespace = options.namespace || 'msghub.0';
+			this.name = options.name || 'msghub';
+			this.log = { silly() {}, debug() {}, info() {}, warn() {}, error() {} };
+		}
+
+		on() {
+			return this;
+		}
+	}
+
+	try {
+		Module._load = function patchedLoad(request, parent, isMain) {
+			if (request === '@iobroker/adapter-core') {
+				return {
+					Adapter: AdapterStub,
+					getAbsoluteInstanceDataDir() {
+						return '';
+					},
+				};
+			}
+			return originalLoad.call(this, request, parent, isMain);
+		};
+
+		delete require.cache[require.resolve('./main')];
+		return require('./main');
+	} finally {
+		Module._load = originalLoad;
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -323,5 +365,100 @@ describe('_i18ninit live-binding (A8 integration)', () => {
 		// Add an overlay source with the synthetic key — same translator closure sees it immediately.
 		registry.addSource('root-admin-overlay', 'root-admin-overlay', { en: { [syntheticKey]: 'Live value' } });
 		expect(t(syntheticKey)).to.equal('Live value');
+	});
+});
+
+describe('main.js message routing (AP3 bootstrap)', () => {
+	it('routes ui.bootstrap through IoAdminCapabilities for the admin host', async () => {
+		const createAdapter = loadMainFactoryForTest();
+		const sent = [];
+		const adapter = createAdapter();
+		adapter._adminCapabilities = {
+			buildBootstrap({ host }) {
+				expect(host).to.equal('admin');
+				return {
+					capabilities: {},
+					about: { title: 'Message Hub', version: '0.0.3-test' },
+				};
+			},
+		};
+		adapter.sendTo = function sendTo(from, command, result, callback) {
+			sent.push({ from, command, result, callback });
+		};
+
+		await adapter.onMessage({
+			from: 'system.adapter.test',
+			command: 'ui.bootstrap',
+			message: { ignored: true },
+			callback: 'cb1',
+		});
+
+		expect(sent).to.deep.equal([
+			{
+				from: 'system.adapter.test',
+				command: 'ui.bootstrap',
+				result: {
+					ok: true,
+					data: {
+						capabilities: {},
+						about: { title: 'Message Hub', version: '0.0.3-test' },
+					},
+				},
+				callback: 'cb1',
+			},
+		]);
+	});
+
+	it('keeps runtime.about on the shared about payload from IoAdminCapabilities', async () => {
+		const createAdapter = loadMainFactoryForTest();
+		const sent = [];
+		const adapter = createAdapter();
+		adapter._adminCapabilities = {
+			buildAbout() {
+				return {
+					title: 'Message Hub',
+					version: '0.0.3-test',
+					time: { timeZone: 'Europe/Berlin', source: 'server' },
+					lang: {
+						backendTextLanguage: 'de',
+						coreTextLanguage: 'en',
+						coreFormatLocale: 'de-DE',
+					},
+					connection: { scope: 'core-link', connected: false, mode: 'local' },
+				};
+			},
+		};
+		adapter.sendTo = function sendTo(from, command, result, callback) {
+			sent.push({ from, command, result, callback });
+		};
+
+		await adapter.onMessage({
+			from: 'system.adapter.test',
+			command: 'runtime.about',
+			message: null,
+			callback: 'cb2',
+		});
+
+		expect(sent).to.deep.equal([
+			{
+				from: 'system.adapter.test',
+				command: 'runtime.about',
+				result: {
+					ok: true,
+					data: {
+						title: 'Message Hub',
+						version: '0.0.3-test',
+						time: { timeZone: 'Europe/Berlin', source: 'server' },
+						lang: {
+							backendTextLanguage: 'de',
+							coreTextLanguage: 'en',
+							coreFormatLocale: 'de-DE',
+						},
+						connection: { scope: 'core-link', connected: false, mode: 'local' },
+					},
+				},
+				callback: 'cb2',
+			},
+		]);
 	});
 });

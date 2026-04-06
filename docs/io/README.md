@@ -66,6 +66,7 @@ The current IO layer is responsible for several distinct kinds of work:
   - plugin resource tracking and cleanup
   - plugin metadata/config integration with ioBroker
 - **Admin/backend bridges**
+  - neutral UI bootstrap/about payload via `IoAdminCapabilities`
   - handling runtime commands for the Admin UI
   - brokering plugin-owned Admin UI bundle/RPC paths
 - **platform-side state surfaces**
@@ -102,6 +103,8 @@ In the current repo layout, the IO layer mainly lives in `lib/Io*.js`.
 
 Typical examples are:
 
+- `IoAdminCapabilities`
+  - central bootstrap/about contract builder for host-facing UI entry points
 - `IoAdminTab`
   - adapter-side bridge for Admin UI/backend commands
 - `IoPlugins`
@@ -164,6 +167,7 @@ Then continue based on your question:
 
 <!-- AUTO-GENERATED:IO-INDEX:START -->
 - `API`: [`./API.md`](./API.md)
+- `IoAdminCapabilities`: [`./IoAdminCapabilities.md`](./IoAdminCapabilities.md)
 - `IoAdminConfig`: [`./IoAdminConfig.md`](./IoAdminConfig.md)
 - `IoAdminTab`: [`./IoAdminTab.md`](./IoAdminTab.md)
 - `IoArchiveIobroker`: [`./IoArchiveIobroker.md`](./IoArchiveIobroker.md)
