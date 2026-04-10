@@ -1,28 +1,39 @@
 /* global window, document */
+/* Docs: ../../../../docs/ui/tab-panels-messages-entry.md */
 (function () {
 	'use strict';
 
-	const win = window;
-
 	/**
-	 * Messages panel entry/orchestrator.
+	 * Messages Panel Entry
+	 * ====================
+	 * Host-owned entry definition for the AdminTab core Messages panel.
 	 *
-	 * Docs: ../../../../docs/ui/tab-panels-messages-index.md
+	 * Docs: ../../../../docs/ui/tab-panels-messages-entry.md
 	 *
-	 * Contains:
-	 * - Module wiring for state/data/render/lifecycle overlays.
-	 * - Action handlers (refresh, delete, paging, auto mode).
-	 * - Panel lifecycle contract (`init(ctx)` -> optional `onConnect()`).
+	 * Responsibilities
+	 * - Publish the host-owned bootstrap definition (`css`, `js`, `panelInit(ctx)`).
+	 * - Build the Messages panel instance from the already-loaded submodule globals.
+	 * - Keep panel-local render, selection, and connect lifecycle wiring inside the entry.
 	 *
-	 * Integration:
-	 * - Loaded last after all messages submodules.
-	 * - Exposes `window.MsghubAdminTabMessages`.
+	 * Non-responsibilities
+	 * - No backend view contract ownership -> owned by `IoUiRegistry` / `IoUiCatalog`.
+	 * - No shell layout/bootstrap orchestration -> owned by `layout.js` / `boot.js`.
+	 * - No plugin-panel hosting -> owned by `plugin-ui-host.js`.
 	 */
 
+	const win = window;
+	const currentScript = document.currentScript;
+	const currentScriptTagName = String(currentScript?.tagName || currentScript?.nodeName || '').toLowerCase();
+	if (!currentScript || currentScriptTagName !== 'script') {
+		throw new Error('MessagesPanel: missing currentScript');
+	}
+	const script = currentScript;
+
 	/**
-	 * Copies text to clipboard with browser API + execCommand fallback.
+	 * Copies one text value to the clipboard, with `execCommand('copy')` fallback.
 	 *
-	 * @param {string} text - Text to copy.
+	 * @param {string} text Text to copy.
+	 * @returns {Promise<void>} Resolves after the copy attempt completed.
 	 */
 	async function copyTextToClipboard(text) {
 		const value = typeof text === 'string' ? text : text == null ? '' : String(text);
@@ -59,12 +70,15 @@
 	}
 
 	/**
-	 * Initializes the messages panel.
+	 * Initializes the Messages core panel from the shared AdminTab runtime context.
 	 *
-	 * @param {object} ctx - Panel init context.
-	 * @returns {{onConnect:Function}} Panel lifecycle handle.
+	 * The function expects all Messages submodules to have been loaded already through
+	 * the `js` asset list exported by this entry.
+	 *
+	 * @param {object} ctx Frozen AdminTab panel runtime context.
+	 * @returns {{ onConnect: Function }} Panel lifecycle handle.
 	 */
-	function initMessagesSection(ctx) {
+	function panelInit(ctx) {
 		const { api, h, elements } = ctx;
 		const root = elements.messagesRoot;
 		const argsExpert = ctx?.args?.expert;
@@ -126,10 +140,11 @@
 		const t = api.i18n.t;
 
 		/**
-		 * Shows a non-throwing toast message.
+		 * Shows a non-throwing toast message through the shared shell UI.
 		 *
-		 * @param {string} text - Toast message.
-		 * @param {string} [variant] - Toast variant.
+		 * @param {string} text Toast text.
+		 * @param {string} [variant] Toast variant. Defaults to `neutral`.
+		 * @returns {void}
 		 */
 		const toast = (text, variant = 'neutral') => {
 			try {
@@ -140,20 +155,22 @@
 		};
 
 		/**
-		 * Opens a link action URL in a new browser tab.
+		 * Opens a validated action link in a separate browser tab.
 		 *
-		 * @param {string} url - Validated http[s] URL from action payload.
+		 * @param {string} url Validated target URL.
+		 * @returns {void}
 		 */
 		const onLinkOpen = url => {
 			win.open(url, '_blank', 'noopener,noreferrer');
 		};
 
 		/**
-		 * Executes a core action after user confirmation, then refreshes the list.
+		 * Confirms and executes one core message action, then refreshes the current list.
 		 *
-		 * @param {string} ref - Message ref.
-		 * @param {string} actionId - Action id.
-		 * @param {string} actionType - Action type shown in confirm dialog.
+		 * @param {string} ref Message reference.
+		 * @param {string} actionId Canonical action id.
+		 * @param {string} actionType Human-readable action type for UI messaging.
+		 * @returns {Promise<void>} Resolves after confirmation, execution, and refresh handling completed.
 		 */
 		const onActionExecute = async (ref, actionId, actionType) => {
 			const text = t('msghub.i18n.core.admin.ui.messages.action.confirm.text', actionType);
@@ -204,7 +221,6 @@
 		});
 
 		const archiveDataApi = archiveDataModule.createArchiveDataApi({ api });
-
 		let menusApi = null;
 
 		const jsonOverlayApi = jsonOverlayModule.createJsonOverlay({
@@ -221,7 +237,9 @@
 		const archiveOverlayApi = archiveOverlayModule.createArchiveOverlay({ ui, t });
 
 		/**
-		 * Applies row selection state to DOM rows and checkboxes.
+		 * Mirrors the current selection state into the rendered row DOM.
+		 *
+		 * @returns {void}
 		 */
 		function syncSelectionUi() {
 			try {
@@ -247,7 +265,9 @@
 		state.syncSelectionUI = syncSelectionUi;
 
 		/**
-		 * Updates select-all checkbox from current table selection.
+		 * Recomputes the select-all checkbox state from the currently visible rows.
+		 *
+		 * @returns {void}
 		 */
 		function updateSelectAllCheckboxState() {
 			if (!state.expertMode || !state.headerSelectAllInput) {
@@ -266,7 +286,9 @@
 		}
 
 		/**
-		 * Removes selection references that are not visible in current tbody.
+		 * Removes selected refs that are no longer visible in the current tbody render.
+		 *
+		 * @returns {void}
 		 */
 		function pruneSelectionToVisibleRows() {
 			if (!state.expertMode) {
@@ -294,9 +316,10 @@
 		}
 
 		/**
-		 * Opens archive overlay with current cached archive state.
+		 * Opens the archive overlay using the current archive cache snapshot for one message.
 		 *
-		 * @param {string} ref - Message ref.
+		 * @param {string} ref Message reference whose archive should be shown.
+		 * @returns {void}
 		 */
 		function openArchiveOverlay(ref) {
 			state.archiveActiveRef = ref;
@@ -312,13 +335,14 @@
 				hasMoreForward: state.archiveHasMoreForward,
 				items: cachedItems,
 			});
-			// Keep cursor contracts normalized even before backend integration is enabled.
 			state.archiveEdgeOldest = archiveDataApi.normalizeCursorEdge(state.archiveEdgeOldest);
 			state.archiveEdgeNewest = archiveDataApi.normalizeCursorEdge(state.archiveEdgeNewest);
 		}
 
 		/**
-		 * Triggers list reload after sort/filter changes.
+		 * Applies query changes by refreshing header controls and reloading the current list.
+		 *
+		 * @returns {void}
 		 */
 		function onQueryChanged() {
 			headerApi.updateHeaderButtons();
@@ -336,7 +360,6 @@
 			copyTextToClipboard,
 			safeStr,
 			pick,
-			// Archive action remains visible but disabled in this refactor step.
 			isArchiveActionEnabled: () => false,
 			onActionExecute,
 			onLinkOpen,
@@ -421,10 +444,10 @@
 		headerApi.renderThead();
 
 		/**
-		 * Applies full panel render pass.
+		 * Applies the current panel state to the visible Messages DOM shell.
 		 *
-		 * @param {object} [optionsArg] - Render options.
-		 * @param {boolean} [optionsArg.forceRows] - Force row redraw while loading.
+		 * @param {{ forceRows?: boolean }} [optionsArg] Render options.
+		 * @returns {void}
 		 */
 		function render(optionsArg = {}) {
 			const forceRows = optionsArg.forceRows === true;
@@ -462,18 +485,21 @@
 		}
 
 		/**
-		 * Loads constants for enum mappings.
+		 * Loads shared constants required by the Messages data facade.
+		 *
+		 * @returns {Promise<void>} Resolves when constants are available.
 		 */
 		async function loadConstants() {
 			await dataApi.loadConstants();
 		}
 
 		/**
-		 * Loads one messages page from backend and updates shared state.
+		 * Loads one messages page, updates the shared panel state, and rerenders the shell.
 		 *
-		 * @param {object} [optionsArg] - Loading options.
-		 * @param {boolean} [optionsArg.keepPopover] - Reserved compatibility option.
-		 * @param {boolean} [optionsArg.silent] - Silent loading mode.
+		 * Request ordering is guarded through `state.requestSeq`, so stale responses are ignored.
+		 *
+		 * @param {{ keepPopover?: boolean, silent?: boolean }} [optionsArg] Loading options.
+		 * @returns {Promise<boolean|undefined>} `true` on the winning successful response, `false` on the winning failure, `undefined` for stale responses.
 		 */
 		async function loadMessages(optionsArg = {}) {
 			void optionsArg.keepPopover;
@@ -523,7 +549,9 @@
 		}
 
 		/**
-		 * Handles bulk deletion for current selection.
+		 * Confirms and deletes the currently selected message refs.
+		 *
+		 * @returns {Promise<void>} Resolves after deletion and follow-up refresh handling completed.
 		 */
 		async function handleDeleteSelection() {
 			if (!state.expertMode) {
@@ -565,9 +593,10 @@
 		}
 
 		/**
-		 * Applies expert mode and rebuilds dependent table UI state.
+		 * Applies one expert-mode transition and rerenders the table-dependent UI state.
 		 *
-		 * @param {boolean} next - New expert mode flag.
+		 * @param {boolean} next Next expert-mode state.
+		 * @returns {void}
 		 */
 		function applyExpertMode(next) {
 			const on = next === true;
@@ -602,7 +631,20 @@
 		};
 	}
 
-	win.MsghubAdminTabMessages = Object.freeze({
-		init: initMessagesSection,
+	script.__msghubCorePanelEntry = Object.freeze({
+		css: Object.freeze(['tab/panels/messages/styles.css']),
+		js: Object.freeze([
+			'tab/panels/messages/state.js',
+			'tab/panels/messages/data.messages.js',
+			'tab/panels/messages/data.archive.js',
+			'tab/panels/messages/overlay.json.js',
+			'tab/panels/messages/overlay.archive.js',
+			'tab/panels/messages/menus.js',
+			'tab/panels/messages/render.table.js',
+			'tab/panels/messages/render.header.js',
+			'tab/panels/messages/render.meta.js',
+			'tab/panels/messages/lifecycle.js',
+		]),
+		panelInit,
 	});
 })();

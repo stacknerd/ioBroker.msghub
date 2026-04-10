@@ -19,6 +19,7 @@ assets into a working UI.
 - [`./tab-ui.md`](./tab-ui.md)
 - [`./tab-layout.md`](./tab-layout.md)
 - [`./tab-plugin-ui-host.md`](./tab-plugin-ui-host.md)
+- [`./tab-core-panel-bootstrap.md`](./tab-core-panel-bootstrap.md)
 
 That load order matters because `boot.js` consumes the globals and factory functions created by those
 modules and then starts the actual runtime on `DOMContentLoaded`.
@@ -111,14 +112,14 @@ the async `updateDocumentTitle()` path.
 For each native panel ID in the active composition, `boot.js`:
 
 1. looks up the panel definition in the active view `corePanels`
-2. loads the panel JavaScript assets in the configured order
-3. finds `window[initGlobal]`
-4. calls `window[initGlobal].init(ctx)`
+2. resolves the host-owned conventional core-panel entry through `loadCorePanelEntry(panelId)`
+3. loads the entry-declared `css` and `js` assets
+4. calls `entry.panelInit(ctx)`
 
 The returned panel handle is stored in `panelSections`.
 If the handle exposes `onConnect()`, `boot.js` can call it in three different situations:
 
-1. immediately after `init(ctx)` during initial panel setup, when `msghubSocket.connected` is already `true`
+1. immediately after `panelInit(ctx)` during initial panel setup, when `msghubSocket.connected` is already `true`
 2. from `onBecomeOnline()` after a successful ping transitioned the shell from offline to online
 3. from `triggerWarmupReconnect()` after reconnect warmup succeeded and `api.constants.get()` became available again
 
@@ -202,13 +203,14 @@ Touch long-presses are handled by the shell polyfill in [`./tab-ui.md`](./tab-ui
 
 ### Panel initialization contract
 
-Each native panel definition in the registry carries `ui.initGlobal`, for example:
+Core panel bootstrap is host-owned and convention-based:
 
-```js
-window.MsghubAdminTabMessages.init(ctx)
-```
+1. `boot.js` calls `loadCorePanelEntry(panelId)`
+2. the host loads `admin/tab/panels/<panelId>/entry.js`
+3. that file publishes `{ css, js, panelInit }` on `document.currentScript.__msghubCorePanelEntry`
+4. `boot.js` loads the declared assets and then calls `panelInit(ctx)`
 
-The `init(ctx)` call may return a section handle with optional lifecycle hooks such as `onConnect()`.
+`panelInit(ctx)` may return a section handle with optional lifecycle hooks such as `onConnect()`.
 
 ### Shared `ctx` contract
 
@@ -257,6 +259,7 @@ It also triggers an unconditional initial `sendPing()` during module load, befor
 - Reconnect warmup is centralized here. Panels are not expected to implement their own retry loop for core shell availability.
 - Early boot failures remain visible; only late critical failures after a previously healthy shell may trigger one guarded hard reload.
 - `pickText()` still exists in `runtime.js`, but hard-migrated panel/app metadata in the shell path no longer use it. `boot.js` resolves `data-i18n` nodes and plugin panel labels key-strict via `t(...)`.
+- Core-panel bootstrap is convention-based and host-owned. `web.view.get(...).corePanels` carries no execution metadata and no compatibility `ui` shell for core panels.
 - Shell-wide timezone fallback warning is intentionally shown only once per page lifetime.
 - The connection panel reports the effective frontend format locale shown to the shell. When `args.locale` is present and valid, that value is shown instead of the old ambient browser-locale source.
 - The global `contextmenu` listener is intentionally shared between mouse right-click and the synthetic long-press flow. It is the fallback path for both mouse and touch.

@@ -2,14 +2,14 @@
 'use strict';
 
 /**
- * MsgHub Admin Tab layout, asset, and DOM orchestration.
+ * MsgHub Admin Tab layout, DOM, and shared asset-loader orchestration.
  *
  * Docs: ../../docs/ui/tab-layout.md
  *
  * Contents:
  * - Tab navigation and panel visibility.
  * - Dynamic layout building from the active backend view.
- * - CSS and JS asset loading per composition.
+ * - Shared CSS and JS asset loaders used by the boot layer.
  * - DOM helpers and panel boot error rendering.
  *
  * Integration:
@@ -18,8 +18,7 @@
  * - Is used by `boot.js` to initialize the visible admin layout.
  *
  * Interfaces:
- * - Exposes helpers such as `buildLayoutFromRegistry`, `initTabs`,
- *   `computeAssetsForComposition`, `getPanelDefinition`, `resolveViewId`,
+ * - Exposes helpers such as `buildLayoutFromRegistry`, `initTabs`, `resolveViewId`,
  *   `resolveViewRequest`, `setActiveView`, and `getActiveView`.
  */
 
@@ -72,7 +71,6 @@ function normalizeCorePanel(registryKey, def) {
 		label: def.label,
 		description: def.description,
 		category: def.category,
-		ui: def.ui ? { ...def.ui } : {},
 		app: def.app,
 		_registryKey: registryKey,
 	};
@@ -157,6 +155,22 @@ function getOwnerPanelKey(descriptor) {
 		return descriptor.id.slice('tab-'.length);
 	}
 	return '';
+}
+
+/**
+ * Returns whether the descriptor belongs to a plugin-owned panel.
+ *
+ * Canonical hydrated plugin descriptors carry `ui.kind === 'plugin'`.
+ * The runtime id prefix stays as a defensive fallback for callers that pass only a partial shape.
+ *
+ * @param {object} descriptor Canonical or near-canonical panel descriptor.
+ * @returns {boolean} True when the descriptor targets a plugin panel.
+ */
+function isPluginPanelDescriptor(descriptor) {
+	if (descriptor?.ui?.kind === 'plugin') {
+		return true;
+	}
+	return typeof descriptor?.id === 'string' && descriptor.id.startsWith('tab-plugin-');
 }
 
 /**
@@ -341,7 +355,10 @@ async function resolveIconAsset(descriptor, slot) {
 
 	let fileName = '';
 	let url = null;
-	if (descriptor?.ui?.kind === 'core') {
+	if (isPluginPanelDescriptor(descriptor)) {
+		fileName = GENERIC_PLUGIN_UI_ICON_FILES[normalizedSlot];
+		url = buildPluginIconUrl(normalizedSlot);
+	} else {
 		fileName =
 			typeof descriptor?.app?.icons?.[normalizedSlot] === 'string'
 				? descriptor.app.icons[normalizedSlot].trim()
@@ -350,9 +367,6 @@ async function resolveIconAsset(descriptor, slot) {
 			return null;
 		}
 		url = buildCoreIconUrl(descriptor, fileName);
-	} else if (descriptor?.ui?.kind === 'plugin') {
-		fileName = GENERIC_PLUGIN_UI_ICON_FILES[normalizedSlot];
-		url = buildPluginIconUrl(normalizedSlot);
 	}
 	if (!fileName || !url) {
 		return null;
@@ -1035,14 +1049,7 @@ function buildLayoutFromRegistry() {
 	const comp = getActiveComposition() || { layout: 'tabs', panels: [], defaultPanel: '' };
 	const layout = comp.layout === 'single' ? 'single' : 'tabs';
 	const defaultPanelId = typeof comp.defaultPanel === 'string' ? comp.defaultPanel : '';
-
-	/**
-	 * Returns the native panel definition for a given ID from the active view.
-	 *
-	 * @param {string} id - Panel ID.
-	 * @returns {object|null} Panel definition or null.
-	 */
-	const getPanelDef = id => getPanelDefinition(id);
+	const corePanels = getCorePanels();
 
 	// Build ordered entry list for tab + panel container rendering.
 	const panelIds = [];
@@ -1053,7 +1060,7 @@ function buildLayoutFromRegistry() {
 	const panels = Array.isArray(comp.panels) ? comp.panels : [];
 	for (const entry of panels) {
 		if (typeof entry === 'string' && entry) {
-			const def = getPanelDef(entry);
+			const def = corePanels[entry];
 			if (!def || typeof def !== 'object') {
 				missingNativePanelIds.push(entry);
 				continue;
@@ -1256,53 +1263,6 @@ function loadJsFilesSequential(files) {
 }
 
 /**
- * Computes the deduplicated asset list for one composition.
- *
- * @param {string[]} panelIds - Panels in the composition.
- * @returns {{css:string[],js:string[]}} Deduplicated asset lists.
- */
-function computeAssetsForComposition(panelIds) {
-	const panels = getCorePanels();
-	const css = [];
-	const js = [];
-
-	for (const pid of panelIds || []) {
-		const def = panels[pid];
-		if (!def || typeof def !== 'object') {
-			continue;
-		}
-		const cssList = Array.isArray(def.ui?.css) ? def.ui.css : [];
-		const jsList = Array.isArray(def.ui?.js) ? def.ui.js : [];
-		for (const c of cssList) {
-			const s = String(c || '').trim();
-			if (s && !css.includes(s)) {
-				css.push(s);
-			}
-		}
-		for (const s0 of jsList) {
-			const s = String(s0 || '').trim();
-			if (s && !js.includes(s)) {
-				js.push(s);
-			}
-		}
-	}
-
-	return { css, js };
-}
-
-/**
- * Returns one panel definition from the registry.
- *
- * @param {string} panelId - Panel id.
- * @returns {object|null} Panel definition or `null`.
- */
-function getPanelDefinition(panelId) {
-	const panels = getCorePanels();
-	const def = panels[panelId];
-	return def && typeof def === 'object' ? def : null;
-}
-
-/**
  * Renders a visible error state directly into the affected panel container.
  *
  * @param {string} panelId - Panel id.
@@ -1328,10 +1288,9 @@ void resolveViewId;
 void buildLayoutFromRegistry;
 void loadCssFiles;
 void loadJsFilesSequential;
-void computeAssetsForComposition;
-void getPanelDefinition;
 void renderPanelBootError;
 void normalizePluginPanel;
+void isPluginPanelDescriptor;
 void resolvePanelI18nKey;
 void resolveIconUrl;
 void generateManifest;

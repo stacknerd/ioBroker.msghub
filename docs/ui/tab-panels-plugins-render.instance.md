@@ -94,7 +94,7 @@ The catalog renderer also passes `instList`, but the current implementation does
 
 - Implementation: `admin/tab/panels/plugins/render.instance.js`
 - Test: `admin/tab/panels/plugins/render.instance.test.js`
-- Panel entry: [`./tab-panels-plugins-index.md`](./tab-panels-plugins-index.md)
+- Panel entry: [`./tab-panels-plugins-entry.md`](./tab-panels-plugins-entry.md)
 - Form builder: [`./tab-panels-plugins-render.form.md`](./tab-panels-plugins-render.form.md)
 - Catalog renderer: [`./tab-panels-plugins-render.catalog.md`](./tab-panels-plugins-render.catalog.md)
 - Admin frontend overview: `docs/ui/README.md`

@@ -91,6 +91,6 @@ Important options:
 
 - Implementation: `admin/tab/panels/messages/lifecycle.js`
 - Test: `admin/tab/panels/messages/lifecycle.test.js`
-- Panel entry: [`./tab-panels-messages-index.md`](./tab-panels-messages-index.md)
+- Panel entry: [`./tab-panels-messages-entry.md`](./tab-panels-messages-entry.md)
 - State: [`./tab-panels-messages-state.md`](./tab-panels-messages-state.md)
 - Admin frontend overview: `docs/ui/README.md`

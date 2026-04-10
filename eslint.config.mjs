@@ -9,6 +9,7 @@ export default [
 		ignores: [
 			'.dev-server/',
 			'.vscode/',
+			'.claude',
 			'*.test.js',
 			'**/*.test.js',
 			'test/**/*.js',
@@ -25,9 +26,8 @@ export default [
 			'i18n-sort.mjs',
 			'i18n-generate.mjs',
 			'admin-ui-bundle-check.mjs',
-			'admin/tab.js',
-			'admin/tab.*.js',
 			'i18n-generate-backend-overlay.mjs',
+			'**/*./'
 		],
 	},
 	{

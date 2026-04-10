@@ -53,10 +53,9 @@ panel/plugin contract in this reference.
 | `setActiveView(view)` / `getActiveView()` | Stores and reads the loaded `web.view.get` payload. | Layout runtime | `admin/tab/layout.js`, `admin/tab/contracts.d.ts` |
 | `resolveViewId()` | Returns the loaded composition id, or `null` in panel mode. | Layout runtime | `admin/tab/layout.js`, `admin/tab/contracts.d.ts` |
 | `getActiveComposition()` | Returns the loaded composition object from the active view, or `null`. | Layout runtime | `admin/tab/layout.js`, `admin/tab/contracts.d.ts` |
-| `computeAssetsForComposition(panelIds)` | Dedupe-merges CSS and JS asset paths from active-view `corePanels`. Returns `{ css, js }`. | Layout runtime | `admin/tab/layout.js`, `admin/tab/contracts.d.ts` |
+| `loadCorePanelEntry(panelId)` | Loads the host-owned conventional core-panel entry `admin/tab/panels/<panelId>/entry.js` and returns the validated frozen contract `{ css, js, panelInit }`. | Core bootstrap runtime | `admin/tab/core-panel-bootstrap.js`, `admin/tab/contracts.d.ts` |
 | `loadCssFiles(files)` | Deduplicated stylesheet loader. Returns `{ failed: string[] }`. Missing files do not reject; they are collected in `failed`. | Layout runtime | `admin/tab/layout.js`, `admin/tab/contracts.d.ts` |
 | `loadJsFilesSequential(files)` | Deduplicated script loader. Loads in order. Rejects on the first script load failure. | Layout runtime | `admin/tab/layout.js`, `admin/tab/contracts.d.ts` |
-| `getPanelDefinition(panelId)` | Returns the native panel definition from the active view `corePanels` or `null`. | Layout runtime | `admin/tab/layout.js`, `admin/tab/contracts.d.ts` |
 | `renderPanelBootError(panelId, err)` | Replaces `#tab-<panelId>` content with a visible boot error block. | Layout runtime | `admin/tab/layout.js`, `admin/tab/contracts.d.ts` |
 | `createMsghubPluginUiHost({ request, api })` | Builds the plugin-owned Admin UI host. Returns `{ mount, unmount, retry }`. | Plugin UI host | `admin/tab/plugin-ui-host.js`, `admin/tab/contracts.d.ts` |
 | `computeContextMenuPosition(params)` | Viewport-aware menu positioning helper used by the context-menu runtime. Returns `{ x, y }`. | Browser API layer | `admin/tab/api.js`, `admin/tab/contracts.d.ts` |
@@ -67,7 +66,7 @@ panel/plugin contract in this reference.
 
 | Entry | Contract | Owner | Reference |
 | --- | --- | --- | --- |
-| `IoUiRegistry.panels[panelId]` | Native producer definition with owner-local `id`, `label`, `category`, `ui`, and optional `app`. Canonical external ids (`tab-...`) are derived later by `normalizeCorePanel(...)`. | Backend registry runtime | `lib/IoUiRegistry.js` |
+| `IoUiRegistry.panels[panelId]` | Native producer definition with owner-local `id`, `label`, `category`, and optional `app`. Core bootstrap fields are intentionally absent. Canonical external ids (`tab-...`) are derived later by `normalizeCorePanel(...)`. | Backend registry runtime | `lib/IoUiRegistry.js` |
 | `IoUiRegistry.compositions[viewId]` | Composition definition with `id`, `layout`, `panels`, `defaultPanel`, and `deviceMode`. The only allowed composition-level `app` block is the special-case `compositions.web.app` for the prepared Public-Web root contract. | Backend registry runtime | `lib/IoUiRegistry.js` |
 | Native composition panel entry | String panel id such as `'messages'` or `'plugins'`. | Backend registry / layout runtime | `lib/IoUiRegistry.js`, `admin/tab/layout.js` |
 | Plugin composition panel entry | Structured ref `{ type: 'pluginPanel', pluginType, instanceId, panelId }`. | Backend registry / layout runtime | `lib/IoUiRegistry.js`, `admin/tab/layout.js` |
@@ -91,9 +90,9 @@ panel/plugin contract in this reference.
 
 | Entry | Contract | Owner | Reference |
 | --- | --- | --- | --- |
-| `corePanels[panelId].ui.initGlobal` | Name of the browser global that owns the panel entry point, e.g. `'MsghubAdminTabMessages'`. | Active view runtime | `admin/tab/layout.js`, `admin/tab/boot.js` |
-| `win[initGlobal].init(ctx)` | Required export. Called once by the shell with the frozen `ctx` object. Return value is an optional lifecycle handle stored by the shell. | Panel entry | `admin/tab/boot.js`, `admin/tab/panels/messages/index.js`, `admin/tab/panels/plugins/index.js` |
-| Lifecycle handle `onConnect()` | Optional method on the object returned by `init(ctx)`. Called by the shell (a) immediately on every online transition and (b) again after a successful constants warmup following a reconnect. | Panel entry | `admin/tab/boot.js` |
+| `loadCorePanelEntry(panelId)` | Resolves the host-owned core-panel entry definition for one owner-local panel key. The loaded contract is `{ css, js, panelInit }`. | Core bootstrap runtime | `admin/tab/core-panel-bootstrap.js`, `admin/tab/boot.js` |
+| `entry.panelInit(ctx)` | Required core-panel entry export. Called once by the shell with the frozen `ctx` object. Return value is an optional lifecycle handle stored by the shell. | Panel entry | `admin/tab/boot.js`, `admin/tab/panels/messages/entry.js`, `admin/tab/panels/plugins/entry.js` |
+| Lifecycle handle `onConnect()` | Optional method on the object returned by `panelInit(ctx)`. Called by the shell (a) immediately on every online transition and (b) again after a successful constants warmup following a reconnect. | Panel entry | `admin/tab/boot.js` |
 
 ### Native panel `ctx`
 

@@ -1,49 +1,52 @@
 /// <reference lib="dom" />
 /// <reference lib="dom.iterable" />
 
-/* global window */
-/**
- * index
- * =====
- * Plugins panel orchestrator.
- *
- * Docs: ../../../../docs/ui/tab-panels-plugins-index.md
- */
+/* global window, document */
+/* Docs: ../../../../docs/ui/tab-panels-plugins-entry.md */
 (function () {
 	'use strict';
 
+	/**
+	 * Plugins Panel Entry
+	 * ===================
+	 * Host-owned entry definition for the AdminTab core Plugins panel.
+	 *
+	 * Docs: ../../../../docs/ui/tab-panels-plugins-entry.md
+	 *
+	 * Responsibilities
+	 * - Publish the host-owned bootstrap definition (`css`, `js`, `panelInit(ctx)`).
+	 * - Build the Plugins panel instance from the already-loaded submodule globals.
+	 * - Keep the connect-refresh lifecycle and immediate contextmenu wiring local to the panel.
+	 *
+	 * Non-responsibilities
+	 * - No backend contract ownership -> owned by `IoUiRegistry` / `IoUiCatalog`.
+	 * - No shell/layout orchestration -> owned by `layout.js` / `boot.js`.
+	 * - No plugin bundle host path -> owned by `plugin-ui-host.js`.
+	 */
+
 	const win = window;
+	const currentScript = document.currentScript;
+	const currentScriptTagName = String(currentScript?.tagName || currentScript?.nodeName || '').toLowerCase();
+	if (!currentScript || currentScriptTagName !== 'script') {
+		throw new Error('PluginsPanel: missing currentScript');
+	}
+	const script = currentScript;
 
 	/**
-	 * Plugins panel orchestrator.
+	 * Initializes the Plugins core panel from the shared AdminTab runtime context.
 	 *
-	 * Contains:
-	 * - Module dependency guards for all six plugins submodules.
-	 * - Wiring of all submodule factories (state, data, form, menus, catalog, instance).
-	 * - refreshAll() lifecycle: show non-blocking spinner, fetch data, render, hide spinner.
-	 * - Direct contextmenu listener registration on elRoot at init time.
+	 * The function expects all Plugins submodules to have been loaded already through
+	 * the `js` asset list exported by this entry.
 	 *
-	 * Integration:
-	 * - Loaded last after all plugins submodules (registry load order).
-	 * - Exposes `window.MsghubAdminTabPlugins`.
-	 *
-	 * Interfaces:
-	 * - `init(ctx)` → `{ onConnect, refreshPlugin }` lifecycle handle.
+	 * @param {object} ctx Frozen AdminTab panel runtime context.
+	 * @returns {{ onConnect: Function, refreshPlugin: Function }} Panel lifecycle handle.
 	 */
-
-	/**
-	 * Initializes the plugins panel and wires all submodule APIs.
-	 *
-	 * @param {object} ctx - Panel init context (frozen, provided by boot.js).
-	 * @returns {{onConnect:Function,refreshPlugin:Function}} Panel lifecycle handle.
-	 */
-	function initPluginConfigSection(ctx) {
+	function panelInit(ctx) {
 		const elRoot = ctx?.elements?.pluginsRoot;
 		if (!elRoot) {
 			throw new Error('MsghubAdminTabPlugins: missing pluginsRoot element');
 		}
 
-		// Module dependency guards — all loaded by registry before index.js.
 		if (!win.MsghubAdminTabPluginsState) {
 			throw new Error('MsghubAdminTabPlugins: missing MsghubAdminTabPluginsState');
 		}
@@ -97,10 +100,11 @@
 		const ui = api?.ui || ctx.ui;
 
 		/**
-		 * Shows a non-throwing toast notification.
+		 * Shows a non-throwing toast notification through the shared shell UI.
 		 *
-		 * @param {string} text - Toast message text.
-		 * @param {string} [variant] - Toast variant (neutral/danger/success).
+		 * @param {string} text Toast text.
+		 * @param {string} [variant] Toast variant. Defaults to `neutral`.
+		 * @returns {void}
 		 */
 		const toast = (text, variant = 'neutral') => {
 			try {
@@ -111,10 +115,10 @@
 		};
 
 		/**
-		 * Opens a confirm dialog. Falls back to window.confirm if ui.dialog is unavailable.
+		 * Opens the shared confirm dialog, with `window.confirm(...)` as a defensive fallback.
 		 *
-		 * @param {object} opts - Dialog options (title, text, confirmText, cancelText, danger).
-		 * @returns {Promise<boolean>} Resolves true if the user confirmed.
+		 * @param {object} opts Confirm dialog options.
+		 * @returns {Promise<boolean>} Resolves `true` only when the user confirmed.
 		 */
 		const confirmDialog = opts => {
 			if (ui?.dialog?.confirm) {
@@ -124,7 +128,6 @@
 			return Promise.resolve(window.confirm(text));
 		};
 
-		// Data layer: create plugin data facade.
 		const pluginsDataApi = createPluginsDataApi({
 			state: pluginsState,
 			constantsApi: api.constants,
@@ -141,7 +144,6 @@
 			getTimeFactor,
 			TIME_UNITS,
 		});
-		// menusApi.onRefreshAll is a lazy reference — refreshAll() is defined later.
 		const menusApi = createPluginsMenusApi({
 			elRoot,
 			CATEGORY_I18N,
@@ -152,7 +154,6 @@
 			pluginsDataApi,
 			onRefreshAll: () => refreshAll(),
 		});
-		// catalogApi.onRefreshAll is also a lazy reference — refreshAll() is defined later.
 		const catalogApi = createPluginsCatalogApi({
 			h,
 			t,
@@ -169,7 +170,6 @@
 			elRoot,
 			adapterNamespace,
 		});
-		// instanceApi.onRefreshAll is also a lazy reference — refreshAll() is defined later.
 		const instanceApi = createPluginsInstanceApi({
 			h,
 			t,
@@ -186,8 +186,6 @@
 			adapterInstance,
 		});
 
-		// Register contextmenu listener directly at init time (architectural fix: previously
-		// registered as a side-effect inside ensurePluginReadmesLoaded on first readme load).
 		elRoot.addEventListener('contextmenu', e => {
 			try {
 				if (e?.defaultPrevented) {
@@ -204,17 +202,13 @@
 		const CONNECT_REFRESH_DEDUP_MS = 1500;
 
 		/**
-		 * Reloads and re-renders the full plugin catalog.
+		 * Reloads the full plugin catalog and rerenders the panel shell.
 		 *
-		 * Shows a non-blocking spinner for the duration of the reload. Renders an
-		 * inline error element on failure; always hides the spinner in the finally block.
-		 *
-		 * `onConnect()` may fire multiple times during boot/reconnect. We intentionally
-		 * collapse overlapping connect-triggered refreshes and suppress immediate
-		 * follow-up reconnect refreshes for a short cooldown window.
+		 * Connect-triggered refreshes are deduplicated for a short cooldown window.
+		 * Overlapping refresh requests share one promise so the panel stays single-flight.
 		 *
 		 * @param {{ source?: 'connect'|'manual' }} [options] Refresh trigger metadata.
-		 * @returns {Promise<void>} Completion promise.
+		 * @returns {Promise<void>} Completion promise for the active refresh.
 		 */
 		async function refreshAll(options) {
 			const source = options?.source === 'connect' ? 'connect' : 'manual';
@@ -268,12 +262,13 @@
 		}
 
 		/**
-		 * Triggers a full refresh for a specific plugin type.
+		 * Triggers a manual refresh for one plugin type.
 		 *
-		 * Currently delegates to refreshAll. Reserved for future scoped per-type refresh.
+		 * The current core Plugins panel still refreshes the whole catalog, so `_type`
+		 * is intentionally ignored at this layer.
 		 *
-		 * @param {string} _type - Plugin type (currently unused).
-		 * @returns {Promise<void>} Completion promise.
+		 * @param {string} _type Plugin type hint from callers.
+		 * @returns {Promise<void>} Completion promise for the delegated refresh.
 		 */
 		async function refreshPlugin(_type) {
 			return refreshAll({ source: 'manual' });
@@ -285,7 +280,16 @@
 		};
 	}
 
-	win.MsghubAdminTabPlugins = Object.freeze({
-		init: initPluginConfigSection,
+	script.__msghubCorePanelEntry = Object.freeze({
+		css: Object.freeze(['tab/panels/plugins/styles.css']),
+		js: Object.freeze([
+			'tab/panels/plugins/state.js',
+			'tab/panels/plugins/data.plugins.js',
+			'tab/panels/plugins/render.form.js',
+			'tab/panels/plugins/menus.js',
+			'tab/panels/plugins/render.catalog.js',
+			'tab/panels/plugins/render.instance.js',
+		]),
+		panelInit,
 	});
 })();

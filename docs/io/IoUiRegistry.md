@@ -94,18 +94,11 @@ Each entry may carry:
 - `id` — owner-local panel id
 - `label` — i18n key string
 - `category`
-- `ui`
 - optional `app`
 
-Current native-panel `ui` shape is intentionally concrete:
-
-- `kind`
-- `loader`
-- `initGlobal`
-- `css`
-- `js`
-
-Those fields are still part of the backend-owned registry truth for core panels today and are consumed directly by the current AdminTab shell for asset loading and native panel startup.
+Core panel entries intentionally do **not** carry frontend execution metadata anymore.
+The Admin Tab host resolves core-panel startup exclusively through the conventional host-owned
+entry path `admin/tab/panels/<panelKey>/entry.js`.
 
 ### `compositions`
 
@@ -163,12 +156,17 @@ That preserves ownership boundaries and avoids a second backend mirror of plugin
 The registry is pure metadata.
 Rules such as default-composition selection, `panel=` normalization, and synthetic single compositions belong to `IoUiCatalog`, not to this file.
 
-### 5) Current core shell metadata is still execution-oriented
+### 5) Core bootstrap is host-owned, not registry-owned
 
-The current registry is backend-owned, but it is not yet reduced to purely abstract panel descriptors.
-For core/native panels it still carries concrete shell bootstrap metadata (`ui.loader`, `ui.initGlobal`, `ui.css`, `ui.js`) because the current AdminTab shell consumes those fields directly.
+The registry now carries only panel metadata that belongs to the backend view contract:
 
-That is the implemented current state, not an implicit promise that the contract is already more abstract than the code.
+- owner-local panel identity
+- translated label keys
+- semantic category
+- optional app/install metadata
+
+Executable frontend bootstrap details are intentionally absent. Core panel asset lists and
+`panelInit(ctx)` live in the host-owned `entry.js` files under `admin/tab/panels/<panelKey>/`.
 
 ---
 

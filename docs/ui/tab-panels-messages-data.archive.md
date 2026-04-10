@@ -16,7 +16,7 @@ is present in the loaded panel but not reachable through the standard user flow.
 
 This module belongs to the archive side of the Messages cluster:
 
-- [`./tab-panels-messages-index.md`](./tab-panels-messages-index.md) constructs the facade and uses `normalizeCursorEdge(...)`.
+- [`./tab-panels-messages-entry.md`](./tab-panels-messages-entry.md) constructs the facade and uses `normalizeCursorEdge(...)`.
 - [`./tab-panels-messages-overlay.archive.md`](./tab-panels-messages-overlay.archive.md) is the current archive view component.
 
 ---
@@ -101,6 +101,6 @@ The normalized response shape is:
 
 - Implementation: `admin/tab/panels/messages/data.archive.js`
 - Test: `admin/tab/panels/messages/data.archive.test.js`
-- Panel entry: [`./tab-panels-messages-index.md`](./tab-panels-messages-index.md)
+- Panel entry: [`./tab-panels-messages-entry.md`](./tab-panels-messages-entry.md)
 - Archive overlay: [`./tab-panels-messages-overlay.archive.md`](./tab-panels-messages-overlay.archive.md)
 - Admin frontend overview: `docs/ui/README.md`

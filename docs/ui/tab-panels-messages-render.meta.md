@@ -88,7 +88,7 @@ The page-size select currently offers: `10`, `25`, `50`, `100`, `250`.
 
 - Implementation: `admin/tab/panels/messages/render.meta.js`
 - Test: `admin/tab/panels/messages/render.meta.test.js`
-- Panel entry: [`./tab-panels-messages-index.md`](./tab-panels-messages-index.md)
+- Panel entry: [`./tab-panels-messages-entry.md`](./tab-panels-messages-entry.md)
 - Header renderer: [`./tab-panels-messages-render.header.md`](./tab-panels-messages-render.header.md)
 - Table renderer: [`./tab-panels-messages-render.table.md`](./tab-panels-messages-render.table.md)
 - Admin frontend overview: `docs/ui/README.md`

@@ -81,6 +81,6 @@ Each item is rendered as a simple `ts · event` row.
 
 - Implementation: `admin/tab/panels/messages/overlay.archive.js`
 - Test: `admin/tab/panels/messages/overlay.archive.test.js`
-- Panel entry: [`./tab-panels-messages-index.md`](./tab-panels-messages-index.md)
+- Panel entry: [`./tab-panels-messages-entry.md`](./tab-panels-messages-entry.md)
 - Archive data facade: [`./tab-panels-messages-data.archive.md`](./tab-panels-messages-data.archive.md)
 - Admin frontend overview: `docs/ui/README.md`

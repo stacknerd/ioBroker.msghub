@@ -92,7 +92,7 @@ Important options:
 
 - Implementation: `admin/tab/panels/messages/render.table.js`
 - Test: `admin/tab/panels/messages/render.table.test.js`
-- Panel entry: [`./tab-panels-messages-index.md`](./tab-panels-messages-index.md)
+- Panel entry: [`./tab-panels-messages-entry.md`](./tab-panels-messages-entry.md)
 - Header renderer: [`./tab-panels-messages-render.header.md`](./tab-panels-messages-render.header.md)
 - Menus: [`./tab-panels-messages-menus.md`](./tab-panels-messages-menus.md)
 - Admin frontend overview: `docs/ui/README.md`

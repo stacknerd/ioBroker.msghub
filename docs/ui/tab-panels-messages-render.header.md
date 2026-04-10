@@ -102,7 +102,7 @@ The current column model is:
 
 - Implementation: `admin/tab/panels/messages/render.header.js`
 - Test: `admin/tab/panels/messages/render.header.test.js`
-- Panel entry: [`./tab-panels-messages-index.md`](./tab-panels-messages-index.md)
+- Panel entry: [`./tab-panels-messages-entry.md`](./tab-panels-messages-entry.md)
 - Meta renderer: [`./tab-panels-messages-render.meta.md`](./tab-panels-messages-render.meta.md)
 - Menus: [`./tab-panels-messages-menus.md`](./tab-panels-messages-menus.md)
 - Admin frontend overview: `docs/ui/README.md`

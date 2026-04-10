@@ -158,8 +158,9 @@ resolution entirely. The resulting `api.host` values differ from the normal comp
 
 `panel=` takes precedence over `composition=`; both may appear in the URL, but `panel=` wins.
 
-The `panelKey` derived here (e.g. `'messages'` from `?panel=tab-messages`) matches the registry
-key used by `computeAssetsForComposition` and `initPanelsForComposition`.
+The `panelKey` derived here (e.g. `'messages'` from `?panel=tab-messages`) matches the owner-local
+core-panel key used by the active composition and by the host-owned bootstrap convention
+`loadCorePanelEntry(panelKey)`.
 
 In normal (composition) mode:
 

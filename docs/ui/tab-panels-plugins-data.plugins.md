@@ -90,7 +90,7 @@ The readme cache values currently have this shape:
 
 - Implementation: `admin/tab/panels/plugins/data.plugins.js`
 - Test: `admin/tab/panels/plugins/data.plugins.test.js`
-- Panel entry: [`./tab-panels-plugins-index.md`](./tab-panels-plugins-index.md)
+- Panel entry: [`./tab-panels-plugins-entry.md`](./tab-panels-plugins-entry.md)
 - State: [`./tab-panels-plugins-state.md`](./tab-panels-plugins-state.md)
 - Catalog renderer: [`./tab-panels-plugins-render.catalog.md`](./tab-panels-plugins-render.catalog.md)
 - Admin frontend overview: `docs/ui/README.md`

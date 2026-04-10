@@ -92,7 +92,7 @@ The context descriptor currently supports:
 
 - Implementation: `admin/tab/panels/plugins/menus.js`
 - Test: `admin/tab/panels/plugins/menus.test.js`
-- Panel entry: [`./tab-panels-plugins-index.md`](./tab-panels-plugins-index.md)
+- Panel entry: [`./tab-panels-plugins-entry.md`](./tab-panels-plugins-entry.md)
 - Catalog renderer: [`./tab-panels-plugins-render.catalog.md`](./tab-panels-plugins-render.catalog.md)
 - Instance renderer: [`./tab-panels-plugins-render.instance.md`](./tab-panels-plugins-render.instance.md)
 - Admin frontend overview: `docs/ui/README.md`

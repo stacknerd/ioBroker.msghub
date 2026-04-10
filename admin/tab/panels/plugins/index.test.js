@@ -4,14 +4,18 @@
 const assert = require('node:assert/strict');
 const { createElement, createH, loadPanelModule } = require('./_test.utils');
 
-describe('admin/tab/panels/plugins/index.js', function () {
+describe('admin/tab/panels/plugins/entry.js', function () {
 	/**
-	 * Loads index.js into a fresh VM sandbox.
+	 * Loads entry.js into a fresh VM sandbox.
 	 *
 	 * @returns {Promise<object>} Sandbox object after module execution.
 	 */
 	async function loadIndexModule() {
-		return loadPanelModule('admin/tab/panels/plugins/index.js');
+		return loadPanelModule('admin/tab/panels/plugins/entry.js');
+	}
+
+	function getEntry(sandbox) {
+		return sandbox.document.currentScript.__msghubCorePanelEntry;
 	}
 
 	/**
@@ -91,7 +95,7 @@ describe('admin/tab/panels/plugins/index.js', function () {
 	 * Returns a minimal ctx object for init(ctx) calls.
 	 *
 	 * @param {object} [overrides] Top-level fields to merge into the default ctx.
-	 * @returns {object} ctx suitable for passing to MsghubAdminTabPlugins.init.
+	 * @returns {object} ctx suitable for passing to entry.panelInit(ctx).
 	 */
 	function makeCtx(overrides = {}) {
 		return {
@@ -112,9 +116,10 @@ describe('admin/tab/panels/plugins/index.js', function () {
 
 	it('exposes frozen MsghubAdminTabPlugins global with init function', async function () {
 		const sandbox = await loadIndexModule();
-		const global = sandbox.window.MsghubAdminTabPlugins;
-		assert.equal(typeof global?.init, 'function');
-		assert.equal(Object.isFrozen(global), true);
+		const entry = getEntry(sandbox);
+		assert.equal(typeof entry?.panelInit, 'function');
+		assert.deepEqual(JSON.parse(JSON.stringify(entry.css)), ['tab/panels/plugins/styles.css']);
+		assert.equal(Object.isFrozen(entry), true);
 	});
 
 	// --- init() guard checks ---
@@ -123,7 +128,7 @@ describe('admin/tab/panels/plugins/index.js', function () {
 		const sandbox = await loadIndexModule();
 		assert.throws(
 			() =>
-				sandbox.window.MsghubAdminTabPlugins.init({
+				getEntry(sandbox).panelInit({
 					api: { i18n: { t: k => k, tOr: (k, fb) => fb, pickText: v => v } },
 					h: createH(),
 					elements: {},
@@ -136,7 +141,7 @@ describe('admin/tab/panels/plugins/index.js', function () {
 		const sandbox = await loadIndexModule();
 		// No submodule globals set in the sandbox → first check fails.
 		assert.throws(
-			() => sandbox.window.MsghubAdminTabPlugins.init(makeCtx()),
+			() => getEntry(sandbox).panelInit(makeCtx()),
 			/missing MsghubAdminTabPluginsState/,
 		);
 	});
@@ -151,7 +156,7 @@ describe('admin/tab/panels/plugins/index.js', function () {
 			const partial = Object.fromEntries(keys.slice(0, i).map(k => [k, stubs[k]]));
 			Object.assign(sandbox.window, partial);
 			assert.throws(
-				() => sandbox.window.MsghubAdminTabPlugins.init(makeCtx()),
+				() => getEntry(sandbox).panelInit(makeCtx()),
 				new RegExp(`missing ${keys[i]}`),
 				`Expected error for missing ${keys[i]}`,
 			);
@@ -179,7 +184,7 @@ describe('admin/tab/panels/plugins/index.js', function () {
 			origAddEventListener(type, handler);
 		};
 
-		sandbox.window.MsghubAdminTabPlugins.init(makeCtx({ elements: { pluginsRoot: elRoot } }));
+		getEntry(sandbox).panelInit(makeCtx({ elements: { pluginsRoot: elRoot } }));
 
 		// Must be registered synchronously during init() — not deferred to the first readme load.
 		assert.equal(contextmenuRegistered, true);
@@ -192,7 +197,7 @@ describe('admin/tab/panels/plugins/index.js', function () {
 		const stubs = makeStubModules();
 		Object.assign(sandbox.window, stubs);
 
-		const panel = sandbox.window.MsghubAdminTabPlugins.init(makeCtx());
+		const panel = getEntry(sandbox).panelInit(makeCtx());
 		assert.equal(typeof panel.onConnect, 'function');
 		assert.equal(typeof panel.refreshPlugin, 'function');
 	});
@@ -217,7 +222,7 @@ describe('admin/tab/panels/plugins/index.js', function () {
 		const stubs = makeStubModules();
 		Object.assign(sandbox.window, stubs);
 
-		const panel = sandbox.window.MsghubAdminTabPlugins.init(
+		const panel = getEntry(sandbox).panelInit(
 			makeCtx({
 				api: {
 					i18n: { t: k => k, tOr: (k, fb) => fb, pickText: v => v },
@@ -272,7 +277,7 @@ describe('admin/tab/panels/plugins/index.js', function () {
 		};
 		Object.assign(sandbox.window, stubs);
 
-		const panel = sandbox.window.MsghubAdminTabPlugins.init(
+		const panel = getEntry(sandbox).panelInit(
 			makeCtx({
 				api: {
 					i18n: { t: k => k, tOr: (k, fb) => fb, pickText: v => v },
@@ -329,7 +334,7 @@ describe('admin/tab/panels/plugins/index.js', function () {
 		};
 		Object.assign(sandbox.window, stubs);
 
-		const panel = sandbox.window.MsghubAdminTabPlugins.init(
+		const panel = getEntry(sandbox).panelInit(
 			makeCtx({
 				api: {
 					i18n: { t: k => k, tOr: (k, fb) => fb, pickText: v => v },
@@ -386,7 +391,7 @@ describe('admin/tab/panels/plugins/index.js', function () {
 		};
 		Object.assign(sandbox.window, stubs);
 
-		const panel = sandbox.window.MsghubAdminTabPlugins.init(
+		const panel = getEntry(sandbox).panelInit(
 			makeCtx({
 				api: {
 					i18n: { t: k => k, tOr: (k, fb) => fb, pickText: v => v },
@@ -411,7 +416,7 @@ describe('admin/tab/panels/plugins/index.js', function () {
 		const stubs = makeStubModules();
 		Object.assign(sandbox.window, stubs);
 
-		const panel = sandbox.window.MsghubAdminTabPlugins.init(makeCtx());
+		const panel = getEntry(sandbox).panelInit(makeCtx());
 		await panel.refreshPlugin('IngestStates');
 	});
 });

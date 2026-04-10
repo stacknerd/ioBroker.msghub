@@ -92,7 +92,7 @@ Important options passed in by `index.js`:
 
 - Implementation: `admin/tab/panels/messages/menus.js`
 - Test: `admin/tab/panels/messages/menus.test.js`
-- Panel entry: [`./tab-panels-messages-index.md`](./tab-panels-messages-index.md)
+- Panel entry: [`./tab-panels-messages-entry.md`](./tab-panels-messages-entry.md)
 - Header renderer: [`./tab-panels-messages-render.header.md`](./tab-panels-messages-render.header.md)
 - Table renderer: [`./tab-panels-messages-render.table.md`](./tab-panels-messages-render.table.md)
 - JSON overlay: [`./tab-panels-messages-overlay.json.md`](./tab-panels-messages-overlay.json.md)

@@ -11,6 +11,14 @@ declare global {
 		[key: string]: any;
 	}
 
+	interface HTMLScriptElement {
+		__msghubCorePanelEntry?: CorePanelEntry;
+	}
+
+	interface SVGScriptElement {
+		__msghubCorePanelEntry?: CorePanelEntry;
+	}
+
 	const win: Window & typeof globalThis;
 	const io: any;
 
@@ -54,10 +62,14 @@ declare global {
 	function getActiveView(): AdminTabViewResponse | null;
 	function resolveViewId(): string | null;
 	function getActiveComposition(): any;
-	function computeAssetsForComposition(panelIds: string[]): { css: string[]; js: string[] };
 	function loadCssFiles(files: string[]): Promise<{ failed: string[] }>;
 	function loadJsFilesSequential(files: string[]): Promise<void>;
-	function getPanelDefinition(panelId: string): any;
+	type CorePanelEntry = {
+		css: readonly string[];
+		js: readonly string[];
+		panelInit: (ctx: any) => any;
+	};
+	function loadCorePanelEntry(panelId: string): Promise<CorePanelEntry>;
 	function renderPanelBootError(panelId: string, err: any): void;
 	/**
 	 * Shared PWA / install metadata carried by a panel descriptor.

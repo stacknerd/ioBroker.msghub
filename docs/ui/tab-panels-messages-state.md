@@ -15,7 +15,7 @@ construction and passes the resulting state object into the data, menu, renderer
 
 It is therefore a shared dependency of the whole Messages panel cluster:
 
-- [`./tab-panels-messages-index.md`](./tab-panels-messages-index.md) creates the state object, injects the active timestamp formatter, and forwards `ctx.args?.expert`.
+- [`./tab-panels-messages-entry.md`](./tab-panels-messages-entry.md) creates the state object, injects the active timestamp formatter, and forwards `ctx.args?.expert`.
 - [`./tab-panels-messages-data.messages.md`](./tab-panels-messages-data.messages.md) stores constants, loaded items, pagination, and filters in this state object.
 - The renderers and menu module read and mutate selection, sorting, and paging fields.
 - [`./tab-panels-messages-lifecycle.md`](./tab-panels-messages-lifecycle.md) uses the auto-refresh and archive-mode fields.
@@ -97,7 +97,7 @@ through this hook so every Messages submodule sees the same timestamp formatting
 
 - Implementation: [`admin/tab/panels/messages/state.js`](../../admin/tab/panels/messages/state.js)
 - Test: [`admin/tab/panels/messages/state.test.js`](../../admin/tab/panels/messages/state.test.js)
-- Panel entry: [`./tab-panels-messages-index.md`](./tab-panels-messages-index.md)
+- Panel entry: [`./tab-panels-messages-entry.md`](./tab-panels-messages-entry.md)
 - Data facade: [`./tab-panels-messages-data.messages.md`](./tab-panels-messages-data.messages.md)
 - Lifecycle: [`./tab-panels-messages-lifecycle.md`](./tab-panels-messages-lifecycle.md)
 - Admin frontend overview: [`./README.md`](./README.md)

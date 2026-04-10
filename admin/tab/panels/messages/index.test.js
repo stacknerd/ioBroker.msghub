@@ -4,9 +4,13 @@
 const assert = require('node:assert/strict');
 const { createElement, createH, loadPanelModule } = require('./_test.utils');
 
-describe('admin/tab/panels/messages/index.js', function () {
+describe('admin/tab/panels/messages/entry.js', function () {
 	async function loadIndexModule() {
-		return loadPanelModule('admin/tab/panels/messages/index.js');
+		return loadPanelModule('admin/tab/panels/messages/entry.js');
+	}
+
+	function getEntry(sandbox) {
+		return sandbox.document.currentScript.__msghubCorePanelEntry;
 	}
 
 	function createState() {
@@ -142,7 +146,7 @@ describe('admin/tab/panels/messages/index.js', function () {
 			}),
 		};
 
-		sandbox.window.MsghubAdminTabMessages.init({
+		getEntry(sandbox).panelInit({
 				api: {
 					i18n: {
 						t: (key, ...args) =>
@@ -296,7 +300,7 @@ describe('admin/tab/panels/messages/index.js', function () {
 				}),
 			};
 
-			sandbox.window.MsghubAdminTabMessages.init({
+			getEntry(sandbox).panelInit({
 				api: {
 					i18n: {
 						t: (key, ...args) =>
@@ -341,7 +345,7 @@ describe('admin/tab/panels/messages/index.js', function () {
 		const sandbox = await loadIndexModule();
 		assert.throws(
 			() =>
-				sandbox.window.MsghubAdminTabMessages.init({
+				getEntry(sandbox).panelInit({
 					api: { i18n: { t: key => key } },
 					h: createH(),
 					elements: {},
@@ -357,7 +361,7 @@ describe('admin/tab/panels/messages/index.js', function () {
 
 		assert.throws(
 			() =>
-				sandbox.window.MsghubAdminTabMessages.init({
+				getEntry(sandbox).panelInit({
 					api: { i18n: { t: key => key } },
 					h: createH(),
 					elements: { messagesRoot: root },
@@ -483,7 +487,7 @@ describe('admin/tab/panels/messages/index.js', function () {
 			}),
 		};
 
-		const panel = sandbox.window.MsghubAdminTabMessages.init({
+		const panel = getEntry(sandbox).panelInit({
 			api: {
 				i18n: { t: key => key },
 				ui: {
@@ -596,7 +600,7 @@ describe('admin/tab/panels/messages/index.js', function () {
 			}),
 		};
 
-		sandbox.window.MsghubAdminTabMessages.init({
+		getEntry(sandbox).panelInit({
 			args: { expert: true },
 			api: {
 				i18n: { t: key => key },
@@ -693,7 +697,7 @@ describe('admin/tab/panels/messages/index.js', function () {
 			}),
 		};
 
-		const panel = sandbox.window.MsghubAdminTabMessages.init({
+		const panel = getEntry(sandbox).panelInit({
 			api: {
 				i18n: { t: key => key },
 				ui: {
@@ -793,7 +797,7 @@ describe('admin/tab/panels/messages/index.js', function () {
 			},
 		};
 
-		sandbox.window.MsghubAdminTabMessages.init({
+		getEntry(sandbox).panelInit({
 			api: {
 				i18n: { t: key => key },
 				ui: {
@@ -973,7 +977,7 @@ describe('admin/tab/panels/messages/index.js', function () {
 			}),
 		};
 
-		sandbox.window.MsghubAdminTabMessages.init({
+		getEntry(sandbox).panelInit({
 			api: {
 				i18n: { t: key => key },
 				ui: {

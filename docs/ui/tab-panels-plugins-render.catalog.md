@@ -95,7 +95,7 @@ The view model built by `buildPluginsViewModel(...)` currently contains:
 
 - Implementation: `admin/tab/panels/plugins/render.catalog.js`
 - Test: `admin/tab/panels/plugins/render.catalog.test.js`
-- Panel entry: [`./tab-panels-plugins-index.md`](./tab-panels-plugins-index.md)
+- Panel entry: [`./tab-panels-plugins-entry.md`](./tab-panels-plugins-entry.md)
 - Menus: [`./tab-panels-plugins-menus.md`](./tab-panels-plugins-menus.md)
 - Instance renderer: [`./tab-panels-plugins-render.instance.md`](./tab-panels-plugins-render.instance.md)
 - Admin frontend overview: `docs/ui/README.md`

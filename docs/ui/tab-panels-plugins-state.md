@@ -15,7 +15,7 @@ and passes its helpers into the data, form, menu, catalog, and instance modules.
 
 It is therefore the shared base of the whole Plugins cluster:
 
-- [`./tab-panels-plugins-index.md`](./tab-panels-plugins-index.md) creates the panel state and injects the helpers into all submodules.
+- [`./tab-panels-plugins-entry.md`](./tab-panels-plugins-entry.md) creates the panel state and injects the helpers into all submodules.
 - [`./tab-panels-plugins-render.form.md`](./tab-panels-plugins-render.form.md) depends on the path, unit, and time helpers.
 - [`./tab-panels-plugins-menus.md`](./tab-panels-plugins-menus.md) uses category metadata and text-editable detection.
 - [`./tab-panels-plugins-render.catalog.md`](./tab-panels-plugins-render.catalog.md) uses category ordering and CSS-safe identifiers.
@@ -88,7 +88,7 @@ These caches are shared across all Plugins submodules created for the same panel
 
 - Implementation: `admin/tab/panels/plugins/state.js`
 - Test: `admin/tab/panels/plugins/state.test.js`
-- Panel entry: [`./tab-panels-plugins-index.md`](./tab-panels-plugins-index.md)
+- Panel entry: [`./tab-panels-plugins-entry.md`](./tab-panels-plugins-entry.md)
 - Form builder: [`./tab-panels-plugins-render.form.md`](./tab-panels-plugins-render.form.md)
 - Menus: [`./tab-panels-plugins-menus.md`](./tab-panels-plugins-menus.md)
 - Admin frontend overview: `docs/ui/README.md`

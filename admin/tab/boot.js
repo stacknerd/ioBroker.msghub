@@ -1,4 +1,4 @@
-/* global window, document, location, HTMLElement, HTMLInputElement, HTMLTextAreaElement, t, lang, createUi, createAdminApi, msghubRequest, msghubSocket, adapterInstance, args, h, getPanelDefinition, win, loadJsFilesSequential, renderPanelBootError, buildLayoutFromRegistry, getActiveComposition, getActiveView, computeAssetsForComposition, ensureAdminI18nLoaded, loadCssFiles, initTabs, activatePanel, updateDocumentTitle, isEmbeddedInAdmin, overrideLang, createMsghubPluginUiHost, normalizePluginPanel, registerPanelDescriptor, resolveViewRequest, setActiveView, renderPanelModeError, applyCategoryMarker, mergePluginI18n, pickText */
+/* global window, document, location, HTMLElement, HTMLInputElement, HTMLTextAreaElement, t, lang, createUi, createAdminApi, msghubRequest, msghubSocket, adapterInstance, args, h, loadJsFilesSequential, renderPanelBootError, buildLayoutFromRegistry, getActiveComposition, getActiveView, ensureAdminI18nLoaded, loadCssFiles, initTabs, activatePanel, updateDocumentTitle, isEmbeddedInAdmin, overrideLang, createMsghubPluginUiHost, normalizePluginPanel, registerPanelDescriptor, resolveViewRequest, setActiveView, renderPanelModeError, applyCategoryMarker, mergePluginI18n, pickText, loadCorePanelEntry */
 'use strict';
 
 /**
@@ -13,7 +13,8 @@
  * - Reconnect warmup for backend APIs that may become available later.
  *
  * Integration:
- * - Consumes the previously loaded `runtime.js`, `api.js`, `layout.js`, and `ui.js` modules.
+ * - Consumes the previously loaded `runtime.js`, `api.js`, `layout.js`, `ui.js`,
+ *   and `core-panel-bootstrap.js` modules.
  * - Acts as the last core module in load order and starts the actual runtime flow.
  *
  * Interfaces:
@@ -896,9 +897,10 @@ const panelSections = new Map();
  * Initializes a panel by its registry id.
  *
  * @param {string} panelId - Panel id.
- * @returns {object|null} Panel handle (optionally with `onConnect`, etc.).
+ * @param {{ panelInit: Function }} entry - Loaded host-owned core panel entry.
+ * @returns {Promise<any|null>} Panel handle (optionally with `onConnect`, etc.).
  */
-function initPanelById(panelId) {
+async function initPanelById(panelId, entry) {
 	const id = String(panelId || '').trim();
 	if (!id) {
 		return null;
@@ -906,22 +908,12 @@ function initPanelById(panelId) {
 	if (panelSections.has(id)) {
 		return panelSections.get(id) || null;
 	}
-
-	const def = getPanelDefinition(id);
-	if (!def) {
-		throw new Error(`Unknown panel '${id}'`);
-	}
-	const initGlobal = String(def.ui?.initGlobal || '').trim();
-	if (!initGlobal) {
-		throw new Error(`Panel '${id}' is missing ui.initGlobal`);
-	}
-
-	const panelApi = win[initGlobal];
-	if (!panelApi?.init) {
-		throw new Error(`Panel '${id}' did not register '${initGlobal}.init'`);
+	if (!entry || typeof entry.panelInit !== 'function') {
+		throw new Error(`Core panel '${id}' entry is missing panelInit(ctx)`);
 	}
 
 	// Mount container id is derived deterministically from the producer-local core panel id.
+	const def = getActiveView()?.corePanels?.[id];
 	const localPanelId = typeof def.id === 'string' ? def.id.trim() : String(id || '').trim();
 	const mountId = localPanelId ? `${localPanelId}-root` : '';
 	const mountEl = mountId ? document.getElementById(mountId) : null;
@@ -929,7 +921,7 @@ function initPanelById(panelId) {
 		throw new Error(`Panel '${id}' mount container '${mountId}' is missing in DOM`);
 	}
 
-	const section = panelApi.init(ctx);
+	const section = entry.panelInit(ctx);
 	panelSections.set(id, section || null);
 	return section || null;
 }
@@ -938,16 +930,17 @@ function initPanelById(panelId) {
  * Initializes all panels of the active composition, including asset loading.
  *
  * @param {string[]} panelIds - Panel ids from the active composition.
+ * @param {{ [panelId: string]: CorePanelEntry }} corePanelEntries - Loaded host-owned entry definitions.
  * @returns {Promise<void>}
  */
-async function initPanelsForComposition(panelIds) {
+async function initPanelsForComposition(panelIds, corePanelEntries) {
 	const list = Array.isArray(panelIds) ? panelIds : [];
 	for (const panelId of list) {
-		const def = getPanelDefinition(panelId);
-		if (!def) {
+		const entry = corePanelEntries && typeof corePanelEntries === 'object' ? corePanelEntries[panelId] : null;
+		if (!entry) {
 			continue;
 		}
-		const jsList = Array.isArray(def.ui?.js) ? def.ui.js : [];
+		const jsList = Array.isArray(entry.js) ? entry.js : [];
 
 		try {
 			await loadJsFilesSequential(jsList);
@@ -966,7 +959,7 @@ async function initPanelsForComposition(panelIds) {
 		}
 
 		try {
-			const section = initPanelById(panelId);
+			const section = await initPanelById(panelId, entry);
 			clearPanelBootFailure(panelId);
 			if (section && msghubSocket?.connected) {
 				section?.onConnect?.();
@@ -1137,6 +1130,17 @@ function ensureBooted() {
 	if (bootPromise) {
 		return bootPromise;
 	}
+
+	/**
+	 * Creates the mutable map used to collect loaded core-panel entry definitions.
+	 *
+	 * @returns {{ [panelId: string]: CorePanelEntry }}
+	 *   Empty entry map keyed by owner-local core panel id.
+	 */
+	function createCorePanelEntryRecord() {
+		return {};
+	}
+
 	bootCssFailures = [];
 	bootPanelFailures.clear();
 	bootFatalErrorMessage = '';
@@ -1183,13 +1187,36 @@ function ensureBooted() {
 				return;
 			}
 			setConnLayout(layout, comp?.deviceMode);
-			const assets = computeAssetsForComposition(panelIds);
+			const corePanelEntries = createCorePanelEntryRecord();
+			const cssAssets = [];
+			for (const panelId of panelIds) {
+				try {
+					const entry = await loadCorePanelEntry(panelId);
+					corePanelEntries[panelId] = entry;
+					for (const href of entry.css) {
+						if (!cssAssets.includes(href)) {
+							cssAssets.push(href);
+						}
+					}
+				} catch (err) {
+					recordPanelBootFailure(panelId, err);
+					renderPanelBootError(panelId, err);
+					try {
+						ui?.toast?.({ text: String(err?.message || err), variant: 'danger' });
+					} catch {
+						// ignore
+					}
+					if (maybeHardReloadForLateCriticalBootFailure(`panel-entry:${panelId}`)) {
+						return;
+					}
+				}
+			}
 
 			await ensureAdminI18nLoaded();
 			if (typeof mergeViewPluginPanelI18n === 'function') {
 				mergeViewPluginPanelI18n(viewData);
 			}
-			const cssRes = await loadCssFiles(assets.css);
+			const cssRes = await loadCssFiles(cssAssets);
 			bootCssFailures = Array.isArray(cssRes?.failed) ? cssRes.failed.slice() : [];
 			if (cssRes?.failed?.length) {
 				ui?.toast?.({ text: `Failed to load CSS: ${cssRes.failed.join(', ')}`, variant: 'danger' });
@@ -1220,7 +1247,7 @@ function ensureBooted() {
 				}
 			}
 
-			await initPanelsForComposition(panelIds);
+			await initPanelsForComposition(panelIds, corePanelEntries);
 
 			if (pluginPanelRefs.length > 0) {
 				const pluginUiHost = createMsghubPluginUiHost({ request: msghubRequest, api });

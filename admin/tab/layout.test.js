@@ -207,8 +207,6 @@ async function loadLayoutSandbox(options = {}) {
 		buildLayoutFromRegistry,
 		loadCssFiles,
 		loadJsFilesSequential,
-		computeAssetsForComposition,
-		getPanelDefinition,
 		renderPanelBootError,
 		normalizePluginPanel,
 		registerPanelDescriptor,
@@ -384,24 +382,10 @@ async function loadLayoutSandbox(options = {}) {
 				stats: {
 					id: 'stats',
 					label: 'stats.key',
-					ui: {
-						kind: 'core',
-						loader: 'globals',
-						initGlobal: 'MsghubAdminTabStats',
-						css: ['tab/panels/stats/styles.css'],
-						js: ['tab/panels/stats/index.js'],
-					},
 				},
 				messages: {
 					id: 'messages',
 					label: 'messages.key',
-					ui: {
-						kind: 'core',
-						loader: 'globals',
-						initGlobal: 'MsghubAdminTabMessages',
-						css: ['tab/panels/messages/styles.css'],
-						js: ['tab/panels/messages/index.js'],
-					},
 				},
 			},
 			request: { mode: 'composition', targetId: 'adminTab' },
@@ -555,30 +539,11 @@ describe('admin/tab/layout.js', function () {
 		assert.equal(element.children[0].textContent, 'hello');
 	});
 
-	it('builds composition assets without duplicates', async function () {
+	it('returns resolved view id and active composition from loaded view defaults', async function () {
 		const { sandbox } = await loadLayoutSandbox();
-		const computeAssetsForComposition = sandbox.window.__layoutFns.computeAssetsForComposition;
-
-		const assets = computeAssetsForComposition(['stats', 'messages', 'stats']);
-		assert.deepEqual(JSON.parse(JSON.stringify(assets.css)), [
-			'tab/panels/stats/styles.css',
-			'tab/panels/messages/styles.css',
-		]);
-		assert.deepEqual(JSON.parse(JSON.stringify(assets.js)), [
-			'tab/panels/stats/index.js',
-			'tab/panels/messages/index.js',
-		]);
-	});
-
-	it('returns panel definitions, resolved view id, and active composition from loaded view defaults', async function () {
-		const { sandbox } = await loadLayoutSandbox();
-
-		const getPanelDefinition = sandbox.window.__layoutFns.getPanelDefinition;
 		const resolveViewId = sandbox.window.__layoutFns.resolveViewId;
 		const getActiveComposition = sandbox.window.__layoutFns.getActiveComposition;
 
-		assert.ok(getPanelDefinition('stats'));
-		assert.equal(getPanelDefinition('unknown'), null);
 		assert.equal(resolveViewId(), 'adminTab');
 		assert.equal(getActiveComposition().defaultPanel, 'messages');
 	});
@@ -675,7 +640,7 @@ describe('admin/tab/layout.js', function () {
 				defaultPanel: 'messages',
 			},
 			corePanels: {
-				messages: { id: 'messages', label: 'messages.key', ui: { kind: 'core', loader: 'globals', initGlobal: 'MsghubAdminTabMessages', css: [], js: [] } },
+				messages: { id: 'messages', label: 'messages.key' },
 			},
 			request: { mode: 'composition', targetId: 'adminTab' },
 		});
@@ -760,7 +725,7 @@ describe('admin/tab/layout.js', function () {
 				defaultPanel: 'messages',
 			},
 			corePanels: {
-				messages: { id: 'messages', label: 'messages.key', ui: { kind: 'core', loader: 'globals', initGlobal: 'MsghubAdminTabMessages', css: [], js: [] } },
+				messages: { id: 'messages', label: 'messages.key' },
 			},
 			pluginPanels: {
 				'plugin-IngestStates-0-presets': {
@@ -800,7 +765,6 @@ describe('admin/tab/layout.js', function () {
 		const url = await sandbox.window.__layoutFns.resolveIconUrl(
 			{
 				id: 'tab-messages',
-				ui: { kind: 'core' },
 				app: { icons: { any192: 'messages-192.png' } },
 				_registryKey: 'messages',
 			},
@@ -839,7 +803,6 @@ describe('admin/tab/layout.js', function () {
 		const url = await sandbox.window.__layoutFns.resolveIconUrl(
 			{
 				id: 'tab-messages',
-				ui: { kind: 'core' },
 				app: { icons: {} },
 				_registryKey: 'messages',
 			},
@@ -855,7 +818,6 @@ describe('admin/tab/layout.js', function () {
 		const url = await sandbox.window.__layoutFns.resolveIconUrl(
 			{
 				id: 'tab-messages',
-				ui: { kind: 'core' },
 			},
 			'any192',
 		);
@@ -884,7 +846,6 @@ describe('admin/tab/layout.js', function () {
 		const url = await sandbox.window.__layoutFns.resolveIconUrl(
 			{
 				id: 'tab-messages',
-				ui: { kind: 'core' },
 				app: { icons: { any192: 'messages-192.png' } },
 				_registryKey: 'messages',
 			},
@@ -1082,15 +1043,14 @@ describe('admin/tab/layout.js', function () {
 		assert.equal(sandbox.document.title, 'Messages - MessageHub');
 	});
 
-	it('buildLayoutFromRegistry() stores correct core panel descriptor — verified via activatePanel and computeAssetsForComposition', async function () {
+	it('buildLayoutFromRegistry() stores the correct core panel descriptor and mount ids', async function () {
 		// normalizeCorePanel is layout-internal. Its effects are tested through real consumers:
 		// - activatePanel resolves title via panelDescriptors (proves id + label were stored correctly)
-		// - computeAssetsForComposition returns the correct assets (proves ui.css/js were stored)
 		// - the panel container and mount div ids prove the canonical id and mountId derivation
 		const { sandbox, layoutHost } = await loadLayoutSandbox({
 			t: key => (key === 'messages.key' ? 'Messages' : key),
 		});
-		const { buildLayoutFromRegistry, activatePanel, computeAssetsForComposition } = sandbox.window.__layoutFns;
+		const { buildLayoutFromRegistry, activatePanel } = sandbox.window.__layoutFns;
 
 		buildLayoutFromRegistry();
 
@@ -1098,11 +1058,6 @@ describe('admin/tab/layout.js', function () {
 		// If id normalization were wrong, the lookup would miss and title would be 'MessageHub'.
 		activatePanel('tab-messages');
 		assert.equal(sandbox.document.title, 'Messages - MessageHub');
-
-		// ui.css / ui.js: computeAssetsForComposition reads def.ui.css/js via getPanelDefinition.
-		const assets = computeAssetsForComposition(['messages']);
-		assert.deepEqual(JSON.parse(JSON.stringify(assets.css)), ['tab/panels/messages/styles.css']);
-		assert.deepEqual(JSON.parse(JSON.stringify(assets.js)), ['tab/panels/messages/index.js']);
 
 		// Mount container derivation: buildLayoutFromRegistry creates a div[id="messages-root"]
 		// inside the panel container, derived from the local producer id.
@@ -1293,7 +1248,6 @@ describe('admin/tab/layout.js', function () {
 				messages: {
 					id: 'messages',
 					label: 'messages.key',
-					ui: { kind: 'core', loader: 'globals', initGlobal: 'MsghubAdminTabMessages', css: [], js: [] },
 				},
 			},
 			request: { mode: 'composition', targetId: 'adminTab' },
@@ -1321,7 +1275,6 @@ describe('admin/tab/layout.js', function () {
 		await updateDocumentTitle({
 			id: 'tab-messages',
 			label: 'messages.key',
-			ui: { kind: 'core' },
 			_registryKey: 'messages',
 			app: { themeColor: '#1f6a53', name: 'App', icons: { any192: 'messages-192.png' } },
 		});
@@ -1340,7 +1293,6 @@ describe('admin/tab/layout.js', function () {
 		await updateDocumentTitle({
 			id: 'tab-messages',
 			label: 'messages.key',
-			ui: { kind: 'core' },
 			_registryKey: 'messages',
 			app: { name: 'some.name.key', icons: { any192: 'messages-192.png' } },
 		});
@@ -1363,7 +1315,6 @@ describe('admin/tab/layout.js', function () {
 		await updateDocumentTitle({
 			id: 'tab-messages',
 			label: 'messages.key',
-			ui: { kind: 'core' },
 			_registryKey: 'messages',
 			app: { name: 'name.key', shortName: 'short.key', icons: { any192: 'messages-192.png' } },
 		});
@@ -1382,7 +1333,6 @@ describe('admin/tab/layout.js', function () {
 		await updateDocumentTitle({
 			id: 'tab-messages',
 			label: 'messages.key',
-			ui: { kind: 'core' },
 			_registryKey: 'messages',
 			app: { name: 'name.key', icons: { any192: 'messages-192.png' } },
 		});
@@ -1400,7 +1350,6 @@ describe('admin/tab/layout.js', function () {
 		await updateDocumentTitle({
 			id: 'tab-messages',
 			label: 'messages.key',
-			ui: { kind: 'core' },
 			_registryKey: 'messages',
 			app: { themeColor: '#1f6a53', name: 'App', icons: { any192: 'messages-192.png' } },
 		});
@@ -1432,14 +1381,12 @@ describe('admin/tab/layout.js', function () {
 		await updateDocumentTitle({
 			id: 'tab-messages',
 			label: 'messages.key',
-			ui: { kind: 'core' },
 			_registryKey: 'messages',
 			app: { themeColor: '#111', name: 'First', icons: { any192: 'messages-192.png' } },
 		});
 		await updateDocumentTitle({
 			id: 'tab-messages',
 			label: 'messages.key',
-			ui: { kind: 'core' },
 			_registryKey: 'messages',
 			app: { themeColor: '#222', name: 'Second', icons: { any192: 'messages-192.png' } },
 		});
@@ -1656,7 +1603,6 @@ describe('admin/tab/layout.js', function () {
 		await updateDocumentTitle({
 			id: 'tab-messages',
 			label: 'messages.key',
-			ui: { kind: 'core' },
 			_registryKey: 'messages',
 			app: {
 				name: 'app.name',
@@ -1903,7 +1849,6 @@ describe('admin/tab/layout.js', function () {
 					id: 'messages',
 					label: 'messages.key',
 					category: 'dashboard',
-					ui: { kind: 'core', loader: 'globals', initGlobal: 'MsghubAdminTabMessages', css: [], js: [] },
 				},
 			},
 			pluginPanels: {

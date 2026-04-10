@@ -101,7 +101,7 @@ the cached overlay body element.
 
 - Implementation: `admin/tab/panels/messages/overlay.json.js`
 - Test: `admin/tab/panels/messages/overlay.json.test.js`
-- Panel entry: [`./tab-panels-messages-index.md`](./tab-panels-messages-index.md)
+- Panel entry: [`./tab-panels-messages-entry.md`](./tab-panels-messages-entry.md)
 - Row menus: [`./tab-panels-messages-menus.md`](./tab-panels-messages-menus.md)
 - Table renderer: [`./tab-panels-messages-render.table.md`](./tab-panels-messages-render.table.md)
 - Admin frontend overview: `docs/ui/README.md`

@@ -164,8 +164,10 @@ function createElement(tagName = 'div') {
  */
 function createDocumentMock() {
 	const listeners = new Map();
+	const currentScript = createElement('script');
 	const documentObject = {
 		hidden: false,
+		currentScript,
 		createElement: tag => createElement(tag),
 		createTextNode: text => ({ nodeType: 3, textContent: String(text) }),
 		createDocumentFragment: () => createElement('fragment'),

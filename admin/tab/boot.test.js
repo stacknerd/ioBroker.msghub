@@ -187,7 +187,7 @@ globalThis.__execCommandSafe = execCommandSafe;
 	it('keeps boot orchestration flow wired to composition + assets + panels', async function () {
 		const source = await readRepoFile('admin/tab/boot.js');
 		assert.match(source, /\bbuildLayoutFromRegistry\s*\(/);
-		assert.match(source, /\bcomputeAssetsForComposition\s*\(/);
+		assert.match(source, /\bloadCorePanelEntry\s*\(/);
 		assert.match(source, /\bloadCssFiles\s*\(/);
 		assert.match(source, /\bloadJsFilesSequential\s*\(/);
 		assert.match(source, /\binitPanelById\s*\(/);
@@ -1450,7 +1450,7 @@ globalThis.__applyRuntimeAboutPayload = applyRuntimeAboutPayload;
 
 		const requestCalls = [];
 		const setActiveViewCalls = [];
-		const computeAssetsForCompositionCalls = [];
+		const loadCorePanelEntryCalls = [];
 		const initPanelsForCompositionCalls = [];
 		const activatePanelCalls = [];
 		let activeComposition = null;
@@ -1466,7 +1466,6 @@ globalThis.__applyRuntimeAboutPayload = applyRuntimeAboutPayload;
 			corePanels: {
 				messages: {
 					id: 'messages',
-					ui: { css: [], js: [], initGlobal: 'MsghubAdminTabMessages' },
 				},
 			},
 			request: { mode: 'panel', targetId: 'tab-messages' },
@@ -1508,9 +1507,9 @@ globalThis.__ensureBooted = ensureBooted;
 					pluginPanelRefs: [],
 					defaultPanelId: 'messages',
 				}),
-				computeAssetsForComposition: keys => {
-					computeAssetsForCompositionCalls.push([...keys]);
-					return { css: [], js: [] };
+				loadCorePanelEntry: async panelId => {
+					loadCorePanelEntryCalls.push(panelId);
+					return { css: [], js: [], panelInit() { return null; } };
 				},
 				activatePanel: id => {
 					activatePanelCalls.push(id);
@@ -1533,7 +1532,7 @@ globalThis.__ensureBooted = ensureBooted;
 		);
 		assert.equal(setActiveViewCalls.length, 1, 'setActiveView must be called once');
 		assert.strictEqual(setActiveViewCalls[0], viewData, 'setActiveView must receive the loaded view payload');
-		assert.deepEqual(computeAssetsForCompositionCalls, [['messages']]);
+		assert.deepEqual(loadCorePanelEntryCalls, ['messages']);
 		assert.deepEqual(initPanelsForCompositionCalls, [['messages']]);
 		assert.deepEqual(activatePanelCalls, ['tab-messages']);
 	});
@@ -1595,7 +1594,7 @@ globalThis.__ensureBooted = ensureBooted;
 					defaultPanelId: 'plugin-IngestStates-0-presets',
 					missingNativePanelIds: [],
 				}),
-				computeAssetsForComposition: () => ({ css: [], js: [] }),
+				loadCorePanelEntry: async () => ({ css: [], js: [], panelInit() { return null; } }),
 				activatePanel: id => {
 					activatePanelCalls.push(id);
 					return id;
@@ -1682,7 +1681,7 @@ globalThis.__ensureBooted = ensureBooted;
 					defaultPanelId: 'plugin-IngestStates-0-presets',
 					missingNativePanelIds: [],
 				}),
-				computeAssetsForComposition: () => ({ css: [], js: [] }),
+				loadCorePanelEntry: async () => ({ css: [], js: [], panelInit() { return null; } }),
 				activatePanel: id => {
 					activatePanelCalls.push(id);
 					return id;
@@ -1833,7 +1832,6 @@ globalThis.__ensureBooted = ensureBooted;
 						messages: {
 							id: 'messages',
 							label: 'msghub.i18n.core.admin.ui.tabs.messages.label',
-							ui: { kind: 'core', loader: 'globals', initGlobal: 'Messages' },
 						},
 					},
 					pluginPanels: {
@@ -1862,7 +1860,7 @@ globalThis.__ensureBooted = ensureBooted;
 					defaultPanelId: 'messages',
 					missingNativePanelIds: [],
 				}),
-				computeAssetsForComposition: () => ({ css: [], js: [] }),
+				loadCorePanelEntry: async () => ({ css: [], js: [], panelInit() { return null; } }),
 				ensureAdminI18nLoaded: async () => {
 					callOrder.push('ensureAdminI18nLoaded');
 				},

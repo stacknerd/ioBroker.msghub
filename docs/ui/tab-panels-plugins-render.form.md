@@ -91,7 +91,7 @@ window.MsghubAdminTabPluginsForm = {
 
 - Implementation: `admin/tab/panels/plugins/render.form.js`
 - Test: `admin/tab/panels/plugins/render.form.test.js`
-- Panel entry: [`./tab-panels-plugins-index.md`](./tab-panels-plugins-index.md)
+- Panel entry: [`./tab-panels-plugins-entry.md`](./tab-panels-plugins-entry.md)
 - State: [`./tab-panels-plugins-state.md`](./tab-panels-plugins-state.md)
 - Instance renderer: [`./tab-panels-plugins-render.instance.md`](./tab-panels-plugins-render.instance.md)
 - Admin frontend overview: `docs/ui/README.md`

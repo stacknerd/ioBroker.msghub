@@ -21,8 +21,7 @@ It depends on:
 
 The main consumer is `boot.js`, which calls `resolveViewId()`, `getActiveComposition()`,
 `buildLayoutFromRegistry()`, `initTabs()`, `activatePanel()`, `updateDocumentTitle()`,
-`computeAssetsForComposition()`, `loadCssFiles()`, `loadJsFilesSequential()`, and
-`resolveIconUrl()`.
+`loadCssFiles()`, `loadJsFilesSequential()`, and `resolveIconUrl()`.
 
 `api.js` also depends on the same composition resolution helpers so that `api.host.*` metadata and the
 visible shell use the same final view/composition decision.
@@ -211,8 +210,8 @@ intermediate DOM changes produces the same state as a single call.
 Converts a raw native panel definition from `corePanels` into a canonical `PanelDescriptor`.
 The producer now stores owner-local ids (`'messages'`, `'plugins'`). `normalizeCorePanel(...)`
 derives the canonical external/runtime id as `tab-<ownerLocalId>`, passes through `category`
-and the optional `app` block, and also sets the private `_registryKey` field used by
-`computeAssetsForComposition`.
+and the optional `app` block, and also sets the private `_registryKey` field used by core
+icon ownership and other host-internal bookkeeping.
 
 ### `normalizePluginPanel(panelDef, pluginRef)`
 
@@ -281,14 +280,6 @@ marker element:
 ```
 
 The marker is host-rendered only; this block introduces no styling policy for it.
-
-### `computeAssetsForComposition(panelIds)`
-
-Returns deduplicated CSS and JS lists for the given native panel IDs.
-
-### `getPanelDefinition(panelId)`
-
-Returns one native panel definition from the active view `corePanels`, or `null`.
 
 ### `renderPanelBootError(panelId, err)`
 

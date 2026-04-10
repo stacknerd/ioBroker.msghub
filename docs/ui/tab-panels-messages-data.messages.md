@@ -13,7 +13,7 @@ In short: this file is the panel-side adapter between Messages state and the bac
 `index.js` creates one data facade per panel instance through `createMessagesDataApi({ api, state, ...helpers })`.
 That facade is then shared with:
 
-- [`./tab-panels-messages-index.md`](./tab-panels-messages-index.md) for `loadConstants()`, `queryMessagesPage()`, and `deleteMessages()`
+- [`./tab-panels-messages-entry.md`](./tab-panels-messages-entry.md) for `loadConstants()`, `queryMessagesPage()`, and `deleteMessages()`
 - [`./tab-panels-messages-menus.md`](./tab-panels-messages-menus.md) for filter state reads and writes
 - [`./tab-panels-messages-render.header.md`](./tab-panels-messages-render.header.md) for filter option lists and enum metadata
 - [`./tab-panels-messages-overlay.json.md`](./tab-panels-messages-overlay.json.md) and [`./tab-panels-messages-render.table.md`](./tab-panels-messages-render.table.md) for level label resolution
@@ -105,7 +105,7 @@ The query method currently sends a payload with:
 
 - Implementation: `admin/tab/panels/messages/data.messages.js`
 - Test: `admin/tab/panels/messages/data.messages.test.js`
-- Panel entry: [`./tab-panels-messages-index.md`](./tab-panels-messages-index.md)
+- Panel entry: [`./tab-panels-messages-entry.md`](./tab-panels-messages-entry.md)
 - Header renderer: [`./tab-panels-messages-render.header.md`](./tab-panels-messages-render.header.md)
 - Menus: [`./tab-panels-messages-menus.md`](./tab-panels-messages-menus.md)
 - Admin frontend overview: `docs/ui/README.md`
