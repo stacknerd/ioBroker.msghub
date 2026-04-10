@@ -1,4 +1,4 @@
-/* global hasAdminKey, resolveViewId, getActiveComposition, args, window */
+/* global hasAdminKey, resolveViewId, getActiveComposition, getActiveView, resolveViewRequest, args, window */
 'use strict';
 
 /**
@@ -291,35 +291,56 @@ function detectHostExpertMode(argsExpert) {
  * @returns {object} Frozen API surface (`ctx.api`).
  */
 function createAdminApi({ msghubRequest, msghubSocket, adapterInstance, lang, t, pickText, ui }) {
-	// Panel mode: args.panel takes precedence over composition resolution.
-	// Guard: args may be undeclared in early-boot or test contexts.
-	const rawPanelArg = typeof args !== 'undefined' && typeof args?.panel === 'string' ? args.panel.trim() : '';
-	const isPanelMode = !!rawPanelArg;
-	let viewId, layout, deviceMode, panelIds, defaultPanelId;
-	if (isPanelMode) {
-		const panelTabId = rawPanelArg;
-		const panelKey = panelTabId.slice('tab-'.length);
-		viewId = null;
-		layout = 'single';
-		deviceMode = 'pc';
-		panelIds = [panelKey];
-		defaultPanelId = panelKey;
-	} else {
-		viewId = typeof resolveViewId === 'function' ? resolveViewId() : 'adminTab';
+	/**
+	 * Computes the current host metadata from the loaded backend view or, during early boot,
+	 * from the pending URL/markup request.
+	 *
+	 * @returns {{viewId:string|null,layout:string,deviceMode:string,panels:string[],defaultPanel:string}}
+	 *   Normalized host metadata snapshot.
+	 */
+	const getHostMetadata = () => {
+		const request = typeof resolveViewRequest === 'function' ? resolveViewRequest() : { mode: 'composition' };
+		const activeView = typeof getActiveView === 'function' ? getActiveView() : null;
+		if (request.mode === 'panel') {
+			const composition =
+				activeView?.request?.mode === 'panel' && activeView?.composition && typeof activeView.composition === 'object'
+					? activeView.composition
+					: null;
+			const panelIds = Array.isArray(composition?.panels)
+				? composition.panels.filter(v => typeof v === 'string' && v)
+				: [];
+			const fallbackPanelId = typeof request.targetId === 'string' ? request.targetId.trim().slice('tab-'.length) : '';
+			return {
+				viewId: null,
+				layout: 'single',
+				deviceMode: typeof composition?.deviceMode === 'string' ? composition.deviceMode : 'pc',
+				panels: panelIds.length > 0 ? panelIds : fallbackPanelId ? [fallbackPanelId] : [],
+				defaultPanel:
+					typeof composition?.defaultPanel === 'string' && composition.defaultPanel
+						? composition.defaultPanel
+						: fallbackPanelId,
+			};
+		}
 		const composition = typeof getActiveComposition === 'function' ? getActiveComposition() : null;
-		// Filter to string entries only — structured plugin panel refs are not native panels.
-		panelIds = Array.isArray(composition?.panels) ? composition.panels.filter(v => typeof v === 'string' && v) : [];
-		defaultPanelId = typeof composition?.defaultPanel === 'string' ? composition.defaultPanel : '';
-		layout = composition?.layout || 'tabs';
-		deviceMode = composition?.deviceMode || 'pc';
-	}
+		const panelIds = Array.isArray(composition?.panels) ? composition.panels.filter(v => typeof v === 'string' && v) : [];
+		return {
+			viewId: typeof resolveViewId === 'function' ? resolveViewId() : 'adminTab',
+			layout: composition?.layout || 'tabs',
+			deviceMode: composition?.deviceMode || 'pc',
+			panels: panelIds,
+			defaultPanel: typeof composition?.defaultPanel === 'string' ? composition.defaultPanel : '',
+		};
+	};
 
-	const logPrefix = `msghub:${viewId}`;
+	const getLogPrefix = () => {
+		const viewId = getHostMetadata().viewId;
+		return `msghub:${viewId || 'panel'}`;
+	};
 	const log = Object.freeze({
-		debug: (...args) => console.debug(logPrefix, ...args),
-		info: (...args) => console.info(logPrefix, ...args),
-		warn: (...args) => console.warn(logPrefix, ...args),
-		error: (...args) => console.error(logPrefix, ...args),
+		debug: (...args) => console.debug(getLogPrefix(), ...args),
+		info: (...args) => console.info(getLogPrefix(), ...args),
+		warn: (...args) => console.warn(getLogPrefix(), ...args),
+		error: (...args) => console.error(getLogPrefix(), ...args),
 	});
 
 	const i18n = Object.freeze({
@@ -452,16 +473,19 @@ function createAdminApi({ msghubRequest, msghubSocket, adapterInstance, lang, t,
 	});
 
 	// Host metadata gives panels context about the active composition and connection state.
-	const host = Object.freeze({
-		viewId,
-		layout,
-		deviceMode,
-		panels: Object.freeze(panelIds),
-		defaultPanel: defaultPanelId,
+	const host = {
 		adapterInstance,
 		isConnected: () => !!msghubSocket?.connected,
 		isExpertMode: () => detectHostExpertMode(typeof args !== 'undefined' ? args?.expert : undefined),
+	};
+	Object.defineProperties(host, {
+		viewId: { enumerable: true, get: () => getHostMetadata().viewId },
+		layout: { enumerable: true, get: () => getHostMetadata().layout },
+		deviceMode: { enumerable: true, get: () => getHostMetadata().deviceMode },
+		panels: { enumerable: true, get: () => Object.freeze([...getHostMetadata().panels]) },
+		defaultPanel: { enumerable: true, get: () => getHostMetadata().defaultPanel },
 	});
+	Object.freeze(host);
 
 	/**
 	 * Helper for intentionally disabled API branches.

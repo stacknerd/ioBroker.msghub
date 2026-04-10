@@ -10,7 +10,8 @@ The same canonical query targets are also the source for the prepared Public-Web
 | `instance` | integer-like | Selects the adapter instance. Invalid or missing values fall back to `0`, so the page uses `msghub.<instance>`. |
 | `lang` | language code | Selects the initial UI language. Missing or blank values fall back to the browser base language. |
 | `locale` | locale string | Overrides only the frontend format locale when the value is non-empty and accepted by `Intl.DateTimeFormat(...)`. Missing, blank, or invalid values leave the existing frontend format-locale source unchanged. |
-| `composition` | registered composition id | Selects the active composition when the id exists in `registry.compositions`. Unknown ids are ignored and fall back to markup/default resolution. |
+| `composition` | composition id | Produces `web.view.get({ mode: 'composition', targetId })`. |
+| `panel` | `tab-...` | Produces `web.view.get({ mode: 'panel', targetId })`. `panel` takes precedence over `composition`. |
 | `expert` | `true`, `1`, bare `?expert`, or any other present value | Normalized by `runtime.js` only when the key is present. `true`, `1`, and bare `?expert` become `true`; every other present value becomes `false`. |
 | `theme` | `dark`, `light` | Canonical theme override. When valid, it wins over host, storage, and media-query theme detection. |
 | `react` | `dark`, `light` | Legacy theme alias. It is only consulted when `theme` is absent. |
@@ -33,15 +34,19 @@ The hash is for panel navigation inside the already resolved composition:
 
 ## Composition resolution
 
-The active composition is resolved in this order:
+The active view request is resolved in this order:
 
-1. `args.composition` when it is a non-empty registered composition id.
-2. `document.documentElement[data-msghub-view]` when it is a non-empty registered composition id.
-3. Hard fallback: `adminTab`.
+1. `args.panel`
+2. `args.composition`
+3. `document.documentElement[data-msghub-view]`
+4. backend default `adminTab`
 
-`getActiveComposition()` always resolves through `resolveViewId()`, so `api.host.viewId`, `api.host.layout`, `api.host.panels`, and layout building all reflect the same final composition.
+`api.host.*`, `layout.js`, and `boot.js` all reflect the same loaded `web.view.get` result.
 
-Wildcard compositions (`panels: ['*']`) are supported only when that exact composition id is selected. They are not used as a fallback for unknown composition ids.
+Important distinction:
+
+- markup `data-msghub-view` and backend default `adminTab` are only fallbacks when no explicit `composition` query parameter is present
+- an explicit but unknown `composition` id is forwarded to `web.view.get(...)` and rejected by the backend resolver; it does not fall back to markup or `adminTab`
 
 ## Theme priority and locking
 
@@ -85,7 +90,8 @@ Today, the Messages panel uses expert mode to enable multi-selection and bulk de
 - Missing/invalid `instance` -> `0`
 - Missing/blank `lang` -> browser base language
 - Missing/blank/invalid `locale` -> existing frontend format-locale source
-- Unknown `composition` -> markup `data-msghub-view`, then `adminTab`
+- Missing/blank `composition` -> markup `data-msghub-view`, then `adminTab`
+- Explicit unknown `composition` -> backend `web.view.get` error
 - Invalid `theme` with no usable legacy alias -> host/storage/media-query theme pipeline
 - Missing `expert` -> host/session expert detection only
 
@@ -96,7 +102,7 @@ Today, the Messages panel uses expert mode to enable multi-selection and bulk de
 /admin/tab.html?instance=0&locale=de-DE#tab-messages
 /admin/tab.html?instance=1&theme=dark#tab-plugins
 /admin/tab.html?instance=1&composition=adminTab#tab-messages
-/admin/tab.html?instance=1&composition=allPlugins
+/admin/tab.html?instance=1&composition=web
 /admin/tab.html?instance=1&expert=1#tab-messages
 /admin/tab.html?instance=1&react=dark
 ```

@@ -8,10 +8,6 @@ declare global {
 	interface Window {
 		__msghubAdminTabEntryLoaded?: boolean;
 		__msghubAdminTabTheme?: 'dark' | 'light';
-		MsghubAdminTabRegistry?: {
-			panels?: Record<string, any>;
-			compositions?: Record<string, any>;
-		};
 		[key: string]: any;
 	}
 
@@ -50,9 +46,13 @@ declare global {
 		panelIds: string[];
 		defaultPanelId: string;
 		pluginPanelRefs: any[];
+		missingNativePanelIds: string[];
 	};
 	function createMsghubPluginUiHost(opts: { request: any; api: any }): any;
-	function resolveViewId(): string;
+	function resolveViewRequest(): { mode: 'composition' | 'panel'; targetId?: string };
+	function setActiveView(view: AdminTabViewResponse | null | undefined): AdminTabViewResponse | null;
+	function getActiveView(): AdminTabViewResponse | null;
+	function resolveViewId(): string | null;
 	function getActiveComposition(): any;
 	function computeAssetsForComposition(panelIds: string[]): { css: string[]; js: string[] };
 	function loadCssFiles(files: string[]): Promise<{ failed: string[] }>;
@@ -109,6 +109,12 @@ declare global {
 		/** Optional PWA/install metadata; when present, applyAppHeadMeta manages head meta tags. */
 		app?: AppBlockBase | CoreAppBlock;
 		[key: string]: any;
+	};
+
+	type AdminTabViewResponse = {
+		composition?: any;
+		corePanels?: Record<string, any>;
+		request?: { mode?: 'composition' | 'panel'; targetId?: string };
 	};
 
 	/**

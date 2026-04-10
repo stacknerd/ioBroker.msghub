@@ -39,6 +39,7 @@ Simple flow for this package:
    - `web.constants.get`
    - `web.messages.query`
    - `web.messages.action`
+   - `web.view.get`
    - `web.ping`
 3. Canonical web-token validation via `IoAdminCapabilities` before business execution.
 4. Shared-safe plugin UI backend commands:
@@ -74,6 +75,7 @@ All `web.*` commands require `payload.token` and validate it centrally via `IoAd
 - `web.constants.get`
 - `web.messages.query`
 - `web.messages.action`
+- `web.view.get`
 - `web.pluginUi.discover`
 - `web.pluginUi.bundle.get`
 - `web.pluginUi.rpc`
@@ -103,6 +105,7 @@ Behavior notes:
 - `web.messages.action` requires `ref` and `actionId` and returns `REJECTED` when the executor returns false.
 - `web.constants.get` returns only `kind`, `lifecycle.state`, `level`, and `notfication.events`.
 - `web.ping` always returns `{ ok: true, data: 'pong' }`.
+- `web.view.get` delegates all view normalization and synthetic panel-composition building to `IoUiCatalog`.
 - `web.pluginUi.discover` and `web.pluginUi.bundle.get` are the exclusive shared-safe/plugin-web-safe discovery and bundle delivery commands.
 - `web.pluginUi.rpc` delegates host-bound RPC validation and dispatch to `IoPluginUiRpc`, which then calls the plugin's `handleWebUiRpc`.
 

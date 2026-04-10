@@ -22,15 +22,14 @@ Without this module, the higher-level shell code would have no stable transport 
 The current HTML load order in [`admin/tab.html`](../../admin/tab.html) is:
 
 1. `globals.js`
-2. `registry.js`
-3. `api.js`
-4. `runtime.js`
-5. `ui.js`
-6. `scroll-strip.js`
-7. `layout.js`
-8. `plugin-ui-host.js`
-9. `boot.js`
-10. `tab.js`
+2. `api.js`
+3. `runtime.js`
+4. `ui.js`
+5. `scroll-strip.js`
+6. `layout.js`
+7. `plugin-ui-host.js`
+8. `boot.js`
+9. `tab.js`
 
 Those later files assume that `runtime.js` already created:
 

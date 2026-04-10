@@ -10,7 +10,7 @@ In short: this file turns the Plugins submodules into one working plugin-managem
 
 ## Where it sits in the system
 
-The Plugins panel is registered as a native panel in `admin/tab/registry.js`. Its asset list loads the six
+The Plugins panel is registered as a native panel in the backend UI registry (`lib/IoUiRegistry.js`). Its asset list loads the six
 Plugins submodules first and then ends with `admin/tab/panels/plugins/index.js`. After the panel is initialized,
 `boot.js` calls the exported lifecycle hooks through `window.MsghubAdminTabPlugins`.
 

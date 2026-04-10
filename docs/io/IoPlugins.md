@@ -223,7 +223,7 @@ Important detail:
 
 - returned contributions always contain `bundle.hash: ''`
 - callers must obtain the authoritative bundle hash separately via `computeAdminUiBundleHash({ type, panelId })`
-- plugin-owned Admin-UI i18n is not embedded here; `IoAdminTab` enriches the raw contribution list during `admin.pluginUi.discover({ lang })` via `readAdminUiTranslations({ type, lang })` so the shell can resolve labels/head metadata before bundle mount
+- plugin-owned Admin-UI i18n is not embedded here; `IoWebUi` enriches the raw contribution list during `web.pluginUi.discover({ lang })` via `readAdminUiTranslations({ type, lang })` so the shell can resolve labels/head metadata before bundle mount
 - each contribution carries producer-owned panel metadata:
   - `label` — plugin-owned admin-ui i18n key string
   - `description` — optional string

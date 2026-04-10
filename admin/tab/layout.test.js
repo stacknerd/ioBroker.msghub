@@ -199,6 +199,9 @@ async function loadLayoutSandbox(options = {}) {
 		updateDocumentTitle,
 		generateManifest,
 		h,
+		resolveViewRequest,
+		setActiveView,
+		getActiveView,
 		resolveViewId,
 		getActiveComposition,
 		buildLayoutFromRegistry,
@@ -245,7 +248,10 @@ async function loadLayoutSandbox(options = {}) {
 		title: '',
 		head: headElement,
 		documentElement: {
-			getAttribute: key => (key === 'data-msghub-view' ? (options.viewIdAttr || 'adminTab') : ''),
+			getAttribute: key =>
+				key === 'data-msghub-view'
+					? (Object.prototype.hasOwnProperty.call(options, 'viewIdAttr') ? options.viewIdAttr : 'adminTab')
+					: '',
 		},
 		querySelector: selector => {
 			if (selector === '.msghub-root') {
@@ -339,29 +345,7 @@ async function loadLayoutSandbox(options = {}) {
 		msghubRequest: options.msghubRequest || (async () => {
 			throw new Error('unexpected request');
 		}),
-		win: {
-			MsghubAdminTabRegistry: {
-				panels: {
-					stats: {
-						id: 'stats',
-						label: 'stats.key',
-						ui: { kind: 'core', loader: 'globals', initGlobal: 'MsghubAdminTabStats', css: ['tab/panels/stats/styles.css'], js: ['tab/panels/stats/index.js'] },
-					},
-					messages: {
-						id: 'messages',
-						label: 'messages.key',
-						ui: { kind: 'core', loader: 'globals', initGlobal: 'MsghubAdminTabMessages', css: ['tab/panels/messages/styles.css'], js: ['tab/panels/messages/index.js'] },
-					},
-				},
-				compositions: {
-					adminTab: {
-						layout: 'tabs',
-						panels: ['stats', 'messages'],
-						defaultPanel: 'messages',
-					},
-				},
-			},
-		},
+		win: {},
 		args: options.args || {},
 		urlThemeLocked: options.urlThemeLocked === true,
 		applyTheme: options.applyTheme || (theme => appliedThemes.push(String(theme))),
@@ -388,6 +372,43 @@ async function loadLayoutSandbox(options = {}) {
 	};
 
 	vm.runInNewContext(`${source}\n${expose}`, sandbox, { filename: 'admin/tab/layout.js' });
+	sandbox.window.__layoutFns.setActiveView(
+		Object.prototype.hasOwnProperty.call(options, 'activeView')
+			? options.activeView
+			: {
+			composition: {
+				id: 'adminTab',
+				layout: 'tabs',
+				panels: ['stats', 'messages'],
+				defaultPanel: 'messages',
+			},
+			corePanels: {
+				stats: {
+					id: 'stats',
+					label: 'stats.key',
+					ui: {
+						kind: 'core',
+						loader: 'globals',
+						initGlobal: 'MsghubAdminTabStats',
+						css: ['tab/panels/stats/styles.css'],
+						js: ['tab/panels/stats/index.js'],
+					},
+				},
+				messages: {
+					id: 'messages',
+					label: 'messages.key',
+					ui: {
+						kind: 'core',
+						loader: 'globals',
+						initGlobal: 'MsghubAdminTabMessages',
+						css: ['tab/panels/messages/styles.css'],
+						js: ['tab/panels/messages/index.js'],
+					},
+				},
+			},
+			request: { mode: 'composition', targetId: 'adminTab' },
+		},
+	);
 	return {
 		sandbox,
 		layoutHost,
@@ -477,12 +498,7 @@ async function loadRuntimeBackedLayoutSandbox(options = {}) {
 		location: createLocationStub(options.location),
 		history: { replaceState() {} },
 		msghubRequest: options.msghubRequest || (async () => ({ mimeType: 'image/png', content: 'AQID' })),
-		win: {
-			MsghubAdminTabRegistry: {
-				panels: {},
-				compositions: {},
-			},
-		},
+		win: {},
 		args: {},
 		urlThemeLocked: false,
 		applyTheme() {},
@@ -556,7 +572,7 @@ describe('admin/tab/layout.js', function () {
 		]);
 	});
 
-	it('returns panel definitions, resolved view id, and active composition from registry defaults', async function () {
+	it('returns panel definitions, resolved view id, and active composition from loaded view defaults', async function () {
 		const { sandbox } = await loadLayoutSandbox();
 
 		const getPanelDefinition = sandbox.window.__layoutFns.getPanelDefinition;
@@ -569,53 +585,51 @@ describe('admin/tab/layout.js', function () {
 		assert.equal(getActiveComposition().defaultPanel, 'messages');
 	});
 
-	it('resolveViewId() prefers a valid URL composition over data-msghub-view', async function () {
+	it('resolveViewRequest() prefers panel mode over composition and markup', async function () {
+		const { sandbox } = await loadLayoutSandbox({
+			args: { panel: 'tab-messages', composition: 'customView' },
+			viewIdAttr: 'adminTab',
+			activeView: null,
+		});
+		assert.deepEqual(JSON.parse(JSON.stringify(sandbox.window.__layoutFns.resolveViewRequest())), {
+			mode: 'panel',
+			targetId: 'tab-messages',
+		});
+	});
+
+	it('resolveViewRequest() prefers URL composition over data-msghub-view when panel mode is absent', async function () {
 		const { sandbox } = await loadLayoutSandbox({
 			args: { composition: 'customView' },
 			viewIdAttr: 'adminTab',
+			activeView: null,
 		});
-		sandbox.win.MsghubAdminTabRegistry.compositions.customView = {
-			layout: 'single',
-			panels: ['messages'],
-			defaultPanel: 'messages',
-		};
-
-		assert.equal(sandbox.window.__layoutFns.resolveViewId(), 'customView');
-		assert.equal(sandbox.window.__layoutFns.getActiveComposition().layout, 'single');
+		assert.deepEqual(JSON.parse(JSON.stringify(sandbox.window.__layoutFns.resolveViewRequest())), {
+			mode: 'composition',
+			targetId: 'customView',
+		});
 	});
 
-	it('resolveViewId() falls back from invalid URL composition to a valid data-msghub-view', async function () {
+	it('resolveViewRequest() falls back to markup composition when URL composition is absent', async function () {
 		const { sandbox } = await loadLayoutSandbox({
-			args: { composition: 'does-not-exist' },
+			args: {},
 			viewIdAttr: 'adminTab',
+			activeView: null,
 		});
-
-		assert.equal(sandbox.window.__layoutFns.resolveViewId(), 'adminTab');
-		assert.equal(sandbox.window.__layoutFns.getActiveComposition().defaultPanel, 'messages');
+		assert.deepEqual(JSON.parse(JSON.stringify(sandbox.window.__layoutFns.resolveViewRequest())), {
+			mode: 'composition',
+			targetId: 'adminTab',
+		});
 	});
 
-	it('resolveViewId() falls back to adminTab when URL and markup views are invalid', async function () {
+	it('resolveViewRequest() falls back to backend default composition when URL and markup are empty', async function () {
 		const { sandbox } = await loadLayoutSandbox({
-			args: { composition: 'does-not-exist' },
-			viewIdAttr: 'also-missing',
+			args: {},
+			viewIdAttr: '',
+			activeView: null,
 		});
-
-		assert.equal(sandbox.window.__layoutFns.resolveViewId(), 'adminTab');
-		assert.equal(sandbox.window.__layoutFns.getActiveComposition().defaultPanel, 'messages');
-	});
-
-	it('resolveViewId() allows wildcard compositions only when explicitly selected and registered', async function () {
-		const { sandbox } = await loadLayoutSandbox({
-			args: { composition: 'allPlugins' },
+		assert.deepEqual(JSON.parse(JSON.stringify(sandbox.window.__layoutFns.resolveViewRequest())), {
+			mode: 'composition',
 		});
-		sandbox.win.MsghubAdminTabRegistry.compositions.allPlugins = {
-			layout: 'tabs',
-			panels: ['*'],
-			defaultPanel: 'messages',
-		};
-
-		assert.equal(sandbox.window.__layoutFns.resolveViewId(), 'allPlugins');
-		assert.deepEqual(JSON.parse(JSON.stringify(sandbox.window.__layoutFns.getActiveComposition().panels)), ['*']);
 	});
 
 	it('blocks all dynamic theme update paths when a URL theme override is locked', async function () {
@@ -655,23 +669,18 @@ describe('admin/tab/layout.js', function () {
 	it('buildLayoutFromRegistry() separates native panelIds from plugin panel refs', async function () {
 		const { sandbox, layoutHost } = await loadLayoutSandbox();
 
-		// Override registry with a mixed composition: one native panel + one plugin panel ref.
-		sandbox.win.MsghubAdminTabRegistry = {
-			panels: {
+		sandbox.window.__layoutFns.setActiveView({
+			composition: {
+				id: 'adminTab',
+				layout: 'tabs',
+				panels: ['messages', { type: 'pluginPanel', pluginType: 'IngestStates', instanceId: 0, panelId: 'presets' }],
+				defaultPanel: 'messages',
+			},
+			corePanels: {
 				messages: { id: 'messages', label: 'messages.key', ui: { kind: 'core', loader: 'globals', initGlobal: 'MsghubAdminTabMessages', css: [], js: [] } },
 			},
-			compositions: {
-				adminTab: {
-					id: 'adminTab',
-					layout: 'tabs',
-					panels: [
-						'messages',
-						{ type: 'pluginPanel', pluginType: 'IngestStates', instanceId: 0, panelId: 'presets' },
-					],
-					defaultPanel: 'messages',
-				},
-			},
-		};
+			request: { mode: 'composition', targetId: 'adminTab' },
+		});
 
 		const { buildLayoutFromRegistry } = sandbox.window.__layoutFns;
 		const result = buildLayoutFromRegistry();
@@ -717,22 +726,43 @@ describe('admin/tab/layout.js', function () {
 		}
 	});
 
+	it('buildLayoutFromRegistry() reports missing native panel definitions and leaves the layout untouched', async function () {
+		const { sandbox, layoutHost } = await loadLayoutSandbox({
+			activeView: {
+				composition: {
+					id: 'broken',
+					layout: 'single',
+					panels: ['unknown'],
+					defaultPanel: 'unknown',
+				},
+				corePanels: {},
+				request: { mode: 'panel', targetId: 'tab-unknown' },
+			},
+		});
+		const { buildLayoutFromRegistry } = sandbox.window.__layoutFns;
+
+		const result = buildLayoutFromRegistry();
+
+		assert.deepEqual(JSON.parse(JSON.stringify(result.missingNativePanelIds)), ['unknown']);
+		assert.deepEqual(JSON.parse(JSON.stringify(result.panelIds)), []);
+		assert.equal(layoutHost.children.length, 0, 'layout must not render partial DOM when a native panel definition is missing');
+	});
+
 	it('buildLayoutFromRegistry() with wildcard panels renders native + contribution plugin tabs', async function () {
 		const { sandbox, layoutHost } = await loadLayoutSandbox();
 
-		sandbox.win.MsghubAdminTabRegistry = {
-			panels: {
+		sandbox.window.__layoutFns.setActiveView({
+			composition: {
+				id: 'adminTab',
+				layout: 'tabs',
+				panels: ['*'],
+				defaultPanel: 'messages',
+			},
+			corePanels: {
 				messages: { id: 'messages', label: 'messages.key', ui: { kind: 'core', loader: 'globals', initGlobal: 'MsghubAdminTabMessages', css: [], js: [] } },
 			},
-			compositions: {
-				adminTab: {
-					id: 'adminTab',
-					layout: 'tabs',
-					panels: ['*'],
-					defaultPanel: 'messages',
-				},
-			},
-		};
+			request: { mode: 'composition', targetId: 'adminTab' },
+		});
 
 		const contributions = [{ pluginType: 'IngestStates', instanceId: 0, panelId: 'presets', label: 'presets.label' }];
 
@@ -1085,11 +1115,18 @@ describe('admin/tab/layout.js', function () {
 		});
 		const { buildLayoutFromRegistry, activatePanel } = sandbox.window.__layoutFns;
 
-		sandbox.win.MsghubAdminTabRegistry.panels.messages = {
-			...sandbox.win.MsghubAdminTabRegistry.panels.messages,
-			surface: 'admin',
-			category: 'dashboard',
-		};
+		const currentView = sandbox.window.__layoutFns.getActiveView();
+		sandbox.window.__layoutFns.setActiveView({
+			...currentView,
+			corePanels: {
+				...currentView.corePanels,
+				messages: {
+					...currentView.corePanels.messages,
+					surface: 'admin',
+					category: 'dashboard',
+				},
+			},
+		});
 
 		// Spy: buildLayoutFromRegistry resolves registerPanelDescriptor via the sandbox global.
 		// Replacing it after load intercepts the internal call without altering the stored result.
@@ -1118,22 +1155,21 @@ describe('admin/tab/layout.js', function () {
 		assert.equal(result.active, false);
 	});
 
-	it('resolvePanelMode() resolves a known core panel and returns descriptor + registryKey', async function () {
+	it('resolvePanelMode() resolves a formally valid core panel target', async function () {
 		const { sandbox } = await loadLayoutSandbox({ args: { panel: 'tab-messages' } });
 		const result = sandbox.window.__layoutFns.resolvePanelMode();
 		assert.equal(result.active, true);
 		assert.equal(result.isPlugin, false);
-		assert.equal(result.registryKey, 'messages');
-		assert.equal(result.descriptor.id, 'tab-messages');
-		assert.equal(result.descriptor.label, 'messages.key');
-		assert.ok(result.descriptor.ui && typeof result.descriptor.ui === 'object');
+		assert.equal(result.panelId, 'messages');
+		assert.equal(result.tabId, 'tab-messages');
 	});
 
-	it('resolvePanelMode() returns unknownTarget error for a tab-prefixed id that has no registry match', async function () {
+	it('resolvePanelMode() keeps unknown but formally valid core panel targets parseable', async function () {
 		const { sandbox } = await loadLayoutSandbox({ args: { panel: 'tab-unknown' } });
 		const result = sandbox.window.__layoutFns.resolvePanelMode();
 		assert.equal(result.active, true);
-		assert.equal(result.error, 'unknownTarget');
+		assert.equal(result.isPlugin, false);
+		assert.equal(result.panelId, 'unknown');
 	});
 
 	it('resolvePanelMode() returns unknownTarget error when panel arg has no tab- prefix', async function () {
@@ -1336,23 +1372,22 @@ describe('admin/tab/layout.js', function () {
 		const { sandbox, layoutHost } = await loadLayoutSandbox({
 			t: key => String(key || ''),
 		});
-		sandbox.win.MsghubAdminTabRegistry = {
-			panels: {
+		sandbox.window.__layoutFns.setActiveView({
+			composition: {
+				id: 'adminTab',
+				layout: 'tabs',
+				panels: ['messages', { type: 'pluginPanel', pluginType: 'IngestStates', instanceId: 0, panelId: 'presets' }],
+				defaultPanel: 'messages',
+			},
+			corePanels: {
 				messages: {
 					id: 'messages',
 					label: 'messages.key',
 					ui: { kind: 'core', loader: 'globals', initGlobal: 'MsghubAdminTabMessages', css: [], js: [] },
 				},
 			},
-			compositions: {
-				adminTab: {
-					id: 'adminTab',
-					layout: 'tabs',
-					panels: ['messages', { type: 'pluginPanel', pluginType: 'IngestStates', instanceId: 0, panelId: 'presets' }],
-					defaultPanel: 'messages',
-				},
-			},
-		};
+			request: { mode: 'composition', targetId: 'adminTab' },
+		});
 
 		sandbox.window.__layoutFns.buildLayoutFromRegistry();
 
@@ -1947,8 +1982,17 @@ describe('admin/tab/layout.js', function () {
 
 	it('buildLayoutFromRegistry() renders a category marker for native and contribution-backed plugin panels', async function () {
 		const { sandbox, layoutHost } = await loadLayoutSandbox();
-		sandbox.win.MsghubAdminTabRegistry = {
-			panels: {
+		sandbox.window.__layoutFns.setActiveView({
+			composition: {
+				id: 'adminTab',
+				layout: 'tabs',
+				panels: [
+					'messages',
+					{ type: 'pluginPanel', pluginType: 'IngestStates', instanceId: 0, panelId: 'presets' },
+				],
+				defaultPanel: 'messages',
+			},
+			corePanels: {
 				messages: {
 					id: 'messages',
 					label: 'messages.key',
@@ -1956,18 +2000,8 @@ describe('admin/tab/layout.js', function () {
 					ui: { kind: 'core', loader: 'globals', initGlobal: 'MsghubAdminTabMessages', css: [], js: [] },
 				},
 			},
-			compositions: {
-				adminTab: {
-					id: 'adminTab',
-					layout: 'tabs',
-					panels: [
-						'messages',
-						{ type: 'pluginPanel', pluginType: 'IngestStates', instanceId: 0, panelId: 'presets' },
-					],
-					defaultPanel: 'messages',
-				},
-			},
-		};
+			request: { mode: 'composition', targetId: 'adminTab' },
+		});
 
 		sandbox.window.__layoutFns.buildLayoutFromRegistry({
 			contributions: [{ pluginType: 'IngestStates', instanceId: 0, panelId: 'presets', label: 'presets.label', category: 'user' }],

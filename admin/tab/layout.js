@@ -8,21 +8,23 @@
  *
  * Contents:
  * - Tab navigation and panel visibility.
- * - Dynamic layout building from the registry.
+ * - Dynamic layout building from the active backend view.
  * - CSS and JS asset loading per composition.
  * - DOM helpers and panel boot error rendering.
  *
  * Integration:
  * - Uses runtime globals such as `args`, `applyTheme`, `detectTheme`, and `urlThemeLocked`.
+ * - Consumes the active view payload loaded through `web.view.get`.
  * - Is used by `boot.js` to initialize the visible admin layout.
  *
  * Interfaces:
  * - Exposes helpers such as `buildLayoutFromRegistry`, `initTabs`,
  *   `computeAssetsForComposition`, `getPanelDefinition`, `resolveViewId`,
- *   `resolvePanelMode`, `buildSinglePanelShell`, and `renderPanelModeError`.
+ *   `resolveViewRequest`, `setActiveView`, and `getActiveView`.
  */
 
 let currentActivePanelId = '';
+let activeView = null;
 
 // Maps panel tab ids (e.g. 'tab-messages') to their PanelDescriptor.
 const panelDescriptors = new Map();
@@ -80,7 +82,7 @@ function normalizeCorePanel(registryKey, def) {
  * Builds a canonical PanelDescriptor from a plugin discover contribution and a plugin ref.
  *
  * `ui.entry` is intentionally absent from the frontend descriptor contract.
- * Bundle loading runs through `admin.pluginUi.bundle.get` RPC plus `bundle.hash`.
+ * Bundle loading runs through `web.pluginUi.bundle.get` plus `bundle.hash`.
  *
  * @param {object} contrib - Discover contribution (`{ pluginType, instanceId, panelId, label, description, bundle, category?, app? }`).
  * @param {object} pluginRef - Plugin reference (`{ pluginType, instanceId, panelId }`).
@@ -96,7 +98,7 @@ function normalizePluginPanel(contrib, pluginRef) {
 		ui: {
 			kind: 'plugin',
 			loader: 'esm',
-			// Bundle loading is host-owned via admin.pluginUi.bundle.get RPC.
+			// Bundle loading is host-owned via web.pluginUi.bundle.get.
 			// `ui.entry` is intentionally not part of the frontend descriptor.
 		},
 		app: contrib.app,
@@ -898,39 +900,80 @@ function h(tag, attrs, children) {
 }
 
 /**
- * Returns the global admin registry in normalized form.
+ * Resolves the normalized backend view request from URL and markup.
  *
- * @returns {object|null} Registry object or `null`.
+ * Resolution order:
+ * 1. `args.panel`
+ * 2. `args.composition`
+ * 3. `data-msghub-view`
+ * 4. backend default composition
+ *
+ * @returns {{mode:'composition'|'panel',targetId?:string}} Normalized view request.
  */
-function getRegistry() {
-	const r = win.MsghubAdminTabRegistry;
-	return r && typeof r === 'object' ? r : null;
+function resolveViewRequest() {
+	const panelTarget = typeof args?.panel === 'string' ? args.panel.trim() : '';
+	if (panelTarget) {
+		return { mode: 'panel', targetId: panelTarget };
+	}
+	const urlComposition = typeof args?.composition === 'string' ? args.composition.trim() : '';
+	if (urlComposition) {
+		return { mode: 'composition', targetId: urlComposition };
+	}
+	const markupComposition = String(document?.documentElement?.getAttribute?.('data-msghub-view') || '').trim();
+	if (markupComposition) {
+		return { mode: 'composition', targetId: markupComposition };
+	}
+	return { mode: 'composition' };
 }
 
 /**
- * Resolves the active composition view id from query, markup, and hard fallback.
+ * Stores the active backend view payload for later layout/API consumers.
  *
- * Resolution order:
- * 1. `args.composition` when present and registered.
- * 2. `data-msghub-view` when present and registered.
- * 3. `'adminTab'` hard fallback.
+ * @param {object|null|undefined} view - View payload from `web.view.get`.
+ * @returns {object|null} Stored view payload or `null`.
+ */
+function setActiveView(view) {
+	activeView = view && typeof view === 'object' ? view : null;
+	return activeView;
+}
+
+/**
+ * Returns the currently active backend view payload.
  *
- * @returns {string} Resolved composition view id.
+ * @returns {object|null} Stored view payload or `null`.
+ */
+function getActiveView() {
+	return activeView && typeof activeView === 'object' ? activeView : null;
+}
+
+/**
+ * Returns the resolved core panel map from the active backend view.
+ *
+ * @returns {Record<string, any>} Core panel map.
+ */
+function getCorePanels() {
+	const panels = getActiveView()?.corePanels;
+	return panels && typeof panels === 'object' ? panels : {};
+}
+
+/**
+ * Resolves the active composition view id from the loaded backend view.
+ *
+ * Returns `null` in panel mode.
+ *
+ * @returns {string|null} Resolved composition view id.
  */
 function resolveViewId() {
-	const registry = getRegistry();
-	const compositions =
-		registry && registry.compositions && typeof registry.compositions === 'object' ? registry.compositions : null;
-	const fromUrl = typeof args?.composition === 'string' ? args.composition.trim() : '';
-	if (fromUrl && compositions && Object.prototype.hasOwnProperty.call(compositions, fromUrl)) {
-		return fromUrl;
+	const view = getActiveView();
+	if (view?.request?.mode === 'panel') {
+		return null;
 	}
-	const viewIdRaw = document?.documentElement?.getAttribute?.('data-msghub-view') || '';
-	const fromMarkup = String(viewIdRaw || '').trim();
-	if (fromMarkup && compositions && Object.prototype.hasOwnProperty.call(compositions, fromMarkup)) {
-		return fromMarkup;
+	const compositionId = typeof view?.composition?.id === 'string' ? view.composition.id.trim() : '';
+	if (compositionId) {
+		return compositionId;
 	}
-	return 'adminTab';
+	const request = resolveViewRequest();
+	return request.mode === 'composition' ? request.targetId || 'adminTab' : null;
 }
 
 /**
@@ -939,57 +982,42 @@ function resolveViewId() {
  * @returns {object|null} Composition object or `null`.
  */
 function getActiveComposition() {
-	const registry = getRegistry();
-	const viewId = resolveViewId();
-	const comp =
-		registry && registry.compositions && typeof registry.compositions === 'object'
-			? registry.compositions[viewId]
-			: null;
+	const comp = getActiveView()?.composition;
 	return comp && typeof comp === 'object' ? comp : null;
 }
 
 /**
- * Resolves the active single-panel mode from the `panel` URL argument.
+ * Resolves the active single-panel mode from the normalized view request.
  *
  * Returns a result object with one of the following shapes:
  * - `{ active: false }` — no `panel` argument present; normal composition boot applies.
- * - `{ active: true, error: 'unknownTarget', tabId }` — argument present but unresolvable.
- * - `{ active: true, isPlugin: false, descriptor, registryKey }` — core panel resolved.
+ * - `{ active: true, error: 'unknownTarget', tabId }` — argument present but formally invalid.
+ * - `{ active: true, isPlugin: false, tabId, panelId }` — core panel target parsed.
  * - `{ active: true, isPlugin: true, pluginRef, tabId }` — plugin panel id parsed.
  *
  * @returns {object} Panel mode result.
  */
 function resolvePanelMode() {
-	const panelArg = typeof args?.panel === 'string' ? args.panel.trim() : '';
-	if (!panelArg) {
+	const request = resolveViewRequest();
+	if (request.mode !== 'panel') {
 		return { active: false };
 	}
+	const panelArg = typeof request.targetId === 'string' ? request.targetId.trim() : '';
 	if (!panelArg.startsWith('tab-')) {
 		return { active: true, error: 'unknownTarget', tabId: panelArg };
 	}
-	const registry = getRegistry();
-	const panels = registry?.panels && typeof registry.panels === 'object' ? registry.panels : {};
-	// Try to find a core panel entry whose canonical id matches.
-	const coreEntry = Object.entries(panels).find(
-		([registryKey, def]) => def && `tab-${getCorePanelLocalId(registryKey, def)}` === panelArg,
-	);
-	if (coreEntry) {
-		const [registryKey, def] = coreEntry;
-		return { active: true, isPlugin: false, descriptor: normalizeCorePanel(registryKey, def), registryKey };
-	}
-	// Determine whether the id follows the plugin panel pattern.
 	const panelKey = panelArg.slice('tab-'.length);
 	if (panelKey.startsWith('plugin-')) {
-		const segments = panelKey.slice('plugin-'.length).split('-');
-		if (segments.length < 3) {
+		const pluginMatch = /^plugin-([A-Za-z][A-Za-z0-9]*)-(\d+)-([a-z0-9][a-z0-9-]*)$/.exec(panelKey);
+		if (!pluginMatch) {
 			return { active: true, error: 'unknownTarget', tabId: panelArg };
 		}
-		const pluginType = segments[0];
-		const instanceId = segments[1];
-		const panelId = segments.slice(2).join('-');
+		const pluginType = pluginMatch[1];
+		const instanceId = pluginMatch[2];
+		const panelId = pluginMatch[3];
 		return { active: true, isPlugin: true, pluginRef: { pluginType, instanceId, panelId }, tabId: panelArg };
 	}
-	return { active: true, error: 'unknownTarget', tabId: panelArg };
+	return { active: true, isPlugin: false, tabId: panelArg, panelId: panelKey };
 }
 
 /**
@@ -1045,14 +1073,14 @@ function renderPanelModeError(errorKey) {
  *
  * @param {{ contributions?: object[] }} [opts] - Optional settings for wildcard mode.
  *   contributions: discover contributions array; required when composition declares `panels:['*']`.
- * @returns {{ layout: string, panelIds: string[], pluginPanelRefs: object[], defaultPanelId: string }}
+ * @returns {{ layout: string, panelIds: string[], pluginPanelRefs: object[], defaultPanelId: string, missingNativePanelIds: string[] }}
  *   layout: 'tabs' or 'single'.
  *   panelIds: native panel string IDs only (for asset loading and panel init).
  *   pluginPanelRefs: structured plugin panel references (for discover hydration in boot.js).
  *   defaultPanelId: default active panel ID.
+ *   missingNativePanelIds: native panel ids referenced by the composition but absent from the active view.
  */
 function buildLayoutFromRegistry({ contributions = [] } = {}) {
-	const registry = getRegistry();
 	const comp = getActiveComposition() || { layout: 'tabs', panels: [], defaultPanel: '' };
 	const layout = comp.layout === 'single' ? 'single' : 'tabs';
 	const defaultPanelId = typeof comp.defaultPanel === 'string' ? comp.defaultPanel : '';
@@ -1061,20 +1089,17 @@ function buildLayoutFromRegistry({ contributions = [] } = {}) {
 	const isWildcard = Array.isArray(comp.panels) && comp.panels.length === 1 && comp.panels[0] === '*';
 
 	/**
-	 * Returns the native panel definition for a given ID, or null if not found.
+	 * Returns the native panel definition for a given ID from the active view.
 	 *
 	 * @param {string} id - Panel ID.
 	 * @returns {object|null} Panel definition or null.
 	 */
-	const getPanelDef = id => {
-		const panels = registry?.panels && typeof registry.panels === 'object' ? registry.panels : null;
-		const p = panels ? panels[id] : null;
-		return p && typeof p === 'object' ? p : null;
-	};
+	const getPanelDef = id => getPanelDefinition(id);
 
 	// Build ordered entry list for tab + panel container rendering.
 	const panelIds = [];
 	const pluginPanelRefs = [];
+	const missingNativePanelIds = [];
 	const allEntries = [];
 	const availableContributions = Array.isArray(contributions) ? contributions : [];
 
@@ -1093,9 +1118,9 @@ function buildLayoutFromRegistry({ contributions = [] } = {}) {
 		) || null;
 
 	if (isWildcard) {
-		const regPanels = registry?.panels && typeof registry.panels === 'object' ? registry.panels : {};
-		for (const pid of Object.keys(regPanels)) {
-			const def = regPanels[pid];
+		const corePanels = getCorePanels();
+		for (const pid of Object.keys(corePanels)) {
+			const def = corePanels[pid];
 			if (def && typeof def === 'object') {
 				panelIds.push(pid);
 				allEntries.push({ kind: 'native', id: pid, def });
@@ -1119,10 +1144,12 @@ function buildLayoutFromRegistry({ contributions = [] } = {}) {
 		for (const entry of panels) {
 			if (typeof entry === 'string' && entry) {
 				const def = getPanelDef(entry);
-				if (def) {
-					panelIds.push(entry);
-					allEntries.push({ kind: 'native', id: entry, def });
+				if (!def || typeof def !== 'object') {
+					missingNativePanelIds.push(entry);
+					continue;
 				}
+				panelIds.push(entry);
+				allEntries.push({ kind: 'native', id: entry, def });
 			} else if (entry && typeof entry === 'object' && entry.type === 'pluginPanel') {
 				pluginPanelRefs.push(entry);
 				allEntries.push({ kind: 'plugin', ref: entry, contrib: findContribution(entry) });
@@ -1130,10 +1157,14 @@ function buildLayoutFromRegistry({ contributions = [] } = {}) {
 		}
 	}
 
+	if (missingNativePanelIds.length > 0) {
+		return { layout, panelIds, pluginPanelRefs, defaultPanelId, missingNativePanelIds };
+	}
+
 	const root = document.querySelector('.msghub-root');
 	const layoutHost = document.getElementById('msghub-layout') || root;
 	if (!layoutHost) {
-		return { layout, panelIds, pluginPanelRefs, defaultPanelId };
+		return { layout, panelIds, pluginPanelRefs, defaultPanelId, missingNativePanelIds };
 	}
 
 	const fragment = document.createDocumentFragment();
@@ -1144,13 +1175,14 @@ function buildLayoutFromRegistry({ contributions = [] } = {}) {
 			if (entry.kind === 'native') {
 				const { id, def } = entry;
 				const tabId = `tab-${id}`;
+				const dataI18n = typeof def?.label === 'string' ? def.label : '';
 				nav.appendChild(
 					h('a', {
 						class: `msghub-tab${id === defaultPanelId ? ' is-active' : ''}`,
 						href: `#${tabId}`,
 						role: 'tab',
 						'aria-controls': tabId,
-						'data-i18n': def.label || '',
+						'data-i18n': dataI18n,
 						text: id,
 					}),
 				);
@@ -1182,20 +1214,22 @@ function buildLayoutFromRegistry({ contributions = [] } = {}) {
 			const { id, def } = entry;
 			const tabId = `tab-${id}`;
 			// Mount container id is derived deterministically from the canonical panel id.
-			const localPanelId = getCorePanelLocalId(String(id || ''), def);
+			const localPanelId = getCorePanelLocalId(String(id || ''), def || { id });
 			const mountId = localPanelId ? `${localPanelId}-root` : '';
-			const descriptor = normalizeCorePanel(String(id), def);
 			const panel = h('div', {
 				id: tabId,
 				class: `msghub-panel msghub-${id}`,
 				role: 'tabpanel',
 			});
-			applyCategoryMarker(panel, descriptor.category);
+			if (def && typeof def === 'object') {
+				const descriptor = normalizeCorePanel(String(id), def);
+				applyCategoryMarker(panel, descriptor.category);
+				// Register descriptor so activatePanel and updateDocumentTitle can resolve titles.
+				registerPanelDescriptor(descriptor);
+			}
 			if (mountId) {
 				panel.appendChild(h('div', { id: mountId }));
 			}
-			// Register descriptor so activatePanel and updateDocumentTitle can resolve titles.
-			registerPanelDescriptor(descriptor);
 			fragment.appendChild(panel);
 		} else {
 			// Plugin panel: container with data attributes for boot.js discover wiring.
@@ -1221,7 +1255,7 @@ function buildLayoutFromRegistry({ contributions = [] } = {}) {
 	}
 
 	layoutHost.replaceChildren(fragment);
-	return { layout, panelIds, pluginPanelRefs, defaultPanelId };
+	return { layout, panelIds, pluginPanelRefs, defaultPanelId, missingNativePanelIds };
 }
 
 /**
@@ -1315,13 +1349,12 @@ function loadJsFilesSequential(files) {
  * @returns {{css:string[],js:string[]}} Deduplicated asset lists.
  */
 function computeAssetsForComposition(panelIds) {
-	const registry = getRegistry();
-	const panels = registry?.panels && typeof registry.panels === 'object' ? registry.panels : null;
+	const panels = getCorePanels();
 	const css = [];
 	const js = [];
 
 	for (const pid of panelIds || []) {
-		const def = panels ? panels[pid] : null;
+		const def = panels[pid];
 		if (!def || typeof def !== 'object') {
 			continue;
 		}
@@ -1351,9 +1384,8 @@ function computeAssetsForComposition(panelIds) {
  * @returns {object|null} Panel definition or `null`.
  */
 function getPanelDefinition(panelId) {
-	const registry = getRegistry();
-	const panels = registry?.panels && typeof registry.panels === 'object' ? registry.panels : null;
-	const def = panels ? panels[panelId] : null;
+	const panels = getCorePanels();
+	const def = panels[panelId];
 	return def && typeof def === 'object' ? def : null;
 }
 
@@ -1376,6 +1408,9 @@ void initTabs;
 void activatePanel;
 void updateDocumentTitle;
 void h;
+void resolveViewRequest;
+void setActiveView;
+void getActiveView;
 void resolveViewId;
 void buildLayoutFromRegistry;
 void loadCssFiles;

@@ -1,4 +1,4 @@
-/* global window, document, location, HTMLElement, HTMLInputElement, HTMLTextAreaElement, t, lang, createUi, createAdminApi, msghubRequest, msghubSocket, adapterInstance, args, h, getPanelDefinition, win, loadJsFilesSequential, renderPanelBootError, buildLayoutFromRegistry, getActiveComposition, computeAssetsForComposition, ensureAdminI18nLoaded, loadCssFiles, initTabs, activatePanel, updateDocumentTitle, isEmbeddedInAdmin, overrideLang, createMsghubPluginUiHost, normalizePluginPanel, registerPanelDescriptor, resolvePanelMode, buildSinglePanelShell, renderPanelModeError, applyCategoryMarker, mergePluginI18n, pickText */
+/* global window, document, location, HTMLElement, HTMLInputElement, HTMLTextAreaElement, t, lang, createUi, createAdminApi, msghubRequest, msghubSocket, adapterInstance, args, h, getPanelDefinition, win, loadJsFilesSequential, renderPanelBootError, buildLayoutFromRegistry, getActiveComposition, computeAssetsForComposition, ensureAdminI18nLoaded, loadCssFiles, initTabs, activatePanel, updateDocumentTitle, isEmbeddedInAdmin, overrideLang, createMsghubPluginUiHost, normalizePluginPanel, registerPanelDescriptor, resolveViewRequest, setActiveView, renderPanelModeError, applyCategoryMarker, mergePluginI18n, pickText */
 'use strict';
 
 /**
@@ -1156,87 +1156,21 @@ function ensureBooted() {
 	bootFatalErrorMessage = '';
 	bootPromise = Promise.resolve()
 		.then(async () => {
-			// Panel mode: args.panel targets a specific panel — bypass composition entirely.
-			const panelMode = resolvePanelMode();
-			if (panelMode.active) {
-				if (panelMode.error) {
+			const viewRequest = typeof resolveViewRequest === 'function' ? resolveViewRequest() : { mode: 'composition' };
+			let viewData;
+			try {
+				viewData = await msghubRequest('web.view.get', viewRequest);
+			} catch (err) {
+				if (viewRequest.mode === 'panel' && err?.code === 'BAD_REQUEST') {
 					// Load i18n before rendering so t() produces a translated string, not a raw key.
 					await ensureAdminI18nLoaded();
 					renderPanelModeError('msghub.i18n.core.admin.ui.panel.error.unknownTarget.text');
 					return;
 				}
-				if (!panelMode.isPlugin) {
-					const { descriptor, registryKey } = panelMode;
-					buildSinglePanelShell(descriptor);
-					setConnLayout('single', 'pc');
-					await ensureAdminI18nLoaded();
-					const assets = computeAssetsForComposition([registryKey]);
-					const cssRes = await loadCssFiles(assets.css);
-					bootCssFailures = Array.isArray(cssRes?.failed) ? cssRes.failed.slice() : [];
-					if (cssRes?.failed?.length) {
-						ui?.toast?.({ text: `Failed to load CSS: ${cssRes.failed.join(', ')}`, variant: 'danger' });
-						if (maybeHardReloadForLateCriticalBootFailure(`css:${cssRes.failed.join(',')}`)) {
-							return;
-						}
-					}
-					applyStaticI18n();
-					updateConnectionPanel();
-					initConnectionPanelInteraction();
-					activatePanel(descriptor.id);
-					await initPanelsForComposition([registryKey]);
-					return;
-				}
-				// Plugin single-panel path.
-				const { pluginRef, tabId } = panelMode;
-
-				setConnLayout('single', 'pc');
-				await ensureAdminI18nLoaded();
-				applyStaticI18n();
-				updateConnectionPanel();
-				initConnectionPanelInteraction();
-
-				const pluginUiHost = createMsghubPluginUiHost({ request: msghubRequest, api });
-				ui?.spinner?.show?.({ blocking: true });
-
-				const rawContribs = await msghubRequest('web.pluginUi.discover', { lang }).catch(() => null);
-				const contributions = Array.isArray(rawContribs) ? rawContribs : [];
-				const contrib = contributions.find(
-					c =>
-						c.pluginType === pluginRef.pluginType &&
-						String(c.instanceId) === String(pluginRef.instanceId) &&
-						c.panelId === pluginRef.panelId,
-				);
-
-				ui?.spinner?.hide?.();
-
-				if (!contrib) {
-					renderPanelModeError('msghub.i18n.core.admin.ui.panel.error.unavailableTarget.text');
-					return;
-				}
-
-				const descriptor = normalizePluginPanel(contrib, pluginRef);
-				buildSinglePanelShell(descriptor);
-				// Shell creates the mount container div — hydratePluginPanels looks it up via
-				// document.getElementById(key), so it must be called after buildSinglePanelShell.
-
-				// Reuse hydratePluginPanels to populate pluginPanelTabMap via the standard mechanism.
-				// Derive the ref from contrib so instanceId type matches contrib exactly — hydratePluginPanels
-				// uses strict equality for the internal find; URL parsing yields string instanceId while
-				// contrib may carry a numeric value.
-				const hydrateRef = {
-					pluginType: contrib.pluginType,
-					instanceId: contrib.instanceId,
-					panelId: contrib.panelId,
-				};
-				await hydratePluginPanels([hydrateRef], pluginUiHost, [contrib]);
-
-				activatePanel(tabId);
-				mountPluginPanelIfNeeded(tabId, pluginUiHost);
-				// No msghub:tabSwitch listener — single-panel shell has no tab switches.
-				return;
+				throw err;
 			}
+			setActiveView(viewData);
 
-			// Wildcard: discover must run before buildLayoutFromRegistry so tab list is known.
 			const comp = getActiveComposition();
 			const isWildcard = Array.isArray(comp?.panels) && comp.panels.length === 1 && comp.panels[0] === '*';
 			let prefetchedContributions = null;
@@ -1245,9 +1179,29 @@ function ensureBooted() {
 				prefetchedContributions = Array.isArray(r) ? r : [];
 			}
 
-			const { layout, panelIds, pluginPanelRefs, defaultPanelId } = buildLayoutFromRegistry({
+			const {
+				layout,
+				panelIds,
+				pluginPanelRefs,
+				defaultPanelId,
+				missingNativePanelIds = [],
+			} = buildLayoutFromRegistry({
 				contributions: prefetchedContributions ?? [],
 			});
+			if (missingNativePanelIds.length > 0) {
+				await ensureAdminI18nLoaded();
+				if (viewRequest.mode === 'panel') {
+					renderPanelModeError('msghub.i18n.core.admin.ui.panel.error.unknownTarget.text');
+					return;
+				}
+				renderPanelModeError('msghub.i18n.core.admin.ui.panel.unavailable.text');
+				ui?.toast?.({
+					text: t('msghub.i18n.core.admin.ui.panel.unavailable.text'),
+					variant: 'danger',
+					persist: true,
+				});
+				return;
+			}
 			setConnLayout(layout, comp?.deviceMode);
 			const assets = computeAssetsForComposition(panelIds);
 
@@ -1267,6 +1221,7 @@ function ensureBooted() {
 
 			let tabSetActive = null;
 			let initialTabId = null;
+			const isPluginOnlyLayout = panelIds.length === 0 && pluginPanelRefs.length > 0;
 			if (layout === 'tabs') {
 				const tabs = initTabs({ defaultPanelId });
 				tabSetActive = tabs?.setActive ?? null;
@@ -1277,7 +1232,7 @@ function ensureBooted() {
 					: panelIds[0]
 						? `tab-${panelIds[0]}`
 						: '';
-				if (singlePanelId) {
+				if (singlePanelId && !isPluginOnlyLayout) {
 					initialTabId = activatePanel(singlePanelId);
 				}
 			}
@@ -1302,12 +1257,18 @@ function ensureBooted() {
 						allowFirstEnabled: true,
 					});
 
-					if (chosenTabId && tabSetActive) {
-						tabSetActive(chosenTabId);
+					if (chosenTabId) {
+						initialTabId = tabSetActive ? tabSetActive(chosenTabId) : activatePanel(chosenTabId);
 						mountPluginPanelIfNeeded(chosenTabId, pluginUiHost);
 						ui?.spinner?.hide?.();
 					} else {
-						// All plugin panels unavailable — keep spinner; show persistent toast.
+						ui?.spinner?.hide?.();
+						if (viewRequest.mode === 'panel' && layout === 'single') {
+							renderPanelModeError('msghub.i18n.core.admin.ui.panel.error.unavailableTarget.text');
+							return;
+						}
+						// All plugin panels unavailable — keep a visible hard failure and a persistent toast.
+						renderPanelModeError('msghub.i18n.core.admin.ui.panel.unavailable.text');
 						ui?.toast?.({
 							text: t('msghub.i18n.core.admin.ui.panel.unavailable.text'),
 							variant: 'danger',
@@ -1318,8 +1279,10 @@ function ensureBooted() {
 					// Mixed composition: a native panel is already active.
 					// URL hash wins when it targets a hydrated plugin tab.
 					const chosenTabId = resolveHydratedPluginTabId(defaultPanelId, enabledTabIds);
-					if (chosenTabId && tabSetActive) {
-						tabSetActive(chosenTabId);
+					if (chosenTabId) {
+						if (tabSetActive) {
+							tabSetActive(chosenTabId);
+						}
 						mountPluginPanelIfNeeded(chosenTabId, pluginUiHost);
 					}
 				}

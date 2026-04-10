@@ -8,7 +8,7 @@ Its job is to present a small, consistent, browser-friendly contract on top of:
 
 - `msghubRequest(...)`
 - shell UI primitives
-- registry-derived host metadata
+- view-derived host metadata
 - i18n and time-format helpers
 
 In practice, this is the intended panel-facing contract of the shell, but for native panels it is not a
@@ -30,10 +30,9 @@ ctx.api
 Native panels use it directly.
 Plugin-owned bundles receive a narrowed wrapper of it through [`./tab-plugin-ui-host.md`](./tab-plugin-ui-host.md).
 
-In normal (composition) mode, `api.js` depends on the shared composition resolver from
-[`./tab-layout.md`](./tab-layout.md) so that `api.host.viewId`, `api.host.layout`, `api.host.panels`,
-and the visible shell all reflect the same final composition decision. In `panel=` mode this dependency
-is bypassed; `api.host.*` is derived from `args.panel` instead (see `api.host` below).
+`api.js` depends on the shared active-view helpers from [`./tab-layout.md`](./tab-layout.md) so that
+`api.host.viewId`, `api.host.layout`, `api.host.panels`, and the visible shell all reflect the same
+loaded `web.view.get` result.
 
 ---
 
@@ -212,7 +211,7 @@ This is used for API branches that are intentionally unavailable in the current 
 - Timezone policy is normalized centrally. Missing or invalid timezones become a UTC fallback policy.
 - Context-menu item handlers are wrapped recursively so the menu closes first, including nested submenu items.
 - The context-menu wrapper intentionally does not emit generic fallback toasts when an action rejects. Error handling stays with the caller.
-- In normal mode, `host.panels` is derived from the active composition but keeps only string entries, because structured plugin refs are hosted differently. In `panel=` mode, `host.panels` is a single-element array derived from `args.panel`.
+- In normal mode, `host.panels` is derived from the loaded active composition but keeps only string entries, because structured plugin refs are hosted differently. In `panel=` mode, `host.panels` is a single-element array derived from the active `web.view.get` request/response pair.
 - `args.locale` affects only the browser-side default format locale for `api.time.*`; it does not change text language, i18n loading, plugin bundle language selection, or backend payloads.
 - `runtime.about()` stays on the API surface, but its data comes from the central `ui.bootstrap` cache in `runtime.js`.
 

@@ -15,14 +15,13 @@ The Admin Tab is served as a classic browser page, not as an ES-module bundle.
 [`admin/tab.html`](../../admin/tab.html) loads the core scripts in a fixed order:
 
 1. globals
-2. registry
-3. API helpers
-4. runtime
-5. UI primitives
-6. layout helpers
-7. plugin UI host
-8. boot orchestration
-9. this file
+2. API helpers
+3. runtime
+4. UI primitives
+5. layout helpers
+6. plugin UI host
+7. boot orchestration
+8. this file
 
 That makes `admin/tab.js` the final shell-level script in the page.
 

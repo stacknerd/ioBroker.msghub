@@ -15,7 +15,7 @@
  *
  * Integration:
  * - This module is the first building block in the load order of `admin/tab.html`.
- * - Subsequent modules (`registry.js`, `api.js`, `runtime.js`, ...) use these variables.
+ * - Subsequent modules (`api.js`, `runtime.js`, ...) use these variables.
  *
  * Interfaces:
  *

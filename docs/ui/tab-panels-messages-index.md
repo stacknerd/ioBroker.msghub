@@ -10,7 +10,7 @@ In short: this file turns the individual Messages submodules into one working pa
 
 ## Where it sits in the system
 
-The Messages panel is registered as a native panel in `admin/tab/registry.js`. Its asset list loads the Messages
+The Messages panel is registered as a native panel in the backend UI registry (`lib/IoUiRegistry.js`). Its asset list loads the Messages
 submodules in a fixed order and ends with `admin/tab/panels/messages/index.js`. After that, `boot.js` calls the
 panel initializer through the global `window.MsghubAdminTabMessages`.
 

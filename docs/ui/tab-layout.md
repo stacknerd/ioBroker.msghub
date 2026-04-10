@@ -1,7 +1,7 @@
 # admin/tab/layout.js: layout, tab navigation, and asset loading for the shell
 
 `layout.js` is the shell-side DOM and asset orchestration layer.
-It translates the static registry into visible tab/panel markup, reads an initial tab from
+It translates the loaded backend view into visible tab/panel markup, reads an initial tab from
 `location.hash`, writes the hash on tab clicks, loads panel assets, and mirrors theme changes from
 the ioBroker admin host.
 
@@ -16,7 +16,7 @@ This module is loaded before [`./tab-boot.md`](./tab-boot.md) and after the runt
 It depends on:
 
 - runtime query/theme helpers from [`./tab-runtime.md`](./tab-runtime.md)
-- the shell registry from [`./tab-registry.md`](./tab-registry.md)
+- the loaded `web.view.get` payload from [`./tab-registry.md`](./tab-registry.md)
 - the small DOM helper `h(...)` defined in this file itself
 
 The main consumer is `boot.js`, which calls `resolveViewId()`, `getActiveComposition()`,
@@ -31,9 +31,9 @@ visible shell use the same final view/composition decision.
 
 ## Responsibilities
 
-### 1) Build the visible composition from the registry
+### 1) Build the visible composition from the active backend view
 
-`buildLayoutFromRegistry()` reads the active composition and renders:
+`buildLayoutFromRegistry()` reads the active view composition and renders:
 
 - the tab navigation
 - native panel containers
@@ -44,17 +44,16 @@ It separates the result into two groups:
 - `panelIds`: native panel string IDs only
 - `pluginPanelRefs`: structured plugin panel references only
 
-That separation is important because native panels are initialized from registry assets, while plugin panels
+That separation is important because native panels are initialized from `corePanels`, while plugin panels
 are hydrated later from runtime discover data.
+The active request is resolved centrally through:
 
-The active composition is resolved centrally through:
+1. `args.panel`
+2. `args.composition`
+3. `data-msghub-view`
+4. backend default `adminTab`
 
-1. registered `args.composition`
-2. registered `data-msghub-view`
-3. hard fallback `adminTab`
-
-Unknown composition ids do not fall through to wildcard mode. Wildcard handling happens only when the
-selected composition itself declares `panels: ['*']`.
+`boot.js` then loads the actual view via `web.view.get(...)` and stores it through `setActiveView(...)`.
 
 ### 2) Manage panel activation, tab navigation, and visibility
 
@@ -129,17 +128,21 @@ When `urlThemeLocked === true`, all of those sync paths become no-ops so an expl
 
 `layout.js` exposes the shell helpers as classic global functions.
 
+### `resolveViewRequest()`
+
+Returns the normalized backend request the shell will send to `web.view.get(...)`.
+
+### `setActiveView(view)` / `getActiveView()`
+
+Store and read the active backend view payload.
+
 ### `resolveViewId()`
 
-Returns the resolved composition id using the shared fallback order:
-
-1. registered `args.composition`
-2. registered `data-msghub-view`
-3. `adminTab`
+Returns the loaded composition id, or `null` in panel mode.
 
 ### `getActiveComposition()`
 
-Returns the registered composition object for `resolveViewId()`, or `null`.
+Returns the loaded composition object from the active backend view, or `null`.
 
 ### `initTabs({ defaultPanelId })`
 
@@ -205,7 +208,7 @@ intermediate DOM changes produces the same state as a single call.
 
 ### `normalizeCorePanel(registryKey, def)`
 
-Converts a raw native panel definition from `registry.panels` into a canonical `PanelDescriptor`.
+Converts a raw native panel definition from `corePanels` into a canonical `PanelDescriptor`.
 The producer now stores owner-local ids (`'messages'`, `'plugins'`). `normalizeCorePanel(...)`
 derives the canonical external/runtime id as `tab-<ownerLocalId>`, passes through `category`
 and the optional `app` block, and also sets the private `_registryKey` field used by
@@ -217,7 +220,7 @@ Converts a plugin contribution object and its structured registry ref into a can
 The resulting id follows the pattern `tab-plugin-<pluginType>-<instanceId>-<panelId>`.
 `ui.kind` is `'plugin'`, `ui.loader` is `'esm'`. `label` is a plugin-owned admin-ui i18n key string,
 `description` is an optional string. `ui.entry` is intentionally absent from the frontend
-descriptor contract; bundle loading is host-owned via `admin.pluginUi.bundle.get` plus `bundle.hash`.
+descriptor contract; bundle loading is host-owned via `web.pluginUi.bundle.get` plus `bundle.hash`.
 
 Optional fields are passed through from `contrib` when present:
 
@@ -260,11 +263,16 @@ Builds the current composition and returns:
   layout,
   panelIds,
   pluginPanelRefs,
-  defaultPanelId
+  defaultPanelId,
+  missingNativePanelIds
 }
 ```
 
 Wildcard compositions (`panels: ['*']`) use `contributions` to materialize plugin panel slots.
+When a composition references a native panel that is missing from the active view `corePanels`,
+`buildLayoutFromRegistry()` reports that through `missingNativePanelIds` and skips DOM rendering so
+boot can surface a visible hard error instead of rendering a partial empty shell.
+
 When a panel descriptor or contribution carries `category`, the rendered panel container gets a semantic
 marker element:
 
@@ -280,7 +288,7 @@ Returns deduplicated CSS and JS lists for the given native panel IDs.
 
 ### `getPanelDefinition(panelId)`
 
-Returns one native panel definition from the registry, or `null`.
+Returns one native panel definition from the active view `corePanels`, or `null`.
 
 ### `renderPanelBootError(panelId, err)`
 
@@ -290,7 +298,7 @@ Writes a visible error state directly into the affected panel container.
 
 ## Design notes / invariants
 
-- `resolveViewId()` is the shared composition resolver for both `layout.js` and `api.js`; visible layout and `api.host.viewId` must not drift.
+- `resolveViewRequest()` and the stored active view are shared between `layout.js`, `boot.js`, and `api.js`; visible layout and `api.host.*` must not drift.
 - Plugin panel refs are never mixed into `panelIds`. Native and plugin panels follow different initialization paths.
 - Plugin tabs render in a disabled placeholder state until discover hydration confirms availability.
 - `activatePanel(...)` is the shared activation path for both `tabs` and `single` layouts.
@@ -313,7 +321,7 @@ Writes a visible error state directly into the affected panel container.
 
 - Implementation: [`admin/tab/layout.js`](../../admin/tab/layout.js)
 - Test: [`admin/tab/layout.test.js`](../../admin/tab/layout.test.js)
-- Registry input: [`./tab-registry.md`](./tab-registry.md)
+- Backend view input: [`./tab-registry.md`](./tab-registry.md)
 - Runtime query/theme helpers: [`./tab-runtime.md`](./tab-runtime.md)
 - API host metadata consumer: [`./tab-api.md`](./tab-api.md)
 - Boot orchestration: [`./tab-boot.md`](./tab-boot.md)

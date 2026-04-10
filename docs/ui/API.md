@@ -5,7 +5,7 @@
 | Scope | UI-facing contracts only. |
 | In scope | Browser/runtime globals, Admin Tab shell builders, native panel `ctx`, `ctx.api`, UI-facing Admin/runtime commands, plugin-owned Admin UI host path, browser lifecycle and mounting invariants. |
 | Out of scope | Plugin runtime `ctx` outside UI-facing paths, full core/module API ownership, general architecture, non-UI plugin wiring details. |
-| Source of truth | `admin/tab/contracts.d.ts`, `admin/tab/runtime.js`, `admin/tab/api.js`, `admin/tab/ui.js`, `admin/tab/layout.js`, `admin/tab/registry.js`, `admin/tab/boot.js`, `admin/tab/plugin-ui-host.js`, `lib/IoAdminTab.js`, `lib/IoPlugins.js`, `lib/IngestStates/manifest.js`, `src/MsgStore.js`, `src/MsgStats.js`, `main.js`. |
+| Source of truth | `admin/tab/contracts.d.ts`, `admin/tab/runtime.js`, `admin/tab/api.js`, `admin/tab/ui.js`, `admin/tab/layout.js`, `admin/tab/boot.js`, `admin/tab/plugin-ui-host.js`, `lib/IoUiRegistry.js`, `lib/IoUiCatalog.js`, `lib/IoWebUi.js`, `lib/IoAdminTab.js`, `lib/IoPlugins.js`, `lib/IngestStates/manifest.js`, `src/MsgStore.js`, `src/MsgStats.js`, `main.js`. |
 
 | Area | Owned by | Use this file for |
 | --- | --- | --- |
@@ -48,28 +48,30 @@ panel/plugin contract in this reference.
 | `createUi()` | Builds the shared shell UI primitive object with `toast`, `toastClose`, `contextMenu`, `overlayLarge`, `dialog`, `spinner`, and `closeAll`. | UI runtime | `admin/tab/ui.js`, `admin/tab/contracts.d.ts` |
 | `createAdminApi(deps)` | Builds the frozen `ctx.api` facade used by native panels and wrapped by the plugin UI host. | Browser API layer | `admin/tab/api.js`, `admin/tab/contracts.d.ts` |
 | `initTabs({ defaultPanelId? })` | Wires tab activation against `location.hash`. Skips tabs marked `aria-disabled="true"`. Returns `{ initial, setActive(tabDomId) }`. | Layout runtime | `admin/tab/layout.js`, `admin/tab/contracts.d.ts` |
-| `buildLayoutFromRegistry({ contributions? })` | Builds the visible shell layout from `window.MsghubAdminTabRegistry`. Returns `{ layout, panelIds, pluginPanelRefs, defaultPanelId }`. `panelIds` contains native panel ids only. `pluginPanelRefs` contains structured plugin-panel refs. | Layout runtime | `admin/tab/layout.js`, `admin/tab/contracts.d.ts` |
-| `resolveViewId()` | Resolves the active composition id in this order: registered `args.composition`, registered `data-msghub-view`, then hard fallback `adminTab`. | Layout runtime | `admin/tab/layout.js`, `admin/tab/contracts.d.ts` |
-| `getActiveComposition()` | Returns the registered composition object for `resolveViewId()`, or `null`. | Layout runtime | `admin/tab/layout.js`, `admin/tab/contracts.d.ts` |
-| `computeAssetsForComposition(panelIds)` | Dedupe-merges CSS and JS asset paths from registry panel definitions. Returns `{ css, js }`. | Layout runtime | `admin/tab/layout.js`, `admin/tab/contracts.d.ts` |
+| `buildLayoutFromRegistry({ contributions? })` | Builds the visible shell layout from the loaded active view. Returns `{ layout, panelIds, pluginPanelRefs, defaultPanelId, missingNativePanelIds }`. `panelIds` contains native panel ids only. `pluginPanelRefs` contains structured plugin-panel refs. `missingNativePanelIds` reports native panel ids referenced by the active composition but missing from `corePanels`; in that case the boot layer surfaces a visible hard error instead of rendering partial DOM. | Layout runtime | `admin/tab/layout.js`, `admin/tab/contracts.d.ts` |
+| `resolveViewRequest()` | Resolves the normalized backend request in this order: `args.panel`, `args.composition`, `data-msghub-view`, backend default. | Layout runtime | `admin/tab/layout.js`, `admin/tab/contracts.d.ts` |
+| `setActiveView(view)` / `getActiveView()` | Stores and reads the loaded `web.view.get` payload. | Layout runtime | `admin/tab/layout.js`, `admin/tab/contracts.d.ts` |
+| `resolveViewId()` | Returns the loaded composition id, or `null` in panel mode. | Layout runtime | `admin/tab/layout.js`, `admin/tab/contracts.d.ts` |
+| `getActiveComposition()` | Returns the loaded composition object from the active view, or `null`. | Layout runtime | `admin/tab/layout.js`, `admin/tab/contracts.d.ts` |
+| `computeAssetsForComposition(panelIds)` | Dedupe-merges CSS and JS asset paths from active-view `corePanels`. Returns `{ css, js }`. | Layout runtime | `admin/tab/layout.js`, `admin/tab/contracts.d.ts` |
 | `loadCssFiles(files)` | Deduplicated stylesheet loader. Returns `{ failed: string[] }`. Missing files do not reject; they are collected in `failed`. | Layout runtime | `admin/tab/layout.js`, `admin/tab/contracts.d.ts` |
 | `loadJsFilesSequential(files)` | Deduplicated script loader. Loads in order. Rejects on the first script load failure. | Layout runtime | `admin/tab/layout.js`, `admin/tab/contracts.d.ts` |
-| `getPanelDefinition(panelId)` | Returns the native panel definition from the registry or `null`. | Layout runtime | `admin/tab/layout.js`, `admin/tab/contracts.d.ts` |
+| `getPanelDefinition(panelId)` | Returns the native panel definition from the active view `corePanels` or `null`. | Layout runtime | `admin/tab/layout.js`, `admin/tab/contracts.d.ts` |
 | `renderPanelBootError(panelId, err)` | Replaces `#tab-<panelId>` content with a visible boot error block. | Layout runtime | `admin/tab/layout.js`, `admin/tab/contracts.d.ts` |
 | `createMsghubPluginUiHost({ request, api })` | Builds the plugin-owned Admin UI host. Returns `{ mount, unmount, retry }`. | Plugin UI host | `admin/tab/plugin-ui-host.js`, `admin/tab/contracts.d.ts` |
 | `computeContextMenuPosition(params)` | Viewport-aware menu positioning helper used by the context-menu runtime. Returns `{ x, y }`. | Browser API layer | `admin/tab/api.js`, `admin/tab/contracts.d.ts` |
 | `toContextMenuIconVar(iconName)` | Converts a safe icon key into `var(--msghub-icon-<name>)`. Invalid names return `''`. | Browser API layer | `admin/tab/api.js`, `admin/tab/contracts.d.ts` |
-| `window.MsghubAdminTabRegistry` | Frozen browser-global registry with `{ panels, compositions }`. | Registry runtime | `admin/tab/registry.js`, `admin/tab/contracts.d.ts` |
+| `web.view.get` | `{ mode, targetId? } -> { composition, corePanels, request }` | Stable backend view-resolution contract for AdminTab/Web UI shells. | `lib/IoUiCatalog.js`, `lib/IoWebUi.js`, `admin/tab/boot.js` |
 
-### Registry-owned DTOs
+### Backend UI Registry / View DTOs
 
 | Entry | Contract | Owner | Reference |
 | --- | --- | --- | --- |
-| `registry.panels[panelId]` | Native producer definition with owner-local `id`, `label`, `category`, `ui`, and optional `app`. Canonical external ids (`tab-...`) are derived later by `normalizeCorePanel(...)`. | Registry runtime | `admin/tab/registry.js` |
-| `registry.compositions[viewId]` | Composition definition with `id`, `layout`, `panels`, `defaultPanel`, and `deviceMode`. The only allowed composition-level `app` block is the special-case `registry.compositions.web.app` for the prepared Public-Web root contract. | Registry runtime | `admin/tab/registry.js` |
-| Native composition panel entry | String panel id such as `'messages'` or `'plugins'`. | Registry runtime | `admin/tab/registry.js`, `admin/tab/layout.js` |
-| Plugin composition panel entry | Structured ref `{ type: 'pluginPanel', pluginType, instanceId, panelId }`. | Registry runtime | `admin/tab/registry.js`, `admin/tab/layout.js` |
-| Wildcard composition | `panels: ['*']`. Native registry panels are rendered first, then all discover contributions as plugin-panel refs. | Layout runtime | `admin/tab/layout.js` |
+| `IoUiRegistry.panels[panelId]` | Native producer definition with owner-local `id`, `label`, `category`, `ui`, and optional `app`. Canonical external ids (`tab-...`) are derived later by `normalizeCorePanel(...)`. | Backend registry runtime | `lib/IoUiRegistry.js` |
+| `IoUiRegistry.compositions[viewId]` | Composition definition with `id`, `layout`, `panels`, `defaultPanel`, and `deviceMode`. The only allowed composition-level `app` block is the special-case `compositions.web.app` for the prepared Public-Web root contract. | Backend registry runtime | `lib/IoUiRegistry.js` |
+| Native composition panel entry | String panel id such as `'messages'` or `'plugins'`. | Backend registry / layout runtime | `lib/IoUiRegistry.js`, `admin/tab/layout.js` |
+| Plugin composition panel entry | Structured ref `{ type: 'pluginPanel', pluginType, instanceId, panelId }`. | Backend registry / layout runtime | `lib/IoUiRegistry.js`, `admin/tab/layout.js` |
+| Wildcard composition | `panels: ['*']`. Native core panels are rendered first, then all discover contributions as plugin-panel refs. | Layout runtime | `admin/tab/layout.js` |
 
 ### Browser events and shell lifecycle
 
@@ -89,7 +91,7 @@ panel/plugin contract in this reference.
 
 | Entry | Contract | Owner | Reference |
 | --- | --- | --- | --- |
-| `registry.panels[panelId].initGlobal` | Name of the browser global that owns the panel entry point, e.g. `'MsghubAdminTabMessages'`. | Registry runtime | `admin/tab/registry.js`, `admin/tab/boot.js` |
+| `corePanels[panelId].ui.initGlobal` | Name of the browser global that owns the panel entry point, e.g. `'MsghubAdminTabMessages'`. | Active view runtime | `admin/tab/layout.js`, `admin/tab/boot.js` |
 | `win[initGlobal].init(ctx)` | Required export. Called once by the shell with the frozen `ctx` object. Return value is an optional lifecycle handle stored by the shell. | Panel entry | `admin/tab/boot.js`, `admin/tab/panels/messages/index.js`, `admin/tab/panels/plugins/index.js` |
 | Lifecycle handle `onConnect()` | Optional method on the object returned by `init(ctx)`. Called by the shell (a) immediately on every online transition and (b) again after a successful constants warmup following a reconnect. | Panel entry | `admin/tab/boot.js` |
 
@@ -185,7 +187,7 @@ panel/plugin contract in this reference.
 | Entry | Contract | Owner | Reference |
 | --- | --- | --- | --- |
 | `ctx.api.log.debug/info/warn/error(...args)` | Console logging with the prefix `msghub:<viewId>`. | Browser API layer | `admin/tab/api.js` |
-| `ctx.api.host.viewId` | Active composition/view id. Defaults to `adminTab`. | Browser API layer | `admin/tab/api.js`, `admin/tab/layout.js` |
+| `ctx.api.host.viewId` | Active composition/view id from the loaded backend view, or `null` in panel mode. | Browser API layer | `admin/tab/api.js`, `admin/tab/layout.js` |
 | `ctx.api.host.layout` | `'tabs'` or `'single'`. Derived from the active composition. | Browser API layer | `admin/tab/api.js` |
 | `ctx.api.host.deviceMode` | Composition `deviceMode` value, currently defaulting to `'pc'` when absent. | Browser API layer | `admin/tab/api.js` |
 | `ctx.api.host.panels` | Frozen array of string entries from `composition.panels`. Non-string plugin-panel ref objects are filtered out, but string sentinels such as `'*'` (wildcard composition) pass through as-is. Wildcard expansion is owned by `layout.js`, not by `api.js`. | Browser API layer | `admin/tab/api.js` |

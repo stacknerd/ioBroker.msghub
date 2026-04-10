@@ -30,19 +30,43 @@ window.__apiFns = {
 			getAttribute: () => 'adminTab',
 		},
 	};
-	const defaultResolveViewId = () => {
+	let activeView =
+		overrides.activeView || {
+			composition: {
+				id: 'adminTab',
+				layout: 'tabs',
+				panels: ['stats', 'messages', 'plugins'],
+				defaultPanel: 'plugins',
+				deviceMode: 'pc',
+			},
+			corePanels: {},
+			request: { mode: 'composition', targetId: 'adminTab' },
+		};
+	const defaultResolveViewRequest = () => {
+		const panel = typeof overrides.args?.panel === 'string' ? overrides.args.panel.trim() : '';
+		if (panel) {
+			return { mode: 'panel', targetId: panel };
+		}
+		const composition = typeof overrides.args?.composition === 'string' ? overrides.args.composition.trim() : '';
+		if (composition) {
+			return { mode: 'composition', targetId: composition };
+		}
 		const raw = documentObject?.documentElement?.getAttribute?.('data-msghub-view') || '';
-		return String(raw || '').trim() || 'adminTab';
+		const viewId = String(raw || '').trim();
+		return viewId ? { mode: 'composition', targetId: viewId } : { mode: 'composition' };
+	};
+	const effectiveResolveViewRequest = overrides.resolveViewRequest || defaultResolveViewRequest;
+	const defaultGetActiveView = () => activeView;
+	const defaultResolveViewId = () => {
+		const view = defaultGetActiveView();
+		if (view?.request?.mode === 'panel') {
+			return null;
+		}
+		return typeof view?.composition?.id === 'string' ? view.composition.id : 'adminTab';
 	};
 	const effectiveResolveViewId = overrides.resolveViewId || defaultResolveViewId;
 	const defaultGetActiveComposition = () => {
-		const registry = windowObject.MsghubAdminTabRegistry;
-		const compositions = registry && typeof registry === 'object' ? registry.compositions : null;
-		if (!compositions || typeof compositions !== 'object') {
-			return null;
-		}
-		const viewId = effectiveResolveViewId();
-		const composition = compositions[viewId];
+		const composition = defaultGetActiveView()?.composition;
 		return composition && typeof composition === 'object' ? composition : null;
 	};
 
@@ -52,6 +76,8 @@ window.__apiFns = {
 		win: windowObject,
 		hasAdminKey: key => key === 'known.key',
 		resolveViewId: effectiveResolveViewId,
+		resolveViewRequest: effectiveResolveViewRequest,
+		getActiveView: overrides.getActiveView || defaultGetActiveView,
 		getActiveComposition: overrides.getActiveComposition || defaultGetActiveComposition,
 		console: { debug() {}, info() {}, warn() {}, error() {} },
 		...overrides,
@@ -156,20 +182,7 @@ describe('admin/tab/api.js', function () {
 			},
 		};
 
-		const sandbox = await loadApiSandbox({
-			window: {
-				MsghubAdminTabRegistry: {
-					compositions: {
-						adminTab: {
-							layout: 'tabs',
-							panels: ['stats', 'messages', 'plugins'],
-							defaultPanel: 'plugins',
-							deviceMode: 'pc',
-						},
-					},
-				},
-			},
-		});
+		const sandbox = await loadApiSandbox();
 
 		const createAdminApi = sandbox.window.__apiFns.createAdminApi;
 		const api = createAdminApi({
@@ -240,22 +253,20 @@ describe('admin/tab/api.js', function () {
 
 	it('api.host.panels filters out structured plugin panel refs — returns only string IDs', async function () {
 		const sandbox = await loadApiSandbox({
-			window: {
-				MsghubAdminTabRegistry: {
-					compositions: {
-						adminTab: {
-							id: 'adminTab',
-							layout: 'tabs',
-							panels: [
-								'messages',
-								'plugins',
-								{ type: 'pluginPanel', pluginType: 'IngestStates', instanceId: 0, panelId: 'presets' },
-							],
-							defaultPanel: 'messages',
-							deviceMode: 'pc',
-						},
-					},
+			activeView: {
+				composition: {
+					id: 'adminTab',
+					layout: 'tabs',
+					panels: [
+						'messages',
+						'plugins',
+						{ type: 'pluginPanel', pluginType: 'IngestStates', instanceId: 0, panelId: 'presets' },
+					],
+					defaultPanel: 'messages',
+					deviceMode: 'pc',
 				},
+				corePanels: {},
+				request: { mode: 'composition', targetId: 'adminTab' },
 			},
 		});
 		const createAdminApi = sandbox.window.__apiFns.createAdminApi;

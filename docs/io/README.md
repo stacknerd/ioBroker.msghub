@@ -183,5 +183,7 @@ Then continue based on your question:
 - `IoPlugins`: [`./IoPlugins.md`](./IoPlugins.md)
 - `IoRuntimeI18n`: [`./IoRuntimeI18n.md`](./IoRuntimeI18n.md)
 - `IoStorageIobroker`: [`./IoStorageIobroker.md`](./IoStorageIobroker.md)
+- `IoUiCatalog`: [`./IoUiCatalog.md`](./IoUiCatalog.md)
+- `IoUiRegistry`: [`./IoUiRegistry.md`](./IoUiRegistry.md)
 - `IoWebUi`: [`./IoWebUi.md`](./IoWebUi.md)
 <!-- AUTO-GENERATED:IO-INDEX:END -->
