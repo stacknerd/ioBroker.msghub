@@ -325,7 +325,6 @@ globalThis.__applyRuntimeAboutPayload = applyRuntimeAboutPayload;
 		const applyRuntimeAboutPayloadSource = extractFunctionSource(source, 'applyRuntimeAboutPayload');
 		const overrideCalls = [];
 		const i18nCalls = [];
-		const requestCalls = [];
 		const mergeCalls = [];
 		const sandbox = runInSandbox(
 			`
@@ -339,18 +338,7 @@ globalThis.__applyRuntimeAboutPayload = applyRuntimeAboutPayload;
 				lang: 'de',
 				overrideLang: lang => overrideCalls.push(lang),
 				ensureAdminI18nLoaded: () => { i18nCalls.push(1); return Promise.resolve(); },
-				msghubRequest: (command, payload) => {
-					requestCalls.push({ command, payload });
-					return Promise.resolve([
-						{
-							pluginType: 'IngestStates',
-							i18n: {
-								lang: 'de',
-								translations: { 'msghub.i18n.IngestStates.ui.panels.presets.label': 'Vorgaben' },
-							},
-						},
-					]);
-				},
+				msghubRequest: () => Promise.resolve([]),
 				mergePluginI18n: (pluginType, translations) => mergeCalls.push({ pluginType, translations }),
 				applyStaticI18n: () => {},
 				updateConnectionPanel: () => {},
@@ -371,15 +359,7 @@ globalThis.__applyRuntimeAboutPayload = applyRuntimeAboutPayload;
 		assert.equal(overrideCalls[0], 'de');
 		assert.equal(i18nCalls.length, 1);
 		await new Promise(resolve => setTimeout(resolve, 0));
-		assert.deepEqual(JSON.parse(JSON.stringify(requestCalls)), [
-			{ command: 'web.pluginUi.discover', payload: { lang: 'de' } },
-		]);
-		assert.deepEqual(mergeCalls, [
-			{
-				pluginType: 'IngestStates',
-				translations: { 'msghub.i18n.IngestStates.ui.panels.presets.label': 'Vorgaben' },
-			},
-		]);
+		assert.deepEqual(mergeCalls, []);
 	});
 
 	it('updateConnectionPanel fills value spans from current state', async function () {
@@ -994,7 +974,6 @@ globalThis.__state = () => ({ healthyShellSinceMs });
 		const removedAttrs = [];
 		const removedClasses = [];
 		const setAttrs = [];
-		const mergeCalls = [];
 		let tabLabel = '';
 		const tabEl = {
 			removeAttribute: attr => removedAttrs.push(attr),
@@ -1019,30 +998,15 @@ globalThis.__map = pluginPanelTabMap;
 `,
 			{
 				lang: 'en',
-				msghubRequest: () =>
-					Promise.resolve([
-						{
-							pluginType: 'IngestStates',
-							instanceId: 0,
-							panelId: 'presets',
-							label: 'msghub.i18n.IngestStates.ui.panels.presets.label',
-							i18n: {
-								lang: 'en',
-								translations: { 'msghub.i18n.IngestStates.ui.panels.presets.label': 'Presets' },
-							},
-							bundle: { hash: 'abc123' },
-						},
-					]),
 				document: {
 					getElementById: id => (id === 'plugin-IngestStates-0-presets' ? container : null),
 					querySelector: () => tabEl,
 				},
-				mergePluginI18n: (pluginType, translations) => mergeCalls.push({ pluginType, translations }),
 				t: key => (key === 'msghub.i18n.IngestStates.ui.panels.presets.label' ? 'Presets' : String(key || '')),
 				applyCategoryMarker: () => {},
-				normalizePluginPanel: (contrib, ref) => ({
+				normalizePluginPanel: (panelDef, ref) => ({
 					id: `tab-plugin-${ref.pluginType}-${ref.instanceId}-${ref.panelId}`,
-					label: contrib.label,
+					label: panelDef.label,
 					ui: { kind: 'plugin', loader: 'esm' },
 				}),
 				registerPanelDescriptor: d => registeredDescriptors.push(d),
@@ -1052,19 +1016,27 @@ globalThis.__map = pluginPanelTabMap;
 		);
 
 		const ref = { pluginType: 'IngestStates', instanceId: 0, panelId: 'presets' };
-		const enabledTabIds = await sandbox.__fn([ref], {}, null);
+		const enabledTabIds = await sandbox.__fn([ref], {}, {
+			'plugin-IngestStates-0-presets': {
+				id: 'plugin-IngestStates-0-presets',
+				label: 'msghub.i18n.IngestStates.ui.panels.presets.label',
+				ui: {
+					kind: 'plugin',
+					loader: 'esm',
+					bundle: { hash: 'abc123' },
+					i18n: {
+						lang: 'en',
+						translations: { 'msghub.i18n.IngestStates.ui.panels.presets.label': 'Presets' },
+					},
+				},
+			},
+		});
 
 		assert.deepEqual(JSON.parse(JSON.stringify(enabledTabIds)), ['tab-plugin-IngestStates-0-presets']);
 		assert.ok(removedAttrs.includes('aria-disabled'), 'aria-disabled must be removed from enabled tab');
 		assert.ok(removedClasses.includes('is-disabled'), 'is-disabled class must be removed from enabled tab');
 		assert.deepEqual(setAttrs, [['data-i18n', 'msghub.i18n.IngestStates.ui.panels.presets.label']]);
 		assert.equal(tabLabel, 'Presets', 'tab text must be translated from the contribution i18n key');
-		assert.deepEqual(mergeCalls, [
-			{
-				pluginType: 'IngestStates',
-				translations: { 'msghub.i18n.IngestStates.ui.panels.presets.label': 'Presets' },
-			},
-		]);
 		assert.ok(sandbox.__map.has('tab-plugin-IngestStates-0-presets'), 'entry must be registered in pluginPanelTabMap');
 		const entry = sandbox.__map.get('tab-plugin-IngestStates-0-presets');
 		assert.equal(entry.hash, 'abc123');
@@ -1074,7 +1046,7 @@ globalThis.__map = pluginPanelTabMap;
 		assert.equal(registeredDescriptors[0].id, 'tab-plugin-IngestStates-0-presets');
 	});
 
-	it('hydratePluginPanels: wrong instanceId — no match, slot stays disabled, enabledTabIds empty', async function () {
+	it('hydratePluginPanels: missing pluginPanels entry leaves the slot unresolved', async function () {
 		const source = await readRepoFile('admin/tab/boot.js');
 		// extractFunctionSource starts at 'function', stripping 'async' — prepend it back.
 		const fnSource = 'async ' + extractFunctionSource(source, 'hydratePluginPanels');
@@ -1088,13 +1060,7 @@ globalThis.__map = pluginPanelTabMap;
 `,
 			{
 				lang: 'en',
-				msghubRequest: () =>
-					Promise.resolve([
-						// instanceId: 99 does not match ref.instanceId: 0
-						{ pluginType: 'IngestStates', instanceId: 99, panelId: 'presets', label: 'presets.label', bundle: { hash: 'x' } },
-					]),
 				document: { getElementById: () => ({}), querySelector: () => null },
-				mergePluginI18n: () => {},
 				t: key => String(key || ''),
 				normalizePluginPanel: () => ({}),
 				registerPanelDescriptor: () => {},
@@ -1104,13 +1070,13 @@ globalThis.__map = pluginPanelTabMap;
 		);
 
 		const ref = { pluginType: 'IngestStates', instanceId: 0, panelId: 'presets' };
-		const enabledTabIds = await sandbox.__fn([ref], {}, null);
+		const enabledTabIds = await sandbox.__fn([ref], {}, {});
 
-		assert.deepEqual(JSON.parse(JSON.stringify(enabledTabIds)), [], 'wrong instanceId must produce no match');
+		assert.deepEqual(JSON.parse(JSON.stringify(enabledTabIds)), [], 'missing pluginPanels entry must produce no match');
 		assert.equal(sandbox.__map.size, 0, 'tabMap must remain empty on no match');
 	});
 
-	it('hydratePluginPanels: empty discover response — all slots disabled, no crash', async function () {
+	it('hydratePluginPanels: empty pluginPanels map leaves all slots unresolved without crashing', async function () {
 		const source = await readRepoFile('admin/tab/boot.js');
 		// extractFunctionSource starts at 'function', stripping 'async' — prepend it back.
 		const fnSource = 'async ' + extractFunctionSource(source, 'hydratePluginPanels');
@@ -1123,9 +1089,7 @@ globalThis.__fn = hydratePluginPanels;
 `,
 			{
 				lang: 'en',
-				msghubRequest: () => Promise.resolve([]),
 				document: { getElementById: () => null, querySelector: () => null },
-				mergePluginI18n: () => {},
 				t: () => '',
 				normalizePluginPanel: () => ({}),
 				registerPanelDescriptor: () => {},
@@ -1135,12 +1099,12 @@ globalThis.__fn = hydratePluginPanels;
 		);
 
 		const ref = { pluginType: 'IngestStates', instanceId: 0, panelId: 'presets' };
-		const enabledTabIds = await sandbox.__fn([ref], {}, null);
+		const enabledTabIds = await sandbox.__fn([ref], {}, {});
 
-		assert.deepEqual(JSON.parse(JSON.stringify(enabledTabIds)), [], 'empty discover must leave all slots disabled');
+		assert.deepEqual(JSON.parse(JSON.stringify(enabledTabIds)), [], 'empty pluginPanels map must leave all slots unresolved');
 	});
 
-	it('hydratePluginPanels: discover failure — all slots disabled, no crash', async function () {
+	it('hydratePluginPanels: missing active view pluginPanels does not crash', async function () {
 		const source = await readRepoFile('admin/tab/boot.js');
 		// extractFunctionSource starts at 'function', stripping 'async' — prepend it back.
 		const fnSource = 'async ' + extractFunctionSource(source, 'hydratePluginPanels');
@@ -1152,10 +1116,7 @@ ${fnSource}
 globalThis.__fn = hydratePluginPanels;
 `,
 			{
-				lang: 'en',
-				msghubRequest: () => Promise.reject(new Error('network error')),
 				document: { getElementById: () => null, querySelector: () => null },
-				mergePluginI18n: () => {},
 				t: () => '',
 				normalizePluginPanel: () => ({}),
 				registerPanelDescriptor: () => {},
@@ -1165,10 +1126,9 @@ globalThis.__fn = hydratePluginPanels;
 		);
 
 		const ref = { pluginType: 'IngestStates', instanceId: 0, panelId: 'presets' };
-		// Must not throw even on network failure.
 		const enabledTabIds = await sandbox.__fn([ref], {}, null);
 
-		assert.deepEqual(JSON.parse(JSON.stringify(enabledTabIds)), [], 'discover failure must leave all slots disabled without crashing');
+		assert.deepEqual(JSON.parse(JSON.stringify(enabledTabIds)), [], 'missing active view pluginPanels must leave all slots unresolved');
 	});
 
 	it('hydratePluginPanels: contrib.app flows through normalizePluginPanel to registered descriptor', async function () {
@@ -1176,14 +1136,6 @@ globalThis.__fn = hydratePluginPanels;
 		const fnSource = 'async ' + extractFunctionSource(source, 'hydratePluginPanels');
 
 		const app = { name: 'msghub.i18n.some.app.label', url: 'https://example.com' };
-		const contrib = {
-			pluginType: 'IngestStates',
-			instanceId: 0,
-			panelId: 'presets',
-			label: 'msghub.i18n.IngestStates.ui.panels.presets.label',
-			bundle: { hash: 'abc123' },
-			app,
-		};
 		const tabId = 'tab-plugin-IngestStates-0-presets';
 		const registeredDescriptors = [];
 
@@ -1196,18 +1148,16 @@ globalThis.__fn = hydratePluginPanels;
 			{
 				Promise,
 				lang: 'en',
-				msghubRequest: () => Promise.resolve([contrib]),
 				document: {
 					getElementById: id => (id === 'plugin-IngestStates-0-presets' ? {} : null),
 					querySelector: () => null,
 				},
-				mergePluginI18n: () => {},
 				t: key => String(key || ''),
-				normalizePluginPanel: (c, ref) => ({
+				normalizePluginPanel: (panelDef, ref) => ({
 					id: `tab-plugin-${ref.pluginType}-${ref.instanceId}-${ref.panelId}`,
-					label: c.label,
+					label: panelDef.label,
 					ui: { kind: 'plugin', loader: 'esm' },
-					app: c.app,
+					app: panelDef.app,
 				}),
 				registerPanelDescriptor: d => registeredDescriptors.push(d),
 			},
@@ -1215,7 +1165,14 @@ globalThis.__fn = hydratePluginPanels;
 		);
 
 		const ref = { pluginType: 'IngestStates', instanceId: 0, panelId: 'presets' };
-		await sandbox.__fn([ref], {}, null);
+		await sandbox.__fn([ref], {}, {
+			'plugin-IngestStates-0-presets': {
+				id: 'plugin-IngestStates-0-presets',
+				label: 'msghub.i18n.IngestStates.ui.panels.presets.label',
+				ui: { kind: 'plugin', loader: 'esm', bundle: { hash: 'abc123' } },
+				app,
+			},
+		});
 
 		assert.equal(registeredDescriptors.length, 1, 'registerPanelDescriptor must be called once');
 		assert.equal(registeredDescriptors[0].id, tabId);
@@ -1226,14 +1183,6 @@ globalThis.__fn = hydratePluginPanels;
 		const source = await readRepoFile('admin/tab/boot.js');
 		const fnSource = 'async ' + extractFunctionSource(source, 'hydratePluginPanels');
 
-		const contrib = {
-			pluginType: 'IngestStates',
-			instanceId: 0,
-			panelId: 'presets',
-			label: 'msghub.i18n.IngestStates.ui.panels.presets.label',
-			bundle: { hash: 'abc123' },
-			// no app field
-		};
 		const registeredDescriptors = [];
 
 		const sandbox = runInSandbox(
@@ -1245,18 +1194,16 @@ globalThis.__fn = hydratePluginPanels;
 			{
 				Promise,
 				lang: 'en',
-				msghubRequest: () => Promise.resolve([contrib]),
 				document: {
 					getElementById: id => (id === 'plugin-IngestStates-0-presets' ? {} : null),
 					querySelector: () => null,
 				},
-				mergePluginI18n: () => {},
 				t: key => String(key || ''),
-				normalizePluginPanel: (c, ref) => ({
+				normalizePluginPanel: (panelDef, ref) => ({
 					id: `tab-plugin-${ref.pluginType}-${ref.instanceId}-${ref.panelId}`,
-					label: c.label,
+					label: panelDef.label,
 					ui: { kind: 'plugin', loader: 'esm' },
-					app: c.app,
+					app: panelDef.app,
 				}),
 				registerPanelDescriptor: d => registeredDescriptors.push(d),
 			},
@@ -1264,7 +1211,13 @@ globalThis.__fn = hydratePluginPanels;
 		);
 
 		const ref = { pluginType: 'IngestStates', instanceId: 0, panelId: 'presets' };
-		await sandbox.__fn([ref], {}, null);
+		await sandbox.__fn([ref], {}, {
+			'plugin-IngestStates-0-presets': {
+				id: 'plugin-IngestStates-0-presets',
+				label: 'msghub.i18n.IngestStates.ui.panels.presets.label',
+				ui: { kind: 'plugin', loader: 'esm', bundle: { hash: 'abc123' } },
+			},
+		});
 
 		assert.equal(registeredDescriptors.length, 1, 'registerPanelDescriptor must be called even without app');
 		assert.equal(registeredDescriptors[0].app, undefined, 'descriptor.app must be undefined when contrib has no app block');
@@ -1348,12 +1301,12 @@ globalThis.__map = pluginPanelTabMap;
 		assert.ok(sandbox.__map.get('tab-plugin-IngestStates-0-presets').mountHandle);
 	});
 
-	it('boot.js wires plugin panel lifecycle: discover hydration, spinner, activation, lazy-load', async function () {
+	it('boot.js wires plugin panel lifecycle from the loaded view, plus spinner, activation, and lazy-load', async function () {
 		const source = await readRepoFile('admin/tab/boot.js');
 
-		// Discover hydration is wired.
 		assert.match(source, /\bhydratePluginPanels\s*\(/, 'hydratePluginPanels must be called');
-		assert.match(source, /['"]web\.pluginUi\.discover['"]/, 'web.pluginUi.discover must be used');
+		assert.doesNotMatch(source, /pluginUi\.[a-z]+/, 'legacy plugin-ui command strings must not appear in boot.js');
+		assert.match(source, /viewData\?\.pluginPanels/, 'plugin panel hydration must consume pluginPanels from the loaded view');
 
 		// Spinner is shown only for plugin-only compositions (initial === null).
 		assert.match(source, /const needsSpinner = initialTabId === null/, 'spinner condition must be initialTabId === null');
@@ -1405,7 +1358,7 @@ globalThis.__test = async function() {
 	const enabledTabIds = await hydratePluginPanels(
 		[{ pluginType: 'IngestStates', instanceId: 0, panelId: 'presets' }],
 		pluginUiHost,
-		null,
+		pluginPanels,
 	);
 	const defaultPanelId = 'messages';
 	const chosenTabId = resolveHydratedPluginTabId(defaultPanelId, enabledTabIds);
@@ -1416,24 +1369,19 @@ globalThis.__test = async function() {
 	return enabledTabIds;
 };`,
 			{
-				lang: 'en',
-				msghubRequest: () =>
-					Promise.resolve([
-						{
-							pluginType: 'IngestStates',
-							instanceId: 0,
-							panelId: 'presets',
-							label: 'msghub.i18n.IngestStates.ui.panels.presets.label',
-							bundle: { hash: 'h1' },
-						},
-					]),
 				document: {
 					getElementById: id => (id === 'plugin-IngestStates-0-presets' ? container : null),
 					querySelector: () => tabEl,
 				},
 				location: { hash: '#tab-plugin-IngestStates-0-presets' },
-				mergePluginI18n: () => {},
 				t: key => (key === 'msghub.i18n.IngestStates.ui.panels.presets.label' ? 'Presets' : String(key || '')),
+				pluginPanels: {
+					'plugin-IngestStates-0-presets': {
+						id: 'plugin-IngestStates-0-presets',
+						label: 'msghub.i18n.IngestStates.ui.panels.presets.label',
+						ui: { kind: 'plugin', loader: 'esm', bundle: { hash: 'h1' } },
+					},
+				},
 				pluginUiHost: {
 					mount(opts) {
 						mountCalls.push(opts);
@@ -1442,9 +1390,9 @@ globalThis.__test = async function() {
 				},
 				applyCategoryMarker: () => {},
 				tabSetActive: id => activatedIds.push(id),
-				normalizePluginPanel: (contrib, ref) => ({
+				normalizePluginPanel: (panelDef, ref) => ({
 					id: `tab-plugin-${ref.pluginType}-${ref.instanceId}-${ref.panelId}`,
-					label: contrib.label,
+					label: panelDef.label,
 					ui: { kind: 'plugin', loader: 'esm' },
 				}),
 				registerPanelDescriptor: () => {},
@@ -1579,7 +1527,10 @@ globalThis.__ensureBooted = ensureBooted;
 
 		await sandbox.__ensureBooted();
 
-		assert.deepEqual(requestCalls, [{ cmd: 'web.view.get', payload: { mode: 'panel', targetId: 'tab-messages' } }]);
+		assert.deepEqual(
+			JSON.parse(JSON.stringify(requestCalls)),
+			[{ cmd: 'web.view.get', payload: { mode: 'panel', targetId: 'tab-messages', lang: 'en' } }],
+		);
 		assert.equal(setActiveViewCalls.length, 1, 'setActiveView must be called once');
 		assert.strictEqual(setActiveViewCalls[0], viewData, 'setActiveView must receive the loaded view payload');
 		assert.deepEqual(computeAssetsForCompositionCalls, [['messages']]);
@@ -1675,7 +1626,7 @@ globalThis.__ensureBooted = ensureBooted;
 		assert.deepEqual(mountPluginPanelIfNeededCalls, [tabId]);
 	});
 
-	it('ensureBooted(): plugin single-panel view renders unavailableTarget when discover hydrates nothing', async function () {
+	it('ensureBooted(): plugin single-panel view renders unavailableTarget when hydration resolves nothing', async function () {
 		const source = await readRepoFile('admin/tab/boot.js');
 		const fnSource = extractFunctionSource(source, 'ensureBooted');
 
@@ -1797,6 +1748,7 @@ globalThis.__ensureBooted = ensureBooted;
 `,
 			{
 				Promise,
+				lang: 'en',
 				resolveViewRequest: () => ({ mode: 'panel', targetId: 'tab-unknown' }),
 				msghubRequest: async () => ({
 					composition: {
@@ -1840,6 +1792,96 @@ globalThis.__ensureBooted = ensureBooted;
 		assert.deepEqual(callOrder, ['ensureAdminI18nLoaded', 'renderPanelModeError']);
 	});
 
+	it('ensureBooted(): merges view plugin i18n only after admin i18n finished loading', async function () {
+		const source = await readRepoFile('admin/tab/boot.js');
+		const fnSource = extractFunctionSource(source, 'ensureBooted');
+
+		const callOrder = [];
+		let activeComposition = null;
+
+		const sandbox = runInSandbox(
+			`
+let bootCssFailures = [];
+const bootPanelFailures = new Map();
+let bootFatalErrorMessage = '';
+let bootPromise = null;
+
+function setConnLayout() {}
+async function loadCssFiles() { return { failed: [] }; }
+function applyStaticI18n() {}
+function updateConnectionPanel() {}
+function initConnectionPanelInteraction() {}
+async function initPanelsForComposition() {}
+
+${fnSource}
+globalThis.__ensureBooted = ensureBooted;
+`,
+			{
+				Promise,
+				lang: 'es',
+				location: { hash: '' },
+				resolveViewRequest: () => ({ mode: 'composition', targetId: 'adminTab' }),
+				msghubRequest: async () => ({
+					composition: {
+						id: 'adminTab',
+						layout: 'tabs',
+						panels: ['messages'],
+						defaultPanel: 'messages',
+						deviceMode: 'pc',
+					},
+					corePanels: {
+						messages: {
+							id: 'messages',
+							label: 'msghub.i18n.core.admin.ui.tabs.messages.label',
+							ui: { kind: 'core', loader: 'globals', initGlobal: 'Messages' },
+						},
+					},
+					pluginPanels: {
+						'plugin-IngestStates-0-presets': {
+							label: 'msghub.i18n.IngestStates.ui.panels.presets.label',
+							ui: {
+								i18n: {
+									lang: 'es',
+									translations: {
+										'msghub.i18n.IngestStates.ui.panels.presets.label': 'Plantillas',
+									},
+								},
+							},
+						},
+					},
+					request: { mode: 'composition', targetId: 'adminTab', lang: 'es' },
+				}),
+				setActiveView: view => {
+					activeComposition = view.composition;
+				},
+				getActiveComposition: () => activeComposition,
+				buildLayoutFromRegistry: () => ({
+					layout: 'tabs',
+					panelIds: ['messages'],
+					pluginPanelRefs: [],
+					defaultPanelId: 'messages',
+					missingNativePanelIds: [],
+				}),
+				computeAssetsForComposition: () => ({ css: [], js: [] }),
+				ensureAdminI18nLoaded: async () => {
+					callOrder.push('ensureAdminI18nLoaded');
+				},
+				mergeViewPluginPanelI18n: () => {
+					callOrder.push('mergeViewPluginPanelI18n');
+				},
+				initTabs: () => ({ setActive() {}, initial: 'tab-messages' }),
+				maybeHardReloadForLateCriticalBootFailure: () => false,
+				document: { addEventListener() {} },
+				ui: null,
+			},
+			'boot-plugin-i18n-order.js',
+		);
+
+		await sandbox.__ensureBooted();
+
+		assert.deepEqual(callOrder, ['ensureAdminI18nLoaded', 'mergeViewPluginPanelI18n']);
+	});
+
 	it('hydratePluginPanels + mountPluginPanelIfNeeded: single-shell — container without tabEl, map populated, mount succeeds', async function () {
 		// Integration test for the single-layout contract:
 		// the shell creates the container div, hydratePluginPanels runs next and
@@ -1856,12 +1898,10 @@ globalThis.__ensureBooted = ensureBooted;
 
 		const tabId = 'tab-plugin-IngestStates-0-presets';
 		const key = 'plugin-IngestStates-0-presets';
-		const contrib = {
-			pluginType: 'IngestStates',
-			instanceId: 0, // numeric — strict-equality match inside hydratePluginPanels requires hydrateRef to use same type
-			panelId: 'presets',
+		const panelDef = {
+			id: 'plugin-IngestStates-0-presets',
 			label: 'msghub.i18n.IngestStates.ui.panels.presets.label',
-			bundle: { hash: 'abc123' },
+			ui: { kind: 'plugin', loader: 'esm', bundle: { hash: 'abc123' } },
 		};
 
 		// Minimal container stub — represents the div created by the single-layout shell.
@@ -1887,10 +1927,9 @@ globalThis.__pluginPanelTabMap = pluginPanelTabMap;
 					getElementById: id => (id === key ? container : null),
 					querySelector: () => null,
 				},
-				mergePluginI18n: () => {},
 				t: key => String(key || ''),
 				applyCategoryMarker: () => {},
-				normalizePluginPanel: (c, ref) => ({ id: tabId, label: c.label, ui: { kind: 'plugin' } }),
+				normalizePluginPanel: (resolvedPanelDef, ref) => ({ id: tabId, label: resolvedPanelDef.label, ui: { kind: 'plugin' } }),
 				registerPanelDescriptor: d => {
 					descriptorCalls.push(d);
 				},
@@ -1898,15 +1937,15 @@ globalThis.__pluginPanelTabMap = pluginPanelTabMap;
 			'boot-hydrate-mount-integration.js',
 		);
 
-		// Derive hydrateRef from contrib to match contrib.instanceId type — same as boot.js plugin path.
-		const hydrateRef = { pluginType: contrib.pluginType, instanceId: contrib.instanceId, panelId: contrib.panelId };
+		const hydrateRef = { pluginType: 'IngestStates', instanceId: 0, panelId: 'presets' };
 
 		const pluginUiHost = {
 			mount: opts => ({ mountedWith: opts }),
 		};
 
-		// Step 1: hydrate with the single-element ref list and the pre-fetched contribution.
-		const enabledIds = await sandbox.__hydratePluginPanels([hydrateRef], pluginUiHost, [contrib]);
+		const enabledIds = await sandbox.__hydratePluginPanels([hydrateRef], pluginUiHost, {
+			'plugin-IngestStates-0-presets': panelDef,
+		});
 
 		// Hydration must succeed without a tab element.
 		// Use element-level checks rather than deepEqual: the returned array is from the vm
@@ -1918,7 +1957,7 @@ globalThis.__pluginPanelTabMap = pluginPanelTabMap;
 		const entry = sandbox.__pluginPanelTabMap.get(tabId);
 		assert.ok(entry, 'pluginPanelTabMap must contain an entry after hydration');
 		assert.equal(entry.container, container, 'entry.container must be the div found by getElementById');
-		assert.equal(entry.hash, 'abc123', 'entry.hash must come from contrib.bundle.hash');
+		assert.equal(entry.hash, 'abc123', 'entry.hash must come from panelDef.ui.bundle.hash');
 		assert.strictEqual(entry.mountHandle, null, 'entry.mountHandle must be null before mount');
 		assert.equal(entry.ref, hydrateRef, 'entry.ref must be the hydrateRef passed to hydratePluginPanels');
 
@@ -1944,7 +1983,6 @@ globalThis.__pluginPanelTabMap = pluginPanelTabMap;
 		// Track call order to verify ensureAdminI18nLoaded precedes renderPanelModeError.
 		const callOrder = [];
 		const renderPanelModeErrorCalls = [];
-		const buildSinglePanelShellCalls = [];
 
 		const sandbox = runInSandbox(
 			`
@@ -1958,6 +1996,7 @@ globalThis.__ensureBooted = ensureBooted;
 `,
 			{
 				Promise,
+				lang: 'en',
 				resolveViewRequest: () => ({ mode: 'panel', targetId: 'bad-target' }),
 				msghubRequest: async () => {
 					throw Object.assign(new Error('Invalid panel target'), { code: 'BAD_REQUEST' });
@@ -1968,9 +2007,6 @@ globalThis.__ensureBooted = ensureBooted;
 				renderPanelModeError: key => {
 					callOrder.push('renderPanelModeError');
 					renderPanelModeErrorCalls.push(key);
-				},
-				buildSinglePanelShell: () => {
-					buildSinglePanelShellCalls.push(true);
 				},
 				maybeHardReloadForLateCriticalBootFailure: () => false,
 				ui: null,
@@ -1986,7 +2022,6 @@ globalThis.__ensureBooted = ensureBooted;
 			'msghub.i18n.core.admin.ui.panel.error.unknownTarget.text',
 			'renderPanelModeError must receive the unknownTarget i18n key',
 		);
-		assert.equal(buildSinglePanelShellCalls.length, 0, 'buildSinglePanelShell must NOT be called for invalid panel requests');
 		// i18n must be loaded before the error is rendered so t() produces a translated string.
 		assert.deepEqual(
 			callOrder,

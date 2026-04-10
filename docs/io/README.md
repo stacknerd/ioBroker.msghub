@@ -178,6 +178,7 @@ Then continue based on your question:
 - `IoCoreConnection`: [`./IoCoreConnection.md`](./IoCoreConnection.md)
 - `IoManagedMeta`: [`./IoManagedMeta.md`](./IoManagedMeta.md)
 - `IoPluginGuards`: [`./IoPluginGuards.md`](./IoPluginGuards.md)
+- `IoPluginPanelResolver`: [`./IoPluginPanelResolver.md`](./IoPluginPanelResolver.md)
 - `IoPluginResources`: [`./IoPluginResources.md`](./IoPluginResources.md)
 - `IoPluginUiRpc`: [`./IoPluginUiRpc.md`](./IoPluginUiRpc.md)
 - `IoPlugins`: [`./IoPlugins.md`](./IoPlugins.md)

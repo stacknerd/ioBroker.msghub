@@ -19,7 +19,7 @@ Without `IoPluginUiRpc`, host-bound PluginUi RPC handling would be duplicated in
 That causes:
 
 - duplicated validation logic,
-- duplicated contribution lookup and timeout handling,
+- duplicated panel lookup and timeout handling,
 - higher drift risk between admin and web RPC behavior.
 
 `IoPluginUiRpc` centralizes that shared RPC core in one file while preserving the explicit public hook split required by the contract.
@@ -32,7 +32,7 @@ Simple flow:
 
 1. A host-facing backend caller sends either `admin.pluginUi.rpc` or `web.pluginUi.rpc`.
 2. `IoAdminTab` or `IoWebUi` routes that command into `IoPluginUiRpc`.
-3. `IoPluginUiRpc` validates the host-bound payload and resolves the active plugin panel contribution.
+3. `IoPluginUiRpc` validates the host-bound payload and resolves the active plugin panel through the canonical backend resolver.
 4. `IoPluginUiRpc` dispatches to the host-specific plugin hook and returns a normalized response.
 
 References:
@@ -49,7 +49,7 @@ References:
 
 1. Shared validation for host-bound PluginUi RPC payloads.
 2. Payload-size enforcement for PluginUi RPC (`64 KiB` serialized limit).
-3. Active contribution lookup for `{ pluginType, instanceId, panelId }`.
+3. Active plugin-panel lookup for `{ pluginType, instanceId, panelId }` through `IoPluginPanelResolver`.
 4. Host-bound dispatch to:
    - `handleAdminUiRpc`
    - `handleWebUiRpc`
@@ -85,7 +85,7 @@ Those responsibilities belong to `IoAdminTab`, `IoWebUi`, `main.js`, and the lat
 
 The payload is host-bound:
 
-- plugin identity is validated against active discover contributions
+- plugin identity is validated against the canonical runtime resolver
 - the caller does not get a second hidden path to override runtime identity
 
 ---
@@ -131,7 +131,7 @@ Covered areas include:
 - admin/web hook selection
 - required-field validation
 - payload-size validation
-- missing contribution/runtime handling
+- missing panel/runtime handling
 - timeout handling
 - unexpected plugin response handling
 
@@ -141,6 +141,7 @@ Covered areas include:
 
 - implementation: `lib/IoPluginUiRpc.js`
 - tests: `lib/IoPluginUiRpc.test.js`
+- canonical panel resolver: `lib/IoPluginPanelResolver.js`
 - admin facade: `lib/IoAdminTab.js`
 - web facade: `lib/IoWebUi.js`
 - IO overview: `docs/io/README.md`

@@ -90,7 +90,6 @@ All normal `admin.*` commands require `payload.token` and validate it centrally 
 
 Not owned by `IoAdminTab` anymore:
 
-- `web.pluginUi.discover`
 - `web.pluginUi.bundle.get`
 - `web.pluginUi.rpc`
 

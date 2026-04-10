@@ -35,13 +35,13 @@ Simple flow:
 1. A host requests `web.view.get`.
 2. `IoWebUi` delegates the business resolution to `IoUiCatalog.getView(...)`.
 3. `IoUiCatalog` validates the request against `IoUiRegistry`.
-4. `IoUiCatalog` returns `{ composition, corePanels, request }`.
+4. `IoUiCatalog` returns `{ composition, corePanels, pluginPanels, request }`.
 
 References:
 
 - registry input: `lib/IoUiRegistry.js`
 - command facade: `lib/IoWebUi.js`
-- UI-facing contract: `docs/ui/tab-registry.md`
+- UI-facing contract: `docs/ui/API.md`
 
 ---
 
@@ -51,9 +51,11 @@ References:
 
 1. Validating the normalized `web.view.get` request shape.
 2. Resolving composition requests against the backend-owned registry.
-3. Building synthetic single-panel compositions for `panel=` requests.
-4. Returning only the resolved core/native panel definitions needed by the active composition.
-5. Rejecting invalid requests with stable `BAD_REQUEST` semantics.
+3. Normalizing `request.lang` with safe fallback to `en`.
+4. Materializing wildcard compositions backend-side.
+5. Resolving plugin-owned panels through the canonical backend resolver.
+6. Returning the split view payload `{ composition, corePanels, pluginPanels, request }`.
+7. Rejecting invalid requests with stable `BAD_REQUEST` semantics.
 
 ---
 
@@ -63,8 +65,8 @@ References:
 
 1. Transport/envelope handling for backend commands.
 2. Token validation.
-3. Plugin runtime availability checks.
-4. Plugin discovery or plugin-owned metadata enrichment.
+3. Bundle-file reads or plugin RPC dispatch.
+4. Maintaining a second plugin lookup or validation path outside the canonical resolver.
 5. Browser-specific shell behavior, DOM state, or asset loading.
 
 Those concerns belong to `IoWebUi`, plugin runtime paths, and the browser shell.
@@ -78,7 +80,7 @@ Those concerns belong to `IoWebUi`, plugin runtime paths, and the browser shell.
 `IoUiCatalog.getView(request)` accepts the normalized `web.view.get` payload:
 
 ```js
-{ mode, targetId? }
+{ mode, targetId?, lang? }
 ```
 
 Supported modes:
@@ -91,13 +93,14 @@ Supported modes:
 `getView(...)` returns:
 
 ```js
-{ composition, corePanels, request }
+{ composition, corePanels, pluginPanels, request }
 ```
 
 Where:
 
 - `composition` is either a registry composition or a synthetic single composition
 - `corePanels` contains only resolved native/core panel definitions
+- `pluginPanels` contains only resolved plugin-owned panel definitions keyed by canonical runtime panel id
 - `request` is the normalized request object that was actually resolved
 
 ### Validation rules
@@ -107,6 +110,7 @@ Where:
 - unknown composition ids are rejected with `BAD_REQUEST`
 - `panel` mode requires `targetId`
 - `panel` mode validates only the formal `tab-...` shape, not runtime availability
+- `lang` is normalized to a safe lowercase tag with `en` fallback
 
 ---
 
@@ -124,11 +128,14 @@ For:
 
 1. picks `targetId` or the default composition `adminTab`
 2. loads the matching composition from `IoUiRegistry.compositions`
-3. extracts only the referenced core/native panels into `corePanels`
+3. materializes wildcard compositions so the frontend never receives `['*']`
+4. extracts referenced core/native panels into `corePanels`
+5. resolves referenced plugin panels into `pluginPanels` through the canonical runtime resolver
 
 Wildcard behavior:
 
 - `panels: ['*']` expands to every core/native panel from `IoUiRegistry.panels`
+- currently running plugin panels are appended as structured plugin refs
 
 ### Panel mode
 
@@ -143,6 +150,7 @@ For:
 1. parses the canonical `tab-...` target
 2. builds a synthetic single composition with `layout: 'single'`
 3. returns the matching core panel in `corePanels`, or an empty `corePanels` map for plugin-panel targets
+4. resolves `pluginPanels` only when the targeted plugin panel is currently available
 
 Core-panel targets become:
 
@@ -154,7 +162,7 @@ Plugin-panel targets become:
 - `panels: [{ type: 'pluginPanel', ... }]`
 - `defaultPanel: 'plugin-<PluginType>-<instanceId>-<panelId>'`
 
-That keeps plugin-owned metadata outside the backend registry and outside the `corePanels` map.
+That keeps plugin-owned metadata outside the backend registry and outside the `corePanels` map while still letting `web.view.get` carry resolved plugin panel shell metadata.
 
 ---
 
@@ -166,16 +174,24 @@ That keeps plugin-owned metadata outside the backend registry and outside the `c
 `IoUiCatalog` owns the request-dependent resolution logic.
 Neither file should absorb the other's responsibility.
 
-### 2) `corePanels` is native-only
+### 2) `corePanels` is native-only and `pluginPanels` is plugin-only
 
 `corePanels` intentionally contains only native/core panel definitions.
-Plugin-owned panel metadata is not mirrored into the resolved view payload.
+`pluginPanels` intentionally contains only resolved plugin-owned panel definitions keyed by runtime panel id.
 
 ### 3) Synthetic panel compositions are shell-compatible
 
 Single-panel requests are answered with a normal composition-shaped object so browser hosts can stay on one shared view contract instead of maintaining a separate frontend-only panel mode model.
 
-### 4) Formal validation only for `panel=`
+### 4) One canonical plugin-panel resolver
+
+Plugin-owned panels are resolved only through the shared backend resolver used by:
+
+- `web.view.get`
+- `web.pluginUi.bundle.get`
+- `web.pluginUi.rpc`
+
+### 5) Formal validation only for `panel=`
 
 Panel mode validates syntax, not runtime existence.
 That keeps `IoUiCatalog` focused on view resolution rather than plugin/runtime liveness.
@@ -217,5 +233,5 @@ Covered areas include:
 - implementation: `lib/IoUiCatalog.js`
 - registry input: `lib/IoUiRegistry.js` / `docs/io/IoUiRegistry.md`
 - web-safe command facade: `lib/IoWebUi.js` / `docs/io/IoWebUi.md`
-- UI-facing view contract: `docs/ui/tab-registry.md`
+- UI-facing view contract: `docs/ui/API.md`
 - IO overview: `docs/io/README.md`

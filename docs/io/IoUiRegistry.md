@@ -191,5 +191,5 @@ Covered areas include:
 - implementation: `lib/IoUiRegistry.js`
 - resolver: `lib/IoUiCatalog.js` / `docs/io/IoUiCatalog.md`
 - web-safe command facade: `lib/IoWebUi.js` / `docs/io/IoWebUi.md`
-- UI-facing view contract: `docs/ui/tab-registry.md`
+- UI-facing view contract: `docs/ui/API.md`
 - IO overview: `docs/io/README.md`

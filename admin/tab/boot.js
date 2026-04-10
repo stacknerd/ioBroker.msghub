@@ -1,4 +1,4 @@
-/* global window, document, location, HTMLElement, HTMLInputElement, HTMLTextAreaElement, t, lang, createUi, createAdminApi, msghubRequest, msghubSocket, adapterInstance, args, h, getPanelDefinition, win, loadJsFilesSequential, renderPanelBootError, buildLayoutFromRegistry, getActiveComposition, computeAssetsForComposition, ensureAdminI18nLoaded, loadCssFiles, initTabs, activatePanel, updateDocumentTitle, isEmbeddedInAdmin, overrideLang, createMsghubPluginUiHost, normalizePluginPanel, registerPanelDescriptor, resolveViewRequest, setActiveView, renderPanelModeError, applyCategoryMarker, mergePluginI18n, pickText */
+/* global window, document, location, HTMLElement, HTMLInputElement, HTMLTextAreaElement, t, lang, createUi, createAdminApi, msghubRequest, msghubSocket, adapterInstance, args, h, getPanelDefinition, win, loadJsFilesSequential, renderPanelBootError, buildLayoutFromRegistry, getActiveComposition, getActiveView, computeAssetsForComposition, ensureAdminI18nLoaded, loadCssFiles, initTabs, activatePanel, updateDocumentTitle, isEmbeddedInAdmin, overrideLang, createMsghubPluginUiHost, normalizePluginPanel, registerPanelDescriptor, resolveViewRequest, setActiveView, renderPanelModeError, applyCategoryMarker, mergePluginI18n, pickText */
 'use strict';
 
 /**
@@ -90,20 +90,6 @@ function applyRuntimeAboutPayload(payload) {
 		if (remoteLang) {
 			overrideLang(remoteLang);
 			void ensureAdminI18nLoaded()
-				.then(() =>
-					msghubRequest('web.pluginUi.discover', { lang })
-						.catch(() => null)
-						.then(contributions => {
-							for (const contrib of Array.isArray(contributions) ? contributions : []) {
-								const pluginType =
-									typeof contrib?.pluginType === 'string' ? contrib.pluginType.trim() : '';
-								if (!pluginType || !contrib?.i18n?.translations) {
-									continue;
-								}
-								mergePluginI18n(pluginType, contrib.i18n.translations);
-							}
-						}),
-				)
 				.catch(() => undefined)
 				.then(() => applyStaticI18n());
 		}
@@ -1004,31 +990,41 @@ async function initPanelsForComposition(panelIds) {
 const pluginPanelTabMap = new Map();
 
 /**
- * Discovers available plugin panel contributions and enables matching tab slots.
- * Enables tabs, updates their text labels, and registers entries in `pluginPanelTabMap`.
- * Per-slot failures are isolated so other slots continue unaffected.
+ * Merges plugin-owned shell translations from one loaded view payload.
+ *
+ * @param {object|null|undefined} viewData - Active view payload.
+ */
+function mergeViewPluginPanelI18n(viewData) {
+	const pluginPanels = viewData?.pluginPanels;
+	const entries = pluginPanels && typeof pluginPanels === 'object' ? Object.entries(pluginPanels) : [];
+	for (const [runtimePanelId, panelDef] of entries) {
+		const runtimeId = typeof runtimePanelId === 'string' ? runtimePanelId.trim() : '';
+		const match = /^plugin-([A-Za-z][A-Za-z0-9]*)-\d+-[a-z0-9][a-z0-9-]*$/.exec(runtimeId);
+		const pluginType = match ? match[1] : '';
+		const translations = panelDef?.ui?.i18n?.translations;
+		if (!pluginType || !translations || typeof translations !== 'object') {
+			continue;
+		}
+		mergePluginI18n(pluginType, translations);
+	}
+}
+
+/**
+ * Registers resolved plugin panel slots from the loaded backend view.
  *
  * @param {object[]} refs - Structured plugin panel references from buildLayoutFromRegistry.
  * @param {object} host - Plugin UI host instance (from createMsghubPluginUiHost).
- * @param {object[]|null} knownContributions - Pre-fetched discover contributions, or null to fetch now.
+ * @param {Record<string, object>|null} knownPluginPanels - Resolved plugin panel map from `web.view.get`, or null to read from the active view.
  * @returns {Promise<string[]>} DOM tab IDs of successfully enabled plugin panel tabs.
  */
-async function hydratePluginPanels(refs, host, knownContributions = null) {
-	let contributions;
-	if (knownContributions !== null) {
-		contributions = knownContributions;
-	} else {
-		const r = await msghubRequest('web.pluginUi.discover', { lang }).catch(() => null);
-		contributions = Array.isArray(r) ? r : [];
-	}
-	for (const contrib of Array.isArray(contributions) ? contributions : []) {
-		const pluginType = typeof contrib?.pluginType === 'string' ? contrib.pluginType.trim() : '';
-		if (!pluginType || !contrib?.i18n?.translations) {
-			continue;
-		}
-		mergePluginI18n(pluginType, contrib.i18n.translations);
-	}
-
+async function hydratePluginPanels(refs, host, knownPluginPanels = null) {
+	const activeViewPluginPanels = typeof getActiveView === 'function' ? getActiveView()?.pluginPanels : null;
+	const pluginPanels =
+		knownPluginPanels && typeof knownPluginPanels === 'object'
+			? knownPluginPanels
+			: activeViewPluginPanels && typeof activeViewPluginPanels === 'object'
+				? activeViewPluginPanels
+				: {};
 	const enabledTabIds = [];
 	for (const ref of refs) {
 		try {
@@ -1036,27 +1032,19 @@ async function hydratePluginPanels(refs, host, knownContributions = null) {
 			const tabId = `tab-${key}`;
 			const container = document.getElementById(key);
 			const panelEl = document.getElementById(tabId);
-			const contrib = Array.isArray(contributions)
-				? contributions.find(
-						c =>
-							c.pluginType === ref.pluginType &&
-							c.instanceId === ref.instanceId &&
-							c.panelId === ref.panelId,
-					)
-				: null;
-			if (!container || !contrib) {
+			const panelDef = pluginPanels[key] && typeof pluginPanels[key] === 'object' ? pluginPanels[key] : null;
+			if (!container || !panelDef) {
 				continue;
 			}
 
-			// Enable tab: remove disabled state and update label.
 			const tabEl = document.querySelector(`a.msghub-tab[href="#${tabId}"]`);
 			if (tabEl) {
 				tabEl.removeAttribute('aria-disabled');
 				tabEl.classList.remove('is-disabled');
-				if (typeof contrib.label === 'string' && contrib.label.trim()) {
-					tabEl.setAttribute('data-i18n', contrib.label);
+				if (typeof panelDef.label === 'string' && panelDef.label.trim()) {
+					tabEl.setAttribute('data-i18n', panelDef.label);
 				}
-				const label = typeof contrib.label === 'string' ? t(contrib.label) : '';
+				const label = typeof panelDef.label === 'string' ? t(panelDef.label) : '';
 				if (label) {
 					tabEl.textContent = label;
 				}
@@ -1064,15 +1052,13 @@ async function hydratePluginPanels(refs, host, knownContributions = null) {
 
 			pluginPanelTabMap.set(tabId, {
 				ref,
-				hash: String(contrib.bundle?.hash ?? ''),
+				hash: String(panelDef?.ui?.bundle?.hash ?? ''),
 				container,
 				host,
 				mountHandle: null,
 			});
 
-			// Register canonical descriptor so activatePanel / updateDocumentTitle can
-			// resolve the panel title without querying DOM tab text.
-			const descriptor = normalizePluginPanel(contrib, ref);
+			const descriptor = normalizePluginPanel(panelDef, ref);
 			registerPanelDescriptor(descriptor);
 			applyCategoryMarker(panelEl, descriptor.category);
 
@@ -1086,7 +1072,7 @@ async function hydratePluginPanels(refs, host, knownContributions = null) {
 }
 
 /**
- * Resolves the preferred hydrated plugin tab after discover completed.
+ * Resolves the preferred hydrated plugin tab after hydration completed.
  *
  * URL hash wins when it targets an enabled plugin tab. Otherwise the composition
  * default panel wins. For plugin-only layouts, the first enabled tab can be used
@@ -1156,10 +1142,12 @@ function ensureBooted() {
 	bootFatalErrorMessage = '';
 	bootPromise = Promise.resolve()
 		.then(async () => {
-			const viewRequest = typeof resolveViewRequest === 'function' ? resolveViewRequest() : { mode: 'composition' };
+			const viewRequest =
+				typeof resolveViewRequest === 'function' ? resolveViewRequest() : { mode: 'composition' };
+			const viewPayload = { ...viewRequest, lang };
 			let viewData;
 			try {
-				viewData = await msghubRequest('web.view.get', viewRequest);
+				viewData = await msghubRequest('web.view.get', viewPayload);
 			} catch (err) {
 				if (viewRequest.mode === 'panel' && err?.code === 'BAD_REQUEST') {
 					// Load i18n before rendering so t() produces a translated string, not a raw key.
@@ -1172,12 +1160,6 @@ function ensureBooted() {
 			setActiveView(viewData);
 
 			const comp = getActiveComposition();
-			const isWildcard = Array.isArray(comp?.panels) && comp.panels.length === 1 && comp.panels[0] === '*';
-			let prefetchedContributions = null;
-			if (isWildcard) {
-				const r = await msghubRequest('web.pluginUi.discover', { lang }).catch(() => null);
-				prefetchedContributions = Array.isArray(r) ? r : [];
-			}
 
 			const {
 				layout,
@@ -1185,9 +1167,7 @@ function ensureBooted() {
 				pluginPanelRefs,
 				defaultPanelId,
 				missingNativePanelIds = [],
-			} = buildLayoutFromRegistry({
-				contributions: prefetchedContributions ?? [],
-			});
+			} = buildLayoutFromRegistry();
 			if (missingNativePanelIds.length > 0) {
 				await ensureAdminI18nLoaded();
 				if (viewRequest.mode === 'panel') {
@@ -1206,6 +1186,9 @@ function ensureBooted() {
 			const assets = computeAssetsForComposition(panelIds);
 
 			await ensureAdminI18nLoaded();
+			if (typeof mergeViewPluginPanelI18n === 'function') {
+				mergeViewPluginPanelI18n(viewData);
+			}
 			const cssRes = await loadCssFiles(assets.css);
 			bootCssFailures = Array.isArray(cssRes?.failed) ? cssRes.failed.slice() : [];
 			if (cssRes?.failed?.length) {
@@ -1248,7 +1231,7 @@ function ensureBooted() {
 					ui?.spinner?.show?.({ blocking: true });
 				}
 
-				const enabledTabIds = await hydratePluginPanels(pluginPanelRefs, pluginUiHost, prefetchedContributions);
+				const enabledTabIds = await hydratePluginPanels(pluginPanelRefs, pluginUiHost, viewData?.pluginPanels);
 
 				if (needsSpinner) {
 					// Plugin-only composition: no tab was active pre-hydration.

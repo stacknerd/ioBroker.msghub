@@ -303,13 +303,17 @@ function createAdminApi({ msghubRequest, msghubSocket, adapterInstance, lang, t,
 		const activeView = typeof getActiveView === 'function' ? getActiveView() : null;
 		if (request.mode === 'panel') {
 			const composition =
-				activeView?.request?.mode === 'panel' && activeView?.composition && typeof activeView.composition === 'object'
+				activeView?.request?.mode === 'panel' &&
+				activeView?.composition &&
+				typeof activeView.composition === 'object'
 					? activeView.composition
 					: null;
 			const panelIds = Array.isArray(composition?.panels)
 				? composition.panels.filter(v => typeof v === 'string' && v)
 				: [];
-			const fallbackPanelId = typeof request.targetId === 'string' ? request.targetId.trim().slice('tab-'.length) : '';
+			const fallbackTargetId =
+				'targetId' in request && typeof request.targetId === 'string' ? request.targetId.trim() : '';
+			const fallbackPanelId = fallbackTargetId ? fallbackTargetId.slice('tab-'.length) : '';
 			return {
 				viewId: null,
 				layout: 'single',
@@ -322,7 +326,9 @@ function createAdminApi({ msghubRequest, msghubSocket, adapterInstance, lang, t,
 			};
 		}
 		const composition = typeof getActiveComposition === 'function' ? getActiveComposition() : null;
-		const panelIds = Array.isArray(composition?.panels) ? composition.panels.filter(v => typeof v === 'string' && v) : [];
+		const panelIds = Array.isArray(composition?.panels)
+			? composition.panels.filter(v => typeof v === 'string' && v)
+			: [];
 		return {
 			viewId: typeof resolveViewId === 'function' ? resolveViewId() : 'adminTab',
 			layout: composition?.layout || 'tabs',

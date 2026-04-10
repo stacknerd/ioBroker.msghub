@@ -41,7 +41,7 @@ declare global {
 	function createUi(): any;
 
 	function initTabs(options?: any): { initial: string | null; setActive: (tabId: string) => void };
-	function buildLayoutFromRegistry(opts?: { contributions?: any[] }): {
+	function buildLayoutFromRegistry(): {
 		layout: 'tabs' | 'single';
 		panelIds: string[];
 		defaultPanelId: string;
@@ -114,32 +114,28 @@ declare global {
 	type AdminTabViewResponse = {
 		composition?: any;
 		corePanels?: Record<string, any>;
-		request?: { mode?: 'composition' | 'panel'; targetId?: string };
+		pluginPanels?: Record<string, any>;
+		request?: { mode?: 'composition' | 'panel'; targetId?: string; lang?: string };
 	};
 
-	/**
-	 * Minimal shape of a plugin panel contribution returned by `web.pluginUi.discover`.
-	 * The host passes this contribution through `normalizePluginPanel` to build a PanelDescriptor.
-	 * Full discover response contract defined in AdminTab_Contracts_APIs.md §6.
-	 */
-	type PluginContrib = {
-		pluginType: string;
-		instanceId: number;
-		panelId: string;
-		/** i18n key string owned by the plugin's admin-ui i18n bundle. */
+	type PluginPanelViewEntry = {
+		id: string;
 		label: string;
 		description?: string;
-		bundle?: { hash?: string };
-		/** Optional plugin-owned Admin UI translations for the active shell language. */
-		i18n?: { lang?: string; translations?: Record<string, unknown> } | null;
 		category?: string;
-		/** Optional PWA / install metadata. Plugin app icons are not consumed in this AdminTab path. */
+		ui: {
+			kind: 'plugin';
+			loader: 'esm';
+			apiVersion: string;
+			bundle: { hash: string };
+			i18n?: { lang?: string; translations?: Record<string, unknown> } | null;
+		};
 		app?: PluginAppBlock;
 	};
 
 	function activatePanel(panelId: string): string;
 	function updateDocumentTitle(descriptor?: PanelDescriptorLike): Promise<void>;
-	function normalizePluginPanel(contrib: PluginContrib, pluginRef: any): PanelDescriptorLike;
+	function normalizePluginPanel(panelDef: PluginPanelViewEntry, pluginRef: any): PanelDescriptorLike;
 	function registerPanelDescriptor(descriptor: PanelDescriptorLike): void;
 	function resolveIconUrl(descriptor: PanelDescriptorLike, slot: string): Promise<string | null>;
 	function generateManifest(
@@ -147,7 +143,5 @@ declare global {
 		resolvedIcons: Record<string, { src?: string; mimeType?: string; content?: string }>,
 	): object | null;
 	function applyCategoryMarker(panelEl: any, category?: string): void;
-	function resolvePanelMode(): any;
-	function buildSinglePanelShell(descriptor: PanelDescriptorLike): any;
 	function renderPanelModeError(errorKey: string): void;
 }

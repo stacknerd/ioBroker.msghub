@@ -64,7 +64,7 @@ The public effect is the existence of the file-scope globals declared in [`admin
 Main consumers:
 
 - `io`: [`./tab-runtime.md`](./tab-runtime.md)
-- `win`: [`./tab-registry.md`](./tab-registry.md), [`./tab-layout.md`](./tab-layout.md), [`./tab-boot.md`](./tab-boot.md), and also [`./tab-runtime.md`](./tab-runtime.md)
+- `win`: [`./tab-layout.md`](./tab-layout.md), [`./tab-boot.md`](./tab-boot.md), and [`./tab-runtime.md`](./tab-runtime.md)
 
 ---
 

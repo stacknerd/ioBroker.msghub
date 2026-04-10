@@ -1,4 +1,4 @@
-/* global window, document, location, history, MutationObserver, win, args, applyTheme, detectTheme, readThemeFromTopWindow, urlThemeLocked, t */
+/* global window, document, location, history, MutationObserver, args, applyTheme, detectTheme, readThemeFromTopWindow, urlThemeLocked, t */
 'use strict';
 
 /**
@@ -79,29 +79,30 @@ function normalizeCorePanel(registryKey, def) {
 }
 
 /**
- * Builds a canonical PanelDescriptor from a plugin discover contribution and a plugin ref.
+ * Builds a canonical PanelDescriptor from a resolved backend plugin panel and a plugin ref.
  *
  * `ui.entry` is intentionally absent from the frontend descriptor contract.
  * Bundle loading runs through `web.pluginUi.bundle.get` plus `bundle.hash`.
  *
- * @param {object} contrib - Discover contribution (`{ pluginType, instanceId, panelId, label, description, bundle, category?, app? }`).
+ * @param {object} panelDef - Resolved plugin panel (`{ id, label, description, category?, ui, app? }`).
  * @param {object} pluginRef - Plugin reference (`{ pluginType, instanceId, panelId }`).
  * @returns {object} Canonical PanelDescriptor.
  */
-function normalizePluginPanel(contrib, pluginRef) {
+function normalizePluginPanel(panelDef, pluginRef) {
 	const key = `plugin-${pluginRef.pluginType}-${pluginRef.instanceId}-${pluginRef.panelId}`;
 	return {
 		id: `tab-${key}`,
-		label: contrib.label,
-		description: contrib.description,
-		category: contrib.category,
+		label: panelDef?.label,
+		description: panelDef?.description,
+		category: panelDef?.category,
 		ui: {
+			...(panelDef?.ui && typeof panelDef.ui === 'object' ? panelDef.ui : {}),
 			kind: 'plugin',
 			loader: 'esm',
 			// Bundle loading is host-owned via web.pluginUi.bundle.get.
 			// `ui.entry` is intentionally not part of the frontend descriptor.
 		},
-		app: contrib.app,
+		app: panelDef?.app,
 	};
 }
 
@@ -957,6 +958,26 @@ function getCorePanels() {
 }
 
 /**
+ * Returns the resolved plugin panel map from the active backend view.
+ *
+ * @returns {Record<string, any>} Plugin panel map keyed by runtime panel id.
+ */
+function getPluginPanels() {
+	const panels = getActiveView()?.pluginPanels;
+	return panels && typeof panels === 'object' ? panels : {};
+}
+
+/**
+ * Build the canonical runtime panel id for one structured plugin ref.
+ *
+ * @param {object} pluginRef Structured plugin panel ref.
+ * @returns {string} Runtime panel id without the `tab-` prefix.
+ */
+function getPluginRuntimePanelId(pluginRef) {
+	return `plugin-${pluginRef.pluginType}-${pluginRef.instanceId}-${pluginRef.panelId}`;
+}
+
+/**
  * Resolves the active composition view id from the loaded backend view.
  *
  * Returns `null` in panel mode.
@@ -987,73 +1008,6 @@ function getActiveComposition() {
 }
 
 /**
- * Resolves the active single-panel mode from the normalized view request.
- *
- * Returns a result object with one of the following shapes:
- * - `{ active: false }` — no `panel` argument present; normal composition boot applies.
- * - `{ active: true, error: 'unknownTarget', tabId }` — argument present but formally invalid.
- * - `{ active: true, isPlugin: false, tabId, panelId }` — core panel target parsed.
- * - `{ active: true, isPlugin: true, pluginRef, tabId }` — plugin panel id parsed.
- *
- * @returns {object} Panel mode result.
- */
-function resolvePanelMode() {
-	const request = resolveViewRequest();
-	if (request.mode !== 'panel') {
-		return { active: false };
-	}
-	const panelArg = typeof request.targetId === 'string' ? request.targetId.trim() : '';
-	if (!panelArg.startsWith('tab-')) {
-		return { active: true, error: 'unknownTarget', tabId: panelArg };
-	}
-	const panelKey = panelArg.slice('tab-'.length);
-	if (panelKey.startsWith('plugin-')) {
-		const pluginMatch = /^plugin-([A-Za-z][A-Za-z0-9]*)-(\d+)-([a-z0-9][a-z0-9-]*)$/.exec(panelKey);
-		if (!pluginMatch) {
-			return { active: true, error: 'unknownTarget', tabId: panelArg };
-		}
-		const pluginType = pluginMatch[1];
-		const instanceId = pluginMatch[2];
-		const panelId = pluginMatch[3];
-		return { active: true, isPlugin: true, pluginRef: { pluginType, instanceId, panelId }, tabId: panelArg };
-	}
-	return { active: true, isPlugin: false, tabId: panelArg, panelId: panelKey };
-}
-
-/**
- * Builds the DOM for a single-panel shell from a canonical PanelDescriptor.
- *
- * Creates a panel container and mount container without a tab strip.
- * Mount container id derivation:
- * - Core panel: `descriptor.id.slice('tab-'.length) + '-root'`  (e.g. `'messages-root'`)
- * - Plugin panel: `descriptor.id.slice('tab-'.length)`          (e.g. `'plugin-IngestStates-0-presets'`)
- *
- * @param {object} descriptor - Canonical PanelDescriptor.
- * @returns {{ layout: string, panelIds: string[], pluginPanelRefs: object[], defaultPanelId: string }} Shell layout descriptor compatible with `setConnLayout`.
- */
-function buildSinglePanelShell(descriptor) {
-	const layoutHost = document.getElementById('msghub-layout') || document.querySelector('.msghub-root');
-	const isPlugin = descriptor?.ui?.kind === 'plugin';
-	const panelId = typeof descriptor?.id === 'string' ? descriptor.id : '';
-	const panelKey = panelId.startsWith('tab-') ? panelId.slice('tab-'.length) : panelId;
-	const mountId = isPlugin ? panelKey : `${panelKey}-root`;
-	const panelEl = h('div', { id: panelId, class: `msghub-panel msghub-${panelKey}`, role: 'tabpanel' });
-	applyCategoryMarker(panelEl, descriptor?.category);
-	panelEl.appendChild(h('div', { id: mountId }));
-	if (layoutHost) {
-		layoutHost.replaceChildren(panelEl);
-	}
-	registerPanelDescriptor(descriptor);
-	const registryKey = descriptor?._registryKey || '';
-	return {
-		layout: 'single',
-		panelIds: registryKey ? [registryKey] : [],
-		pluginPanelRefs: [],
-		defaultPanelId: registryKey,
-	};
-}
-
-/**
  * Renders a hard error state for unresolvable single-panel targets.
  *
  * @param {string} errorKey - i18n key for the error message.
@@ -1067,26 +1021,20 @@ function renderPanelModeError(errorKey) {
 }
 
 /**
- * Builds the visible layout (tabs/panel containers) from the registry.
+ * Builds the visible layout (tabs/panel containers) from the loaded backend view.
  * Handles mixed composition panels: native string IDs and structured plugin panel references.
- * For wildcard compositions (`panels: ['*']`), pass discover contributions via opts.
  *
- * @param {{ contributions?: object[] }} [opts] - Optional settings for wildcard mode.
- *   contributions: discover contributions array; required when composition declares `panels:['*']`.
  * @returns {{ layout: string, panelIds: string[], pluginPanelRefs: object[], defaultPanelId: string, missingNativePanelIds: string[] }}
  *   layout: 'tabs' or 'single'.
  *   panelIds: native panel string IDs only (for asset loading and panel init).
- *   pluginPanelRefs: structured plugin panel references (for discover hydration in boot.js).
+ *   pluginPanelRefs: structured plugin panel references (for plugin bundle mounting in boot.js).
  *   defaultPanelId: default active panel ID.
  *   missingNativePanelIds: native panel ids referenced by the composition but absent from the active view.
  */
-function buildLayoutFromRegistry({ contributions = [] } = {}) {
+function buildLayoutFromRegistry() {
 	const comp = getActiveComposition() || { layout: 'tabs', panels: [], defaultPanel: '' };
 	const layout = comp.layout === 'single' ? 'single' : 'tabs';
 	const defaultPanelId = typeof comp.defaultPanel === 'string' ? comp.defaultPanel : '';
-
-	// Wildcard: show all registry native panels first, then all contributions as plugin panels.
-	const isWildcard = Array.isArray(comp.panels) && comp.panels.length === 1 && comp.panels[0] === '*';
 
 	/**
 	 * Returns the native panel definition for a given ID from the active view.
@@ -1101,59 +1049,22 @@ function buildLayoutFromRegistry({ contributions = [] } = {}) {
 	const pluginPanelRefs = [];
 	const missingNativePanelIds = [];
 	const allEntries = [];
-	const availableContributions = Array.isArray(contributions) ? contributions : [];
-
-	/**
-	 * Finds the matching discover contribution for a structured plugin panel reference.
-	 *
-	 * @param {object} pluginRef Structured plugin panel reference.
-	 * @returns {object|null} Matching discover contribution or null.
-	 */
-	const findContribution = pluginRef =>
-		availableContributions.find(
-			contrib =>
-				contrib?.pluginType === pluginRef?.pluginType &&
-				String(contrib?.instanceId) === String(pluginRef?.instanceId) &&
-				contrib?.panelId === pluginRef?.panelId,
-		) || null;
-
-	if (isWildcard) {
-		const corePanels = getCorePanels();
-		for (const pid of Object.keys(corePanels)) {
-			const def = corePanels[pid];
-			if (def && typeof def === 'object') {
-				panelIds.push(pid);
-				allEntries.push({ kind: 'native', id: pid, def });
-			}
-		}
-		for (const c of availableContributions) {
-			if (!c || typeof c !== 'object') {
+	const availablePluginPanels = getPluginPanels();
+	const panels = Array.isArray(comp.panels) ? comp.panels : [];
+	for (const entry of panels) {
+		if (typeof entry === 'string' && entry) {
+			const def = getPanelDef(entry);
+			if (!def || typeof def !== 'object') {
+				missingNativePanelIds.push(entry);
 				continue;
 			}
-			const ref = Object.freeze({
-				type: 'pluginPanel',
-				pluginType: c.pluginType,
-				instanceId: c.instanceId,
-				panelId: c.panelId,
-			});
-			pluginPanelRefs.push(ref);
-			allEntries.push({ kind: 'plugin', ref, contrib: c });
-		}
-	} else {
-		const panels = Array.isArray(comp.panels) ? comp.panels : [];
-		for (const entry of panels) {
-			if (typeof entry === 'string' && entry) {
-				const def = getPanelDef(entry);
-				if (!def || typeof def !== 'object') {
-					missingNativePanelIds.push(entry);
-					continue;
-				}
-				panelIds.push(entry);
-				allEntries.push({ kind: 'native', id: entry, def });
-			} else if (entry && typeof entry === 'object' && entry.type === 'pluginPanel') {
-				pluginPanelRefs.push(entry);
-				allEntries.push({ kind: 'plugin', ref: entry, contrib: findContribution(entry) });
-			}
+			panelIds.push(entry);
+			allEntries.push({ kind: 'native', id: entry, def });
+		} else if (entry && typeof entry === 'object' && entry.type === 'pluginPanel') {
+			const runtimePanelId = getPluginRuntimePanelId(entry);
+			const panelDef = availablePluginPanels[runtimePanelId] || null;
+			pluginPanelRefs.push(entry);
+			allEntries.push({ kind: 'plugin', ref: entry, panelDef });
 		}
 	}
 
@@ -1187,20 +1098,21 @@ function buildLayoutFromRegistry({ contributions = [] } = {}) {
 					}),
 				);
 			} else {
-				// Plugin panel: starts disabled until discover confirms availability.
-				const { ref } = entry;
-				const key = `plugin-${ref.pluginType}-${ref.instanceId}-${ref.panelId}`;
+				const { ref, panelDef } = entry;
+				const key = getPluginRuntimePanelId(ref);
 				const tabId = `tab-${key}`;
+				const isResolved = !!panelDef;
+				const dataI18n = isResolved && typeof panelDef?.label === 'string' ? panelDef.label : '';
 				nav.appendChild(
 					h('a', {
-						class: 'msghub-tab is-disabled',
+						class: `msghub-tab${isResolved ? '' : ' is-disabled'}`,
 						href: `#${tabId}`,
 						role: 'tab',
 						'aria-controls': tabId,
-						'aria-disabled': 'true',
-						'data-i18n': 'msghub.i18n.core.admin.ui.panel.loading.text',
+						...(isResolved ? {} : { 'aria-disabled': 'true' }),
+						...(dataI18n ? { 'data-i18n': dataI18n } : {}),
 						// Keep the first paint neutral until admin i18n has loaded; never expose raw keys.
-						text: '...',
+						text: isResolved ? key : '...',
 					}),
 				);
 			}
@@ -1232,9 +1144,8 @@ function buildLayoutFromRegistry({ contributions = [] } = {}) {
 			}
 			fragment.appendChild(panel);
 		} else {
-			// Plugin panel: container with data attributes for boot.js discover wiring.
-			const { ref, contrib } = entry;
-			const key = `plugin-${ref.pluginType}-${ref.instanceId}-${ref.panelId}`;
+			const { ref, panelDef } = entry;
+			const key = getPluginRuntimePanelId(ref);
 			const tabId = `tab-${key}`;
 			const panel = h('div', {
 				id: tabId,
@@ -1245,8 +1156,10 @@ function buildLayoutFromRegistry({ contributions = [] } = {}) {
 				'data-plugin-instance-id': String(ref.instanceId),
 				'data-panel-id': ref.panelId,
 			});
-			if (contrib) {
-				applyCategoryMarker(panel, normalizePluginPanel(contrib, ref).category);
+			if (panelDef) {
+				const descriptor = normalizePluginPanel(panelDef, ref);
+				applyCategoryMarker(panel, descriptor.category);
+				registerPanelDescriptor(descriptor);
 			}
 			// Mount container: this element is passed to pluginUiHost.mount().
 			panel.appendChild(h('div', { id: key }));
@@ -1422,6 +1335,4 @@ void normalizePluginPanel;
 void resolvePanelI18nKey;
 void resolveIconUrl;
 void generateManifest;
-void resolvePanelMode;
-void buildSinglePanelShell;
 void renderPanelModeError;

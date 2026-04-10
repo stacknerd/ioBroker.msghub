@@ -89,7 +89,7 @@ function createMsghubPluginUiHost({ request, api, _importFn = undefined }) {
 	 * @param {string} pluginType - Plugin type identifier (e.g. 'IngestStates').
 	 * @param {string} instanceId - Plugin instance id (e.g. '0').
 	 * @param {string} panelId - Panel id within the plugin's adminUi declaration.
-	 * @param {string} [hash] - Known hash from discover/registry; used for cache lookup.
+	 * @param {string} [hash] - Known hash from `web.view.get.pluginPanels[*].ui.bundle.hash`; used for cache lookup.
 	 * @param {string} [activeLang] - Active UI language; included in cache key and forwarded to backend.
 	 * @returns {Promise<{ module: object, css: string|null, hash: string, i18n: object|null }>} Cached or freshly loaded bundle entry.
 	 */
@@ -216,7 +216,7 @@ function createMsghubPluginUiHost({ request, api, _importFn = undefined }) {
 	 * tag inside the wrapper, then calls module.mount(ctx).
 	 *
 	 * @param {{ container: Element, pluginType: string, instanceId: string, panelId: string, hash?: string }} opts
-	 *   hash: known bundle hash (from discover/registry); used for cache fast-path.
+	 *   hash: known bundle hash from the active view; used for cache fast-path.
 	 * @returns {Promise<object>} Handle for unmount/retry.
 	 */
 	async function mount({ container, pluginType, instanceId, panelId, hash = '' }) {

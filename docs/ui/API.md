@@ -48,7 +48,7 @@ panel/plugin contract in this reference.
 | `createUi()` | Builds the shared shell UI primitive object with `toast`, `toastClose`, `contextMenu`, `overlayLarge`, `dialog`, `spinner`, and `closeAll`. | UI runtime | `admin/tab/ui.js`, `admin/tab/contracts.d.ts` |
 | `createAdminApi(deps)` | Builds the frozen `ctx.api` facade used by native panels and wrapped by the plugin UI host. | Browser API layer | `admin/tab/api.js`, `admin/tab/contracts.d.ts` |
 | `initTabs({ defaultPanelId? })` | Wires tab activation against `location.hash`. Skips tabs marked `aria-disabled="true"`. Returns `{ initial, setActive(tabDomId) }`. | Layout runtime | `admin/tab/layout.js`, `admin/tab/contracts.d.ts` |
-| `buildLayoutFromRegistry({ contributions? })` | Builds the visible shell layout from the loaded active view. Returns `{ layout, panelIds, pluginPanelRefs, defaultPanelId, missingNativePanelIds }`. `panelIds` contains native panel ids only. `pluginPanelRefs` contains structured plugin-panel refs. `missingNativePanelIds` reports native panel ids referenced by the active composition but missing from `corePanels`; in that case the boot layer surfaces a visible hard error instead of rendering partial DOM. | Layout runtime | `admin/tab/layout.js`, `admin/tab/contracts.d.ts` |
+| `buildLayoutFromRegistry()` | Builds the visible shell layout from the loaded active view. Returns `{ layout, panelIds, pluginPanelRefs, defaultPanelId, missingNativePanelIds }`. `panelIds` contains native panel ids only. `pluginPanelRefs` contains structured plugin-panel refs. `missingNativePanelIds` reports native panel ids referenced by the active composition but missing from `corePanels`; in that case the boot layer surfaces a visible hard error instead of rendering partial DOM. | Layout runtime | `admin/tab/layout.js`, `admin/tab/contracts.d.ts` |
 | `resolveViewRequest()` | Resolves the normalized backend request in this order: `args.panel`, `args.composition`, `data-msghub-view`, backend default. | Layout runtime | `admin/tab/layout.js`, `admin/tab/contracts.d.ts` |
 | `setActiveView(view)` / `getActiveView()` | Stores and reads the loaded `web.view.get` payload. | Layout runtime | `admin/tab/layout.js`, `admin/tab/contracts.d.ts` |
 | `resolveViewId()` | Returns the loaded composition id, or `null` in panel mode. | Layout runtime | `admin/tab/layout.js`, `admin/tab/contracts.d.ts` |
@@ -61,7 +61,7 @@ panel/plugin contract in this reference.
 | `createMsghubPluginUiHost({ request, api })` | Builds the plugin-owned Admin UI host. Returns `{ mount, unmount, retry }`. | Plugin UI host | `admin/tab/plugin-ui-host.js`, `admin/tab/contracts.d.ts` |
 | `computeContextMenuPosition(params)` | Viewport-aware menu positioning helper used by the context-menu runtime. Returns `{ x, y }`. | Browser API layer | `admin/tab/api.js`, `admin/tab/contracts.d.ts` |
 | `toContextMenuIconVar(iconName)` | Converts a safe icon key into `var(--msghub-icon-<name>)`. Invalid names return `''`. | Browser API layer | `admin/tab/api.js`, `admin/tab/contracts.d.ts` |
-| `web.view.get` | `{ mode, targetId? } -> { composition, corePanels, request }` | Stable backend view-resolution contract for AdminTab/Web UI shells. | `lib/IoUiCatalog.js`, `lib/IoWebUi.js`, `admin/tab/boot.js` |
+| `web.view.get` | `{ mode, targetId?, lang? } -> { composition, corePanels, pluginPanels, request }` | Stable backend view-resolution contract for AdminTab/Web UI shells. `request.lang` is normalized backend-side with `en` fallback. | `lib/IoUiCatalog.js`, `lib/IoWebUi.js`, `admin/tab/boot.js` |
 
 ### Backend UI Registry / View DTOs
 
@@ -71,7 +71,7 @@ panel/plugin contract in this reference.
 | `IoUiRegistry.compositions[viewId]` | Composition definition with `id`, `layout`, `panels`, `defaultPanel`, and `deviceMode`. The only allowed composition-level `app` block is the special-case `compositions.web.app` for the prepared Public-Web root contract. | Backend registry runtime | `lib/IoUiRegistry.js` |
 | Native composition panel entry | String panel id such as `'messages'` or `'plugins'`. | Backend registry / layout runtime | `lib/IoUiRegistry.js`, `admin/tab/layout.js` |
 | Plugin composition panel entry | Structured ref `{ type: 'pluginPanel', pluginType, instanceId, panelId }`. | Backend registry / layout runtime | `lib/IoUiRegistry.js`, `admin/tab/layout.js` |
-| Wildcard composition | `panels: ['*']`. Native core panels are rendered first, then all discover contributions as plugin-panel refs. | Layout runtime | `admin/tab/layout.js` |
+| Wildcard composition | `panels: ['*']` exists only in backend registry input. `web.view.get` materializes it before the frontend consumes the view. | Backend view runtime | `lib/IoUiCatalog.js` |
 
 ### Browser events and shell lifecycle
 
@@ -284,7 +284,6 @@ panel/plugin contract in this reference.
 
 | Command | Request contract | Response contract | Owner | Reference |
 | --- | --- | --- | --- | --- |
-| `web.pluginUi.discover` | `{ lang? }` where `lang` is the active shell language used for plugin-owned Admin-UI i18n lookup. | Shared/web-safe discover path consumed by the AdminTab browser host after AP6. | Web runtime for UI host | `admin/tab/boot.js`, `lib/IoWebUi.js` |
 | `web.pluginUi.bundle.get` | `{ pluginType, instanceId?, panelId, lang? }` | Shared/web-safe bundle delivery path consumed by the AdminTab browser host after AP6. | Web runtime for UI host | `admin/tab/plugin-ui-host.js`, `lib/IoWebUi.js` |
 | `admin.pluginUi.rpc` | `{ pluginType, instanceId?, panelId, command, payload? }` | Admin-host RPC path. Plugin-defined `{ ok, data }` or `{ ok: false, error: { code, message } }` at the backend boundary. `msghubRequest` rejects any `ok: false` response as `Error(message)`, so `error.code` is already absent before the host rejection handler runs. Bundle code always receives the normalized envelope described below. | Admin runtime for UI host | `lib/IoAdminTab.js`, `lib/IoPluginUiRpc.js`, `admin/tab/plugin-ui-host.js` |
 | `web.pluginUi.rpc` | `{ pluginType, instanceId?, panelId, command, payload? }` | Web-host RPC path with the same backend envelope semantics as `admin.pluginUi.rpc`. | Web runtime for UI host | `lib/IoWebUi.js`, `lib/IoPluginUiRpc.js`, `admin/tab/plugin-ui-host.js` |
@@ -293,7 +292,6 @@ panel/plugin contract in this reference.
 
 | DTO | Contract | Owner | Reference |
 | --- | --- | --- | --- |
-| `PluginUiContribution` | `{ pluginType, instanceId, panelId, label, description, category?, app?, apiVersion, bundle: { hash }, i18n?: { lang, translations }\|null }` | Runtime DTO surfaced from plugin manifests and enriched by the backend discover path with discover-time shell i18n for the requested language. | `lib/IoPlugins.js`, `lib/IoWebUi.js` |
 | `bundle.get` response | `{ apiVersion, moduleFormat: 'esm', hash, js, css?, i18n }` | Admin runtime | `lib/IoWebUi.js`, `lib/IoPlugins.js` |
 | `bundle.get.i18n` | `{ lang, translations }` or `null`. `translations` is the parsed plugin-owned language file. | Admin runtime | `lib/IoPlugins.js`, `lib/IoWebUi.js` |
 | `bundle.get.css` | Optional companion CSS from `<bundle.entry>.css`. | Admin runtime | `lib/IoPlugins.js`, `lib/IoWebUi.js` |
@@ -335,15 +333,15 @@ panel/plugin contract in this reference.
 | Entry | Contract | Owner | Reference |
 | --- | --- | --- | --- |
 | `manifest.adminUi.apiVersion` | API version string for plugin-owned Admin UI. `IoPlugins.getAdminUiContributions()` defaults to `'1'` when absent. | Plugin-owned, consumed by UI path | `lib/IngestStates/manifest.js`, `lib/IoPlugins.js` |
-| `manifest.adminUi.panels[]` | Flat panel list. Only running plugin instances with declared panels are discoverable. | Plugin-owned, consumed by UI path | `lib/IngestStates/manifest.js`, `lib/IoPlugins.js` |
+| `manifest.adminUi.panels[]` | Flat panel list. Only running plugin instances with declared panels can be resolved into the active host view. | Plugin-owned, consumed by UI path | `lib/IngestStates/manifest.js`, `lib/IoPlugins.js` |
 | `panel.id` | Panel id unique within one plugin type. | Plugin-owned | `lib/IngestStates/manifest.js` |
-| `panel.label` | Plugin-owned admin-ui i18n key surfaced by `discover` and resolved by the shell via `t(...)` when a matching slot is hydrated. | Plugin-owned | `lib/IngestStates/manifest.js`, `admin/tab/boot.js` |
-| `panel.description` | Optional string surfaced by `discover`. Built-in plugin manifests currently also use plugin-owned i18n keys here. | Plugin-owned | `lib/IngestStates/manifest.js`, `lib/IoPlugins.js` |
-| `panel.category` | Optional discover metadata for semantic grouping. | Plugin-owned | `lib/IngestStates/manifest.js`, `lib/IoPlugins.js` |
+| `panel.label` | Plugin-owned admin-ui i18n key surfaced through the backend-resolved view payload and resolved by the shell via `t(...)` when a matching slot is hydrated. | Plugin-owned | `lib/IngestStates/manifest.js`, `admin/tab/boot.js` |
+| `panel.description` | Optional string surfaced through the backend-resolved view payload. Built-in plugin manifests currently also use plugin-owned i18n keys here. | Plugin-owned | `lib/IngestStates/manifest.js`, `lib/IoPlugins.js` |
+| `panel.category` | Optional plugin-owned semantic grouping metadata surfaced through the backend-resolved view payload. | Plugin-owned | `lib/IngestStates/manifest.js`, `lib/IoPlugins.js` |
 | `panel.app` | Optional install/PWA metadata block. Text fields are i18n keys. `app.url` is a host-neutral single-panel target string (current producer contract: stable query params such as `?panel=tab-...`). In the current AdminTab installability/head path, plugin panels do not provide or consume plugin-owned `app.icons`; the shell resolves those slots from the generic host set `admin/icons/pluginUI/*`. | Plugin-owned metadata, host-owned AdminTab icon consumer | `lib/IngestStates/manifest.js`, `lib/IoPlugins.js`, `admin/tab/layout.js` |
-| `panel.bundle.entry` | Relative ESM bundle path inside the plugin package root (`packageRoot`). Required for `discover`, `bundle.get`, and hash computation. Host-side resolution is descriptor-based, not repo-path-based. | Plugin-owned | `lib/IngestStates/manifest.js`, `lib/IoPlugins.js` |
+| `panel.bundle.entry` | Relative ESM bundle path inside the plugin package root (`packageRoot`). Required for `bundle.get` and hash computation. Host-side resolution is descriptor-based, not repo-path-based. | Plugin-owned | `lib/IngestStates/manifest.js`, `lib/IoPlugins.js` |
 | Companion CSS convention | Optional stylesheet loaded from the same bundle path with `.js` replaced by `.css`. No separate manifest field exists. | UI path convention | `lib/IoPlugins.js`, `admin/tab/plugin-ui-host.js` |
-| Plugin-owned Admin UI i18n | Optional JSON files at `admin-ui/i18n/<lang>.json`. `readAdminUiBundle(...)` falls back from the requested safe language to `en` when needed. | Plugin-owned, consumed by UI path | `lib/IoPlugins.js` |
+| Plugin-owned Admin UI i18n | Optional JSON files at `admin-ui/i18n/<lang>.json`. `readAdminUiBundle(...)` falls back from the requested safe language to `en` when needed. The same language normalization is used for `web.view.get(...).pluginPanels[*].ui.i18n`. | Plugin-owned, consumed by UI path | `lib/IoPlugins.js`, `lib/IoPluginPanelResolver.js` |
 
 ### Current plugin-owned Admin UI contributors
 
@@ -362,10 +360,10 @@ panel/plugin contract in this reference.
 | `ui.bootstrap.about` updates shell-wide policy | `boot.js` uses `ctx.api.runtime.about()` to consume `ui.bootstrap.about` for branding text, timezone policy, cached connection metadata, and embedded-admin language override. The connection panel still reports the frontend format locale locally, with `args.locale` able to override that browser-side source when valid. | Boot runtime | `admin/tab/boot.js`, `main.js`, `lib/IoAdminCapabilities.js` |
 | Timezone fallback is explicit | Missing or invalid runtime timezone metadata becomes a UTC fallback policy and may trigger one warning toast. | Browser API layer / boot runtime | `admin/tab/api.js`, `admin/tab/boot.js` |
 | Plugin bundle cache key includes language | Bundle cache identity is `(pluginType, instanceId, panelId, hash, lang)` because the bundle response may contain language-specific i18n payloads. | Plugin UI host | `admin/tab/plugin-ui-host.js` |
-| `discover` hash is advisory, `bundle.get` hash is authoritative | The backend discover path best-effort computes hashes, but `bundle.get` recomputes the authoritative content hash. | Admin runtime | `lib/IoWebUi.js` |
+| View payload hash is advisory, `bundle.get` hash is authoritative | The backend view path may reuse the resolver hash as a fast shell hint, but `bundle.get` recomputes the authoritative content hash. | Admin runtime | `lib/IoWebUi.js` |
 | `bundle.get` enforces size limits | JS is limited to 512 KiB. CSS and plugin i18n payloads are limited to 64 KiB each. | Admin runtime | `lib/IoWebUi.js`, `lib/IoPlugins.js` |
 | Plugin UI uses Light DOM only | There is no Shadow DOM contract for plugin panels. Companion CSS is injected as a sibling of `ctx.root`, not into `ctx.root` itself. | Plugin UI host | `admin/tab/plugin-ui-host.js` |
 | Admin-UI i18n stays separate from backend/runtime i18n | Shell text dictionaries come from `admin/i18n/*`. The repo-root `i18n/*` tree is a separate backend/runtime catalog and is not the source of Admin Tab text. | Browser runtime | `admin/tab/runtime.js` |
-| Plugin-panel tabs start disabled | `buildLayoutFromRegistry(...)` renders plugin-panel tabs with `aria-disabled="true"` until `hydratePluginPanels(...)` finds a matching discover contribution. | Layout runtime / boot runtime | `admin/tab/layout.js`, `admin/tab/boot.js` |
+| Resolved plugin-panel tabs can render immediately | `buildLayoutFromRegistry()` uses `view.pluginPanels` to render already resolved plugin tabs as active frontend tabs. Explicit refs that are not present in `view.pluginPanels` remain disabled placeholders. | Layout runtime / boot runtime | `admin/tab/layout.js`, `admin/tab/boot.js` |
 | Plugin panel bundles are lazy-mounted | After hydration, the shell mounts a plugin panel only when `msghub:tabSwitch` activates that plugin tab for the first time. | Boot runtime | `admin/tab/boot.js` |
 | Shell Escape behavior is global | `Escape` closes the dialog first, then submenu levels or context menu, then the large overlay. `msghub:tabSwitch` also closes overlay, dialog, and context menu. | UI runtime | `admin/tab/ui.js` |

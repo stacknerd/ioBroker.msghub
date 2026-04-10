@@ -213,8 +213,6 @@ async function loadLayoutSandbox(options = {}) {
 		normalizePluginPanel,
 		registerPanelDescriptor,
 		resolveIconUrl,
-		resolvePanelMode,
-		buildSinglePanelShell,
 		renderPanelModeError
 	};
 	`;
@@ -748,31 +746,36 @@ describe('admin/tab/layout.js', function () {
 		assert.equal(layoutHost.children.length, 0, 'layout must not render partial DOM when a native panel definition is missing');
 	});
 
-	it('buildLayoutFromRegistry() with wildcard panels renders native + contribution plugin tabs', async function () {
+	it('buildLayoutFromRegistry() uses the materialized backend view for wildcard-like compositions', async function () {
 		const { sandbox, layoutHost } = await loadLayoutSandbox();
 
 		sandbox.window.__layoutFns.setActiveView({
 			composition: {
 				id: 'adminTab',
 				layout: 'tabs',
-				panels: ['*'],
+				panels: [
+					'messages',
+					{ type: 'pluginPanel', pluginType: 'IngestStates', instanceId: 0, panelId: 'presets' },
+				],
 				defaultPanel: 'messages',
 			},
 			corePanels: {
 				messages: { id: 'messages', label: 'messages.key', ui: { kind: 'core', loader: 'globals', initGlobal: 'MsghubAdminTabMessages', css: [], js: [] } },
 			},
+			pluginPanels: {
+				'plugin-IngestStates-0-presets': {
+					id: 'plugin-IngestStates-0-presets',
+					label: 'presets.label',
+					ui: { kind: 'plugin', loader: 'esm', apiVersion: '1', bundle: { hash: 'h1' }, i18n: null },
+				},
+			},
 			request: { mode: 'composition', targetId: 'adminTab' },
 		});
 
-		const contributions = [{ pluginType: 'IngestStates', instanceId: 0, panelId: 'presets', label: 'presets.label' }];
-
 		const { buildLayoutFromRegistry } = sandbox.window.__layoutFns;
-		const result = buildLayoutFromRegistry({ contributions });
+		const result = buildLayoutFromRegistry();
 
-		// Native panel IDs come from registry.panels.
 		assert.deepEqual(JSON.parse(JSON.stringify(result.panelIds)), ['messages']);
-
-		// pluginPanelRefs derived from contributions.
 		assert.equal(result.pluginPanelRefs.length, 1);
 		assert.equal(result.pluginPanelRefs[0].pluginType, 'IngestStates');
 		assert.equal(result.pluginPanelRefs[0].instanceId, 0);
@@ -787,7 +790,8 @@ describe('admin/tab/layout.js', function () {
 		assert.equal(nav.children[2].classList.contains('msghub-strip-edge--right'), true);
 		assert.equal(nav.children[0].children.length, 2);
 		const pluginTab = nav.children[0].children[1];
-		assert.equal(pluginTab.getAttribute('aria-disabled'), 'true');
+		assert.equal(pluginTab.getAttribute('aria-disabled'), null);
+		assert.equal(pluginTab.getAttribute('data-i18n'), 'presets.label');
 	});
 
 	it('resolveIconUrl() returns a static admin icon path for core panels', async function () {
@@ -1149,100 +1153,6 @@ describe('admin/tab/layout.js', function () {
 		assert.equal(messageDescriptor.category, 'dashboard', 'category must be passed through from panel def');
 	});
 
-	it('resolvePanelMode() returns { active: false } when args.panel is absent', async function () {
-		const { sandbox } = await loadLayoutSandbox({ args: {} });
-		const result = sandbox.window.__layoutFns.resolvePanelMode();
-		assert.equal(result.active, false);
-	});
-
-	it('resolvePanelMode() resolves a formally valid core panel target', async function () {
-		const { sandbox } = await loadLayoutSandbox({ args: { panel: 'tab-messages' } });
-		const result = sandbox.window.__layoutFns.resolvePanelMode();
-		assert.equal(result.active, true);
-		assert.equal(result.isPlugin, false);
-		assert.equal(result.panelId, 'messages');
-		assert.equal(result.tabId, 'tab-messages');
-	});
-
-	it('resolvePanelMode() keeps unknown but formally valid core panel targets parseable', async function () {
-		const { sandbox } = await loadLayoutSandbox({ args: { panel: 'tab-unknown' } });
-		const result = sandbox.window.__layoutFns.resolvePanelMode();
-		assert.equal(result.active, true);
-		assert.equal(result.isPlugin, false);
-		assert.equal(result.panelId, 'unknown');
-	});
-
-	it('resolvePanelMode() returns unknownTarget error when panel arg has no tab- prefix', async function () {
-		const { sandbox } = await loadLayoutSandbox({ args: { panel: 'noprefixvalue' } });
-		const result = sandbox.window.__layoutFns.resolvePanelMode();
-		assert.equal(result.active, true);
-		assert.equal(result.error, 'unknownTarget');
-	});
-
-	it('resolvePanelMode() identifies a plugin panel id and parses pluginRef', async function () {
-		const { sandbox } = await loadLayoutSandbox({ args: { panel: 'tab-plugin-IngestStates-0-presets' } });
-		const result = sandbox.window.__layoutFns.resolvePanelMode();
-		assert.equal(result.active, true);
-		assert.equal(result.isPlugin, true);
-		assert.equal(result.tabId, 'tab-plugin-IngestStates-0-presets');
-		assert.equal(result.pluginRef.pluginType, 'IngestStates');
-		assert.equal(result.pluginRef.instanceId, '0');
-		assert.equal(result.pluginRef.panelId, 'presets');
-	});
-
-	it('resolvePanelMode() parses a plugin panel id with a hyphenated panelId correctly', async function () {
-		const { sandbox } = await loadLayoutSandbox({ args: { panel: 'tab-plugin-IngestStates-0-bulk-apply' } });
-		const result = sandbox.window.__layoutFns.resolvePanelMode();
-		assert.equal(result.isPlugin, true);
-		assert.equal(result.pluginRef.panelId, 'bulk-apply');
-	});
-
-	it('resolvePanelMode() returns unknownTarget error for a plugin id with fewer than 3 segments', async function () {
-		const { sandbox } = await loadLayoutSandbox({ args: { panel: 'tab-plugin-X-0' } });
-		const result = sandbox.window.__layoutFns.resolvePanelMode();
-		assert.equal(result.active, true);
-		assert.equal(result.error, 'unknownTarget');
-	});
-
-	it('buildSinglePanelShell() renders panel div and mount div without a tab strip', async function () {
-		const { sandbox, layoutHost } = await loadLayoutSandbox();
-		const descriptor = { id: 'tab-messages', label: 'messages.key', ui: { kind: 'core' } };
-		sandbox.window.__layoutFns.buildSinglePanelShell(descriptor);
-
-		assert.equal(layoutHost.children.length, 1, 'layout host must have exactly one child (the panel)');
-		const panelEl = layoutHost.children[0];
-		assert.equal(panelEl.getAttribute('id'), 'tab-messages', 'panel div must use descriptor.id');
-		assert.ok(String(panelEl.className || '').includes('msghub-panel'), 'panel div must carry msghub-panel class');
-		// length === 1 proves no nav strip was created alongside the panel.
-
-		// Mount container uses core derivation: id.slice('tab-'.length) + '-root'.
-		const mountDiv = panelEl.children.find(c => c.getAttribute('id') === 'messages-root');
-		assert.ok(mountDiv, 'core panel mount container id must be messages-root');
-	});
-
-	it('buildSinglePanelShell() derives plugin mount id without -root suffix', async function () {
-		const { sandbox, layoutHost } = await loadLayoutSandbox();
-		const descriptor = { id: 'tab-plugin-IngestStates-0-presets', ui: { kind: 'plugin' } };
-		sandbox.window.__layoutFns.buildSinglePanelShell(descriptor);
-
-		const panelEl = layoutHost.children[0];
-		const mountDiv = panelEl.children.find(c => c.getAttribute('id') === 'plugin-IngestStates-0-presets');
-		assert.ok(mountDiv, 'plugin panel mount container id must be plugin-IngestStates-0-presets (no -root suffix)');
-	});
-
-	it('buildSinglePanelShell() calls registerPanelDescriptor with the descriptor', async function () {
-		const { sandbox } = await loadLayoutSandbox();
-		const registered = [];
-		const original = sandbox.registerPanelDescriptor;
-		sandbox.registerPanelDescriptor = d => { registered.push(d); original(d); };
-
-		const descriptor = { id: 'tab-messages', label: 'messages.key', ui: { kind: 'core' } };
-		sandbox.window.__layoutFns.buildSinglePanelShell(descriptor);
-
-		assert.equal(registered.length, 1, 'registerPanelDescriptor must be called exactly once');
-		assert.strictEqual(registered[0], descriptor, 'the original descriptor must be registered');
-	});
-
 	it('renderPanelModeError() uses t() to resolve the error key and renders it', async function () {
 		const tCalls = [];
 		const { sandbox, layoutHost } = await loadLayoutSandbox({
@@ -1368,7 +1278,7 @@ describe('admin/tab/layout.js', function () {
 		assert.equal(sandbox.document.title, 'Stats - MessageHub');
 	});
 
-	it('buildLayoutFromRegistry() keeps plugin loading tabs neutral before admin i18n has loaded', async function () {
+	it('buildLayoutFromRegistry() keeps unresolved plugin tabs neutral before admin i18n has loaded', async function () {
 		const { sandbox, layoutHost } = await loadLayoutSandbox({
 			t: key => String(key || ''),
 		});
@@ -1395,11 +1305,7 @@ describe('admin/tab/layout.js', function () {
 		const nav = fragment?.children?.[0];
 		const pluginTab = nav?.children?.[0]?.children?.[1] || null;
 		assert.ok(pluginTab, 'plugin loading tab must be rendered');
-		assert.equal(
-			pluginTab.getAttribute('data-i18n'),
-			'msghub.i18n.core.admin.ui.panel.loading.text',
-			'plugin loading tab must carry the loading i18n key for later static hydration',
-		);
+		assert.equal(pluginTab.getAttribute('data-i18n'), null);
 		assert.equal(pluginTab.textContent, '...');
 		assert.equal(
 			pluginTab.textContent.includes('msghub.i18n.'),
@@ -1894,7 +1800,7 @@ describe('admin/tab/layout.js', function () {
 		assert.deepEqual(JSON.parse(JSON.stringify(revokedUrls)), ['blob:test-1']);
 	});
 
-	it('discover i18n merge feeds the real shell head/manifest path with visible plugin text', async function () {
+	it('view-time plugin i18n merge feeds the real shell head/manifest path with visible plugin text', async function () {
 		const { sandbox, blobUrls, registerElement } = await loadRuntimeBackedLayoutSandbox({
 			location: {
 				href: 'http://192.168.4.4:8081/adapter/msghub/tab.html?instance=0&theme=light&lang=es&locale=en-US&expert=true#tab-plugins',
@@ -1980,7 +1886,7 @@ describe('admin/tab/layout.js', function () {
 		);
 	});
 
-	it('buildLayoutFromRegistry() renders a category marker for native and contribution-backed plugin panels', async function () {
+	it('buildLayoutFromRegistry() renders a category marker for native and resolved plugin panels', async function () {
 		const { sandbox, layoutHost } = await loadLayoutSandbox();
 		sandbox.window.__layoutFns.setActiveView({
 			composition: {
@@ -2000,12 +1906,18 @@ describe('admin/tab/layout.js', function () {
 					ui: { kind: 'core', loader: 'globals', initGlobal: 'MsghubAdminTabMessages', css: [], js: [] },
 				},
 			},
+			pluginPanels: {
+				'plugin-IngestStates-0-presets': {
+					id: 'plugin-IngestStates-0-presets',
+					label: 'presets.label',
+					category: 'user',
+					ui: { kind: 'plugin', loader: 'esm', apiVersion: '1', bundle: { hash: 'h1' }, i18n: null },
+				},
+			},
 			request: { mode: 'composition', targetId: 'adminTab' },
 		});
 
-		sandbox.window.__layoutFns.buildLayoutFromRegistry({
-			contributions: [{ pluginType: 'IngestStates', instanceId: 0, panelId: 'presets', label: 'presets.label', category: 'user' }],
-		});
+		sandbox.window.__layoutFns.buildLayoutFromRegistry();
 
 		const fragment = layoutHost.children[0];
 		const nativePanel = fragment.children[1];
@@ -2014,25 +1926,4 @@ describe('admin/tab/layout.js', function () {
 		assert.ok(pluginPanel.children.find(child => String(child.className || '').includes('msghub-paneltype-user')));
 	});
 
-	it('buildSinglePanelShell() renders a category marker when the descriptor carries one and omits it otherwise', async function () {
-		const { sandbox, layoutHost } = await loadLayoutSandbox();
-		sandbox.window.__layoutFns.buildSinglePanelShell({
-			id: 'tab-plugin-IngestStates-0-presets',
-			ui: { kind: 'plugin' },
-			category: 'user',
-		});
-
-		let panelEl = layoutHost.children[0];
-		assert.ok(panelEl.children.find(child => String(child.className || '').includes('msghub-paneltype-user')));
-
-		sandbox.window.__layoutFns.buildSinglePanelShell({
-			id: 'tab-messages',
-			ui: { kind: 'core' },
-		});
-		panelEl = layoutHost.children[0];
-		assert.equal(
-			panelEl.children.some(child => String(child.className || '').includes('msghub-paneltype-')),
-			false,
-		);
-	});
 });

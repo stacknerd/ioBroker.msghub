@@ -151,7 +151,7 @@ It combines:
 - generic host-owned panels
 - plugin-owned panels that are declared in plugin manifests
 
-The host discovers those plugin panels, loads their ESM bundles, mounts them into the shared shell, and routes plugin-owned RPC calls back to the owning plugin.
+The host resolves those plugin panels through the backend view payload, loads their ESM bundles, mounts them into the shared shell, and routes plugin-owned RPC calls back to the owning plugin.
 
 This allows the UI to grow without turning the Admin Tab host into a central place for plugin-specific special logic.
 
@@ -166,7 +166,7 @@ Then continue based on your question:
 - **How does the backend bridge work?**
   - continue with [`docs/io/IoAdminTab.md`](../io/IoAdminTab.md) for the backend command bridge, then [`docs/ui/tab-api.md`](./tab-api.md) and [`docs/ui/tab-runtime.md`](./tab-runtime.md) for the browser-side API/runtime layer
 - **How do the browser-side Admin modules fit together?**
-  - start with [`docs/ui/tab.md`](./tab.md), [`docs/ui/tab-boot.md`](./tab-boot.md), [`docs/ui/tab-layout.md`](./tab-layout.md), and [`docs/ui/tab-registry.md`](./tab-registry.md)
+  - start with [`docs/ui/tab.md`](./tab.md), [`docs/ui/tab-boot.md`](./tab-boot.md), [`docs/ui/tab-layout.md`](./tab-layout.md), and [`docs/ui/API.md`](./API.md)
 - **How do plugin-owned UI panels work?**
   - continue with [`docs/ui/tab-plugin-ui-host.md`](./tab-plugin-ui-host.md), then the plugin docs under [`docs/plugins/`](../plugins/README.md)
 
@@ -197,7 +197,6 @@ Then continue based on your question:
 - `tab-panels-plugins-render.instance`: [`./tab-panels-plugins-render.instance.md`](./tab-panels-plugins-render.instance.md)
 - `tab-panels-plugins-state`: [`./tab-panels-plugins-state.md`](./tab-panels-plugins-state.md)
 - `tab-plugin-ui-host`: [`./tab-plugin-ui-host.md`](./tab-plugin-ui-host.md)
-- `tab-registry`: [`./tab-registry.md`](./tab-registry.md)
 - `tab-runtime`: [`./tab-runtime.md`](./tab-runtime.md)
 - `tab-scroll-strip`: [`./tab-scroll-strip.md`](./tab-scroll-strip.md)
 - `tab-ui`: [`./tab-ui.md`](./tab-ui.md)

@@ -45,7 +45,7 @@ Conceptually:
    - optional `ctx.meta.managedObjects`
 7. Handling plugin enable/disable state changes.
 8. Exposing plugin runtime read bridges such as `callPluginRuntime(...)`.
-9. Owning plugin-owned Admin UI discovery and bundle file access.
+9. Owning plugin-owned Admin UI runtime panel resolution and bundle file access.
 10. Owning the single messagebox/sendTo handler adopted by Engage plugins.
 
 ---
@@ -223,7 +223,7 @@ Important detail:
 
 - returned contributions always contain `bundle.hash: ''`
 - callers must obtain the authoritative bundle hash separately via `computeAdminUiBundleHash({ type, panelId })`
-- plugin-owned Admin-UI i18n is not embedded here; `IoWebUi` enriches the raw contribution list during `web.pluginUi.discover({ lang })` via `readAdminUiTranslations({ type, lang })` so the shell can resolve labels/head metadata before bundle mount
+- plugin-owned Admin-UI i18n is not embedded here; the canonical backend resolver (`IoPluginPanelResolver`) enriches the raw contribution list via `readAdminUiTranslations({ type, lang })`
 - each contribution carries producer-owned panel metadata:
   - `label` — plugin-owned admin-ui i18n key string
   - `description` — optional string
@@ -386,7 +386,7 @@ The goal is to keep the adapter stable even if plugin cleanup is imperfect.
 
 `IoPlugins` owns:
 
-- the discovery of running panel contributions,
+- the runtime resolution of running panel contributions,
 - file-backed bundle loading,
 - content hashing,
 - plugin-owned i18n loading,

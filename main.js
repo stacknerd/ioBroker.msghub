@@ -197,6 +197,9 @@ class Msghub extends utils.Adapter {
 
 		const { IoAdminTab } = require(`${__dirname}/lib/IoAdminTab`);
 		const { IoAdminConfig } = require(`${__dirname}/lib/IoAdminConfig`);
+		const { IoPluginPanelResolver } = require(`${__dirname}/lib/IoPluginPanelResolver`);
+		const { IoPluginUiRpc } = require(`${__dirname}/lib/IoPluginUiRpc`);
+		const { IoUiCatalog } = require(`${__dirname}/lib/IoUiCatalog`);
 		const { IoWebUi } = require(`${__dirname}/lib/IoWebUi`);
 
 		try {
@@ -209,15 +212,27 @@ class Msghub extends utils.Adapter {
 			this.log?.error?.(`Plugin wiring failed: ${e?.message || e}`);
 		}
 
+		const pluginPanelResolver = new IoPluginPanelResolver({
+			ioPlugins: this._msgPlugins,
+			log: this.log,
+		});
+		const pluginUiRpc = new IoPluginUiRpc(this, this._msgPlugins, { pluginPanelResolver });
+		const uiCatalog = new IoUiCatalog({ pluginPanelResolver });
+
 		// Keep AdminTab operational even if plugin wiring fails,
 		// so Stats/Messages diagnostics remain available.
 		this._adminTab = new IoAdminTab(this, this._msgPlugins, {
 			msgStore: this.msgStore,
+			pluginPanelResolver,
+			pluginUiRpc,
 			adminCapabilities: this._adminCapabilities,
 		});
 		this._webUi = new IoWebUi(this, {
 			msgStore: this.msgStore,
 			ioPlugins: this._msgPlugins,
+			pluginPanelResolver,
+			pluginUiRpc,
+			uiCatalog,
 			adminCapabilities: this._adminCapabilities,
 		});
 		this._adminConfig = new IoAdminConfig(this, {

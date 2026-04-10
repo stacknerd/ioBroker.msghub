@@ -38,10 +38,10 @@ single-panel mode.
 3. If the backend rejects a formally invalid panel target: load i18n, render a hard error message, and stop.
 4. Build the single-panel shell from the loaded synthetic composition, load i18n and CSS, and initialize native panel assets — no tab strip.
 5. For a **core panel** target, the shared single-panel activation path runs immediately after layout build.
-6. For a **plugin panel** target, the shell defers activation until `web.pluginUi.discover({ lang })` successfully hydrates the requested panel, then mounts the plugin bundle immediately.
+6. For a **plugin panel** target, the shell defers activation until the loaded `web.view.get(...).pluginPanels` data hydrates the requested panel, then mounts the plugin bundle immediately.
 7. Keep connection state current (same as the composition path).
 
-If a plugin single-panel target is formally valid but not currently available at discover time, `boot.js`
+If a plugin single-panel target is formally valid but not currently available in `view.pluginPanels`, `boot.js`
 renders the translated `unavailableTarget` hard error instead of leaving an empty shell behind.
 
 ### Composition path (normal)
@@ -56,11 +56,11 @@ renders the translated `unavailableTarget` hard error instead of leaving an empt
 8. Build the current layout from the loaded view.
    If the view references native panels that are missing from `corePanels`, boot stops with a visible hard error instead of rendering a partial shell.
 9. Load composition CSS, activate the initial panel (`initTabs()` for tabbed layouts, `activatePanel(...)` for single layouts), and initialize native panels.
-10. Discover matching plugin panel contributions and enable their tab slots.
+10. Resolve matching plugin panel slots from `view.pluginPanels` and prepare them for lazy bundle mounting.
 11. Register lazy-mount handling for later plugin-tab switches.
 12. Keep connection state current via ping, guarded resume-triggered recovery checks, socket reconnect handling, and reconnect warmup.
 
-Important: plugin panel activation after discover is resolved in this order:
+Important: plugin panel activation after hydration is resolved in this order:
 
 1. URL hash, when it targets a hydrated plugin tab
 2. composition `defaultPanel`, when it resolves to a hydrated plugin tab
@@ -135,13 +135,12 @@ This keeps initial visibility and document-title derivation on the same activati
 ### 4) Hydrate plugin panel tab slots
 
 Structured plugin panel refs from the composition are not active immediately.
-`hydratePluginPanels()` matches them against `web.pluginUi.discover` results, then:
+`hydratePluginPanels()` matches them against the loaded `web.view.get(...).pluginPanels` map, then:
 
-- merges plugin-owned Admin-UI i18n from discover into the runtime dictionary before any shell metadata is resolved
 - enables the matching tab
-- stores `data-i18n=contrib.label` on the tab and replaces the temporary loading label with `t(contrib.label)`
+- stores `data-i18n=panelDef.label` on the tab and replaces the temporary loading label with `t(panelDef.label)`
 - stores the mount metadata in `pluginPanelTabMap`
-- calls `normalizePluginPanel(contrib, ref)` and `registerPanelDescriptor(descriptor)` so that `panelDescriptors` in `layout.js` is populated before the user first activates a plugin tab
+- calls `normalizePluginPanel(panelDef, ref)` and `registerPanelDescriptor(descriptor)` so that `panelDescriptors` in `layout.js` is populated before the user first activates a plugin tab
 - mirrors `descriptor.category` to the plugin panel container as `span.msghub-paneltype-<category>` when present
 
 Actual plugin bundle mounting is lazy by default, but `boot.js` also mounts a plugin panel immediately when it
@@ -151,7 +150,7 @@ became active during boot before the later `msghub:tabSwitch` listener could obs
 `pluginPanelTabMap` via the same mechanism. In that context the tab DOM elements do not exist, but
 `hydratePluginPanels` handles absent `tabEl` results gracefully — the `if (tabEl)` block is skipped
 and `pluginPanelTabMap.set(...)` still executes. The single-panel mount container comes from the normal
-`buildLayoutFromRegistry(...)` single-layout path, and the bundle is then mounted immediately after.
+`buildLayoutFromRegistry()` single-layout path, and the bundle is then mounted immediately after.
 
 ### 5) Handle `panel=` Single-Panel-Mode
 
@@ -246,7 +245,8 @@ It also triggers an unconditional initial `sendPing()` during module load, befor
 - `ensureBooted()` always starts from the normalized `web.view.get` request. In `panel=` mode, the backend returns a synthetic single composition that the shell then consumes through the same active-view path.
 - In `panel=` Single-Panel-Mode, `hydratePluginPanels()` is reused for plugin targets so that `pluginPanelTabMap` is populated via the same mechanism as in composition mode. The required mount container div is created by the normal single-layout build path before `hydratePluginPanels()` runs.
 - In `panel=` Single-Panel-Mode, i18n is loaded before any error message is rendered so that `t()` produces a translated string rather than a raw key.
-- Plugin tabs start disabled. They are enabled only when a matching discover contribution and DOM mount container both exist.
+- Plugin refs that are already resolved in `view.pluginPanels` can render as active frontend tabs immediately.
+- Explicit plugin refs that are not resolved in `view.pluginPanels` stay as disabled placeholders.
 - Initial panel activation is layout-aware: tabbed compositions use `initTabs()`, single compositions call the shared `activatePanel(...)` path directly.
 - `ctx` is frozen before it is handed to panels. Panels should treat it as read-only runtime state.
 - `ctx.elements` exposes getters for `connection`, `pluginsRoot`, `messagesRoot`, and `statsRoot`. In the current shell, `statsRoot` has no matching mount point in [`admin/tab.html`](../../admin/tab.html) and currently resolves to `null`.
@@ -267,7 +267,7 @@ It also triggers an unconditional initial `sendPing()` during module load, befor
 
 - Implementation: [`admin/tab/boot.js`](../../admin/tab/boot.js)
 - Test: [`admin/tab/boot.test.js`](../../admin/tab/boot.test.js)
-- Backend view source of truth: [`./tab-registry.md`](./tab-registry.md)
+- Backend view source of truth: [`./API.md`](./API.md)
 - Layout builder: [`./tab-layout.md`](./tab-layout.md)
 - Runtime globals and i18n/theme handling: [`./tab-runtime.md`](./tab-runtime.md)
 - Shared shell API: [`./tab-api.md`](./tab-api.md)

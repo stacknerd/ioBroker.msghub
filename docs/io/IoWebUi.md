@@ -43,7 +43,6 @@ Simple flow for this package:
    - `web.ping`
 3. Canonical web-token validation via `IoAdminCapabilities` before business execution.
 4. Shared-safe plugin UI backend commands:
-   - `web.pluginUi.discover`
    - `web.pluginUi.bundle.get`
    - `web.pluginUi.rpc`
 5. Consistent response envelopes (`ok/data/error`) for the web-safe runtime commands.
@@ -76,7 +75,6 @@ All `web.*` commands require `payload.token` and validate it centrally via `IoAd
 - `web.messages.query`
 - `web.messages.action`
 - `web.view.get`
-- `web.pluginUi.discover`
 - `web.pluginUi.bundle.get`
 - `web.pluginUi.rpc`
 
@@ -105,9 +103,9 @@ Behavior notes:
 - `web.messages.action` requires `ref` and `actionId` and returns `REJECTED` when the executor returns false.
 - `web.constants.get` returns only `kind`, `lifecycle.state`, `level`, and `notfication.events`.
 - `web.ping` always returns `{ ok: true, data: 'pong' }`.
-- `web.view.get` delegates all view normalization and synthetic panel-composition building to `IoUiCatalog`.
-- `web.pluginUi.discover` and `web.pluginUi.bundle.get` are the exclusive shared-safe/plugin-web-safe discovery and bundle delivery commands.
-- `web.pluginUi.rpc` delegates host-bound RPC validation and dispatch to `IoPluginUiRpc`, which then calls the plugin's `handleWebUiRpc`.
+- `web.view.get` delegates view normalization, `lang` handling, wildcard materialization, and `pluginPanels` assembly to `IoUiCatalog`.
+- `web.pluginUi.bundle.get` validates target panels through the canonical backend resolver before reading bundle files from `IoPlugins`.
+- `web.pluginUi.rpc` delegates host-bound RPC validation and dispatch to `IoPluginUiRpc`, which resolves the target through the same canonical backend resolver before calling `handleWebUiRpc`.
 
 ---
 
@@ -116,7 +114,7 @@ Behavior notes:
 1. Scope guardrail: `web.*` only.
 2. Token validation is centralized in `IoAdminCapabilities`; IoWebUi does not implement local token logic.
 3. No WebExtension mount/routing/asset logic.
-4. No plugin UI backend migration in this package.
+4. No second plugin-panel lookup path beside the canonical backend resolver.
 
 ---
 
@@ -130,7 +128,7 @@ Covered areas include:
 - `web.*` command dispatch
 - token-required backend gating for `web.*`
 - store-backed query/action/constants/stats behavior
-- plugin UI discover/bundle/RPC behavior
+- plugin UI bundle/RPC behavior
 - unknown-command rejection
 
 ---
@@ -139,6 +137,7 @@ Covered areas include:
 
 - implementation: `lib/IoWebUi.js`
 - tests: `lib/IoWebUi.test.js`
+- canonical panel resolver: `lib/IoPluginPanelResolver.js`
 - routing: `main.js`
 - admin counterpart: `lib/IoAdminTab.js` / `docs/io/IoAdminTab.md`
 - IO overview: `docs/io/README.md`

@@ -15,9 +15,9 @@ creates a host instance for plugin panel refs in the current composition.
 
 That means the plugin UI path is:
 
-1. [`./tab-registry.md`](./tab-registry.md) declares plugin panel slots
+1. the loaded [`./API.md`](./API.md) `web.view.get` payload declares plugin panel refs
 2. [`./tab-layout.md`](./tab-layout.md) renders disabled placeholder tabs and containers
-3. [`./tab-boot.md`](./tab-boot.md) hydrates matching slots from discover data
+3. [`./tab-boot.md`](./tab-boot.md) hydrates matching slots from the loaded view payload
 4. `plugin-ui-host.js` mounts the actual bundle when `boot.js` either:
    - observes a later `msghub:tabSwitch` into that plugin tab, or
    - calls `mountPluginPanelIfNeeded(...)` immediately after activating an already selected hydrated plugin tab during boot
