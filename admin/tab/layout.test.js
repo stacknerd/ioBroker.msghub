@@ -731,7 +731,7 @@ describe('admin/tab/layout.js', function () {
 				'plugin-IngestStates-0-presets': {
 					id: 'plugin-IngestStates-0-presets',
 					label: 'presets.label',
-					ui: { kind: 'plugin', loader: 'esm', apiVersion: '1', bundle: { hash: 'h1' }, i18n: null },
+					ui: { kind: 'plugin', loader: 'esm', apiVersion: '1', bundle: { hash: 'h1' } },
 				},
 			},
 			request: { mode: 'composition', targetId: 'adminTab' },
@@ -1746,7 +1746,7 @@ describe('admin/tab/layout.js', function () {
 		assert.deepEqual(JSON.parse(JSON.stringify(revokedUrls)), ['blob:test-1']);
 	});
 
-	it('view-time plugin i18n merge feeds the real shell head/manifest path with visible plugin text', async function () {
+	it('plugin bundle i18n merge feeds the real shell head/manifest path with visible plugin text', async function () {
 		const { sandbox, blobUrls, registerElement } = await loadRuntimeBackedLayoutSandbox({
 			location: {
 				href: 'http://192.168.4.4:8081/adapter/msghub/tab.html?instance=0&theme=light&lang=es&locale=en-US&expert=true#tab-plugins',
@@ -1856,7 +1856,7 @@ describe('admin/tab/layout.js', function () {
 					id: 'plugin-IngestStates-0-presets',
 					label: 'presets.label',
 					category: 'user',
-					ui: { kind: 'plugin', loader: 'esm', apiVersion: '1', bundle: { hash: 'h1' }, i18n: null },
+					ui: { kind: 'plugin', loader: 'esm', apiVersion: '1', bundle: { hash: 'h1' } },
 				},
 			},
 			request: { mode: 'composition', targetId: 'adminTab' },

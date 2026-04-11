@@ -51,10 +51,10 @@ References:
 
 1. Validating the normalized `web.view.get` request shape.
 2. Resolving composition requests against the backend-owned registry.
-3. Normalizing `request.lang` with safe fallback to `en`.
-4. Materializing wildcard compositions backend-side.
-5. Resolving plugin-owned panels through the canonical backend resolver.
-6. Returning the split view payload `{ composition, corePanels, pluginPanels, request }`.
+3. Materializing wildcard compositions backend-side.
+4. Resolving plugin-owned panels through the canonical backend resolver.
+5. Returning the split view payload `{ composition, corePanels, pluginPanels, request }`.
+6. Keeping plugin-owned Admin-UI i18n out of the `web.view.get` payload.
 7. Rejecting invalid requests with stable `BAD_REQUEST` semantics.
 
 ---
@@ -80,7 +80,7 @@ Those concerns belong to `IoWebUi`, plugin runtime paths, and the browser shell.
 `IoUiCatalog.getView(request)` accepts the normalized `web.view.get` payload:
 
 ```js
-{ mode, targetId?, lang? }
+{ mode, targetId? }
 ```
 
 Supported modes:
@@ -101,6 +101,7 @@ Where:
 - `composition` is either a registry composition or a synthetic single composition
 - `corePanels` contains only resolved native/core panel definitions
 - `pluginPanels` contains only resolved plugin-owned panel definitions keyed by canonical runtime panel id
+- plugin-owned Admin-UI i18n is intentionally absent from `pluginPanels[*]`
 - `request` is the normalized request object that was actually resolved
 
 ### Validation rules
@@ -110,7 +111,6 @@ Where:
 - unknown composition ids are rejected with `BAD_REQUEST`
 - `panel` mode requires `targetId`
 - `panel` mode validates only the formal `tab-...` shape, not runtime availability
-- `lang` is normalized to a safe lowercase tag with `en` fallback
 
 ---
 
@@ -162,7 +162,7 @@ Plugin-panel targets become:
 - `panels: [{ type: 'pluginPanel', ... }]`
 - `defaultPanel: 'plugin-<PluginType>-<instanceId>-<panelId>'`
 
-That keeps plugin-owned metadata outside the backend registry and outside the `corePanels` map while still letting `web.view.get` carry resolved plugin panel shell metadata.
+That keeps plugin-owned metadata outside the backend registry and outside the `corePanels` map while still letting `web.view.get` carry resolved plugin panel shell metadata without becoming an i18n transport path.
 
 ---
 

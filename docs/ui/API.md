@@ -60,7 +60,7 @@ panel/plugin contract in this reference.
 | `createMsghubPluginUiHost({ request, api })` | Builds the plugin-owned Admin UI host. Returns `{ mount, unmount, retry }`. | Plugin UI host | `admin/tab/plugin-ui-host.js`, `admin/tab/contracts.d.ts` |
 | `computeContextMenuPosition(params)` | Viewport-aware menu positioning helper used by the context-menu runtime. Returns `{ x, y }`. | Browser API layer | `admin/tab/api.js`, `admin/tab/contracts.d.ts` |
 | `toContextMenuIconVar(iconName)` | Converts a safe icon key into `var(--msghub-icon-<name>)`. Invalid names return `''`. | Browser API layer | `admin/tab/api.js`, `admin/tab/contracts.d.ts` |
-| `web.view.get` | `{ mode, targetId?, lang? } -> { composition, corePanels, pluginPanels, request }` | Stable backend view-resolution contract for AdminTab/Web UI shells. `request.lang` is normalized backend-side with `en` fallback. | `lib/IoUiCatalog.js`, `lib/IoWebUi.js`, `admin/tab/boot.js` |
+| `web.view.get` | `{ mode, targetId? } -> { composition, corePanels, pluginPanels, request }` | Stable backend view-resolution contract for AdminTab/Web UI shells. `pluginPanels[*]` carries shell metadata only; plugin-owned Admin-UI i18n is not transported here. | `lib/IoUiCatalog.js`, `lib/IoWebUi.js`, `admin/tab/boot.js` |
 
 ### Backend UI Registry / View DTOs
 
@@ -340,7 +340,7 @@ panel/plugin contract in this reference.
 | `panel.app` | Optional install/PWA metadata block. Text fields are i18n keys. `app.url` is a host-neutral single-panel target string (current producer contract: stable query params such as `?panel=tab-...`). In the current AdminTab installability/head path, plugin panels do not provide or consume plugin-owned `app.icons`; the shell resolves those slots from the generic host set `admin/icons/pluginUI/*`. | Plugin-owned metadata, host-owned AdminTab icon consumer | `lib/IngestStates/manifest.js`, `lib/IoPlugins.js`, `admin/tab/layout.js` |
 | `panel.bundle.entry` | Relative ESM bundle path inside the plugin package root (`packageRoot`). Required for `bundle.get` and hash computation. Host-side resolution is descriptor-based, not repo-path-based. | Plugin-owned | `lib/IngestStates/manifest.js`, `lib/IoPlugins.js` |
 | Companion CSS convention | Optional stylesheet loaded from the same bundle path with `.js` replaced by `.css`. No separate manifest field exists. | UI path convention | `lib/IoPlugins.js`, `admin/tab/plugin-ui-host.js` |
-| Plugin-owned Admin UI i18n | Optional JSON files at `admin-ui/i18n/<lang>.json`. `readAdminUiBundle(...)` falls back from the requested safe language to `en` when needed. The same language normalization is used for `web.view.get(...).pluginPanels[*].ui.i18n`. | Plugin-owned, consumed by UI path | `lib/IoPlugins.js`, `lib/IoPluginPanelResolver.js` |
+| Plugin-owned Admin UI i18n | Optional JSON files at `admin-ui/i18n/<lang>.json`. `readAdminUiBundle(...)` falls back from the requested safe language to `en` when needed. Transport to the frontend happens only through `bundle.get.i18n`, not through `web.view.get`. | Plugin-owned, consumed by UI path | `lib/IoPlugins.js`, `lib/IoWebUi.js` |
 
 ### Current plugin-owned Admin UI contributors
 

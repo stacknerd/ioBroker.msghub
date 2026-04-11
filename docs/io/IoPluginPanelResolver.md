@@ -17,7 +17,7 @@ Without `IoPluginPanelResolver`, plugin-owned panel lookup would remain scattere
 That causes:
 
 - duplicated lookup logic,
-- duplicated `lang` normalization and i18n reads,
+- duplicated runtime validation,
 - drift risk between view assembly, bundle validation, and RPC validation.
 
 `IoPluginPanelResolver` centralizes that runtime lookup in one file with a stable internal contract and explicit scope boundaries.
@@ -56,11 +56,9 @@ References:
 2. Resolving plugin-owned panels by:
    - canonical runtime panel id
    - structured runtime ref `{ pluginType, instanceId, panelId }`
-3. Normalizing the requested UI language with safe fallback to `en`.
-4. Computing the advisory bundle hash through `IoPlugins.computeAdminUiBundleHash(...)`.
-5. Reading plugin-owned Admin-UI i18n through `IoPlugins.readAdminUiTranslations(...)`.
-6. Returning one canonical host-safe runtime DTO for plugin-owned panels.
-7. Soft-degrading hash/i18n enrichment failures to empty hash or `null` i18n with warning logs.
+3. Computing the advisory bundle hash through `IoPlugins.computeAdminUiBundleHash(...)`.
+4. Returning one canonical host-safe runtime DTO for plugin-owned panels.
+5. Soft-degrading hash enrichment failures to an empty hash with warning logs.
 
 ---
 
@@ -88,7 +86,7 @@ Creates the resolver.
 
 Relevant dependency:
 
-- `ioPlugins` — runtime/package source used for raw Admin-UI contributions, bundle hashes, and plugin-owned i18n
+- `ioPlugins` — runtime/package source used for raw Admin-UI contributions and bundle hashes
 - `log` — small optional warn-capable log port used only for soft-degradation logging
 
 ### Readiness
@@ -99,15 +97,14 @@ Returns whether the required runtime functions are wired:
 
 - `getAdminUiContributions()`
 - `computeAdminUiBundleHash(...)`
-- `readAdminUiTranslations(...)`
 
 ### Lookup methods
 
-### `getPanelsByRuntimeId({ lang })`
+### `getPanelsByRuntimeId()`
 
 Returns resolved panel DTOs keyed by canonical runtime panel id.
 
-### `getPanelByRuntimeId({ runtimePanelId, lang })`
+### `getPanelByRuntimeId({ runtimePanelId })`
 
 Resolves one panel by runtime id such as:
 
@@ -115,7 +112,7 @@ Resolves one panel by runtime id such as:
 
 Returns `null` for syntactically invalid or currently unavailable runtime ids.
 
-### `getPanelByRef({ pluginType, instanceId, panelId, lang })`
+### `getPanelByRef({ pluginType, instanceId, panelId })`
 
 Resolves one panel by structured runtime ref.
 
@@ -142,11 +139,7 @@ Each resolved plugin-owned panel follows this internal runtime DTO:
     apiVersion,
     bundle: {
       hash,
-    },
-    i18n: {
-      lang,
-      translations,
-    } | null,
+    }
   },
   app?,
 }
@@ -157,7 +150,6 @@ Important details:
 - `id` is the canonical runtime panel id without the `tab-` prefix.
 - `label` and `description` remain plugin-owned shell metadata.
 - `ui.bundle.hash` is advisory and may be `''` on soft failure.
-- `ui.i18n` is language-dependent and may be `null` on absence or soft failure.
 - no bundle entry path is exposed here.
 
 ---
@@ -172,13 +164,6 @@ Typical resolver behavior:
 - invalid runtime panel id syntax -> returns `null`
 - unavailable runtime panel -> returns `null`
 - bundle hash read failure -> logs warning, returns `hash: ''`
-- plugin i18n read failure -> logs warning, returns `i18n: null`
-
-Language behavior:
-
-- incoming `lang` is normalized to lowercase
-- only safe tags matching the shared backend pattern are accepted
-- invalid or missing values fall back to `en`
 
 ---
 
@@ -188,6 +173,7 @@ Language behavior:
 2. Resolver DTO is host-safe: no packageRoot or bundle.entry leakage.
 3. Resolver is read-only: it never mutates runtime state.
 4. `web.view.get`, `web.pluginUi.bundle.get`, and `web.pluginUi.rpc` must all validate against this resolver instead of building parallel lookup paths.
+5. Plugin-owned Admin-UI i18n is intentionally out of scope here and stays on the `web.pluginUi.bundle.get` path.
 
 ---
 
@@ -200,7 +186,6 @@ Language behavior:
 
 Covered areas include:
 
-- language normalization
 - keyed lookup behavior
 - runtime-id lookup behavior
 - `NOT_READY` handling

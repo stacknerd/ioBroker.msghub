@@ -1,4 +1,4 @@
-/* global window, document, location, HTMLElement, HTMLInputElement, HTMLTextAreaElement, t, lang, createUi, createAdminApi, msghubRequest, msghubSocket, adapterInstance, args, h, loadJsFilesSequential, renderPanelBootError, buildLayoutFromRegistry, getActiveComposition, getActiveView, ensureAdminI18nLoaded, loadCssFiles, initTabs, activatePanel, updateDocumentTitle, isEmbeddedInAdmin, overrideLang, createMsghubPluginUiHost, normalizePluginPanel, registerPanelDescriptor, resolveViewRequest, setActiveView, renderPanelModeError, applyCategoryMarker, mergePluginI18n, pickText, loadCorePanelEntry */
+/* global window, document, location, HTMLElement, HTMLInputElement, HTMLTextAreaElement, t, lang, createUi, createAdminApi, msghubRequest, msghubSocket, adapterInstance, args, h, loadJsFilesSequential, renderPanelBootError, buildLayoutFromRegistry, getActiveComposition, getActiveView, ensureAdminI18nLoaded, loadCssFiles, initTabs, activatePanel, updateDocumentTitle, isEmbeddedInAdmin, overrideLang, createMsghubPluginUiHost, normalizePluginPanel, registerPanelDescriptor, resolveViewRequest, setActiveView, renderPanelModeError, applyCategoryMarker, pickText, loadCorePanelEntry */
 'use strict';
 
 /**
@@ -983,26 +983,6 @@ async function initPanelsForComposition(panelIds, corePanelEntries) {
 const pluginPanelTabMap = new Map();
 
 /**
- * Merges plugin-owned shell translations from one loaded view payload.
- *
- * @param {object|null|undefined} viewData - Active view payload.
- */
-function mergeViewPluginPanelI18n(viewData) {
-	const pluginPanels = viewData?.pluginPanels;
-	const entries = pluginPanels && typeof pluginPanels === 'object' ? Object.entries(pluginPanels) : [];
-	for (const [runtimePanelId, panelDef] of entries) {
-		const runtimeId = typeof runtimePanelId === 'string' ? runtimePanelId.trim() : '';
-		const match = /^plugin-([A-Za-z][A-Za-z0-9]*)-\d+-[a-z0-9][a-z0-9-]*$/.exec(runtimeId);
-		const pluginType = match ? match[1] : '';
-		const translations = panelDef?.ui?.i18n?.translations;
-		if (!pluginType || !translations || typeof translations !== 'object') {
-			continue;
-		}
-		mergePluginI18n(pluginType, translations);
-	}
-}
-
-/**
  * Registers resolved plugin panel slots from the loaded backend view.
  *
  * @param {object[]} refs - Structured plugin panel references from buildLayoutFromRegistry.
@@ -1148,7 +1128,7 @@ function ensureBooted() {
 		.then(async () => {
 			const viewRequest =
 				typeof resolveViewRequest === 'function' ? resolveViewRequest() : { mode: 'composition' };
-			const viewPayload = { ...viewRequest, lang };
+			const viewPayload = { ...viewRequest };
 			let viewData;
 			try {
 				viewData = await msghubRequest('web.view.get', viewPayload);
@@ -1213,9 +1193,6 @@ function ensureBooted() {
 			}
 
 			await ensureAdminI18nLoaded();
-			if (typeof mergeViewPluginPanelI18n === 'function') {
-				mergeViewPluginPanelI18n(viewData);
-			}
 			const cssRes = await loadCssFiles(cssAssets);
 			bootCssFailures = Array.isArray(cssRes?.failed) ? cssRes.failed.slice() : [];
 			if (cssRes?.failed?.length) {

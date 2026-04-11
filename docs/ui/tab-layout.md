@@ -172,10 +172,10 @@ When called with no argument, falls back to `panelDescriptors.get(currentActiveP
 `applyStaticI18n()` to call `updateDocumentTitle()` with no args after a language change and still
 re-derive the correct title for the currently active panel.
 
-For plugin panels, the shell consumes the same runtime dictionary that already contains the
-view-time plugin admin-ui translations. `document.title`, app head meta, and manifest text
-all resolve through the same key-strict consumer contract, so once view-time plugin i18n is merged there is
-no separate legacy text path for head versus manifest output.
+For plugin panels, the shell consumes whatever runtime dictionary is currently loaded.
+In this rescue cut, `web.view.get` no longer transports plugin-owned Admin-UI translations; those arrive only
+through the later bundle path. `document.title`, app head meta, and manifest text therefore stay on the same
+key-strict consumer contract and may expose raw plugin-owned i18n keys until bundle i18n has been merged.
 
 When `descriptor.app` is present, `applyAppHeadMeta(descriptor)` runs asynchronously and sets or updates:
 - `<meta name="theme-color">` (when `app.themeColor` is a string)

@@ -1024,10 +1024,6 @@ globalThis.__map = pluginPanelTabMap;
 					kind: 'plugin',
 					loader: 'esm',
 					bundle: { hash: 'abc123' },
-					i18n: {
-						lang: 'en',
-						translations: { 'msghub.i18n.IngestStates.ui.panels.presets.label': 'Presets' },
-					},
 				},
 			},
 		});
@@ -1528,7 +1524,7 @@ globalThis.__ensureBooted = ensureBooted;
 
 		assert.deepEqual(
 			JSON.parse(JSON.stringify(requestCalls)),
-			[{ cmd: 'web.view.get', payload: { mode: 'panel', targetId: 'tab-messages', lang: 'en' } }],
+			[{ cmd: 'web.view.get', payload: { mode: 'panel', targetId: 'tab-messages' } }],
 		);
 		assert.equal(setActiveViewCalls.length, 1, 'setActiveView must be called once');
 		assert.strictEqual(setActiveViewCalls[0], viewData, 'setActiveView must receive the loaded view payload');
@@ -1789,95 +1785,6 @@ globalThis.__ensureBooted = ensureBooted;
 
 		assert.deepEqual(renderPanelModeErrorCalls, ['msghub.i18n.core.admin.ui.panel.error.unknownTarget.text']);
 		assert.deepEqual(callOrder, ['ensureAdminI18nLoaded', 'renderPanelModeError']);
-	});
-
-	it('ensureBooted(): merges view plugin i18n only after admin i18n finished loading', async function () {
-		const source = await readRepoFile('admin/tab/boot.js');
-		const fnSource = extractFunctionSource(source, 'ensureBooted');
-
-		const callOrder = [];
-		let activeComposition = null;
-
-		const sandbox = runInSandbox(
-			`
-let bootCssFailures = [];
-const bootPanelFailures = new Map();
-let bootFatalErrorMessage = '';
-let bootPromise = null;
-
-function setConnLayout() {}
-async function loadCssFiles() { return { failed: [] }; }
-function applyStaticI18n() {}
-function updateConnectionPanel() {}
-function initConnectionPanelInteraction() {}
-async function initPanelsForComposition() {}
-
-${fnSource}
-globalThis.__ensureBooted = ensureBooted;
-`,
-			{
-				Promise,
-				lang: 'es',
-				location: { hash: '' },
-				resolveViewRequest: () => ({ mode: 'composition', targetId: 'adminTab' }),
-				msghubRequest: async () => ({
-					composition: {
-						id: 'adminTab',
-						layout: 'tabs',
-						panels: ['messages'],
-						defaultPanel: 'messages',
-						deviceMode: 'pc',
-					},
-					corePanels: {
-						messages: {
-							id: 'messages',
-							label: 'msghub.i18n.core.admin.ui.tabs.messages.label',
-						},
-					},
-					pluginPanels: {
-						'plugin-IngestStates-0-presets': {
-							label: 'msghub.i18n.IngestStates.ui.panels.presets.label',
-							ui: {
-								i18n: {
-									lang: 'es',
-									translations: {
-										'msghub.i18n.IngestStates.ui.panels.presets.label': 'Plantillas',
-									},
-								},
-							},
-						},
-					},
-					request: { mode: 'composition', targetId: 'adminTab', lang: 'es' },
-				}),
-				setActiveView: view => {
-					activeComposition = view.composition;
-				},
-				getActiveComposition: () => activeComposition,
-				buildLayoutFromRegistry: () => ({
-					layout: 'tabs',
-					panelIds: ['messages'],
-					pluginPanelRefs: [],
-					defaultPanelId: 'messages',
-					missingNativePanelIds: [],
-				}),
-				loadCorePanelEntry: async () => ({ css: [], js: [], panelInit() { return null; } }),
-				ensureAdminI18nLoaded: async () => {
-					callOrder.push('ensureAdminI18nLoaded');
-				},
-				mergeViewPluginPanelI18n: () => {
-					callOrder.push('mergeViewPluginPanelI18n');
-				},
-				initTabs: () => ({ setActive() {}, initial: 'tab-messages' }),
-				maybeHardReloadForLateCriticalBootFailure: () => false,
-				document: { addEventListener() {} },
-				ui: null,
-			},
-			'boot-plugin-i18n-order.js',
-		);
-
-		await sandbox.__ensureBooted();
-
-		assert.deepEqual(callOrder, ['ensureAdminI18nLoaded', 'mergeViewPluginPanelI18n']);
 	});
 
 	it('hydratePluginPanels + mountPluginPanelIfNeeded: single-shell — container without tabEl, map populated, mount succeeds', async function () {

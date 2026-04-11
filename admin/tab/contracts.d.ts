@@ -127,7 +127,7 @@ declare global {
 		composition?: any;
 		corePanels?: Record<string, any>;
 		pluginPanels?: Record<string, any>;
-		request?: { mode?: 'composition' | 'panel'; targetId?: string; lang?: string };
+		request?: { mode?: 'composition' | 'panel'; targetId?: string };
 	};
 
 	type PluginPanelViewEntry = {
@@ -140,7 +140,6 @@ declare global {
 			loader: 'esm';
 			apiVersion: string;
 			bundle: { hash: string };
-			i18n?: { lang?: string; translations?: Record<string, unknown> } | null;
 		};
 		app?: PluginAppBlock;
 	};

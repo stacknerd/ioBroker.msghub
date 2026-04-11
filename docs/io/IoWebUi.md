@@ -103,8 +103,8 @@ Behavior notes:
 - `web.messages.action` requires `ref` and `actionId` and returns `REJECTED` when the executor returns false.
 - `web.constants.get` returns only `kind`, `lifecycle.state`, `level`, and `notfication.events`.
 - `web.ping` always returns `{ ok: true, data: 'pong' }`.
-- `web.view.get` delegates view normalization, `lang` handling, wildcard materialization, and `pluginPanels` assembly to `IoUiCatalog`.
-- `web.pluginUi.bundle.get` validates target panels through the canonical backend resolver before reading bundle files from `IoPlugins`.
+- `web.view.get` delegates view normalization, wildcard materialization, and `pluginPanels` assembly to `IoUiCatalog`.
+- `web.pluginUi.bundle.get` validates target panels through the canonical backend resolver, then normalizes bundle language locally before reading bundle files from `IoPlugins`.
 - `web.pluginUi.rpc` delegates host-bound RPC validation and dispatch to `IoPluginUiRpc`, which resolves the target through the same canonical backend resolver before calling `handleWebUiRpc`.
 
 ---

@@ -147,6 +147,10 @@ Structured plugin panel refs from the composition are not active immediately.
 Actual plugin bundle mounting is lazy by default, but `boot.js` also mounts a plugin panel immediately when it
 became active during boot before the later `msghub:tabSwitch` listener could observe that activation.
 
+In this rescue cut, `web.view.get` no longer transports plugin-owned Admin-UI translations.
+That means `t(panelDef.label)` may still resolve to the raw key at hydration time; this is the accepted
+intermediate state until the bundle path later merges plugin-owned i18n.
+
 `hydratePluginPanels()` is also reused in the Single-Panel-Mode plugin path (see above) to populate
 `pluginPanelTabMap` via the same mechanism. In that context the tab DOM elements do not exist, but
 `hydratePluginPanels` handles absent `tabEl` results gracefully — the `if (tabEl)` block is skipped
