@@ -771,8 +771,7 @@ describe('admin/tab/layout.js', function () {
 		const url = await sandbox.window.__layoutFns.resolveIconUrl(
 			{
 				id: 'tab-messages',
-				app: { icons: { any192: 'messages-192.png' } },
-				_registryKey: 'messages',
+				resolvedAppIcons: { any192: 'admin/icons/messages/messages-192.png' },
 			},
 			'any192',
 		);
@@ -780,7 +779,7 @@ describe('admin/tab/layout.js', function () {
 		assert.equal(url, 'icons/messages/messages-192.png');
 	});
 
-	it('resolveIconUrl() returns the generic static host icon path for plugin panels', async function () {
+	it('resolveIconUrl() returns the backend-resolved plugin host icon path', async function () {
 		const requests = [];
 		const { sandbox, blobUrls } = await loadLayoutSandbox({
 			msghubRequest: async (command, payload) => {
@@ -792,8 +791,7 @@ describe('admin/tab/layout.js', function () {
 		const url = await sandbox.window.__layoutFns.resolveIconUrl(
 			{
 				id: 'tab-plugin-IngestStates-0-presets',
-				ui: { kind: 'plugin' },
-				app: { name: 'presets.app.name', url: '?panel=tab-plugin-IngestStates-0-presets' },
+				resolvedAppIcons: { any192: 'admin/icons/pluginUI/pluginUI-192.png' },
 			},
 			'any192',
 		);
@@ -809,8 +807,7 @@ describe('admin/tab/layout.js', function () {
 		const url = await sandbox.window.__layoutFns.resolveIconUrl(
 			{
 				id: 'tab-messages',
-				app: { icons: {} },
-				_registryKey: 'messages',
+				resolvedAppIcons: {},
 			},
 			'any192',
 		);
@@ -831,14 +828,13 @@ describe('admin/tab/layout.js', function () {
 		assert.equal(url, null);
 	});
 
-	it('resolveIconUrl() returns the generic plugin host icon path even without plugin app.icons', async function () {
+	it('resolveIconUrl() uses resolvedAppIcons even when plugin app.icons are absent', async function () {
 		const { sandbox } = await loadLayoutSandbox();
 
 		const url = await sandbox.window.__layoutFns.resolveIconUrl(
 			{
 				id: 'tab-plugin-IngestStates-0-presets',
-				ui: { kind: 'plugin' },
-				app: { name: 'presets.app.name', url: '?panel=tab-plugin-IngestStates-0-presets' },
+				resolvedAppIcons: { any192: 'admin/icons/pluginUI/pluginUI-192.png' },
 			},
 			'any192',
 		);
@@ -846,21 +842,20 @@ describe('admin/tab/layout.js', function () {
 		assert.equal(url, 'icons/pluginUI/pluginUI-192.png');
 	});
 
-	it('resolveIconUrl() keeps the core owner key in the path and never uses the runtime tab id as a directory', async function () {
+	it('resolveIconUrl() consumes the backend-owned resolvedAppIcons path and ignores stale local app.icons data', async function () {
 		const { sandbox } = await loadLayoutSandbox();
 
 		const url = await sandbox.window.__layoutFns.resolveIconUrl(
 			{
 				id: 'tab-messages',
-				app: { icons: { any192: 'messages-192.png' } },
-				_registryKey: 'messages',
+				app: { icons: { any192: 'stale-local-value.png' } },
+				resolvedAppIcons: { any192: 'admin/icons/messages/messages-192.png' },
 			},
 			'any192',
 		);
 
 		assert.equal(url, 'icons/messages/messages-192.png');
-		assert.equal(url.includes('tab-messages'), false);
-		assert.equal(url.includes('/tab-'), false);
+		assert.equal(url.includes('stale-local-value.png'), false);
 	});
 
 	it('initTabs() returns null initial when all tabs are disabled', async function () {
@@ -1160,6 +1155,23 @@ describe('admin/tab/layout.js', function () {
 		assert.strictEqual(descriptor.app, app);
 	});
 
+	it('normalizePluginPanel() passes backend-owned resolvedAppIcons through to descriptor', async function () {
+		const { sandbox } = await loadLayoutSandbox();
+		const { normalizePluginPanel } = sandbox.window.__layoutFns;
+
+		const resolvedAppIcons = { any192: 'admin/icons/pluginUI/pluginUI-192.png' };
+		const contrib = {
+			pluginType: 'IngestStates',
+			instanceId: 0,
+			panelId: 'presets',
+			label: 'key',
+			resolvedAppIcons,
+		};
+		const descriptor = normalizePluginPanel(contrib, { pluginType: 'IngestStates', instanceId: 0, panelId: 'presets' });
+
+		assert.strictEqual(descriptor.resolvedAppIcons, resolvedAppIcons);
+	});
+
 	it('normalizePluginPanel() with no contrib.app yields descriptor.app === undefined', async function () {
 		const { sandbox } = await loadLayoutSandbox();
 		const { normalizePluginPanel } = sandbox.window.__layoutFns;
@@ -1279,8 +1291,7 @@ describe('admin/tab/layout.js', function () {
 		await updateDocumentTitle({
 			id: 'tab-messages',
 			label: 'messages.key',
-			_registryKey: 'messages',
-			app: { themeColor: '#1f6a53', name: 'App', icons: { any192: 'messages-192.png' } },
+			app: { themeColor: '#1f6a53', name: 'App' },
 		});
 
 		const meta = sandbox.document.head.querySelector('meta[name="theme-color"]');
@@ -1297,8 +1308,7 @@ describe('admin/tab/layout.js', function () {
 		await updateDocumentTitle({
 			id: 'tab-messages',
 			label: 'messages.key',
-			_registryKey: 'messages',
-			app: { name: 'some.name.key', icons: { any192: 'messages-192.png' } },
+			app: { name: 'some.name.key' },
 		});
 
 		const meta = sandbox.document.head.querySelector('meta[name="application-name"]');
@@ -1319,8 +1329,7 @@ describe('admin/tab/layout.js', function () {
 		await updateDocumentTitle({
 			id: 'tab-messages',
 			label: 'messages.key',
-			_registryKey: 'messages',
-			app: { name: 'name.key', shortName: 'short.key', icons: { any192: 'messages-192.png' } },
+			app: { name: 'name.key', shortName: 'short.key' },
 		});
 
 		const meta = sandbox.document.head.querySelector('meta[name="apple-mobile-web-app-title"]');
@@ -1337,8 +1346,7 @@ describe('admin/tab/layout.js', function () {
 		await updateDocumentTitle({
 			id: 'tab-messages',
 			label: 'messages.key',
-			_registryKey: 'messages',
-			app: { name: 'name.key', icons: { any192: 'messages-192.png' } },
+			app: { name: 'name.key' },
 		});
 
 		const meta = sandbox.document.head.querySelector('meta[name="apple-mobile-web-app-title"]');
@@ -1354,8 +1362,7 @@ describe('admin/tab/layout.js', function () {
 		await updateDocumentTitle({
 			id: 'tab-messages',
 			label: 'messages.key',
-			_registryKey: 'messages',
-			app: { themeColor: '#1f6a53', name: 'App', icons: { any192: 'messages-192.png' } },
+			app: { themeColor: '#1f6a53', name: 'App' },
 		});
 		assert.ok(
 			sandbox.document.head.querySelector('meta[name="theme-color"]'),
@@ -1385,14 +1392,12 @@ describe('admin/tab/layout.js', function () {
 		await updateDocumentTitle({
 			id: 'tab-messages',
 			label: 'messages.key',
-			_registryKey: 'messages',
-			app: { themeColor: '#111', name: 'First', icons: { any192: 'messages-192.png' } },
+			app: { themeColor: '#111', name: 'First' },
 		});
 		await updateDocumentTitle({
 			id: 'tab-messages',
 			label: 'messages.key',
-			_registryKey: 'messages',
-			app: { themeColor: '#222', name: 'Second', icons: { any192: 'messages-192.png' } },
+			app: { themeColor: '#222', name: 'Second' },
 		});
 
 		const metas = sandbox.document.head.children.filter(c => c.getAttribute('name') === 'theme-color');
@@ -1607,7 +1612,6 @@ describe('admin/tab/layout.js', function () {
 		await updateDocumentTitle({
 			id: 'tab-messages',
 			label: 'messages.key',
-			_registryKey: 'messages',
 			app: {
 				name: 'app.name',
 				shortName: 'app.short',
@@ -1615,13 +1619,13 @@ describe('admin/tab/layout.js', function () {
 				display: 'standalone',
 				themeColor: '#1f6a53',
 				backgroundColor: '#0c1014',
-				icons: {
-					any192: 'messages-192.png',
-					any512: 'messages-512.png',
-					maskable192: 'messages-maskable-192.png',
-					maskable512: 'messages-maskable-512.png',
-					apple180: 'messages-apple-180.png',
-				},
+			},
+			resolvedAppIcons: {
+				any192: 'admin/icons/messages/messages-192.png',
+				any512: 'admin/icons/messages/messages-512.png',
+				maskable192: 'admin/icons/messages/messages-maskable-192.png',
+				maskable512: 'admin/icons/messages/messages-maskable-512.png',
+				apple180: 'admin/icons/messages/messages-apple-180.png',
 			},
 		});
 
@@ -1676,7 +1680,7 @@ describe('admin/tab/layout.js', function () {
 		assert.deepEqual(fetchCalls, []);
 	});
 
-	it('updateDocumentTitle() uses generic static host icons for a plugin app descriptor and only revokes the manifest blob', async function () {
+	it('updateDocumentTitle() uses backend-resolved plugin icons for a plugin app descriptor and only revokes the manifest blob', async function () {
 		const requests = [];
 		const { sandbox, blobUrls, revokedUrls } = await loadLayoutSandbox({
 			msghubRequest: async (command, payload) => {
@@ -1696,6 +1700,13 @@ describe('admin/tab/layout.js', function () {
 			app: {
 				name: 'presets.app.name',
 				url: '?panel=tab-plugin-IngestStates-0-presets',
+			},
+			resolvedAppIcons: {
+				any192: 'admin/icons/pluginUI/pluginUI-192.png',
+				any512: 'admin/icons/pluginUI/pluginUI-512.png',
+				maskable192: 'admin/icons/pluginUI/pluginUI-maskable-192.png',
+				maskable512: 'admin/icons/pluginUI/pluginUI-maskable-512.png',
+				apple180: 'admin/icons/pluginUI/pluginUI-apple-180.png',
 			},
 		});
 
@@ -1764,6 +1775,13 @@ describe('admin/tab/layout.js', function () {
 				name: 'msghub.i18n.IngestStates.ui.panels.presets.app.name',
 				shortName: 'msghub.i18n.IngestStates.ui.panels.presets.app.shortName',
 				url: '?panel=tab-plugin-IngestStates-0-presets',
+			},
+			resolvedAppIcons: {
+				any192: 'admin/icons/pluginUI/pluginUI-192.png',
+				any512: 'admin/icons/pluginUI/pluginUI-512.png',
+				maskable192: 'admin/icons/pluginUI/pluginUI-maskable-192.png',
+				maskable512: 'admin/icons/pluginUI/pluginUI-maskable-512.png',
+				apple180: 'admin/icons/pluginUI/pluginUI-apple-180.png',
 			},
 		};
 		const panel = createElement('div');

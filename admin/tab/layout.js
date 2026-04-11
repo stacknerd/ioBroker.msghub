@@ -34,13 +34,6 @@ const MANIFEST_ICON_SLOT_CONFIG = Object.freeze({
 	maskable192: Object.freeze({ sizes: '192x192', purpose: 'maskable' }),
 	maskable512: Object.freeze({ sizes: '512x512', purpose: 'maskable' }),
 });
-const GENERIC_PLUGIN_UI_ICON_FILES = Object.freeze({
-	any192: 'pluginUI-192.png',
-	any512: 'pluginUI-512.png',
-	maskable192: 'pluginUI-maskable-192.png',
-	maskable512: 'pluginUI-maskable-512.png',
-	apple180: 'pluginUI-apple-180.png',
-});
 
 let appHeadVersion = 0;
 let activeManifestUrl = '';
@@ -72,7 +65,7 @@ function normalizeCorePanel(registryKey, def) {
 		description: def.description,
 		category: def.category,
 		app: def.app,
-		_registryKey: registryKey,
+		resolvedAppIcons: def?.resolvedAppIcons,
 	};
 }
 
@@ -101,6 +94,7 @@ function normalizePluginPanel(panelDef, pluginRef) {
 			// `ui.entry` is intentionally not part of the frontend descriptor.
 		},
 		app: panelDef?.app,
+		resolvedAppIcons: panelDef?.resolvedAppIcons,
 	};
 }
 
@@ -142,65 +136,23 @@ function isSupportedAppIconSlot(slot) {
 }
 
 /**
- * Returns the owner-local key that determines the icon directory for a core panel.
+ * Translate one backend-owned icon path into the current host-visible asset path.
  *
- * @param {object} descriptor Canonical panel descriptor.
- * @returns {string} Owner-local panel key or an empty string.
+ * Backend icon contracts currently resolve under `admin/icons/...`.
+ * The AdminTab host serves those assets under `icons/...`.
+ *
+ * @param {string} iconPath Backend-owned icon path.
+ * @returns {string|null} Host-visible icon path or null.
  */
-function getOwnerPanelKey(descriptor) {
-	if (typeof descriptor?._registryKey === 'string' && descriptor._registryKey.trim()) {
-		return descriptor._registryKey.trim();
-	}
-	if (typeof descriptor?.id === 'string' && descriptor.id.startsWith('tab-')) {
-		return descriptor.id.slice('tab-'.length);
-	}
-	return '';
-}
-
-/**
- * Returns whether the descriptor belongs to a plugin-owned panel.
- *
- * Canonical hydrated plugin descriptors carry `ui.kind === 'plugin'`.
- * The runtime id prefix stays as a defensive fallback for callers that pass only a partial shape.
- *
- * @param {object} descriptor Canonical or near-canonical panel descriptor.
- * @returns {boolean} True when the descriptor targets a plugin panel.
- */
-function isPluginPanelDescriptor(descriptor) {
-	if (descriptor?.ui?.kind === 'plugin') {
-		return true;
-	}
-	return typeof descriptor?.id === 'string' && descriptor.id.startsWith('tab-plugin-');
-}
-
-/**
- * Builds the static admin-host URL for a core panel icon.
- *
- * @param {object} descriptor Canonical panel descriptor.
- * @param {string} fileName Owner-local icon file name.
- * @returns {string|null} Static icon URL or null.
- */
-function buildCoreIconUrl(descriptor, fileName) {
-	const ownerPanelKey = getOwnerPanelKey(descriptor);
-	if (!ownerPanelKey || !fileName) {
+function toCurrentHostIconUrl(iconPath) {
+	const rawPath = typeof iconPath === 'string' ? iconPath.trim() : '';
+	if (!rawPath) {
 		return null;
 	}
-	return `icons/${encodeURIComponent(ownerPanelKey)}/${encodeURIComponent(fileName)}`;
-}
-
-/**
- * Builds the static admin-host URL for a generic plugin panel icon.
- *
- * @param {string} slot Fixed app icon slot name.
- * @returns {string|null} Static icon URL or null.
- */
-function buildPluginIconUrl(slot) {
-	const fileName =
-		typeof GENERIC_PLUGIN_UI_ICON_FILES[slot] === 'string' ? GENERIC_PLUGIN_UI_ICON_FILES[slot].trim() : '';
-	if (!fileName) {
-		return null;
+	if (rawPath.startsWith('admin/')) {
+		return rawPath.slice('admin/'.length);
 	}
-	return `icons/pluginUI/${encodeURIComponent(fileName)}`;
+	return rawPath;
 }
 
 /**
@@ -339,9 +291,9 @@ function createResolvedIconMap() {
 /**
  * Resolves the complete icon asset metadata for one app slot.
  *
- * This AdminTab consumer knows exactly two static icon sources:
- * core panels keep their owner-local `admin/icons/<panel>/...` files, while
- * plugin panels always map to the generic host-owned `admin/icons/pluginUI/...` set.
+ * The effective icon-slot policy is backend-owned and arrives through
+ * `descriptor.resolvedAppIcons`. The AdminTab host only translates those
+ * canonical paths into its runtime-visible asset URLs.
  *
  * @param {object} descriptor Canonical panel descriptor.
  * @param {string} slot Fixed app icon slot name.
@@ -353,36 +305,26 @@ async function resolveIconAsset(descriptor, slot) {
 		return null;
 	}
 
-	let fileName = '';
-	let url = null;
-	if (isPluginPanelDescriptor(descriptor)) {
-		fileName = GENERIC_PLUGIN_UI_ICON_FILES[normalizedSlot];
-		url = buildPluginIconUrl(normalizedSlot);
-	} else {
-		fileName =
-			typeof descriptor?.app?.icons?.[normalizedSlot] === 'string'
-				? descriptor.app.icons[normalizedSlot].trim()
-				: '';
-		if (!fileName) {
-			return null;
-		}
-		url = buildCoreIconUrl(descriptor, fileName);
-	}
-	if (!fileName || !url) {
+	const rawIconPath =
+		typeof descriptor?.resolvedAppIcons?.[normalizedSlot] === 'string'
+			? descriptor.resolvedAppIcons[normalizedSlot].trim()
+			: '';
+	const url = toCurrentHostIconUrl(rawIconPath);
+	if (!rawIconPath || !url) {
 		return null;
 	}
 	return {
 		url,
-		mimeType: detectIconMimeType(fileName),
+		mimeType: detectIconMimeType(rawIconPath),
 	};
 }
 
 /**
  * Resolves an app icon URL for a canonical panel descriptor.
  *
- * Core panels resolve to their existing static admin-host paths.
- * Plugin panels resolve to the generic static host-owned `admin/icons/pluginUI/*` set.
- * Missing core app metadata or unsupported slots degrade to `null`.
+ * The effective icon path is backend-owned and comes from `resolvedAppIcons`.
+ * The host only translates that canonical path into a runtime-visible asset URL.
+ * Missing icon metadata or unsupported slots degrade to `null`.
  *
  * @param {object} descriptor Canonical panel descriptor.
  * @param {string} slot Fixed app icon slot name.
@@ -1294,7 +1236,6 @@ void loadCssFiles;
 void loadJsFilesSequential;
 void renderPanelBootError;
 void normalizePluginPanel;
-void isPluginPanelDescriptor;
 void resolvePanelI18nKey;
 void resolveIconUrl;
 void generateManifest;

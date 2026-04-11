@@ -187,13 +187,12 @@ When `descriptor.app` is present, `applyAppHeadMeta(descriptor)` runs asynchrono
 
 `layout.js` resolves app icons generically for both descriptor kinds:
 
-- core panels: static admin-host paths `icons/<ownerPanelKey>/<filename>`
-- plugin panels: static admin-host paths `icons/pluginUI/<filename>` from the generic host icon set
+- both descriptor kinds: host-visible URLs derived from `descriptor.resolvedAppIcons[slot]`
+- current AdminTab translation: canonical backend paths `admin/icons/...` become `icons/...`
 
 For the generated manifest, icon entries are emitted as browser-loadable runtime URLs:
 
-- core panels: absolute runtime URLs derived from the current shell entry plus `icons/<ownerPanelKey>/<filename>`
-- plugin panels: absolute runtime URLs derived from the current shell entry plus `icons/pluginUI/<filename>`
+- both descriptor kinds: absolute runtime URLs derived from the current shell entry plus the translated host-visible icon path
 
 This avoids inline data URIs and keeps manifest icon loading
 separate from the blob manifest document itself.
@@ -209,9 +208,8 @@ intermediate DOM changes produces the same state as a single call.
 
 Converts a raw native panel definition from `corePanels` into a canonical `PanelDescriptor`.
 The producer now stores owner-local ids (`'messages'`, `'plugins'`). `normalizeCorePanel(...)`
-derives the canonical external/runtime id as `tab-<ownerLocalId>`, passes through `category`
-and the optional `app` block, and also sets the private `_registryKey` field used by core
-icon ownership and other host-internal bookkeeping.
+derives the canonical external/runtime id as `tab-<ownerLocalId>`, and passes through `category`,
+the optional `app` block, and the backend-owned `resolvedAppIcons` map.
 
 ### `normalizePluginPanel(panelDef, pluginRef)`
 
@@ -231,10 +229,12 @@ Optional fields are passed through from `contrib` when present:
   `start_url` / `id` are resolved later from the current shell entry URL (`origin + pathname`)
   plus that target, so the generated blob manifest carries installable absolute `http(s)` URLs.
   Optional: `shortName`, `display`, `themeColor`, and `backgroundColor`. In the current
-  AdminTab installability/head path, plugin panels do not consume plugin-owned `app.icons`;
-  the fixed icon slots are resolved from the generic host set `admin/icons/pluginUI/*`. When present,
-  `updateDocumentTitle` will call `applyAppHeadMeta` with it. When absent, the field is `undefined`
-  on the descriptor — no error, no head-meta update.
+  AdminTab installability/head path, icon policy is not derived from `app.icons`; the effective
+  icon slots arrive through the backend-owned `resolvedAppIcons` map. When present, `updateDocumentTitle`
+  will call `applyAppHeadMeta` with `app`. When absent, the field is `undefined` on the descriptor —
+  no error, no head-meta update.
+- `resolvedAppIcons` — backend-owned effective icon-slot map. The shell consumes it as-is and only
+  translates the canonical `admin/icons/...` paths into the current host-visible asset URLs.
 
 ### `registerPanelDescriptor(descriptor)`
 
@@ -246,12 +246,12 @@ Provides the lookup needed by the no-arg form of `updateDocumentTitle`.
 
 Resolves one app-icon URL from a canonical `PanelDescriptor`.
 
-- core panels: returns a static admin-host path `icons/<ownerPanelKey>/<filename>`
-- plugin panels: returns a static admin-host path `icons/pluginUI/<filename>` from the generic host icon set
-- missing core `app.icons`, unsupported slots, or malformed descriptors return `null`
+- returns the current host-visible URL derived from `descriptor.resolvedAppIcons[slot]`
+- currently translates canonical backend paths from `admin/icons/...` to `icons/...`
+- missing icon slots, unsupported slots, or malformed descriptors return `null`
 
-This function is the only place where core and plugin icon ownership differs. Callers receive the
-same `Promise<string|null>` contract for both descriptor kinds.
+This function no longer derives icon policy locally. Callers receive the same
+`Promise<string|null>` contract for both descriptor kinds.
 
 ### `buildLayoutFromRegistry()`
 
