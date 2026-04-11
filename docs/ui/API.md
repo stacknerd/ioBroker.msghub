@@ -283,7 +283,7 @@ panel/plugin contract in this reference.
 
 | Command | Request contract | Response contract | Owner | Reference |
 | --- | --- | --- | --- | --- |
-| `web.pluginUi.bundle.get` | `{ pluginType, instanceId?, panelId, lang? }` | Shared/web-safe bundle delivery path consumed by the AdminTab browser host after AP6. | Web runtime for UI host | `admin/tab/plugin-ui-host.js`, `lib/IoWebUi.js` |
+| `web.pluginUi.bundle.get` | `{ pluginType, instanceId?, panelId, lang?, include?, exclude? }` with canonical top-level parts `js`, `css`, `i18n`. Missing or empty arrays behave like full bundle; `exclude` wins over `include`. | Shared/web-safe bundle delivery path consumed by the AdminTab browser host. Full and partial responses share the same `hash`. | Web runtime for UI host | `admin/tab/plugin-ui-host.js`, `lib/IoWebUi.js` |
 | `admin.pluginUi.rpc` | `{ pluginType, instanceId?, panelId, command, payload? }` | Admin-host RPC path. Plugin-defined `{ ok, data }` or `{ ok: false, error: { code, message } }` at the backend boundary. `msghubRequest` rejects any `ok: false` response as `Error(message)`, so `error.code` is already absent before the host rejection handler runs. Bundle code always receives the normalized envelope described below. | Admin runtime for UI host | `lib/IoAdminTab.js`, `lib/IoPluginUiRpc.js`, `admin/tab/plugin-ui-host.js` |
 | `web.pluginUi.rpc` | `{ pluginType, instanceId?, panelId, command, payload? }` | Web-host RPC path with the same backend envelope semantics as `admin.pluginUi.rpc`. | Web runtime for UI host | `lib/IoWebUi.js`, `lib/IoPluginUiRpc.js`, `admin/tab/plugin-ui-host.js` |
 
@@ -291,16 +291,17 @@ panel/plugin contract in this reference.
 
 | DTO | Contract | Owner | Reference |
 | --- | --- | --- | --- |
-| `bundle.get` response | `{ apiVersion, moduleFormat: 'esm', hash, js, css?, i18n }` | Admin runtime | `lib/IoWebUi.js`, `lib/IoPlugins.js` |
-| `bundle.get.i18n` | `{ lang, translations }` or `null`. `translations` is the parsed plugin-owned language file. | Admin runtime | `lib/IoPlugins.js`, `lib/IoWebUi.js` |
-| `bundle.get.css` | Optional companion CSS from `<bundle.entry>.css`. | Admin runtime | `lib/IoPlugins.js`, `lib/IoWebUi.js` |
+| `bundle.get` response | `{ apiVersion, moduleFormat: 'esm', hash, ...parts }` where `js`, `css`, `i18n` appear only when the selected projection includes them. | Admin runtime | `lib/IoWebUi.js`, `lib/IoPlugins.js` |
+| `bundle.get.i18n` | `{ lang, translations }` or `null`. Present only when the selected projection includes `i18n`. | Admin runtime | `lib/IoPlugins.js`, `lib/IoWebUi.js` |
+| `bundle.get.css` | Optional companion CSS from `<bundle.entry>.css`. Present only when the selected projection includes `css`. | Admin runtime | `lib/IoPlugins.js`, `lib/IoWebUi.js` |
 
 ### Plugin UI host surface
 
 | Entry | Contract | Owner | Reference |
 | --- | --- | --- | --- |
-| `createMsghubPluginUiHost({ request, api })` | Returns `{ mount, unmount, retry }`. `request` is expected to behave like `msghubRequest(...)`. `api` is expected to be the shell `ctx.api`. | Plugin UI host | `admin/tab/plugin-ui-host.js` |
-| `host.mount({ container, pluginType, instanceId, panelId, hash? })` | Fetches or reuses a cached bundle, imports the ESM source, merges plugin i18n, appends a `.msghub-plugin-ui-mount` wrapper, injects companion CSS as a sibling `<style>`, then calls `module.mount(ctx)`. Returns a handle used by `unmount(...)` and `retry(...)`. | Plugin UI host | `admin/tab/plugin-ui-host.js` |
+| `createMsghubPluginUiHost({ request, api, onI18nReady? })` | Returns `{ mount, unmount, retry, preloadI18n }`. `request` is expected to behave like `msghubRequest(...)`. `api` is expected to be the shell `ctx.api`. `onI18nReady(...)` is an optional shell callback after plugin-owned i18n has been merged. | Plugin UI host | `admin/tab/plugin-ui-host.js` |
+| `host.preloadI18n({ pluginType, instanceId, panelId, hash? })` | Fetches only the `i18n` projection for one plugin panel, merges plugin-owned translations into the runtime dictionary, and notifies the shell through `onI18nReady(...)`. | Plugin UI host | `admin/tab/plugin-ui-host.js`, `admin/tab/boot.js` |
+| `host.mount({ container, pluginType, instanceId, panelId, hash? })` | Fetches or reuses a cached bundle, imports the ESM source, merges plugin i18n when present, appends a `.msghub-plugin-ui-mount` wrapper, injects companion CSS as a sibling `<style>`, then calls `module.mount(ctx)`. When a matching i18n preload is already cached for the same `(pluginType, instanceId, panelId, hash, lang)`, the mount path prefers `exclude:['i18n']`; otherwise it falls back to the full bundle. Returns a handle used by `unmount(...)` and `retry(...)`. | Plugin UI host | `admin/tab/plugin-ui-host.js` |
 | `host.unmount(handle)` | Calls `module.unmount(ctx)` when exported, then clears the host container. Unmount errors are swallowed. | Plugin UI host | `admin/tab/plugin-ui-host.js` |
 | `host.retry(handle)` | Drops all cache entries for the same `(pluginType, instanceId, panelId)`, unmounts the current handle, then remounts without a hash hint. | Plugin UI host | `admin/tab/plugin-ui-host.js` |
 

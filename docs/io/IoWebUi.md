@@ -104,7 +104,8 @@ Behavior notes:
 - `web.constants.get` returns only `kind`, `lifecycle.state`, `level`, and `notfication.events`.
 - `web.ping` always returns `{ ok: true, data: 'pong' }`.
 - `web.view.get` delegates view normalization, wildcard materialization, and `pluginPanels` assembly to `IoUiCatalog`.
-- `web.pluginUi.bundle.get` validates target panels through the canonical backend resolver, then normalizes bundle language locally before reading bundle files from `IoPlugins`.
+- `web.pluginUi.bundle.get` validates target panels through the canonical backend resolver, normalizes bundle language and the optional `include` / `exclude` projection locally, then reads bundle files from `IoPlugins`.
+- `web.pluginUi.bundle.get` keeps the bundle hash shared across full and partial responses; cache identity therefore includes the normalized projection in addition to `(pluginType, instanceId, panelId, hash, lang)`.
 - `web.pluginUi.rpc` delegates host-bound RPC validation and dispatch to `IoPluginUiRpc`, which resolves the target through the same canonical backend resolver before calling `handleWebUiRpc`.
 
 ---

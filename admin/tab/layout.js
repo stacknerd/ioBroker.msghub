@@ -1113,7 +1113,6 @@ function buildLayoutFromRegistry() {
 				const key = getPluginRuntimePanelId(ref);
 				const tabId = `tab-${key}`;
 				const isResolved = !!panelDef;
-				const dataI18n = isResolved && typeof panelDef?.label === 'string' ? panelDef.label : '';
 				nav.appendChild(
 					h('a', {
 						class: `msghub-tab${isResolved ? '' : ' is-disabled'}`,
@@ -1121,9 +1120,10 @@ function buildLayoutFromRegistry() {
 						role: 'tab',
 						'aria-controls': tabId,
 						...(isResolved ? {} : { 'aria-disabled': 'true' }),
-						...(dataI18n ? { 'data-i18n': dataI18n } : {}),
-						// Keep the first paint neutral until admin i18n has loaded; never expose raw keys.
-						text: isResolved ? key : '...',
+						'data-i18n': 'msghub.i18n.core.admin.ui.panel.loading.text',
+						// First paint stays on the shared loading label until boot re-renders
+						// the tab with the resolved plugin-owned label key.
+						text: '...',
 					}),
 				);
 			}

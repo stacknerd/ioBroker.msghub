@@ -968,6 +968,7 @@ globalThis.__state = () => ({ healthyShellSinceMs });
 
 	it('hydratePluginPanels enables tab for matching contribution and registers entry in tabMap', async function () {
 		const source = await readRepoFile('admin/tab/boot.js');
+		const renderSource = extractFunctionSource(source, 'renderPluginPanelTabLabel');
 		// extractFunctionSource starts at 'function', stripping 'async' — prepend it back.
 		const fnSource = 'async ' + extractFunctionSource(source, 'hydratePluginPanels');
 
@@ -992,12 +993,14 @@ globalThis.__state = () => ({ healthyShellSinceMs });
 		const sandbox = runInSandbox(
 			`
 const pluginPanelTabMap = new Map();
+${renderSource}
 ${fnSource}
 globalThis.__fn = hydratePluginPanels;
 globalThis.__map = pluginPanelTabMap;
 `,
 			{
 				lang: 'en',
+				hasAdminKey: key => key === 'msghub.i18n.IngestStates.ui.panels.presets.label',
 				document: {
 					getElementById: id => (id === 'plugin-IngestStates-0-presets' ? container : null),
 					querySelector: () => tabEl,
@@ -1044,12 +1047,14 @@ globalThis.__map = pluginPanelTabMap;
 
 	it('hydratePluginPanels: missing pluginPanels entry leaves the slot unresolved', async function () {
 		const source = await readRepoFile('admin/tab/boot.js');
+		const renderSource = extractFunctionSource(source, 'renderPluginPanelTabLabel');
 		// extractFunctionSource starts at 'function', stripping 'async' — prepend it back.
 		const fnSource = 'async ' + extractFunctionSource(source, 'hydratePluginPanels');
 
 		const sandbox = runInSandbox(
 			`
 const pluginPanelTabMap = new Map();
+${renderSource}
 ${fnSource}
 globalThis.__fn = hydratePluginPanels;
 globalThis.__map = pluginPanelTabMap;
@@ -1074,12 +1079,14 @@ globalThis.__map = pluginPanelTabMap;
 
 	it('hydratePluginPanels: empty pluginPanels map leaves all slots unresolved without crashing', async function () {
 		const source = await readRepoFile('admin/tab/boot.js');
+		const renderSource = extractFunctionSource(source, 'renderPluginPanelTabLabel');
 		// extractFunctionSource starts at 'function', stripping 'async' — prepend it back.
 		const fnSource = 'async ' + extractFunctionSource(source, 'hydratePluginPanels');
 
 		const sandbox = runInSandbox(
 			`
 const pluginPanelTabMap = new Map();
+${renderSource}
 ${fnSource}
 globalThis.__fn = hydratePluginPanels;
 `,
@@ -1102,12 +1109,14 @@ globalThis.__fn = hydratePluginPanels;
 
 	it('hydratePluginPanels: missing active view pluginPanels does not crash', async function () {
 		const source = await readRepoFile('admin/tab/boot.js');
+		const renderSource = extractFunctionSource(source, 'renderPluginPanelTabLabel');
 		// extractFunctionSource starts at 'function', stripping 'async' — prepend it back.
 		const fnSource = 'async ' + extractFunctionSource(source, 'hydratePluginPanels');
 
 		const sandbox = runInSandbox(
 			`
 const pluginPanelTabMap = new Map();
+${renderSource}
 ${fnSource}
 globalThis.__fn = hydratePluginPanels;
 `,
@@ -1129,6 +1138,7 @@ globalThis.__fn = hydratePluginPanels;
 
 	it('hydratePluginPanels: contrib.app flows through normalizePluginPanel to registered descriptor', async function () {
 		const source = await readRepoFile('admin/tab/boot.js');
+		const renderSource = extractFunctionSource(source, 'renderPluginPanelTabLabel');
 		const fnSource = 'async ' + extractFunctionSource(source, 'hydratePluginPanels');
 
 		const app = { name: 'msghub.i18n.some.app.label', url: 'https://example.com' };
@@ -1138,6 +1148,7 @@ globalThis.__fn = hydratePluginPanels;
 		const sandbox = runInSandbox(
 			`
 const pluginPanelTabMap = new Map();
+${renderSource}
 ${fnSource}
 globalThis.__fn = hydratePluginPanels;
 `,
@@ -1177,6 +1188,7 @@ globalThis.__fn = hydratePluginPanels;
 
 	it('hydratePluginPanels: contrib without app yields descriptor.app === undefined, no crash', async function () {
 		const source = await readRepoFile('admin/tab/boot.js');
+		const renderSource = extractFunctionSource(source, 'renderPluginPanelTabLabel');
 		const fnSource = 'async ' + extractFunctionSource(source, 'hydratePluginPanels');
 
 		const registeredDescriptors = [];
@@ -1184,6 +1196,7 @@ globalThis.__fn = hydratePluginPanels;
 		const sandbox = runInSandbox(
 			`
 const pluginPanelTabMap = new Map();
+${renderSource}
 ${fnSource}
 globalThis.__fn = hydratePluginPanels;
 `,
@@ -1217,6 +1230,146 @@ globalThis.__fn = hydratePluginPanels;
 
 		assert.equal(registeredDescriptors.length, 1, 'registerPanelDescriptor must be called even without app');
 		assert.equal(registeredDescriptors[0].app, undefined, 'descriptor.app must be undefined when contrib has no app block');
+	});
+
+	it('rerenderPluginPanelTabLabels reapplies the existing label render path after plugin i18n merge', async function () {
+		const source = await readRepoFile('admin/tab/boot.js');
+		const renderSource = extractFunctionSource(source, 'renderPluginPanelTabLabel');
+		const rerenderSource = extractFunctionSource(source, 'rerenderPluginPanelTabLabels');
+
+		const setAttrs = [];
+		let tabLabel = 'msghub.i18n.IngestStates.ui.panels.presets.label';
+		let titleUpdates = 0;
+		const tabEl = {
+			setAttribute: (name, value) => setAttrs.push([name, value]),
+			get textContent() {
+				return tabLabel;
+			},
+			set textContent(value) {
+				tabLabel = value;
+			},
+		};
+
+		const sandbox = runInSandbox(
+			`
+const pluginPanelTabMap = new Map();
+${renderSource}
+${rerenderSource}
+globalThis.__rerender = rerenderPluginPanelTabLabels;
+globalThis.__map = pluginPanelTabMap;
+`,
+			{
+				document: {
+					querySelector: selector =>
+						selector === 'a.msghub-tab[href="#tab-plugin-IngestStates-0-presets"]' ? tabEl : null,
+				},
+				getActiveView: () => ({
+					pluginPanels: {
+						'plugin-IngestStates-0-presets': {
+							label: 'msghub.i18n.IngestStates.ui.panels.presets.label',
+						},
+					},
+				}),
+				hasAdminKey: key => key === 'msghub.i18n.IngestStates.ui.panels.presets.label',
+				t: key => (key === 'msghub.i18n.IngestStates.ui.panels.presets.label' ? 'Preset Editor' : String(key || '')),
+				updateDocumentTitle: () => {
+					titleUpdates += 1;
+				},
+			},
+			'boot-rerender-plugin-labels.js',
+		);
+
+		sandbox.__map.set('tab-plugin-IngestStates-0-presets', {
+			ref: { pluginType: 'IngestStates', instanceId: 0, panelId: 'presets' },
+		});
+
+		sandbox.__rerender('IngestStates');
+
+		assert.deepEqual(setAttrs, [['data-i18n', 'msghub.i18n.IngestStates.ui.panels.presets.label']]);
+		assert.equal(tabLabel, 'Preset Editor');
+		assert.equal(titleUpdates, 1, 'active document title should be refreshed alongside the tab label');
+	});
+
+	it('renderPluginPanelTabLabel keeps the existing loading state until plugin-owned i18n is available', async function () {
+		const source = await readRepoFile('admin/tab/boot.js');
+		const renderSource = extractFunctionSource(source, 'renderPluginPanelTabLabel');
+
+		const setAttrs = [];
+		let tabLabel = 'Lädt…';
+		const tabEl = {
+			setAttribute: (name, value) => setAttrs.push([name, value]),
+			get textContent() {
+				return tabLabel;
+			},
+			set textContent(value) {
+				tabLabel = value;
+			},
+		};
+
+		const sandbox = runInSandbox(
+			`
+${renderSource}
+globalThis.__render = renderPluginPanelTabLabel;
+`,
+			{
+				hasAdminKey: () => false,
+				t: key => String(key || ''),
+			},
+			'boot-render-plugin-label-guard.js',
+		);
+
+		const changed = sandbox.__render(tabEl, {
+			label: 'msghub.i18n.IngestStates.ui.panels.presets.label',
+		});
+
+		assert.equal(changed, false);
+		assert.deepEqual(setAttrs, []);
+		assert.equal(tabLabel, 'Lädt…');
+	});
+
+	it('preloadPluginPanelI18n only preloads resolved plugin panels for the current view', async function () {
+		const source = await readRepoFile('admin/tab/boot.js');
+		const fnSource = 'async ' + extractFunctionSource(source, 'preloadPluginPanelI18n');
+		const preloadCalls = [];
+
+		const sandbox = runInSandbox(
+			`
+${fnSource}
+globalThis.__preload = preloadPluginPanelI18n;
+`,
+			{
+				Promise,
+				getActiveView: () => null,
+			},
+			'boot-preload-plugin-i18n.js',
+		);
+
+		await sandbox.__preload(
+			[
+				{ pluginType: 'IngestStates', instanceId: 0, panelId: 'presets' },
+				{ pluginType: 'Missing', instanceId: 0, panelId: 'ghost' },
+			],
+			{
+				preloadI18n: opts => {
+					preloadCalls.push(opts);
+					return Promise.resolve();
+				},
+			},
+			{
+				'plugin-IngestStates-0-presets': {
+					ui: { bundle: { hash: 'abc123' } },
+				},
+			},
+		);
+
+		assert.deepEqual(JSON.parse(JSON.stringify(preloadCalls)), [
+			{
+				pluginType: 'IngestStates',
+				instanceId: '0',
+				panelId: 'presets',
+				hash: 'abc123',
+			},
+		]);
 	});
 
 	it('resolveHydratedPluginTabId() prefers a hydrated hash tab over the composition default', async function () {
@@ -1332,6 +1485,7 @@ globalThis.__map = pluginPanelTabMap;
 
 	it('mixed composition prefers a hydrated hash plugin tab over the default panel', async function () {
 		const source = await readRepoFile('admin/tab/boot.js');
+		const renderSource = extractFunctionSource(source, 'renderPluginPanelTabLabel');
 		const hydrateSource = 'async ' + extractFunctionSource(source, 'hydratePluginPanels');
 		const resolveSource = extractFunctionSource(source, 'resolveHydratedPluginTabId');
 		const mountSource = extractFunctionSource(source, 'mountPluginPanelIfNeeded');
@@ -1347,6 +1501,7 @@ globalThis.__map = pluginPanelTabMap;
 		const sandbox = runInSandbox(
 			`
 const pluginPanelTabMap = new Map();
+${renderSource}
 ${hydrateSource}
 ${resolveSource}
 ${mountSource}
@@ -1514,6 +1669,7 @@ globalThis.__ensureBooted = ensureBooted;
 				initPanelsForComposition: async keys => {
 					initPanelsForCompositionCalls.push([...keys]);
 				},
+				preloadPluginPanelI18n: async () => {},
 				maybeHardReloadForLateCriticalBootFailure: () => false,
 				ui: null,
 			},
@@ -1600,6 +1756,7 @@ globalThis.__ensureBooted = ensureBooted;
 					hydratePluginPanelsCalls.push(refs);
 					return [tabId];
 				},
+				preloadPluginPanelI18n: async () => {},
 				createMsghubPluginUiHost: () => ({}),
 				mountPluginPanelIfNeeded: id => {
 					mountPluginPanelIfNeededCalls.push(id);
@@ -1684,6 +1841,7 @@ globalThis.__ensureBooted = ensureBooted;
 				},
 				initPanelsForComposition: async () => {},
 				hydratePluginPanels: async () => [],
+				preloadPluginPanelI18n: async () => {},
 				createMsghubPluginUiHost: () => ({}),
 				mountPluginPanelIfNeeded: id => {
 					mountPluginPanelIfNeededCalls.push(id);
@@ -1795,6 +1953,7 @@ globalThis.__ensureBooted = ensureBooted;
 		// This test uses the real hydratePluginPanels and mountPluginPanelIfNeeded code paths
 		// rather than stubs, to verify the contract directly.
 		const source = await readRepoFile('admin/tab/boot.js');
+		const renderSource = extractFunctionSource(source, 'renderPluginPanelTabLabel');
 		// extractFunctionSource captures from 'function', missing the 'async' prefix.
 		// Prepend 'async' to restore the original declaration — the function body uses
 		// 'await' in its else branch, so the async declaration is required for parsing.
@@ -1817,6 +1976,7 @@ globalThis.__ensureBooted = ensureBooted;
 			`
 const pluginPanelTabMap = new Map();
 
+${renderSource}
 ${hydrateSource}
 
 ${mountSource}

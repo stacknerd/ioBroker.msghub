@@ -762,7 +762,7 @@ describe('admin/tab/layout.js', function () {
 		assert.equal(nav.children[0].children.length, 2);
 		const pluginTab = nav.children[0].children[1];
 		assert.equal(pluginTab.getAttribute('aria-disabled'), null);
-		assert.equal(pluginTab.getAttribute('data-i18n'), 'presets.label');
+		assert.equal(pluginTab.getAttribute('data-i18n'), 'msghub.i18n.core.admin.ui.panel.loading.text');
 	});
 
 	it('resolveIconUrl() returns a static admin icon path for core panels', async function () {
@@ -1239,7 +1239,7 @@ describe('admin/tab/layout.js', function () {
 		assert.equal(sandbox.document.title, 'Stats - MessageHub');
 	});
 
-	it('buildLayoutFromRegistry() keeps unresolved plugin tabs neutral before admin i18n has loaded', async function () {
+	it('buildLayoutFromRegistry() keeps plugin tabs on the shared loading key before plugin labels are rendered', async function () {
 		const { sandbox, layoutHost } = await loadLayoutSandbox({
 			t: key => String(key || ''),
 		});
@@ -1268,13 +1268,8 @@ describe('admin/tab/layout.js', function () {
 		const nav = fragment?.children?.[0];
 		const pluginTab = nav?.children?.[0]?.children?.[1] || null;
 		assert.ok(pluginTab, 'plugin loading tab must be rendered');
-		assert.equal(pluginTab.getAttribute('data-i18n'), null);
+		assert.equal(pluginTab.getAttribute('data-i18n'), 'msghub.i18n.core.admin.ui.panel.loading.text');
 		assert.equal(pluginTab.textContent, '...');
-		assert.equal(
-			pluginTab.textContent.includes('msghub.i18n.'),
-			false,
-			'plugin loading tab must not expose a raw i18n key before admin i18n has loaded',
-		);
 	});
 
 	it('updateDocumentTitle() sets theme-color meta when descriptor.app.themeColor is present', async function () {

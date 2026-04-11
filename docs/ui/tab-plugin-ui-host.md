@@ -4,7 +4,7 @@
 It is the bridge between the generic Admin Tab shell and plugin-specific browser UI code.
 
 The host does not know plugin business rules.
-Its job is to fetch, cache, mount, unmount, and retry plugin bundles in a controlled way.
+Its job is to fetch, cache, preload i18n, mount, unmount, and retry plugin bundles in a controlled way.
 
 ---
 
@@ -16,8 +16,8 @@ creates a host instance for plugin panel refs in the current composition.
 That means the plugin UI path is:
 
 1. the loaded [`./API.md`](./API.md) `web.view.get` payload declares plugin panel refs
-2. [`./tab-layout.md`](./tab-layout.md) renders disabled placeholder tabs and containers
-3. [`./tab-boot.md`](./tab-boot.md) hydrates matching slots from the loaded view payload
+2. [`./tab-layout.md`](./tab-layout.md) renders plugin tabs with the shared loading label and the panel containers
+3. [`./tab-boot.md`](./tab-boot.md) hydrates matching slots from the loaded view payload and may start a non-blocking `preloadI18n(...)`
 4. `plugin-ui-host.js` mounts the actual bundle when `boot.js` either:
    - observes a later `msghub:tabSwitch` into that plugin tab, or
    - calls `mountPluginPanelIfNeeded(...)` immediately after activating an already selected hydrated plugin tab during boot
@@ -46,8 +46,15 @@ The cache key includes:
 - `panelId`
 - bundle `hash`
 - active `lang`
+- projection key (`all`, `i18n`, `without-i18n`, ...)
 
 If a matching cached entry already exists, the backend call is skipped.
+
+### 1a) Preload plugin-owned i18n without mounting
+
+`preloadI18n(...)` requests only the i18n projection for one panel. After a successful merge, the host
+calls the optional shell callback `onI18nReady(...)` so the existing tab-label render path can be re-run
+without waiting for panel mount.
 
 ### 2) Build the plugin mount context
 
@@ -109,12 +116,17 @@ window.createMsghubPluginUiHost
 Returns:
 
 - `mount({ container, pluginType, instanceId, panelId, hash })`
+- `preloadI18n({ pluginType, instanceId, panelId, hash })`
 - `unmount(handle)`
 - `retry(handle)`
 
 ### `mount(...)`
 
 Fetches/imports the bundle, injects the mount wrapper, merges i18n if present, and calls `module.mount(ctx)`.
+
+When an i18n-only preload for the same panel/hash/lang is already cached, the mount path prefers the
+projection `exclude: ['i18n']`. If no preload happened, mount falls back to the full bundle so the panel
+still mounts correctly.
 
 The returned handle tracks:
 
@@ -152,8 +164,10 @@ This is intentionally different from the raw `msghubRequest(...)` behavior used 
 ## Design notes / invariants
 
 - Plugin UI uses Light DOM only. `ctx.root` is the render target; there is no `shadowRoot` contract.
-- The bundle cache key includes the active language, because bundle responses may contain language-specific UI text.
+- The bundle cache key includes the active language and the selected projection.
 - `mergePluginI18n(...)` is called only when `i18n.translations` is present in the bundle response.
+- The host never writes plugin raw keys into the tab nav on its own. Until plugin-owned i18n is available,
+  the shell keeps the shared loading label from `layout.js`.
 - Error rendering is isolated:
   - bundle fetch/import failure renders an error directly in the panel container
   - `module.mount(...)` failure renders an error inside the created mount wrapper

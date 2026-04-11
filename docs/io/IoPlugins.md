@@ -254,7 +254,7 @@ plugin.adminUi = {
 };
 ```
 
-### `readAdminUiBundle({ type, panelId, lang })`
+### `readAdminUiBundle({ type, panelId, lang, include?, exclude? })`
 
 ### `readAdminUiTranslations({ type, lang })`
 
@@ -266,11 +266,17 @@ Soft-failure behavior matches `readAdminUiBundle()`:
 - invalid or oversized files are skipped with a warning
 - path traversal is rejected
 
-Reads:
+Reads the requested top-level bundle parts:
 
-- JS bundle
-- optional companion CSS
-- requested plugin-owned i18n file (with `en` fallback)
+- `js`
+- optional companion `css`
+- requested plugin-owned `i18n` file (with `en` fallback)
+
+Projection rules:
+
+- missing `include` / `exclude` (or empty arrays) -> full bundle
+- `exclude` wins over `include`
+- unsupported part names raise `BAD_REQUEST`
 
 All plugin-owned assets are resolved relative to the plugin descriptor `packageRoot`.
 Path traversal outside that package root is explicitly guarded.

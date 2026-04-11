@@ -1,4 +1,4 @@
-/* global window, document, location, HTMLElement, HTMLInputElement, HTMLTextAreaElement, t, lang, createUi, createAdminApi, msghubRequest, msghubSocket, adapterInstance, args, h, loadJsFilesSequential, renderPanelBootError, buildLayoutFromRegistry, getActiveComposition, getActiveView, ensureAdminI18nLoaded, loadCssFiles, initTabs, activatePanel, updateDocumentTitle, isEmbeddedInAdmin, overrideLang, createMsghubPluginUiHost, normalizePluginPanel, registerPanelDescriptor, resolveViewRequest, setActiveView, renderPanelModeError, applyCategoryMarker, pickText, loadCorePanelEntry */
+/* global window, document, location, HTMLElement, HTMLInputElement, HTMLTextAreaElement, t, lang, createUi, createAdminApi, msghubRequest, msghubSocket, adapterInstance, args, h, loadJsFilesSequential, renderPanelBootError, buildLayoutFromRegistry, getActiveComposition, getActiveView, ensureAdminI18nLoaded, hasAdminKey, loadCssFiles, initTabs, activatePanel, updateDocumentTitle, isEmbeddedInAdmin, overrideLang, createMsghubPluginUiHost, normalizePluginPanel, registerPanelDescriptor, resolveViewRequest, setActiveView, renderPanelModeError, applyCategoryMarker, pickText, loadCorePanelEntry */
 'use strict';
 
 /**
@@ -983,6 +983,56 @@ async function initPanelsForComposition(panelIds, corePanelEntries) {
 const pluginPanelTabMap = new Map();
 
 /**
+ * Applies the existing plugin-tab label render logic to one tab element.
+ *
+ * @param {Element|null} tabEl - Plugin tab anchor.
+ * @param {any} panelDef - Resolved plugin panel definition from `web.view.get`.
+ * @returns {boolean} `true` when a matching panel definition was processed.
+ */
+function renderPluginPanelTabLabel(tabEl, panelDef) {
+	if (!tabEl || !panelDef || typeof panelDef !== 'object') {
+		return false;
+	}
+	const labelKey = typeof panelDef.label === 'string' ? panelDef.label.trim() : '';
+	if (!labelKey || typeof hasAdminKey !== 'function' || !hasAdminKey(labelKey)) {
+		return false;
+	}
+	tabEl.setAttribute('data-i18n', labelKey);
+	const label = t(labelKey);
+	if (label) {
+		tabEl.textContent = label;
+	}
+	return true;
+}
+
+/**
+ * Re-runs the existing plugin-tab label render path after plugin-owned i18n became available.
+ *
+ * @param {string} [pluginTypeFilter] - Optional plugin type limiter.
+ */
+function rerenderPluginPanelTabLabels(pluginTypeFilter = '') {
+	const activeViewPluginPanels = typeof getActiveView === 'function' ? getActiveView()?.pluginPanels : null;
+	const pluginPanels =
+		activeViewPluginPanels && typeof activeViewPluginPanels === 'object' ? activeViewPluginPanels : {};
+	let touched = false;
+	for (const [tabId, entry] of pluginPanelTabMap.entries()) {
+		const ref = entry?.ref;
+		if (!ref || (pluginTypeFilter && ref.pluginType !== pluginTypeFilter)) {
+			continue;
+		}
+		const key = `plugin-${ref.pluginType}-${ref.instanceId}-${ref.panelId}`;
+		const panelDef = pluginPanels[key] && typeof pluginPanels[key] === 'object' ? pluginPanels[key] : null;
+		const tabEl = document.querySelector(`a.msghub-tab[href="#${tabId}"]`);
+		if (renderPluginPanelTabLabel(tabEl, panelDef)) {
+			touched = true;
+		}
+	}
+	if (touched) {
+		void updateDocumentTitle();
+	}
+}
+
+/**
  * Registers resolved plugin panel slots from the loaded backend view.
  *
  * @param {object[]} refs - Structured plugin panel references from buildLayoutFromRegistry.
@@ -1014,13 +1064,7 @@ async function hydratePluginPanels(refs, host, knownPluginPanels = null) {
 			if (tabEl) {
 				tabEl.removeAttribute('aria-disabled');
 				tabEl.classList.remove('is-disabled');
-				if (typeof panelDef.label === 'string' && panelDef.label.trim()) {
-					tabEl.setAttribute('data-i18n', panelDef.label);
-				}
-				const label = typeof panelDef.label === 'string' ? t(panelDef.label) : '';
-				if (label) {
-					tabEl.textContent = label;
-				}
+				renderPluginPanelTabLabel(tabEl, panelDef);
 			}
 
 			pluginPanelTabMap.set(tabId, {
@@ -1042,6 +1086,46 @@ async function hydratePluginPanels(refs, host, knownPluginPanels = null) {
 	}
 
 	return enabledTabIds;
+}
+
+/**
+ * Starts a non-blocking plugin-owned i18n preload for the current view.
+ *
+ * @param {object[]} refs - Structured plugin panel references from buildLayoutFromRegistry.
+ * @param {object} host - Plugin UI host instance (from createMsghubPluginUiHost).
+ * @param {Record<string, object>|null} knownPluginPanels - Resolved plugin panel map from `web.view.get`, or null to read from the active view.
+ * @returns {Promise<void>} Resolves when all preload requests have settled.
+ */
+async function preloadPluginPanelI18n(refs, host, knownPluginPanels = null) {
+	if (!host || typeof host.preloadI18n !== 'function') {
+		return;
+	}
+	const activeViewPluginPanels = typeof getActiveView === 'function' ? getActiveView()?.pluginPanels : null;
+	const pluginPanels =
+		knownPluginPanels && typeof knownPluginPanels === 'object'
+			? knownPluginPanels
+			: activeViewPluginPanels && typeof activeViewPluginPanels === 'object'
+				? activeViewPluginPanels
+				: {};
+	const tasks = [];
+	for (const ref of refs) {
+		const key = `plugin-${ref.pluginType}-${ref.instanceId}-${ref.panelId}`;
+		const panelDef = pluginPanels[key] && typeof pluginPanels[key] === 'object' ? pluginPanels[key] : null;
+		if (!panelDef) {
+			continue;
+		}
+		tasks.push(
+			Promise.resolve(
+				host.preloadI18n({
+					pluginType: ref.pluginType,
+					instanceId: String(ref.instanceId),
+					panelId: ref.panelId,
+					hash: String(panelDef?.ui?.bundle?.hash ?? ''),
+				}),
+			).catch(() => undefined),
+		);
+	}
+	await Promise.all(tasks);
 }
 
 /**
@@ -1227,7 +1311,11 @@ function ensureBooted() {
 			await initPanelsForComposition(panelIds, corePanelEntries);
 
 			if (pluginPanelRefs.length > 0) {
-				const pluginUiHost = createMsghubPluginUiHost({ request: msghubRequest, api });
+				const pluginUiHost = createMsghubPluginUiHost({
+					request: msghubRequest,
+					api,
+					onI18nReady: ({ pluginType }) => rerenderPluginPanelTabLabels(pluginType),
+				});
 
 				// Show blocking spinner only when no panel was activated (plugin-only composition).
 				const needsSpinner = initialTabId === null;
@@ -1236,6 +1324,7 @@ function ensureBooted() {
 				}
 
 				const enabledTabIds = await hydratePluginPanels(pluginPanelRefs, pluginUiHost, viewData?.pluginPanels);
+				void preloadPluginPanelI18n(pluginPanelRefs, pluginUiHost, viewData?.pluginPanels);
 
 				if (needsSpinner) {
 					// Plugin-only composition: no tab was active pre-hydration.

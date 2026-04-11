@@ -56,7 +56,17 @@ declare global {
 		pluginPanelRefs: PluginPanelRef[];
 		missingNativePanelIds: string[];
 	};
-	function createMsghubPluginUiHost(opts: { request: any; api: any }): any;
+	function createMsghubPluginUiHost(opts: {
+		request: any;
+		api: any;
+		onI18nReady?: (info: {
+			pluginType: string;
+			instanceId: string | number;
+			panelId: string;
+			lang: string;
+			hash: string;
+		}) => void;
+	}): any;
 	function resolveViewRequest(): { mode: 'composition' | 'panel'; targetId?: string };
 	function setActiveView(view: AdminTabViewResponse | null | undefined): AdminTabViewResponse | null;
 	function getActiveView(): AdminTabViewResponse | null;

@@ -21,14 +21,16 @@
  * Creates a plugin UI host that manages bundle loading, caching,
  * and Light DOM mounting for plugin panel tabs.
  *
- * @param {{ request: Function, api: object, _importFn?: Function }} opts
+ * @param {{ request: Function, api: object, onI18nReady?: Function, _importFn?: Function }} opts
  *   _importFn: optional test seam — receives JS source string, returns module.
  *   In production, bundles are imported via Blob URL (native dynamic import).
- * @returns {{ mount: Function, unmount: Function, retry: Function }} Host interface.
+ * @returns {{ mount: Function, preloadI18n: Function, unmount: Function, retry: Function }} Host interface.
  */
-function createMsghubPluginUiHost({ request, api, _importFn = undefined }) {
-	// Cache keyed by "pluginType:instanceId:panelId:hash" → { module, css }
+function createMsghubPluginUiHost({ request, api, onI18nReady = undefined, _importFn = undefined }) {
+	// Cache keyed by "pluginType:instanceId:panelId:hash:lang:projection" → entry
 	const bundleCache = new Map();
+	const i18nPreloadCache = new Map();
+	const i18nReadyByPanelLang = new Map();
 
 	/**
 	 * Resolve one bundle-side plugin UI RPC command to the host-specific backend path.
@@ -81,8 +83,8 @@ function createMsghubPluginUiHost({ request, api, _importFn = undefined }) {
 	}
 
 	/**
-	 * Fetches and caches a plugin bundle.
-	 * Cache is keyed by (pluginType, instanceId, panelId, hash, lang).
+	 * Fetches and caches one plugin bundle projection.
+	 * Cache is keyed by (pluginType, instanceId, panelId, hash, lang, projection).
 	 * Lang is part of the key because the i18n payload is language-dependent.
 	 * If a matching cache entry exists, bundle.get is skipped entirely.
 	 *
@@ -91,12 +93,26 @@ function createMsghubPluginUiHost({ request, api, _importFn = undefined }) {
 	 * @param {string} panelId - Panel id within the plugin's adminUi declaration.
 	 * @param {string} [hash] - Known hash from `web.view.get.pluginPanels[*].ui.bundle.hash`; used for cache lookup.
 	 * @param {string} [activeLang] - Active UI language; included in cache key and forwarded to backend.
-	 * @returns {Promise<{ module: object, css: string|null, hash: string, i18n: object|null }>} Cached or freshly loaded bundle entry.
+	 * @param {object} [options] Projection and import options.
+	 * @param {string[]|null} [options.include] - Optional bundle parts to include.
+	 * @param {string[]|null} [options.exclude] - Optional bundle parts to exclude.
+	 * @param {string} [options.projectionKey] - Stable cache-key suffix for the projection.
+	 * @param {boolean} [options.expectJs] - Whether JS must be present in the response.
+	 * @param {boolean} [options.importJs] - Whether JS should be imported into a module.
+	 * @returns {Promise<{ module: object|null, css: string|null, hash: string, i18n: object|null }>}
+	 *   Cached or freshly loaded bundle entry.
 	 */
-	async function loadBundle(pluginType, instanceId, panelId, hash, activeLang) {
+	async function loadBundle(
+		pluginType,
+		instanceId,
+		panelId,
+		hash,
+		activeLang,
+		{ include = null, exclude = null, projectionKey = 'all', expectJs = true, importJs = true } = {},
+	) {
 		// Fast path: known hash already in cache — skip bundle.get entirely.
 		if (hash) {
-			const cachedKey = `${pluginType}:${instanceId}:${panelId}:${hash}:${activeLang}`;
+			const cachedKey = `${pluginType}:${instanceId}:${panelId}:${hash}:${activeLang}:${projectionKey}`;
 			if (bundleCache.has(cachedKey)) {
 				return bundleCache.get(cachedKey);
 			}
@@ -109,22 +125,72 @@ function createMsghubPluginUiHost({ request, api, _importFn = undefined }) {
 			instanceId,
 			panelId,
 			lang: activeLang,
+			...(Array.isArray(include) && include.length > 0 ? { include } : {}),
+			...(Array.isArray(exclude) && exclude.length > 0 ? { exclude } : {}),
 		});
-		if (!bundleData?.js) {
+		if (expectJs && !bundleData?.js) {
 			throw new Error('bundle.get returned no JS content');
 		}
-		const { hash: responseHash, js, css = null, i18n: i18nPayload = null } = bundleData;
+		const responseHash = typeof bundleData?.hash === 'string' ? bundleData.hash : String(hash || '');
+		const js = typeof bundleData?.js === 'string' ? bundleData.js : '';
+		const css = typeof bundleData?.css === 'string' ? bundleData.css : null;
+		const i18nPayload = bundleData?.i18n ?? null;
 
 		// Check cache again using the authoritative hash from the response.
-		const cacheKey = `${pluginType}:${instanceId}:${panelId}:${responseHash}:${activeLang}`;
+		const cacheKey = `${pluginType}:${instanceId}:${panelId}:${responseHash}:${activeLang}:${projectionKey}`;
 		if (bundleCache.has(cacheKey)) {
 			return bundleCache.get(cacheKey);
 		}
 
-		const module = await importFromSource(js);
+		const module = importJs && js ? await importFromSource(js) : null;
 		const entry = { module, css, hash: responseHash, i18n: i18nPayload };
 		bundleCache.set(cacheKey, entry);
 		return entry;
+	}
+
+	function getPanelLangKey(pluginType, instanceId, panelId, activeLang) {
+		return `${pluginType}:${instanceId}:${panelId}:${activeLang}`;
+	}
+
+	function applyPluginI18n(pluginType, instanceId, panelId, activeLang, hash, i18nData) {
+		if (!i18nData?.translations) {
+			return;
+		}
+		mergePluginI18n(pluginType, i18nData.translations);
+		i18nReadyByPanelLang.set(getPanelLangKey(pluginType, instanceId, panelId, activeLang), String(hash || ''));
+		if (typeof onI18nReady === 'function') {
+			onI18nReady({
+				pluginType,
+				instanceId,
+				panelId,
+				lang: activeLang,
+				hash: String(hash || ''),
+			});
+		}
+	}
+
+	async function preloadI18n({ pluginType, instanceId, panelId, hash = '' }) {
+		const activeLang = lang;
+		const preloadKey = `${getPanelLangKey(pluginType, instanceId, panelId, activeLang)}:i18n`;
+		if (i18nPreloadCache.has(preloadKey)) {
+			return i18nPreloadCache.get(preloadKey);
+		}
+		const pending = loadBundle(pluginType, instanceId, panelId, hash, activeLang, {
+			include: ['i18n'],
+			projectionKey: 'i18n',
+			expectJs: false,
+			importJs: false,
+		})
+			.then(entry => {
+				applyPluginI18n(pluginType, instanceId, panelId, activeLang, entry.hash, entry.i18n);
+				return entry;
+			})
+			.catch(err => {
+				i18nPreloadCache.delete(preloadKey);
+				throw err;
+			});
+		i18nPreloadCache.set(preloadKey, pending);
+		return pending;
 	}
 
 	/**
@@ -230,14 +296,36 @@ function createMsghubPluginUiHost({ request, api, _importFn = undefined }) {
 		};
 
 		try {
-			const { module, css, i18n: i18nData } = await loadBundle(pluginType, instanceId, panelId, hash, lang);
+			const activeLang = lang;
+			const preloadedHash = i18nReadyByPanelLang.get(
+				getPanelLangKey(pluginType, instanceId, panelId, activeLang),
+			);
+			const canSkipI18n = !!preloadedHash && (!hash || preloadedHash === hash);
+			const {
+				module,
+				css,
+				i18n: i18nData,
+				hash: responseHash,
+			} = await loadBundle(
+				pluginType,
+				instanceId,
+				panelId,
+				hash,
+				activeLang,
+				canSkipI18n
+					? {
+							exclude: ['i18n'],
+							projectionKey: 'exclude:i18n',
+							expectJs: true,
+							importJs: true,
+						}
+					: undefined,
+			);
 
 			// Step 7a: Merge plugin-owned translations into the runtime i18n dictionary before mount.
 			// Namespace filter and no-overwrite rule are enforced inside mergePluginI18n (runtime.js),
 			// not here — this call is intentionally unconditional on i18nData presence check.
-			if (i18nData?.translations) {
-				mergePluginI18n(pluginType, i18nData.translations);
-			}
+			applyPluginI18n(pluginType, instanceId, panelId, activeLang, responseHash, i18nData);
 
 			// Create the Light DOM mount wrapper — this is ctx.root and the CSS scope root.
 			// Plugin companion CSS scopes to .msghub-plugin-ui-mount[data-plugin-type=...][data-panel-id=...].
@@ -321,6 +409,17 @@ function createMsghubPluginUiHost({ request, api, _importFn = undefined }) {
 				bundleCache.delete(key);
 			}
 		}
+		const preloadPrefix = `${handle._pluginType}:${handle._instanceId}:${handle._panelId}:`;
+		for (const key of i18nPreloadCache.keys()) {
+			if (key.startsWith(preloadPrefix)) {
+				i18nPreloadCache.delete(key);
+			}
+		}
+		for (const key of i18nReadyByPanelLang.keys()) {
+			if (key.startsWith(preloadPrefix)) {
+				i18nReadyByPanelLang.delete(key);
+			}
+		}
 		await unmount(handle);
 		// No hash: forces bundle.get to be called on the next mount.
 		return mount({
@@ -331,7 +430,7 @@ function createMsghubPluginUiHost({ request, api, _importFn = undefined }) {
 		});
 	}
 
-	return { mount, unmount, retry };
+	return { mount, preloadI18n, unmount, retry };
 }
 
 window.createMsghubPluginUiHost = createMsghubPluginUiHost;

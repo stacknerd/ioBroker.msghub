@@ -73,7 +73,7 @@ function createH() {
  * sandbox is exposed so tests can mutate sandbox.lang between mount() calls.
  *
  * @param {{ lang?: string }} [opts]
- * @returns {Promise<{ createHost: Function, mergeI18nCalls: Array, sandbox: object }>}
+ * @returns {Promise<{ createHost: Function, mergeI18nCalls: Array, i18nReadyCalls: Array, sandbox: object }>}
  */
 async function loadHostSandbox({ lang: sandboxLang = 'en' } = {}) {
 	const source = await readRepoFile('admin/tab/plugin-ui-host.js');
@@ -82,6 +82,7 @@ async function loadHostSandbox({ lang: sandboxLang = 'en' } = {}) {
 		createElement: tag => createElement(tag),
 	};
 	const mergeI18nCalls = [];
+	const i18nReadyCalls = [];
 	const sandbox = {
 		window: windowObject,
 		document: documentObject,
@@ -102,7 +103,7 @@ async function loadHostSandbox({ lang: sandboxLang = 'en' } = {}) {
 	};
 	vm.runInNewContext(source, sandbox, { filename: 'admin/tab/plugin-ui-host.js' });
 	const createHost = sandbox.window.createMsghubPluginUiHost;
-	return { createHost, mergeI18nCalls, sandbox };
+	return { createHost, mergeI18nCalls, i18nReadyCalls, sandbox };
 }
 
 // Sentinel: distinguishes "rpcResponse not provided" from an explicit response object.
@@ -135,10 +136,16 @@ describe('admin/tab/plugin-ui-host.js', function () {
 		assert.equal(typeof createHost, 'function');
 	});
 
-	it('factory returns mount, unmount, and retry', async function () {
-		const { createHost } = await loadHostSandbox();
-		const host = createHost({ request: makeRequest(), api: {}, _importFn: async () => ({}) });
+	it('factory returns mount, preloadI18n, unmount, and retry', async function () {
+		const { createHost, i18nReadyCalls } = await loadHostSandbox();
+		const host = createHost({
+			request: makeRequest(),
+			api: {},
+			onI18nReady: info => i18nReadyCalls.push(info),
+			_importFn: async () => ({}),
+		});
 		assert.equal(typeof host.mount, 'function');
+		assert.equal(typeof host.preloadI18n, 'function');
 		assert.equal(typeof host.unmount, 'function');
 		assert.equal(typeof host.retry, 'function');
 	});
@@ -334,17 +341,24 @@ describe('admin/tab/plugin-ui-host.js', function () {
 		});
 
 		it('calls mergePluginI18n with pluginType and translations when i18n is present', async function () {
-			const { createHost, mergeI18nCalls } = await loadHostSandbox();
+			const { createHost, mergeI18nCalls, i18nReadyCalls } = await loadHostSandbox();
 			const container = createContainer();
 			const translations = { 'msghub.i18n.IngestStates.ui.foo': 'Foo' };
 			const request = makeRequest({ i18n: { lang: 'en', translations } });
-			const host = createHost({ request, api: {}, _importFn: async () => ({ mount: async () => {} }) });
+			const host = createHost({
+				request,
+				api: {},
+				onI18nReady: info => i18nReadyCalls.push(info),
+				_importFn: async () => ({ mount: async () => {} }),
+			});
 
 			await host.mount({ container, pluginType: 'IngestStates', instanceId: '0', panelId: 'presets', hash: '' });
 
 			assert.equal(mergeI18nCalls.length, 1);
 			assert.equal(mergeI18nCalls[0].pluginType, 'IngestStates');
 			assert.deepEqual(JSON.parse(JSON.stringify(mergeI18nCalls[0].translations)), translations);
+			assert.equal(i18nReadyCalls.length, 1);
+			assert.equal(i18nReadyCalls[0].pluginType, 'IngestStates');
 		});
 
 		it('does not call mergePluginI18n when i18n is null', async function () {
@@ -387,6 +401,60 @@ describe('admin/tab/plugin-ui-host.js', function () {
 			sandbox.lang = 'en';
 			await host.mount({ container: createContainer(), pluginType: 'T', instanceId: '0', panelId: 'p', hash: 'same-hash' });
 			assert.equal(request.calls.length, 2, 'different lang must produce a separate cache entry');
+		});
+
+		it('preloadI18n requests only i18n and leaves JS lazy', async function () {
+			const { createHost, mergeI18nCalls } = await loadHostSandbox();
+			const translations = { 'msghub.i18n.IngestStates.ui.foo': 'Foo' };
+			const importCalls = [];
+			const request = makeRequest({ hash: 'preload-hash', js: '', i18n: { lang: 'en', translations } });
+			const host = createHost({
+				request,
+				api: {},
+				_importFn: async js => {
+					importCalls.push(js);
+					return { mount: async () => {} };
+				},
+			});
+
+			await host.preloadI18n({ pluginType: 'IngestStates', instanceId: '0', panelId: 'presets', hash: 'preload-hash' });
+
+			assert.equal(request.calls.length, 1);
+			assert.deepEqual(JSON.parse(JSON.stringify(request.calls[0].payload.include)), ['i18n']);
+			assert.equal(importCalls.length, 0, 'preload must not import JS');
+			assert.equal(mergeI18nCalls.length, 1, 'preload must merge plugin-owned i18n');
+		});
+
+		it('mount excludes i18n after a successful preload for the same panel hash', async function () {
+			const { createHost } = await loadHostSandbox();
+			const requestCalls = [];
+			const request = async (cmd, payload) => {
+				requestCalls.push({ cmd, payload });
+				if (Array.isArray(payload?.include) && payload.include[0] === 'i18n') {
+					return {
+						hash: 'shared-hash',
+						i18n: { lang: 'en', translations: { 'msghub.i18n.IngestStates.ui.foo': 'Foo' } },
+					};
+				}
+				return {
+					hash: 'shared-hash',
+					js: 'export function mount(){}',
+					css: '.host{}',
+				};
+			};
+			request.calls = requestCalls;
+			const host = createHost({
+				request,
+				api: {},
+				_importFn: async () => ({ mount: async () => {} }),
+			});
+
+			await host.preloadI18n({ pluginType: 'IngestStates', instanceId: '0', panelId: 'presets', hash: 'shared-hash' });
+			await host.mount({ container: createContainer(), pluginType: 'IngestStates', instanceId: '0', panelId: 'presets', hash: 'shared-hash' });
+
+			assert.equal(requestCalls.length, 2);
+			assert.deepEqual(JSON.parse(JSON.stringify(requestCalls[0].payload.include)), ['i18n']);
+			assert.deepEqual(JSON.parse(JSON.stringify(requestCalls[1].payload.exclude)), ['i18n']);
 		});
 	});
 

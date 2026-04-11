@@ -139,17 +139,26 @@ Structured plugin panel refs from the composition are not active immediately.
 `hydratePluginPanels()` matches them against the loaded `web.view.get(...).pluginPanels` map, then:
 
 - enables the matching tab
-- stores `data-i18n=panelDef.label` on the tab and replaces the temporary loading label with `t(panelDef.label)`
 - stores the mount metadata in `pluginPanelTabMap`
 - calls `normalizePluginPanel(panelDef, ref)` and `registerPanelDescriptor(descriptor)` so that `panelDescriptors` in `layout.js` is populated before the user first activates a plugin tab
 - mirrors `descriptor.category` to the plugin panel container as `span.msghub-paneltype-<category>` when present
+
+The first paint for plugin tabs stays on the shared loading label from `layout.js`:
+
+- `data-i18n='msghub.i18n.core.admin.ui.panel.loading.text'`
+- fallback text `...` until static admin i18n has been applied
+
+`renderPluginPanelTabLabel(...)` in `boot.js` only switches a plugin tab over to `panelDef.label`
+when that plugin-owned key is already present in the runtime dictionary. Otherwise the existing loading
+label remains untouched.
 
 Actual plugin bundle mounting is lazy by default, but `boot.js` also mounts a plugin panel immediately when it
 became active during boot before the later `msghub:tabSwitch` listener could observe that activation.
 
 In this rescue cut, `web.view.get` no longer transports plugin-owned Admin-UI translations.
-That means `t(panelDef.label)` may still resolve to the raw key at hydration time; this is the accepted
-intermediate state until the bundle path later merges plugin-owned i18n.
+The shell therefore keeps the existing loading label visible until the bundle path later merges plugin-owned i18n.
+After that merge, `rerenderPluginPanelTabLabels(...)` re-runs the existing label render path so the matching tab
+switches in place to the localized plugin label without waiting for panel mount.
 
 `hydratePluginPanels()` is also reused in the Single-Panel-Mode plugin path (see above) to populate
 `pluginPanelTabMap` via the same mechanism. In that context the tab DOM elements do not exist, but
