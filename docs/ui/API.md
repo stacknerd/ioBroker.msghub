@@ -68,7 +68,7 @@ panel/plugin contract in this reference.
 | --- | --- | --- | --- |
 | `IoUiRegistry.panels[panelId]` | Native producer definition with owner-local `id`, `label`, `category`, and optional `app`. Core bootstrap fields are intentionally absent. Canonical external ids (`tab-...`) are derived later by `normalizeCorePanel(...)`. | Backend registry runtime | `lib/IoUiRegistry.js` |
 | `IoUiRegistry.compositions[viewId]` | Composition definition with `id`, `layout`, `panels`, `defaultPanel`, and `deviceMode`. The only allowed composition-level `app` block is the special-case `compositions.web.app` for the prepared Public-Web root contract. | Backend registry runtime | `lib/IoUiRegistry.js` |
-| Native composition panel entry | String panel id such as `'messages'` or `'plugins'`. | Backend registry / layout runtime | `lib/IoUiRegistry.js`, `admin/tab/layout.js` |
+| Native composition panel entry | Structured ref `{ type: 'corePanel', panelId }`. | Backend registry / layout runtime | `lib/IoUiRegistry.js`, `admin/tab/layout.js` |
 | Plugin composition panel entry | Structured ref `{ type: 'pluginPanel', pluginType, instanceId, panelId }`. | Backend registry / layout runtime | `lib/IoUiRegistry.js`, `admin/tab/layout.js` |
 | Wildcard composition | `panels: ['*']` exists only in backend registry input. `web.view.get` materializes it before the frontend consumes the view. | Backend view runtime | `lib/IoUiCatalog.js` |
 
@@ -189,7 +189,7 @@ panel/plugin contract in this reference.
 | `ctx.api.host.viewId` | Active composition/view id from the loaded backend view, or `null` in panel mode. | Browser API layer | `admin/tab/api.js`, `admin/tab/layout.js` |
 | `ctx.api.host.layout` | `'tabs'` or `'single'`. Derived from the active composition. | Browser API layer | `admin/tab/api.js` |
 | `ctx.api.host.deviceMode` | Composition `deviceMode` value, currently defaulting to `'pc'` when absent. | Browser API layer | `admin/tab/api.js` |
-| `ctx.api.host.panels` | Frozen array of string entries from `composition.panels`. Non-string plugin-panel ref objects are filtered out, but string sentinels such as `'*'` (wildcard composition) pass through as-is. Wildcard expansion is owned by `layout.js`, not by `api.js`. | Browser API layer | `admin/tab/api.js` |
+| `ctx.api.host.panels` | Frozen array of structured refs from `composition.panels`. Core refs use `{ type: 'corePanel', panelId }`; plugin refs use `{ type: 'pluginPanel', pluginType, instanceId, panelId }`. Wildcard expansion is already completed before this browser API layer consumes the active view. | Browser API layer | `admin/tab/api.js` |
 | `ctx.api.host.defaultPanel` | Composition `defaultPanel` string or `''`. | Browser API layer | `admin/tab/api.js` |
 | `ctx.api.host.adapterInstance` | Same value as `adapterInstance`. | Browser API layer | `admin/tab/api.js` |
 | `ctx.api.host.isConnected()` | Returns `!!msghubSocket.connected`. This is transport state only; it is not the same as the shell ping-derived online flag. | Browser API layer | `admin/tab/api.js` |
@@ -354,7 +354,7 @@ panel/plugin contract in this reference.
 | Contract | Notes | Owner | Reference |
 | --- | --- | --- | --- |
 | Native panels and plugin bundles do not get the same boundary strength | Native panels receive raw `msghubRequest`, `msghubSocket`, and `ui` in `ctx`. Plugin bundles receive only the narrowed bundle `ctx`. | Boot runtime / plugin UI host | `admin/tab/boot.js`, `admin/tab/plugin-ui-host.js` |
-| `host.panels` excludes plugin panel refs | Native panel `ctx.api.host.panels` contains string entries from `composition.panels` with non-string plugin-panel refs removed. In wildcard compositions this array may contain `'*'` rather than expanded panel ids. | Browser API layer | `admin/tab/api.js` |
+| `host.panels` preserves the resolved composition refs | `ctx.api.host.panels` carries the same structured `corePanel` / `pluginPanel` refs that the active view composition resolved. | Browser API layer | `admin/tab/api.js` |
 | `ctx.api.i18n.lang()` is a boot-time snapshot | `createAdminApi(...)` captures `lang` by value. `overrideLang(...)` updates global language state, but existing `ctx.api.i18n.lang()` closures keep the captured value until the API is rebuilt. | Browser API layer | `admin/tab/api.js`, `admin/tab/runtime.js` |
 | `ui.bootstrap.about` updates shell-wide policy | `boot.js` uses `ctx.api.runtime.about()` to consume `ui.bootstrap.about` for branding text, timezone policy, cached connection metadata, and embedded-admin language override. The connection panel still reports the frontend format locale locally, with `args.locale` able to override that browser-side source when valid. | Boot runtime | `admin/tab/boot.js`, `main.js`, `lib/IoAdminCapabilities.js` |
 | Timezone fallback is explicit | Missing or invalid runtime timezone metadata becomes a UTC fallback policy and may trigger one warning toast. | Browser API layer / boot runtime | `admin/tab/api.js`, `admin/tab/boot.js` |

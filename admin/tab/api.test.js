@@ -35,7 +35,11 @@ window.__apiFns = {
 			composition: {
 				id: 'adminTab',
 				layout: 'tabs',
-				panels: ['stats', 'messages', 'plugins'],
+				panels: [
+					{ type: 'corePanel', panelId: 'stats' },
+					{ type: 'corePanel', panelId: 'messages' },
+					{ type: 'corePanel', panelId: 'plugins' },
+				],
 				defaultPanel: 'plugins',
 				deviceMode: 'pc',
 			},
@@ -210,7 +214,11 @@ describe('admin/tab/api.js', function () {
 		assert.ok(Object.isFrozen(api));
 		assert.equal(api.host.viewId, 'adminTab');
 		assert.equal(api.host.layout, 'tabs');
-		assert.deepEqual(JSON.parse(JSON.stringify(api.host.panels)), ['stats', 'messages', 'plugins']);
+		assert.deepEqual(JSON.parse(JSON.stringify(api.host.panels)), [
+			{ type: 'corePanel', panelId: 'stats' },
+			{ type: 'corePanel', panelId: 'messages' },
+			{ type: 'corePanel', panelId: 'plugins' },
+		]);
 		assert.equal(api.host.isConnected(), true);
 		assert.equal(api.i18n.lang(), 'de');
 		assert.equal(api.i18n.has('known.key'), true);
@@ -251,15 +259,15 @@ describe('admin/tab/api.js', function () {
 		assert.throws(() => api.notSupported('x'), err => err && err.code === 'NOT_SUPPORTED');
 	});
 
-	it('api.host.panels filters out structured plugin panel refs — returns only string IDs', async function () {
+	it('api.host.panels exposes the active structured composition refs unchanged', async function () {
 		const sandbox = await loadApiSandbox({
 			activeView: {
 				composition: {
 					id: 'adminTab',
 					layout: 'tabs',
 					panels: [
-						'messages',
-						'plugins',
+						{ type: 'corePanel', panelId: 'messages' },
+						{ type: 'corePanel', panelId: 'plugins' },
 						{ type: 'pluginPanel', pluginType: 'IngestStates', instanceId: 0, panelId: 'presets' },
 					],
 					defaultPanel: 'messages',
@@ -281,11 +289,11 @@ describe('admin/tab/api.js', function () {
 		});
 
 		const panels = JSON.parse(JSON.stringify(api.host.panels));
-		// Only string entries must appear — the structured plugin panel ref must be filtered out.
-		assert.deepEqual(panels, ['messages', 'plugins']);
-		for (const id of panels) {
-			assert.equal(typeof id, 'string', `api.host.panels must only contain strings, got: ${JSON.stringify(id)}`);
-		}
+		assert.deepEqual(panels, [
+			{ type: 'corePanel', panelId: 'messages' },
+			{ type: 'corePanel', panelId: 'plugins' },
+			{ type: 'pluginPanel', pluginType: 'IngestStates', instanceId: 0, panelId: 'presets' },
+		]);
 	});
 
 	it('uses the shared view resolver and active composition globals for host metadata', async function () {
@@ -294,7 +302,7 @@ describe('admin/tab/api.js', function () {
 			getActiveComposition: () => ({
 				layout: 'single',
 				panels: [
-					'messages',
+					{ type: 'corePanel', panelId: 'messages' },
 					{ type: 'pluginPanel', pluginType: 'IngestStates', instanceId: 0, panelId: 'presets' },
 				],
 				defaultPanel: 'messages',
@@ -321,7 +329,10 @@ describe('admin/tab/api.js', function () {
 		assert.equal(api.host.layout, 'single');
 		assert.equal(api.host.deviceMode, 'screenOnly');
 		assert.equal(api.host.defaultPanel, 'messages');
-		assert.deepEqual(JSON.parse(JSON.stringify(api.host.panels)), ['messages']);
+		assert.deepEqual(JSON.parse(JSON.stringify(api.host.panels)), [
+			{ type: 'corePanel', panelId: 'messages' },
+			{ type: 'pluginPanel', pluginType: 'IngestStates', instanceId: 0, panelId: 'presets' },
+		]);
 	});
 
 	it('handles missing active composition defensively while still using the shared resolved view id', async function () {
@@ -539,8 +550,21 @@ describe('admin/tab/api.js', function () {
 		assert.notEqual(apiB.time.formatTs(Date.UTC(2024, 0, 2, 3, 4, 5)), '');
 	});
 
-	it('panel mode: args.panel sets host.viewId=null, layout=single, panels=[panelKey], defaultPanel=panelKey', async function () {
-		const sandbox = await loadApiSandbox({ args: { panel: 'tab-messages' } });
+	it('panel mode: args.panel sets host.viewId=null, layout=single, panels=[corePanelRef], defaultPanel=panelId', async function () {
+		const sandbox = await loadApiSandbox({
+			args: { panel: 'tab-messages' },
+			activeView: {
+				composition: {
+					id: 'comp-tab-messages',
+					layout: 'single',
+					panels: [{ type: 'corePanel', panelId: 'messages' }],
+					defaultPanel: 'messages',
+					deviceMode: 'pc',
+				},
+				corePanels: {},
+				request: { mode: 'panel', targetId: 'tab-messages' },
+			},
+		});
 		const api = sandbox.window.__apiFns.createAdminApi({
 			msghubRequest: async () => ({}),
 			msghubSocket: { connected: true },
@@ -553,7 +577,7 @@ describe('admin/tab/api.js', function () {
 		assert.equal(api.host.viewId, null, 'panel mode must set viewId to null');
 		assert.equal(api.host.layout, 'single');
 		assert.equal(api.host.deviceMode, 'pc');
-		assert.deepEqual(JSON.parse(JSON.stringify(api.host.panels)), ['messages']);
+		assert.deepEqual(JSON.parse(JSON.stringify(api.host.panels)), [{ type: 'corePanel', panelId: 'messages' }]);
 		assert.equal(api.host.defaultPanel, 'messages');
 	});
 

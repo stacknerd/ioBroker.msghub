@@ -135,6 +135,7 @@ For:
 Wildcard behavior:
 
 - `panels: ['*']` expands to every core/native panel from `IoUiRegistry.panels`
+- expanded core panels become `{ type: 'corePanel', panelId }`
 - currently running plugin panels are appended as structured plugin refs
 
 ### Panel mode
@@ -154,7 +155,7 @@ For:
 
 Core-panel targets become:
 
-- `panels: ['messages']`
+- `panels: [{ type: 'corePanel', panelId: 'messages' }]`
 - `defaultPanel: 'messages'`
 
 Plugin-panel targets become:

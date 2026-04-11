@@ -1455,7 +1455,7 @@ globalThis.__applyRuntimeAboutPayload = applyRuntimeAboutPayload;
 			composition: {
 				id: 'comp-tab-messages',
 				layout: 'single',
-				panels: ['messages'],
+				panels: [{ type: 'corePanel', panelId: 'messages' }],
 				defaultPanel: 'messages',
 				deviceMode: 'pc',
 			},
@@ -1749,7 +1749,7 @@ globalThis.__ensureBooted = ensureBooted;
 					composition: {
 						id: 'comp-tab-unknown',
 						layout: 'single',
-						panels: ['unknown'],
+						panels: [{ type: 'corePanel', panelId: 'unknown' }],
 						defaultPanel: 'unknown',
 						deviceMode: 'pc',
 					},

@@ -53,7 +53,7 @@ declare global {
 		layout: 'tabs' | 'single';
 		panelIds: string[];
 		defaultPanelId: string;
-		pluginPanelRefs: any[];
+		pluginPanelRefs: PluginPanelRef[];
 		missingNativePanelIds: string[];
 	};
 	function createMsghubPluginUiHost(opts: { request: any; api: any }): any;
@@ -123,10 +123,33 @@ declare global {
 		[key: string]: any;
 	};
 
+	type CorePanelRef = {
+		type: 'corePanel';
+		panelId: string;
+	};
+
+	type PluginPanelRef = {
+		type: 'pluginPanel';
+		pluginType: string;
+		instanceId: number;
+		panelId: string;
+	};
+
+	type CompositionPanelRef = CorePanelRef | PluginPanelRef;
+
+	type AdminTabViewComposition = {
+		id?: string;
+		layout?: string;
+		panels?: CompositionPanelRef[];
+		defaultPanel?: string;
+		deviceMode?: string;
+		app?: AppBlockBase | CoreAppBlock;
+	};
+
 	type AdminTabViewResponse = {
-		composition?: any;
+		composition?: AdminTabViewComposition;
 		corePanels?: Record<string, any>;
-		pluginPanels?: Record<string, any>;
+		pluginPanels?: Record<string, PluginPanelViewEntry>;
 		request?: { mode?: 'composition' | 'panel'; targetId?: string };
 	};
 
@@ -146,7 +169,7 @@ declare global {
 
 	function activatePanel(panelId: string): string;
 	function updateDocumentTitle(descriptor?: PanelDescriptorLike): Promise<void>;
-	function normalizePluginPanel(panelDef: PluginPanelViewEntry, pluginRef: any): PanelDescriptorLike;
+	function normalizePluginPanel(panelDef: PluginPanelViewEntry, pluginRef: PluginPanelRef): PanelDescriptorLike;
 	function registerPanelDescriptor(descriptor: PanelDescriptorLike): void;
 	function resolveIconUrl(descriptor: PanelDescriptorLike, slot: string): Promise<string | null>;
 	function generateManifest(

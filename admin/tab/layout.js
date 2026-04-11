@@ -1036,11 +1036,11 @@ function renderPanelModeError(errorKey) {
 
 /**
  * Builds the visible layout (tabs/panel containers) from the loaded backend view.
- * Handles mixed composition panels: native string IDs and structured plugin panel references.
+ * Handles structured composition refs for native/core and plugin panels.
  *
  * @returns {{ layout: string, panelIds: string[], pluginPanelRefs: object[], defaultPanelId: string, missingNativePanelIds: string[] }}
  *   layout: 'tabs' or 'single'.
- *   panelIds: native panel string IDs only (for asset loading and panel init).
+ *   panelIds: native panel ids only (for asset loading and panel init).
  *   pluginPanelRefs: structured plugin panel references (for plugin bundle mounting in boot.js).
  *   defaultPanelId: default active panel ID.
  *   missingNativePanelIds: native panel ids referenced by the composition but absent from the active view.
@@ -1059,14 +1059,18 @@ function buildLayoutFromRegistry() {
 	const availablePluginPanels = getPluginPanels();
 	const panels = Array.isArray(comp.panels) ? comp.panels : [];
 	for (const entry of panels) {
-		if (typeof entry === 'string' && entry) {
-			const def = corePanels[entry];
-			if (!def || typeof def !== 'object') {
-				missingNativePanelIds.push(entry);
+		if (entry && typeof entry === 'object' && entry.type === 'corePanel') {
+			const panelId = typeof entry.panelId === 'string' ? entry.panelId : '';
+			if (!panelId) {
 				continue;
 			}
-			panelIds.push(entry);
-			allEntries.push({ kind: 'native', id: entry, def });
+			const def = corePanels[panelId];
+			if (!def || typeof def !== 'object') {
+				missingNativePanelIds.push(panelId);
+				continue;
+			}
+			panelIds.push(panelId);
+			allEntries.push({ kind: 'native', id: panelId, def });
 		} else if (entry && typeof entry === 'object' && entry.type === 'pluginPanel') {
 			const runtimePanelId = getPluginRuntimePanelId(entry);
 			const panelDef = availablePluginPanels[runtimePanelId] || null;

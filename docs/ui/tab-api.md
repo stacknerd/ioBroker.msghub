@@ -153,21 +153,20 @@ resolution entirely. The resulting `api.host` values differ from the normal comp
 | `host.viewId` | `null` | resolved view id (e.g. `'adminTab'`) |
 | `host.layout` | `'single'` | composition `layout` field |
 | `host.deviceMode` | `'pc'` | composition `deviceMode` field |
-| `host.panels` | `[panelKey]` — single-element frozen array, where `panelKey = args.panel.slice('tab-'.length)` | panels from composition, strings only |
-| `host.defaultPanel` | same `panelKey` | composition `defaultPanel` |
+| `host.panels` | single-element array with the structured ref for the requested panel target | panels from composition, structured refs only |
+| `host.defaultPanel` | same owner-local `panelId` | composition `defaultPanel` |
 
 `panel=` takes precedence over `composition=`; both may appear in the URL, but `panel=` wins.
 
-The `panelKey` derived here (e.g. `'messages'` from `?panel=tab-messages`) matches the owner-local
-core-panel key used by the active composition and by the host-owned bootstrap convention
-`loadCorePanelEntry(panelKey)`.
+The `panelId` derived here (e.g. `'messages'` from `?panel=tab-messages`) matches the owner-local
+core-panel id used by the active composition and by the host-owned bootstrap convention
+`loadCorePanelEntry(panelId)`.
 
 In normal (composition) mode:
 
-- `host.panels` contains only string entries from `composition.panels`
-- structured plugin panel refs are filtered out
-- string sentinels such as `'*'` may still appear in wildcard compositions
-- wildcard expansion remains a responsibility of [`./tab-layout.md`](./tab-layout.md), not `api.js`
+- `host.panels` contains the active structured refs from `composition.panels`
+- core refs use `{ type: 'corePanel', panelId }`
+- plugin refs use `{ type: 'pluginPanel', pluginType, instanceId, panelId }`
 
 `api.host.isExpertMode()` is a native-panel helper with additive semantics:
 
@@ -212,7 +211,7 @@ This is used for API branches that are intentionally unavailable in the current 
 - Timezone policy is normalized centrally. Missing or invalid timezones become a UTC fallback policy.
 - Context-menu item handlers are wrapped recursively so the menu closes first, including nested submenu items.
 - The context-menu wrapper intentionally does not emit generic fallback toasts when an action rejects. Error handling stays with the caller.
-- In normal mode, `host.panels` is derived from the loaded active composition but keeps only string entries, because structured plugin refs are hosted differently. In `panel=` mode, `host.panels` is a single-element array derived from the active `web.view.get` request/response pair.
+- In normal mode, `host.panels` is derived from the loaded active composition and preserves the structured `corePanel` / `pluginPanel` refs. In `panel=` mode, `host.panels` stays the same structured contract, narrowed to the requested single panel.
 - `args.locale` affects only the browser-side default format locale for `api.time.*`; it does not change text language, i18n loading, plugin bundle language selection, or backend payloads.
 - `runtime.about()` stays on the API surface, but its data comes from the central `ui.bootstrap` cache in `runtime.js`.
 

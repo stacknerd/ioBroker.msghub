@@ -375,7 +375,10 @@ async function loadLayoutSandbox(options = {}) {
 			composition: {
 				id: 'adminTab',
 				layout: 'tabs',
-				panels: ['stats', 'messages'],
+				panels: [
+					{ type: 'corePanel', panelId: 'stats' },
+					{ type: 'corePanel', panelId: 'messages' },
+				],
 				defaultPanel: 'messages',
 			},
 			corePanels: {
@@ -636,7 +639,10 @@ describe('admin/tab/layout.js', function () {
 			composition: {
 				id: 'adminTab',
 				layout: 'tabs',
-				panels: ['messages', { type: 'pluginPanel', pluginType: 'IngestStates', instanceId: 0, panelId: 'presets' }],
+				panels: [
+					{ type: 'corePanel', panelId: 'messages' },
+					{ type: 'pluginPanel', pluginType: 'IngestStates', instanceId: 0, panelId: 'presets' },
+				],
 				defaultPanel: 'messages',
 			},
 			corePanels: {
@@ -648,7 +654,7 @@ describe('admin/tab/layout.js', function () {
 		const { buildLayoutFromRegistry } = sandbox.window.__layoutFns;
 		const result = buildLayoutFromRegistry();
 
-		// panelIds must contain only string IDs.
+		// panelIds remain owner-local native ids derived from structured core refs.
 		assert.deepEqual(JSON.parse(JSON.stringify(result.panelIds)), ['messages']);
 
 		// pluginPanelRefs must contain the structured ref.
@@ -675,11 +681,11 @@ describe('admin/tab/layout.js', function () {
 		assert.equal(pluginPanel.getAttribute('data-panel-id'), 'presets');
 	});
 
-	it('buildLayoutFromRegistry() returns empty pluginPanelRefs for string-only panels', async function () {
+	it('buildLayoutFromRegistry() returns empty pluginPanelRefs for core-only structured refs', async function () {
 		const { sandbox } = await loadLayoutSandbox();
 		const { buildLayoutFromRegistry } = sandbox.window.__layoutFns;
 
-		// Default sandbox has a string-only composition.
+		// Default sandbox has a core-only structured composition.
 		const result = buildLayoutFromRegistry();
 
 		assert.deepEqual(JSON.parse(JSON.stringify(result.pluginPanelRefs)), []);
@@ -695,7 +701,7 @@ describe('admin/tab/layout.js', function () {
 				composition: {
 					id: 'broken',
 					layout: 'single',
-					panels: ['unknown'],
+					panels: [{ type: 'corePanel', panelId: 'unknown' }],
 					defaultPanel: 'unknown',
 				},
 				corePanels: {},
@@ -719,7 +725,7 @@ describe('admin/tab/layout.js', function () {
 				id: 'adminTab',
 				layout: 'tabs',
 				panels: [
-					'messages',
+					{ type: 'corePanel', panelId: 'messages' },
 					{ type: 'pluginPanel', pluginType: 'IngestStates', instanceId: 0, panelId: 'presets' },
 				],
 				defaultPanel: 'messages',
@@ -1241,7 +1247,10 @@ describe('admin/tab/layout.js', function () {
 			composition: {
 				id: 'adminTab',
 				layout: 'tabs',
-				panels: ['messages', { type: 'pluginPanel', pluginType: 'IngestStates', instanceId: 0, panelId: 'presets' }],
+				panels: [
+					{ type: 'corePanel', panelId: 'messages' },
+					{ type: 'pluginPanel', pluginType: 'IngestStates', instanceId: 0, panelId: 'presets' },
+				],
 				defaultPanel: 'messages',
 			},
 			corePanels: {
@@ -1839,7 +1848,7 @@ describe('admin/tab/layout.js', function () {
 				id: 'adminTab',
 				layout: 'tabs',
 				panels: [
-					'messages',
+					{ type: 'corePanel', panelId: 'messages' },
 					{ type: 'pluginPanel', pluginType: 'IngestStates', instanceId: 0, panelId: 'presets' },
 				],
 				defaultPanel: 'messages',

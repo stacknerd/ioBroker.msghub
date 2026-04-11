@@ -98,7 +98,7 @@ Each entry may carry:
 
 Core panel entries intentionally do **not** carry frontend execution metadata anymore.
 The Admin Tab host resolves core-panel startup exclusively through the conventional host-owned
-entry path `admin/tab/panels/<panelKey>/entry.js`.
+entry path `admin/tab/panels/<panelId>/entry.js`.
 
 ### `compositions`
 
@@ -122,7 +122,7 @@ Each composition carries:
 
 Panel membership rules:
 
-- string ids reference core/native panels from `panels`
+- structured `{ type: 'corePanel', panelId }` refs reference core/native panels from `panels`
 - structured `{ type: 'pluginPanel', ... }` refs reference plugin-owned panels without mirroring their metadata
 - `'*'` is the wildcard sentinel for all core/native panels
 
@@ -166,7 +166,7 @@ The registry now carries only panel metadata that belongs to the backend view co
 - optional app/install metadata
 
 Executable frontend bootstrap details are intentionally absent. Core panel asset lists and
-`panelInit(ctx)` live in the host-owned `entry.js` files under `admin/tab/panels/<panelKey>/`.
+`panelInit(ctx)` live in the host-owned `entry.js` files under `admin/tab/panels/<panelId>/`.
 
 ---
 

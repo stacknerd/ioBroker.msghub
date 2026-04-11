@@ -295,7 +295,7 @@ function createAdminApi({ msghubRequest, msghubSocket, adapterInstance, lang, t,
 	 * Computes the current host metadata from the loaded backend view or, during early boot,
 	 * from the pending URL/markup request.
 	 *
-	 * @returns {{viewId:string|null,layout:string,deviceMode:string,panels:string[],defaultPanel:string}}
+	 * @returns {{viewId:string|null,layout:string,deviceMode:string,panels:object[],defaultPanel:string}}
 	 *   Normalized host metadata snapshot.
 	 */
 	const getHostMetadata = () => {
@@ -303,22 +303,16 @@ function createAdminApi({ msghubRequest, msghubSocket, adapterInstance, lang, t,
 		const activeView = typeof getActiveView === 'function' ? getActiveView() : null;
 		if (request.mode === 'panel') {
 			const composition =
-				activeView?.request?.mode === 'panel' &&
-				activeView?.composition &&
-				typeof activeView.composition === 'object'
-					? activeView.composition
-					: null;
-			const panelIds = Array.isArray(composition?.panels)
-				? composition.panels.filter(v => typeof v === 'string' && v)
-				: [];
+				activeView?.composition && typeof activeView.composition === 'object' ? activeView.composition : null;
+			const panelRefs = Array.isArray(composition?.panels) ? composition.panels.filter(ref => !!ref) : [];
 			const fallbackTargetId =
 				'targetId' in request && typeof request.targetId === 'string' ? request.targetId.trim() : '';
-			const fallbackPanelId = fallbackTargetId ? fallbackTargetId.slice('tab-'.length) : '';
+			const fallbackPanelId = fallbackTargetId.startsWith('tab-') ? fallbackTargetId.slice('tab-'.length) : '';
 			return {
 				viewId: null,
 				layout: 'single',
 				deviceMode: typeof composition?.deviceMode === 'string' ? composition.deviceMode : 'pc',
-				panels: panelIds.length > 0 ? panelIds : fallbackPanelId ? [fallbackPanelId] : [],
+				panels: panelRefs,
 				defaultPanel:
 					typeof composition?.defaultPanel === 'string' && composition.defaultPanel
 						? composition.defaultPanel
@@ -326,14 +320,12 @@ function createAdminApi({ msghubRequest, msghubSocket, adapterInstance, lang, t,
 			};
 		}
 		const composition = typeof getActiveComposition === 'function' ? getActiveComposition() : null;
-		const panelIds = Array.isArray(composition?.panels)
-			? composition.panels.filter(v => typeof v === 'string' && v)
-			: [];
+		const panelRefs = Array.isArray(composition?.panels) ? composition.panels.filter(ref => !!ref) : [];
 		return {
 			viewId: typeof resolveViewId === 'function' ? resolveViewId() : 'adminTab',
 			layout: composition?.layout || 'tabs',
 			deviceMode: composition?.deviceMode || 'pc',
-			panels: panelIds,
+			panels: panelRefs,
 			defaultPanel: typeof composition?.defaultPanel === 'string' ? composition.defaultPanel : '',
 		};
 	};

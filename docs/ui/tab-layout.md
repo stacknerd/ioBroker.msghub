@@ -40,7 +40,7 @@ visible shell use the same final view/composition decision.
 
 It separates the result into two groups:
 
-- `panelIds`: native panel string IDs only
+- `panelIds`: native/core panel ids only
 - `pluginPanelRefs`: structured plugin panel references only
 
 That separation is important because native panels are initialized from `corePanels`, while plugin panels
