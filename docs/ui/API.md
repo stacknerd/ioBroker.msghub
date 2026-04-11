@@ -67,7 +67,7 @@ panel/plugin contract in this reference.
 | Entry | Contract | Owner | Reference |
 | --- | --- | --- | --- |
 | `IoUiRegistry.panels[panelId]` | Native producer definition with owner-local `id`, `label`, `category`, and optional `app`. Core bootstrap fields are intentionally absent. Canonical external ids (`tab-...`) are derived later by `normalizeCorePanel(...)`. | Backend registry runtime | `lib/IoUiRegistry.js` |
-| `IoUiRegistry.compositions[viewId]` | Composition definition with `id`, `layout`, `panels`, `defaultPanel`, and `deviceMode`. The only allowed composition-level `app` block is the special-case `compositions.web.app` for the prepared Public-Web root contract. | Backend registry runtime | `lib/IoUiRegistry.js` |
+| `IoUiRegistry.compositions[viewId]` | Pure composition definition with `id`, `layout`, `panels`, `defaultPanel`, and `deviceMode`. Composition-level app/install metadata is intentionally absent. | Backend registry runtime | `lib/IoUiRegistry.js` |
 | Native composition panel entry | Structured ref `{ type: 'corePanel', panelId }`. | Backend registry / layout runtime | `lib/IoUiRegistry.js`, `admin/tab/layout.js` |
 | Plugin composition panel entry | Structured ref `{ type: 'pluginPanel', pluginType, instanceId, panelId }`. | Backend registry / layout runtime | `lib/IoUiRegistry.js`, `admin/tab/layout.js` |
 | `corePanels[*].resolvedAppIcons` | Optional effective icon-slot map resolved by `IoUiCatalog`. Core panels resolve owner-local `app.icons` filenames to host-ready paths under `admin/icons/<panelId>/...`. | Backend view runtime | `lib/IoUiCatalog.js` |

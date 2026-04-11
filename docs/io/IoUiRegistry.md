@@ -6,7 +6,6 @@ Its job is to hold the canonical static truth for:
 
 - core/native panels
 - shell compositions
-- the special prepared web-root composition metadata
 
 In short:
 
@@ -52,7 +51,7 @@ References:
 1. Defining the canonical native/core panel metadata.
 2. Defining the canonical shell composition metadata.
 3. Keeping plugin-owned panels represented only as structured composition refs.
-4. Holding the current core-owned app/install metadata for native panels and the prepared web-root composition.
+4. Holding the current core-owned app/install metadata only on native panel entries.
 
 ---
 
@@ -118,7 +117,6 @@ Each composition carries:
 - `panels`
 - `defaultPanel`
 - `deviceMode`
-- optional `app` only where explicitly intended (`web`)
 
 Panel membership rules:
 
