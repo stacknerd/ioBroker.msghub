@@ -5,7 +5,7 @@
 | Scope | IO-/runtime-facing contracts only. |
 | In scope | Adapter-side runtime bridges, plugin orchestration, platform-side state surfaces, UI/backend command routers, IO-brokered bundle/RPC paths, and IO-owned helper contracts exposed across layer boundaries. |
 | Out of scope | Browser-only shell contracts (`docs/ui/API.md`), plugin-facing ctx details (`docs/plugins/API.md`), core-internal DTO semantics owned by `src/`, and archive/storage backend implementation APIs except where they surface through IO-owned commands or status payloads. |
-| Source of truth | `main.js`, `lib/index.js`, `lib/IoAdminCapabilities.js`, `lib/IoAdminTab.js`, `lib/IoWebUi.js`, `lib/IoAdminConfig.js`, `lib/IoCoreConnection.js`, `lib/IoPlugins.js`, `lib/IoPluginResources.js`, `lib/IoManagedMeta.js`, `lib/IngestStates/manifest.js`, `src/MsgStore.js`, `src/MsgStats.js`. |
+| Source of truth | `main.js`, `lib/index.js`, `lib/IoAdminCapabilities.js`, `lib/IoAdminTab.js`, `lib/IoWebUi.js`, `lib/IoUiCatalog.js`, `lib/IoAdminConfig.js`, `lib/IoCoreConnection.js`, `lib/IoPlugins.js`, `lib/IoPluginResources.js`, `lib/IoManagedMeta.js`, `lib/IngestStates/manifest.js`, `src/MsgStore.js`, `src/MsgStats.js`. |
 
 | Area | Owned by | Use this file for |
 | --- | --- | --- |
@@ -179,6 +179,13 @@
 | `web.ping` | none | Requires a valid web token via `payload.token`. Fixed health probe command. | `{ ok: true, data: 'pong' }` | `lib/IoWebUi.js` |
 | empty or non-string web command | none | `IoWebUi.handleCommand(...)` returns `BAD_REQUEST` when `cmd` is blank or not a string. | `{ ok: false, error }` | `lib/IoWebUi.js` |
 | unknown `web.*` command | none | `IoWebUi.handleCommand(...)` returns `UNKNOWN_COMMAND` when no dispatch-table entry matches the command. | `{ ok: false, error }` | `lib/IoWebUi.js` |
+
+### `IoUiCatalog` helper surface
+
+| Entry | Contract | Owner | Reference |
+| --- | --- | --- | --- |
+| `IoUiCatalog.getView({ mode, targetId? })` | Resolves the canonical backend view payload `{ composition, corePanels, pluginPanels, request }`. `corePanels[*]` and `pluginPanels[*]` may carry `resolvedAppIcons`, which is the catalog-owned effective icon-slot map for panel-app consumers. Plugin-owned Admin-UI i18n is intentionally absent from `pluginPanels[*]`. | IO runtime | `lib/IoUiCatalog.js` |
+| `IoUiCatalog.getApp({ mode: 'panel', targetId })` | Panel-only helper. Returns the existing canonical core-panel entry or resolved plugin-panel entry enriched with `resolvedAppIcons`, or `null` when the target is formally valid but unknown, currently unavailable, or has no valid `app` block. `composition` mode and invalid targets are rejected with `BAD_REQUEST`. | IO runtime | `lib/IoUiCatalog.js` |
 
 ### `IoAdminConfig` command surface
 
