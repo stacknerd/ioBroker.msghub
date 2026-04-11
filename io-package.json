@@ -100,6 +100,7 @@
 			"link": "/adapter/msghub/tab.html",
 			"ignoreConfigUpdate": true
 		},
+		"webExtension": "web.js",
 		"dependencies": [
 			{
 				"js-controller": ">=6.0.11"
@@ -122,10 +123,10 @@
 		"aiOpenAiModelBest": "gpt-4o-mini",
 		"aiPurposeModelOverrides": "[]",
 		"aiTimeoutMs": 30000,
-			"aiMaxConcurrency": 2,
-			"aiRpm": 0,
-			"aiCacheTtlMs": 0,
-			"keepPreviousWeeks": 3,
+		"aiMaxConcurrency": 2,
+		"aiRpm": 0,
+		"aiCacheTtlMs": 0,
+		"keepPreviousWeeks": 3,
 		"archiveMaxBatchSize": 200,
 		"archiveFlushIntervalSec": 10,
 		"archiveEffectiveStrategyLock": "native",
@@ -141,6 +142,7 @@
 		"rollupKeepDays": 400,
 		"writeIntervalMs": 10000,
 		"locale": "de-DE",
+		"webInstance": "web.0",
 		"quietHoursEnabled": true,
 		"quietHoursStart": "22:00",
 		"quietHoursEnd": "06:00",
