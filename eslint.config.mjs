@@ -7,27 +7,17 @@ export default [
 	{
 		// specify files to exclude from linting here
 		ignores: [
-			'.dev-server/',
-			'.vscode/',
-			'.claude',
-			'*.test.js',
+			'**/.*/',
+			'**/*.mjs',
 			'**/*.test.js',
 			'test/**/*.js',
-			'*.config.mjs',
-			'build',
-			'dist',
+			'build/',
+			'dist/',
 			'admin/words.js',
 			'admin/admin.d.ts',
 			'admin/blockly.js',
 			'**/adapter-config.d.ts',
 			'widgets/**/*.js',
-			'generate-doc-index.mjs',
-			'i18n-check.mjs',
-			'i18n-sort.mjs',
-			'i18n-generate.mjs',
-			'admin-ui-bundle-check.mjs',
-			'i18n-generate-backend-overlay.mjs',
-			'**/*./'
 		],
 	},
 	{

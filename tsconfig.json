@@ -25,6 +25,15 @@
 		// "noUnusedParameters": true,
 		"useUnknownInCatchVariables": false
 	},
-	"include": ["**/*.js", "**/*.d.ts"],
-	"exclude": ["node_modules/**", "widgets/**"]
+	"include": [
+		"*.js",
+		"*.d.ts",
+		"admin/**/*.js",
+		"admin/**/*.d.ts",
+		"src/**/*.js",
+		"src/**/*.d.ts",
+		"lib/**/*.js",
+		"lib/**/*.d.ts"
+	],
+	"exclude": ["node_modules/**", "widgets/**", "build/**", "dist/**", "docs/**"]
 }
