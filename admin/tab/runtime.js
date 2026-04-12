@@ -7,7 +7,7 @@
  * Docs: ../../docs/ui/tab-runtime.md
  *
  * Contents:
- * - URL query parsing and normalization for adapter/runtime bootstrap values.
+ * - Host-forwarded/bootstrap args plus URL query parsing and normalization for adapter/runtime values.
  * - Admin backend socket setup.
  * - Admin i18n dictionary loading and translation helpers.
  * - Theme detection from query, storage, host window, and fallbacks.
@@ -16,7 +16,7 @@
  * - Exposes runtime globals (`args`, `window.msghubSocket`, `lang`, ...) consumed by
  *   `api.js`, `layout.js`, and `boot.js`.
  *
- * Canonical query parameters:
+ * Canonical runtime parameters:
  * - `instance` {number}, default `0`, consumed by `adapterInstance` bootstrap in this module.
  * - `lang` {string}, default browser base language, consumed by `lang` bootstrap and i18n loading here.
  * - `locale` {string}, default absent, trimmed here and consumed downstream as an optional frontend format-locale override.
@@ -32,27 +32,19 @@
  * - No DOM mutation except setting the root theme attribute.
  */
 
+const FORWARDED_ARGS_MARKER_ID = 'msghub-forwarded-args';
+
 /**
- * Reads URL query parameters and normalizes canonical runtime values.
- *
- * Normalization:
- * - `instance`: integer, defaults to `0` when absent or invalid.
- * - `lang`: browser base language when absent or blank.
- * - `locale`: trimmed string; empty after trim is removed.
- * - `composition`: trimmed string; empty after trim is removed.
- * - `panel`: trimmed string; empty after trim is removed.
- * - `expert`: normalized only when present; `true`, `1`, and bare `?expert` become `true`.
- * - `theme` / `react`: kept as raw strings, including whitespace.
- * - `debugTheme`: kept raw here and normalized later at module load.
- * - Unknown keys are preserved.
+ * Parses one raw query string into key/value pairs without applying runtime normalization yet.
  *
  * Invalid URL encoding is handled defensively: undecodable keys or values fall back
- * to their raw query fragments instead of throwing during bootstrap.
+ * to their raw query fragments instead of aborting shell bootstrap.
  *
- * @returns {object} Normalized query values including `instance` and `lang`.
+ * @param {string} rawSearch Raw `window.location.search`-like string.
+ * @returns {object} Raw decoded query key/value map.
  */
-function parseQuery() {
-	const q = (window.location.search || '').replace(/^\?/, '').replace(/#.*$/, '');
+function parseRawQueryArgs(rawSearch) {
+	const q = String(rawSearch || '').replace(/^\?/, '').replace(/#.*$/, '');
 	const out = {};
 	for (const pair of q.split('&')) {
 		const p = pair.trim();
@@ -76,6 +68,58 @@ function parseQuery() {
 		}
 		out[key] = value;
 	}
+	return out;
+}
+
+/**
+ * Reads host-forwarded runtime args from the optional server-rendered bootstrap marker.
+ *
+ * The marker is internal host glue, not a public URL contract. When present, it must contain
+ * one JSON object whose entries follow the same runtime parameter names as the query layer.
+ *
+ * @returns {object} Forwarded arg map, or an empty object when the marker is absent/invalid.
+ */
+function readForwardedArgs() {
+	if (typeof document?.getElementById !== 'function') {
+		return {};
+	}
+	const marker = document.getElementById(FORWARDED_ARGS_MARKER_ID);
+	const raw = typeof marker?.textContent === 'string' ? marker.textContent.trim() : '';
+	if (!raw) {
+		return {};
+	}
+	try {
+		const parsed = JSON.parse(raw);
+		if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+			return {};
+		}
+		return { ...parsed };
+	} catch {
+		return {};
+	}
+}
+
+/**
+ * Reads host-forwarded args plus URL query parameters and normalizes canonical runtime values.
+ *
+ * Normalization:
+ * - `instance`: integer, defaults to `0` when absent or invalid.
+ * - `lang`: browser base language when absent or blank.
+ * - `locale`: trimmed string; empty after trim is removed.
+ * - `composition`: trimmed string; empty after trim is removed.
+ * - `panel`: trimmed string; empty after trim is removed.
+ * - `expert`: normalized only when present; `true`, `1`, and bare `?expert` become `true`.
+ * - `theme` / `react`: kept as raw strings, including whitespace.
+ * - `debugTheme`: kept raw here and normalized later at module load.
+ * - Unknown keys are preserved.
+ * - When a host-forwarded marker is present, forwarded values win over same-named query args.
+ *
+ * @returns {object} Normalized runtime args including `instance` and `lang`.
+ */
+function parseQuery() {
+	const queryArgs = parseRawQueryArgs(window.location.search || '');
+	const forwardedArgs = readForwardedArgs();
+	const out = { ...queryArgs, ...forwardedArgs };
 	if (out.instance !== undefined) {
 		const n = Number(out.instance);
 		out.instance = Number.isFinite(n) ? Math.trunc(n) : 0;

@@ -63,10 +63,19 @@ async function loadRuntimeSandbox(options = {}) {
 	`;
 
 	const attrs = new Map();
+	const forwardedMarker =
+		options.forwardedRaw !== undefined
+			? { textContent: String(options.forwardedRaw) }
+			: options.forwardedArgs !== undefined
+				? { textContent: JSON.stringify(options.forwardedArgs) }
+				: null;
 	const documentObject = {
 		documentElement: {
 			getAttribute: key => attrs.get(String(key)) || null,
 			setAttribute: (key, value) => attrs.set(String(key), String(value)),
+		},
+		getElementById(id) {
+			return String(id) === 'msghub-forwarded-args' ? forwardedMarker : null;
 		},
 	};
 
@@ -246,6 +255,49 @@ describe('admin/tab/runtime.js', function () {
 			assert.equal(result.instance, 0);
 			assert.equal(result.lang, 'en');
 			assert.equal(result.expert, undefined);
+		});
+
+		it('merges host-forwarded args ahead of same-named query args', async function () {
+			const sandbox = await loadRuntimeSandbox({
+				search: '?instance=2&panel=tab-other&theme=light&unknown=query',
+				forwardedArgs: {
+					instance: '0',
+					panel: 'tab-messages',
+					theme: 'dark',
+					unknown: 'forwarded',
+				},
+			});
+
+			const result = sandbox.window.__runtime.parseQuery();
+
+			assert.equal(result.instance, 0);
+			assert.equal(result.panel, 'tab-messages');
+			assert.equal(result.theme, 'dark');
+			assert.equal(result.unknown, 'forwarded');
+		});
+
+		it('keeps query args as fallback when the host-forwarded marker is absent', async function () {
+			const sandbox = await loadRuntimeSandbox({
+				search: '?instance=3&panel=tab-messages&theme=dark',
+			});
+
+			const result = sandbox.window.__runtime.parseQuery();
+
+			assert.equal(result.instance, 3);
+			assert.equal(result.panel, 'tab-messages');
+			assert.equal(result.theme, 'dark');
+		});
+
+		it('ignores an invalid host-forwarded marker and continues with query parsing', async function () {
+			const sandbox = await loadRuntimeSandbox({
+				search: '?instance=4&panel=tab-messages',
+				forwardedRaw: '{bad json',
+			});
+
+			const result = sandbox.window.__runtime.parseQuery();
+
+			assert.equal(result.instance, 4);
+			assert.equal(result.panel, 'tab-messages');
 		});
 
 		describe('panel parameter', function () {

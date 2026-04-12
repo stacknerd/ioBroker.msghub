@@ -41,7 +41,7 @@ Those later files assume that `runtime.js` already created:
 - translation helpers
 - theme helpers
 
-`runtime.js` also defines the initial browser-side source for optional URL overrides such as
+`runtime.js` also defines the initial browser-side source for optional runtime args such as
 `composition`, `expert`, `theme`, and `locale`, even though some of those values are only consumed
 later by [`./tab-layout.md`](./tab-layout.md), [`./tab-api.md`](./tab-api.md), or panel code.
 
@@ -49,9 +49,26 @@ later by [`./tab-layout.md`](./tab-layout.md), [`./tab-api.md`](./tab-api.md), o
 
 ## Responsibilities
 
-### 1) Parse URL query parameters into usable runtime state
+### 1) Parse host-forwarded args plus URL query parameters into usable runtime state
 
-`parseQuery()` normalizes the page query into `args`.
+`parseQuery()` builds `args` from two sources:
+
+1. optional host-forwarded args from a server-rendered bootstrap marker
+2. the browser URL query
+
+When both sources provide the same key, the host-forwarded value wins.
+
+Current marker shape:
+
+```html
+<script id="msghub-forwarded-args" type="application/json">
+{"instance":"0","panel":"tab-messages"}
+</script>
+```
+
+The marker is internal host glue, not a public URL contract.
+
+`parseQuery()` then normalizes the merged runtime args into `args`.
 Notable behavior:
 
 - `instance` defaults to `0` and is coerced to an integer
@@ -62,7 +79,7 @@ Notable behavior:
 - `expert` is normalized only when the key is present
 - `theme` and `react` stay raw so later theme helpers can apply the canonical precedence rules
 - `debugTheme` stays raw in `args` and is normalized separately at module load
-- unknown keys are preserved
+- unknown keys are preserved, regardless of whether they came from the marker or the URL query
 
 Invalid URL encoding is handled defensively: undecodable query fragments fall back to their raw key/value
 strings instead of aborting shell bootstrap.
@@ -217,7 +234,8 @@ Main consumers:
 - `overrideLang(...)` resets the cached dictionary promise so a later load can fetch the new language.
 - Plugin i18n merging is intentionally one-way and additive. Existing keys are never overwritten.
 - Admin-UI text loading stays in the `admin/i18n/*` namespace. The repo-root `i18n/*` tree is reserved for backend/runtime catalogs and should not be mixed into the shell dictionary.
-- Unknown query keys remain available to native panels through `ctx.args`.
+- Unknown runtime arg keys remain available to native panels through `ctx.args`.
+- Host-forwarded args and URL query args share one central normalization path. New runtime args therefore do not need a second host-specific parser branch in `runtime.js`.
 - `runtime.js` parses `composition`, `panel`, and `expert`, but their consumption happens downstream: composition resolution in [`./tab-layout.md`](./tab-layout.md), panel-mode activation in [`./tab-boot.md`](./tab-boot.md), expert-mode capabilities in panel/API concerns.
 - `panel` activates Single-Panel mode when set; it must carry a `tab-` prefix. Unresolvable targets render a hard error. `panel` takes precedence over `composition` when both are present.
 - `locale` is only a browser-side format-locale override source. It does not change admin i18n loading, text language, plugin bundle language selection, or backend payloads.

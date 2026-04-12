@@ -186,5 +186,6 @@ Then continue based on your question:
 - `IoStorageIobroker`: [`./IoStorageIobroker.md`](./IoStorageIobroker.md)
 - `IoUiCatalog`: [`./IoUiCatalog.md`](./IoUiCatalog.md)
 - `IoUiRegistry`: [`./IoUiRegistry.md`](./IoUiRegistry.md)
+- `IoWebExtension`: [`./IoWebExtension.md`](./IoWebExtension.md)
 - `IoWebUi`: [`./IoWebUi.md`](./IoWebUi.md)
 <!-- AUTO-GENERATED:IO-INDEX:END -->
