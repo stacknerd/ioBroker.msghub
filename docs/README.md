@@ -22,6 +22,7 @@ Naming note: the adapter is called **Message Hub**. In code and ioBroker object 
 - Plugin developer guide (interfaces and `ctx.api`): [`docs/plugins/README.md`](./plugins/README.md)
 - IO runtime layer (platform adapters/backends/resolver): [`docs/io/README.md`](./io/README.md)
 - UI docs (Admin tab and future UI surfaces): [`docs/ui/README.md`](./ui/README.md)
+- Public web host architecture (`web.js`, host/runtime split, internal bridges): [`docs/ui/web.md`](./ui/web.md)
 - Plugin runtime wiring (enable switches, options in `native`): [`docs/plugins/IoPlugins.md`](./plugins/IoPlugins.md)
 
 ## What This Repo Ships Today

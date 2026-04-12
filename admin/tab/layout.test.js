@@ -242,6 +242,7 @@ async function loadLayoutSandbox(options = {}) {
 	const fetchCalls = [];
 	const documentObject = {
 		title: '',
+		baseURI: typeof options.baseURI === 'string' ? options.baseURI : '',
 		head: headElement,
 		documentElement: {
 			getAttribute: key =>
@@ -765,18 +766,35 @@ describe('admin/tab/layout.js', function () {
 		assert.equal(pluginTab.getAttribute('data-i18n'), 'msghub.i18n.core.admin.ui.panel.loading.text');
 	});
 
-	it('resolveIconUrl() returns a static admin icon path for core panels', async function () {
+	it('resolveIconUrl() returns the host-relative icon path for core panels', async function () {
 		const { sandbox } = await loadLayoutSandbox();
 
 		const url = await sandbox.window.__layoutFns.resolveIconUrl(
 			{
 				id: 'tab-messages',
-				resolvedAppIcons: { any192: 'admin/icons/messages/messages-192.png' },
+				resolvedAppIcons: { any192: 'icons/messages/messages-192.png' },
 			},
 			'any192',
 		);
 
 		assert.equal(url, 'icons/messages/messages-192.png');
+	});
+
+	it('resolveIconUrl() resolves against the host root base when baseURI is present', async function () {
+		const { sandbox } = await loadLayoutSandbox({
+			baseURI: 'http://192.168.4.4:8082/MessageHub/0/messages/admin/',
+			args: { panel: 'tab-messages' },
+		});
+
+		const url = await sandbox.window.__layoutFns.resolveIconUrl(
+			{
+				id: 'tab-messages',
+				resolvedAppIcons: { any192: 'icons/messages/messages-192.png' },
+			},
+			'any192',
+		);
+
+		assert.equal(url, 'http://192.168.4.4:8082/MessageHub/0/icons/messages/messages-192.png');
 	});
 
 	it('resolveIconUrl() returns the backend-resolved plugin host icon path', async function () {
@@ -791,7 +809,7 @@ describe('admin/tab/layout.js', function () {
 		const url = await sandbox.window.__layoutFns.resolveIconUrl(
 			{
 				id: 'tab-plugin-IngestStates-0-presets',
-				resolvedAppIcons: { any192: 'admin/icons/pluginUI/pluginUI-192.png' },
+				resolvedAppIcons: { any192: 'icons/pluginUI/pluginUI-192.png' },
 			},
 			'any192',
 		);
@@ -834,7 +852,7 @@ describe('admin/tab/layout.js', function () {
 		const url = await sandbox.window.__layoutFns.resolveIconUrl(
 			{
 				id: 'tab-plugin-IngestStates-0-presets',
-				resolvedAppIcons: { any192: 'admin/icons/pluginUI/pluginUI-192.png' },
+				resolvedAppIcons: { any192: 'icons/pluginUI/pluginUI-192.png' },
 			},
 			'any192',
 		);
@@ -849,7 +867,7 @@ describe('admin/tab/layout.js', function () {
 			{
 				id: 'tab-messages',
 				app: { icons: { any192: 'stale-local-value.png' } },
-				resolvedAppIcons: { any192: 'admin/icons/messages/messages-192.png' },
+				resolvedAppIcons: { any192: 'icons/messages/messages-192.png' },
 			},
 			'any192',
 		);
@@ -1159,7 +1177,7 @@ describe('admin/tab/layout.js', function () {
 		const { sandbox } = await loadLayoutSandbox();
 		const { normalizePluginPanel } = sandbox.window.__layoutFns;
 
-		const resolvedAppIcons = { any192: 'admin/icons/pluginUI/pluginUI-192.png' };
+		const resolvedAppIcons = { any192: 'icons/pluginUI/pluginUI-192.png' };
 		const contrib = {
 			pluginType: 'IngestStates',
 			instanceId: 0,
@@ -1621,11 +1639,11 @@ describe('admin/tab/layout.js', function () {
 				backgroundColor: '#0c1014',
 			},
 			resolvedAppIcons: {
-				any192: 'admin/icons/messages/messages-192.png',
-				any512: 'admin/icons/messages/messages-512.png',
-				maskable192: 'admin/icons/messages/messages-maskable-192.png',
-				maskable512: 'admin/icons/messages/messages-maskable-512.png',
-				apple180: 'admin/icons/messages/messages-apple-180.png',
+				any192: 'icons/messages/messages-192.png',
+				any512: 'icons/messages/messages-512.png',
+				maskable192: 'icons/messages/messages-maskable-192.png',
+				maskable512: 'icons/messages/messages-maskable-512.png',
+				apple180: 'icons/messages/messages-apple-180.png',
 			},
 		});
 
@@ -1636,7 +1654,10 @@ describe('admin/tab/layout.js', function () {
 
 		const appleLink = sandbox.document.head.querySelector('link[rel="apple-touch-icon"]');
 		assert.ok(appleLink);
-		assert.equal(appleLink.getAttribute('href'), 'icons/messages/messages-apple-180.png');
+		assert.equal(
+			appleLink.getAttribute('href'),
+			'http://192.168.4.4:8081/adapter/msghub/icons/messages/messages-apple-180.png',
+		);
 		assert.equal(appleLink.getAttribute('href').includes('tab-messages'), false);
 
 		const manifestLink = sandbox.document.head.querySelector('link[rel="manifest"]');
@@ -1702,11 +1723,11 @@ describe('admin/tab/layout.js', function () {
 				url: '?panel=tab-plugin-IngestStates-0-presets',
 			},
 			resolvedAppIcons: {
-				any192: 'admin/icons/pluginUI/pluginUI-192.png',
-				any512: 'admin/icons/pluginUI/pluginUI-512.png',
-				maskable192: 'admin/icons/pluginUI/pluginUI-maskable-192.png',
-				maskable512: 'admin/icons/pluginUI/pluginUI-maskable-512.png',
-				apple180: 'admin/icons/pluginUI/pluginUI-apple-180.png',
+				any192: 'icons/pluginUI/pluginUI-192.png',
+				any512: 'icons/pluginUI/pluginUI-512.png',
+				maskable192: 'icons/pluginUI/pluginUI-maskable-192.png',
+				maskable512: 'icons/pluginUI/pluginUI-maskable-512.png',
+				apple180: 'icons/pluginUI/pluginUI-apple-180.png',
 			},
 		});
 
@@ -1714,7 +1735,10 @@ describe('admin/tab/layout.js', function () {
 		const manifestLink = sandbox.document.head.querySelector('link[rel="manifest"]');
 		assert.ok(appleLink);
 		assert.ok(manifestLink);
-		assert.equal(appleLink.getAttribute('href'), 'icons/pluginUI/pluginUI-apple-180.png');
+		assert.equal(
+			appleLink.getAttribute('href'),
+			'http://192.168.4.4:8081/adapter/msghub/icons/pluginUI/pluginUI-apple-180.png',
+		);
 		assert.equal(manifestLink.getAttribute('href'), 'blob:test-1');
 		assert.deepEqual(JSON.parse(JSON.stringify(revokedUrls)), []);
 		assert.equal(requests.length, 0);
@@ -1777,11 +1801,11 @@ describe('admin/tab/layout.js', function () {
 				url: '?panel=tab-plugin-IngestStates-0-presets',
 			},
 			resolvedAppIcons: {
-				any192: 'admin/icons/pluginUI/pluginUI-192.png',
-				any512: 'admin/icons/pluginUI/pluginUI-512.png',
-				maskable192: 'admin/icons/pluginUI/pluginUI-maskable-192.png',
-				maskable512: 'admin/icons/pluginUI/pluginUI-maskable-512.png',
-				apple180: 'admin/icons/pluginUI/pluginUI-apple-180.png',
+				any192: 'icons/pluginUI/pluginUI-192.png',
+				any512: 'icons/pluginUI/pluginUI-512.png',
+				maskable192: 'icons/pluginUI/pluginUI-maskable-192.png',
+				maskable512: 'icons/pluginUI/pluginUI-maskable-512.png',
+				apple180: 'icons/pluginUI/pluginUI-apple-180.png',
 			},
 		};
 		const panel = createElement('div');

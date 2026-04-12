@@ -1033,6 +1033,30 @@ function rerenderPluginPanelTabLabels(pluginTypeFilter = '') {
 }
 
 /**
+ * Refresh head/title metadata when the active panel belongs to the plugin type
+ * whose i18n was just merged.
+ *
+ * @param {string} pluginType Plugin type that just became available.
+ */
+function refreshActivePluginHead(pluginType) {
+	if (!pluginType) {
+		return;
+	}
+	const activePanelId =
+		typeof document?.querySelector === 'function'
+			? document.querySelector('.msghub-panel:not([hidden])')?.id || ''
+			: '';
+	if (!activePanelId) {
+		return;
+	}
+	const entry = pluginPanelTabMap.get(activePanelId);
+	if (entry?.ref?.pluginType !== pluginType) {
+		return;
+	}
+	void updateDocumentTitle();
+}
+
+/**
  * Registers resolved plugin panel slots from the loaded backend view.
  *
  * @param {object[]} refs - Structured plugin panel references from buildLayoutFromRegistry.
@@ -1314,7 +1338,10 @@ function ensureBooted() {
 				const pluginUiHost = createMsghubPluginUiHost({
 					request: msghubRequest,
 					api,
-					onI18nReady: ({ pluginType }) => rerenderPluginPanelTabLabels(pluginType),
+					onI18nReady: ({ pluginType }) => {
+						rerenderPluginPanelTabLabels(pluginType);
+						refreshActivePluginHead(pluginType);
+					},
 				});
 
 				// Show blocking spinner only when no panel was activated (plugin-only composition).

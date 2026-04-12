@@ -39,6 +39,59 @@ let appHeadVersion = 0;
 let activeManifestUrl = '';
 
 /**
+ * Resolve the host root base URL from the current shell base URI.
+ *
+ * The shell sets <base href=".../admin/">. We strip "/admin/" and, when a panel
+ * id is known, its trailing segment to land on the host root.
+ *
+ * @returns {string} Absolute base URL or empty string.
+ */
+function resolveHostRootBase() {
+	const base = typeof document?.baseURI === 'string' ? document.baseURI.trim() : '';
+	if (!base) {
+		return '';
+	}
+	let url;
+	try {
+		url = new URL(base, document.location?.origin || undefined);
+	} catch {
+		return base;
+	}
+
+	url.pathname = url.pathname.replace(/\/admin\/?$/, '/');
+
+	const panel = typeof args?.panel === 'string' ? args.panel.trim() : '';
+	if (panel.startsWith('tab-')) {
+		const panelSlug = panel.slice('tab-'.length);
+		if (panelSlug) {
+			const pattern = new RegExp(`/${panelSlug}/?$`);
+			url.pathname = url.pathname.replace(pattern, '/');
+		}
+	}
+
+	return url.href;
+}
+
+/**
+ * Resolve a host-relative asset path against the host root base.
+ *
+ * @param {string} relativePath Host-relative asset path.
+ * @returns {string} Absolute URL or the raw path when base resolution fails.
+ */
+function resolveHostAssetUrl(relativePath) {
+	const raw = typeof relativePath === 'string' ? relativePath.trim() : '';
+	if (!raw) {
+		return '';
+	}
+	const base = resolveHostRootBase();
+	try {
+		return new URL(raw, base || document.baseURI).href;
+	} catch {
+		return raw;
+	}
+}
+
+/**
  * Returns the producer-local id of a core panel.
  *
  * @param {string} registryKey - JS object key in registry.panels.
@@ -136,12 +189,12 @@ function isSupportedAppIconSlot(slot) {
 }
 
 /**
- * Translate one backend-owned icon path into the current host-visible asset path.
+ * Normalize one resolved app icon path for the current host.
  *
- * Backend icon contracts currently resolve under `admin/icons/...`.
- * The AdminTab host serves those assets under `icons/...`.
+ * `resolvedAppIcons` already carries host-relative asset paths, so the shell only
+ * accepts and reuses that effective host truth.
  *
- * @param {string} iconPath Backend-owned icon path.
+ * @param {string} iconPath Host-relative icon path.
  * @returns {string|null} Host-visible icon path or null.
  */
 function toCurrentHostIconUrl(iconPath) {
@@ -149,10 +202,7 @@ function toCurrentHostIconUrl(iconPath) {
 	if (!rawPath) {
 		return null;
 	}
-	if (rawPath.startsWith('admin/')) {
-		return rawPath.slice('admin/'.length);
-	}
-	return rawPath;
+	return resolveHostAssetUrl(rawPath);
 }
 
 /**
@@ -292,8 +342,8 @@ function createResolvedIconMap() {
  * Resolves the complete icon asset metadata for one app slot.
  *
  * The effective icon-slot policy is backend-owned and arrives through
- * `descriptor.resolvedAppIcons`. The AdminTab host only translates those
- * canonical paths into its runtime-visible asset URLs.
+ * `descriptor.resolvedAppIcons`. The AdminTab host only consumes those
+ * host-relative asset paths as runtime-visible URLs.
  *
  * @param {object} descriptor Canonical panel descriptor.
  * @param {string} slot Fixed app icon slot name.
@@ -323,7 +373,7 @@ async function resolveIconAsset(descriptor, slot) {
  * Resolves an app icon URL for a canonical panel descriptor.
  *
  * The effective icon path is backend-owned and comes from `resolvedAppIcons`.
- * The host only translates that canonical path into a runtime-visible asset URL.
+ * The host only consumes that host-relative asset path as a runtime-visible URL.
  * Missing icon metadata or unsupported slots degrade to `null`.
  *
  * @param {object} descriptor Canonical panel descriptor.
@@ -531,7 +581,7 @@ async function applyAppHeadMeta(descriptor) {
 		};
 	}
 
-	setOrRemoveHeadLink('apple-touch-icon', resolvedIcons.apple180?.url || '');
+	setOrRemoveHeadLink('apple-touch-icon', resolvedIcons.apple180?.src || '');
 
 	const manifest = generateManifest(descriptor, resolvedIcons);
 	if (manifest) {

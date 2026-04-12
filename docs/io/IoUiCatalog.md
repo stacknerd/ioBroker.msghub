@@ -114,7 +114,7 @@ Where:
 - `composition` is either a registry composition or a synthetic single composition
 - `corePanels` contains only resolved native/core panel definitions
 - `pluginPanels` contains only resolved plugin-owned panel definitions keyed by canonical runtime panel id
-- `corePanels[*].resolvedAppIcons` and `pluginPanels[*].resolvedAppIcons` expose the effective host-ready icon slots resolved by `IoUiCatalog`
+- `corePanels[*].resolvedAppIcons` and `pluginPanels[*].resolvedAppIcons` expose the effective host-relative icon slots resolved by `IoUiCatalog`
 - plugin-owned Admin-UI i18n is intentionally absent from `pluginPanels[*]`
 - `request` is the normalized request object that was actually resolved
 
@@ -232,18 +232,18 @@ Strict null/error behavior:
 Core panels:
 
 - producer source remains `panel.app.icons`
-- `IoUiCatalog` resolves those filenames to host-ready paths under `admin/icons/<panelId>/...`
+- `IoUiCatalog` resolves those filenames to host-relative asset paths under `icons/<panelId>/...`
 
 Plugin panels:
 
 - plugin-owned `app.icons` are not part of the panel-app consumer contract here
 - plugin-owned `app.icons` are stripped from the returned `app` payload
 - `IoUiCatalog` always resolves plugin panel app icons to the fixed host set:
-  - `admin/icons/pluginUI/pluginUI-192.png`
-  - `admin/icons/pluginUI/pluginUI-512.png`
-  - `admin/icons/pluginUI/pluginUI-maskable-192.png`
-  - `admin/icons/pluginUI/pluginUI-maskable-512.png`
-  - `admin/icons/pluginUI/pluginUI-apple-180.png`
+  - `icons/pluginUI/pluginUI-192.png`
+  - `icons/pluginUI/pluginUI-512.png`
+  - `icons/pluginUI/pluginUI-maskable-192.png`
+  - `icons/pluginUI/pluginUI-maskable-512.png`
+  - `icons/pluginUI/pluginUI-apple-180.png`
 
 This normalization is shared by:
 

@@ -10,6 +10,8 @@ If you are looking for plugin implementation details, jump to [`docs/plugins/REA
 
 Detailed UI documents and generated implementation docs are linked at the bottom of this page.
 
+For the public path-based web host that reuses the AdminTab shell through the ioBroker `web` adapter, see [`./web.md`](./web.md).
+
 ## What the Admin UI is (and what it is not)
 
 The current Message Hub UI is the **Admin Tab** inside the ioBroker admin interface.
@@ -118,6 +120,18 @@ The UI follows a few consistent design ideas:
 - **composition over special cases**: core panels and plugin-owned panels should fit into one host model
 - **plugin ownership stays with plugins**: plugin-specific UI, RPC, i18n, and related assets belong to the plugin
 - **lightweight host layer**: the Admin Tab host should stay generic and avoid plugin-specific knowledge
+
+## Public Web Host
+
+Besides the embedded Admin Tab, Message Hub also has a path-based public host entry in [`/web.js`](/home/pi/ioBroker.msghub/web.js).
+
+That host:
+
+- runs in the ioBroker `web` adapter context
+- reuses the AdminTab shell
+- resolves panel apps through narrow internal adapter bridges into the running MsgHub adapter
+
+Read more: [`./web.md`](./web.md)
 - **one source of truth per concern**: core owns message semantics, plugins own integration semantics, the UI owns presentation and operator flow
 
 This is also why the recent plugin-owned Admin UI work matters:
@@ -203,4 +217,5 @@ Then continue based on your question:
 - `tab-ui`: [`./tab-ui.md`](./tab-ui.md)
 - `tab`: [`./tab.md`](./tab.md)
 - `url-parameters`: [`./url-parameters.md`](./url-parameters.md)
+- `web`: [`./web.md`](./web.md)
 <!-- AUTO-GENERATED:UI-INDEX:END -->

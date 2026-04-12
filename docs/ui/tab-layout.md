@@ -188,7 +188,7 @@ When `descriptor.app` is present, `applyAppHeadMeta(descriptor)` runs asynchrono
 `layout.js` resolves app icons generically for both descriptor kinds:
 
 - both descriptor kinds: host-visible URLs derived from `descriptor.resolvedAppIcons[slot]`
-- current AdminTab translation: canonical backend paths `admin/icons/...` become `icons/...`
+- `resolvedAppIcons` already contains the effective host-relative asset paths (`icons/...`)
 
 For the generated manifest, icon entries are emitted as browser-loadable runtime URLs:
 
@@ -233,8 +233,8 @@ Optional fields are passed through from `contrib` when present:
   icon slots arrive through the backend-owned `resolvedAppIcons` map. When present, `updateDocumentTitle`
   will call `applyAppHeadMeta` with `app`. When absent, the field is `undefined` on the descriptor —
   no error, no head-meta update.
-- `resolvedAppIcons` — backend-owned effective icon-slot map. The shell consumes it as-is and only
-  translates the canonical `admin/icons/...` paths into the current host-visible asset URLs.
+- `resolvedAppIcons` — backend-owned effective icon-slot map. The shell consumes it as-is; each slot value
+  is already the current host-relative asset path (`icons/...`).
 
 ### `registerPanelDescriptor(descriptor)`
 
@@ -247,7 +247,7 @@ Provides the lookup needed by the no-arg form of `updateDocumentTitle`.
 Resolves one app-icon URL from a canonical `PanelDescriptor`.
 
 - returns the current host-visible URL derived from `descriptor.resolvedAppIcons[slot]`
-- currently translates canonical backend paths from `admin/icons/...` to `icons/...`
+- consumes the backend-provided host-relative asset path directly
 - missing icon slots, unsupported slots, or malformed descriptors return `null`
 
 This function no longer derives icon policy locally. Callers receive the same

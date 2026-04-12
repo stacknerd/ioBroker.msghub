@@ -69,6 +69,7 @@ The current IO layer is responsible for several distinct kinds of work:
   - neutral UI bootstrap/about payload via `IoAdminCapabilities`
   - handling runtime commands for the Admin UI
   - brokering plugin-owned Admin UI bundle/RPC paths
+  - hosting the public path-based web shell in `web.js` through narrow internal adapter bridges
 - **platform-side state surfaces**
   - connection/health-related adapter state surfaces
   - managed metadata/watchlist persistence where needed
@@ -109,6 +110,9 @@ Typical examples are:
   - adapter-side bridge for Admin UI/backend commands
 - `IoWebUi`
   - adapter-side bridge for web-safe runtime/backend commands
+- `web.js`
+  - public path-based host for `/MessageHub/<instance>/<panelId>/...`
+  - reuses `admin/tab.html` and resolves panel apps / plugin-manifest i18n through narrow internal bridges
 - `IoPlugins`
   - adapter-side plugin runtime orchestration
 - `IoPluginResources`
@@ -186,6 +190,5 @@ Then continue based on your question:
 - `IoStorageIobroker`: [`./IoStorageIobroker.md`](./IoStorageIobroker.md)
 - `IoUiCatalog`: [`./IoUiCatalog.md`](./IoUiCatalog.md)
 - `IoUiRegistry`: [`./IoUiRegistry.md`](./IoUiRegistry.md)
-- `IoWebExtension`: [`./IoWebExtension.md`](./IoWebExtension.md)
 - `IoWebUi`: [`./IoWebUi.md`](./IoWebUi.md)
 <!-- AUTO-GENERATED:IO-INDEX:END -->

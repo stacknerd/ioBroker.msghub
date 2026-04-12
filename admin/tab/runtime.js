@@ -44,7 +44,9 @@ const FORWARDED_ARGS_MARKER_ID = 'msghub-forwarded-args';
  * @returns {object} Raw decoded query key/value map.
  */
 function parseRawQueryArgs(rawSearch) {
-	const q = String(rawSearch || '').replace(/^\?/, '').replace(/#.*$/, '');
+	const q = String(rawSearch || '')
+		.replace(/^\?/, '')
+		.replace(/#.*$/, '');
 	const out = {};
 	for (const pair of q.split('&')) {
 		const p = pair.trim();

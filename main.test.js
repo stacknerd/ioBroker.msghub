@@ -608,6 +608,120 @@ describe('main.js message routing (AP3 bootstrap)', () => {
 		]);
 	});
 
+	it('routes internal.uiCatalog.getApp through the shared IoUiCatalog instance', async () => {
+		const createAdapter = loadMainFactoryForTest();
+		const sent = [];
+		const adapter = createAdapter();
+		adapter._uiCatalog = {
+			getApp: async request => {
+				expect(request).to.deep.equal({ mode: 'panel', targetId: 'tab-messages' });
+				return { id: 'messages', app: { name: 'Messages' } };
+			},
+		};
+		adapter.sendTo = function sendTo(from, command, result, callback) {
+			sent.push({ from, command, result, callback });
+		};
+
+		await adapter.onMessage({
+			from: 'system.adapter.test',
+			command: 'internal.uiCatalog.getApp',
+			message: { mode: 'panel', targetId: 'tab-messages' },
+			callback: 'cb-internal',
+		});
+
+		expect(sent).to.deep.equal([
+			{
+				from: 'system.adapter.test',
+				command: 'internal.uiCatalog.getApp',
+				result: { id: 'messages', app: { name: 'Messages' } },
+				callback: 'cb-internal',
+			},
+		]);
+	});
+
+	it('routes internal.IoPlugins.readAdminUiBundle through IoPlugins and enforces parts=[\"i18n\"]', async () => {
+		const createAdapter = loadMainFactoryForTest();
+		const sent = [];
+		const adapter = createAdapter();
+		adapter._msgPlugins = {
+			readAdminUiBundle: async request => {
+				expect(request).to.deep.equal({
+					type: 'IngestStates',
+					panelId: 'presets',
+					lang: 'de',
+					parts: ['i18n'],
+				});
+				return {
+					i18n: {
+						lang: 'de',
+						translations: {
+							'msghub.i18n.IngestStates.ui.panels.presets.app.name': 'Voreinstellungen',
+						},
+					},
+				};
+			},
+		};
+		adapter.sendTo = function sendTo(from, command, result, callback) {
+			sent.push({ from, command, result, callback });
+		};
+
+		await adapter.onMessage({
+			from: 'system.adapter.test',
+			command: 'internal.IoPlugins.readAdminUiBundle',
+			message: {
+				type: 'IngestStates',
+				panelId: 'presets',
+				lang: 'de',
+				parts: ['js', 'css'],
+			},
+			callback: 'cb-internal-bundle',
+		});
+
+		expect(sent).to.deep.equal([
+			{
+				from: 'system.adapter.test',
+				command: 'internal.IoPlugins.readAdminUiBundle',
+				result: {
+					i18n: {
+						lang: 'de',
+						translations: {
+							'msghub.i18n.IngestStates.ui.panels.presets.app.name': 'Voreinstellungen',
+						},
+					},
+				},
+				callback: 'cb-internal-bundle',
+			},
+		]);
+	});
+
+	it('routes unknown internal.* commands through the internal dispatcher and returns UNKNOWN_COMMAND', async () => {
+		const createAdapter = loadMainFactoryForTest();
+		const sent = [];
+		const adapter = createAdapter();
+		adapter.sendTo = function sendTo(from, command, result, callback) {
+			sent.push({ from, command, result, callback });
+		};
+
+		await adapter.onMessage({
+			from: 'system.adapter.test',
+			command: 'internal.unknown',
+			message: { ignored: true },
+			callback: 'cb-internal-unknown',
+		});
+
+		expect(sent).to.deep.equal([
+			{
+				from: 'system.adapter.test',
+				command: 'internal.unknown',
+				result: {
+					ok: false,
+					error: { code: 'UNKNOWN_COMMAND', message: 'Unknown internal command: internal.unknown' },
+				},
+				callback: 'cb-internal-unknown',
+			},
+		]);
+	});
+
 	it('routes ui.bootstrap through IoAdminCapabilities for the admin host', async () => {
 		const createAdapter = loadMainFactoryForTest();
 		const sent = [];

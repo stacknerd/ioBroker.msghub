@@ -1,21 +1,21 @@
 # Admin Tab URL Parameters
 
 This page documents the supported URL and hash inputs for `admin/tab.html` as implemented today.
-The same canonical query targets are also the source for the prepared Public-Web URLs introduced by the `web` composition contract.
+The same canonical query targets also remain the internal shell targets behind the public Single-WebApp host under `/MessageHub/<instance>/<panelId>/`.
 
 ## Supported query parameters
 
-| Parameter | Values | Behavior |
-| --- | --- | --- |
-| `instance` | integer-like | Selects the adapter instance. Invalid or missing values fall back to `0`, so the page uses `msghub.<instance>`. |
-| `lang` | language code | Selects the initial UI language. Missing or blank values fall back to the browser base language. |
-| `locale` | locale string | Overrides only the frontend format locale when the value is non-empty and accepted by `Intl.DateTimeFormat(...)`. Missing, blank, or invalid values leave the existing frontend format-locale source unchanged. |
-| `composition` | composition id | Produces `web.view.get({ mode: 'composition', targetId })`. |
-| `panel` | `tab-...` | Produces `web.view.get({ mode: 'panel', targetId })`. `panel` takes precedence over `composition`. |
-| `expert` | `true`, `1`, bare `?expert`, or any other present value | Normalized by `runtime.js` only when the key is present. `true`, `1`, and bare `?expert` become `true`; every other present value becomes `false`. |
-| `theme` | `dark`, `light` | Canonical theme override. When valid, it wins over host, storage, and media-query theme detection. |
-| `react` | `dark`, `light` | Legacy theme alias. It is only consulted when `theme` is absent. |
-| `debugTheme` | `true`, `1`, or bare `?debugTheme` | Debug-only flag. Only those values enable it. When enabled, `applyTheme(...)` mirrors the effective theme to `window.__msghubAdminTabTheme`. |
+| Parameter     | Values                                                  | Behavior                                                                                                                                                                                                        |
+| ------------- | ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `instance`    | integer-like                                            | Selects the adapter instance. Invalid or missing values fall back to `0`, so the page uses `msghub.<instance>`.                                                                                                 |
+| `lang`        | language code                                           | Selects the initial UI language. Missing or blank values fall back to the browser base language.                                                                                                                |
+| `locale`      | locale string                                           | Overrides only the frontend format locale when the value is non-empty and accepted by `Intl.DateTimeFormat(...)`. Missing, blank, or invalid values leave the existing frontend format-locale source unchanged. |
+| `composition` | composition id                                          | Produces `web.view.get({ mode: 'composition', targetId })`.                                                                                                                                                     |
+| `panel`       | `tab-...`                                               | Produces `web.view.get({ mode: 'panel', targetId })`. `panel` takes precedence over `composition`.                                                                                                              |
+| `expert`      | `true`, `1`, bare `?expert`, or any other present value | Normalized by `runtime.js` only when the key is present. `true`, `1`, and bare `?expert` become `true`; every other present value becomes `false`.                                                              |
+| `theme`       | `dark`, `light`                                         | Canonical theme override. When valid, it wins over host, storage, and media-query theme detection.                                                                                                              |
+| `react`       | `dark`, `light`                                         | Legacy theme alias. It is only consulted when `theme` is absent.                                                                                                                                                |
+| `debugTheme`  | `true`, `1`, or bare `?debugTheme`                      | Debug-only flag. Only those values enable it. When enabled, `applyTheme(...)` mirrors the effective theme to `window.__msghubAdminTabTheme`.                                                                    |
 
 Unknown query keys are preserved on `args` and are available to native panels through `ctx.args`.
 
@@ -73,9 +73,9 @@ Current semantics:
 
 - Native panels receive the normalized value through `ctx.args.expert`.
 - `api.host.isExpertMode()` resolves expert mode additively from:
-  - `args.expert === true`
-  - `sessionStorage['App.expertMode'] === 'true'`
-  - `window._system.expertMode` or `window.top._system.expertMode`
+    - `args.expert === true`
+    - `sessionStorage['App.expertMode'] === 'true'`
+    - `window._system.expertMode` or `window.top._system.expertMode`
 - The Messages panel uses the same additive model through `detectExpertMode(ctx.args?.expert)`.
 
 Additive means:
@@ -107,12 +107,32 @@ Today, the Messages panel uses expert mode to enable multi-selection and bulk de
 /admin/tab.html?instance=1&react=dark
 ```
 
-## Prepared Public-Web mapping
+## Public Single-WebApp mapping
 
-This package does not turn the Public-Web host on.
-It only fixes the canonical target mapping that later host-specific routing must use:
+The public host is path-based and panel-app-only:
 
-- Admin-shell single-panel target: `?panel=tab-messages`
-- Later canonical Public-Web app URL: `/msghubUi/<instance>/tab-messages/`
-- Admin-shell web-root target: `?composition=web`
-- Later canonical Public-Web root URL: `/msghubUi/<instance>/`
+- public shell URL: `/MessageHub/<instance>/<panelId>/`
+- public icon assets: `/MessageHub/<instance>/icons/...`
+
+The shell itself still boots through the canonical internal query targets:
+
+- public path `<panelId>` becomes internal forwarded `panel=tab-<panelId>`
+- public path `<instance>` becomes internal forwarded `instance=<instance>`
+- `composition` is host-owned and forwarded as `adminTab`
+
+Current forwarded marker payload injected by the public host:
+
+```json
+{
+  "instance": "<instance>",
+  "panel": "tab-<panelId>",
+  "composition": "adminTab"
+}
+```
+
+Important invariants:
+
+- the browser URL stays the public path-based URL
+- there is no client-side URL rewrite for boot
+- public query args `instance`, `panel`, and `composition` never control shell bootstrap
+- the public host does not expose a server-side `manifest.webmanifest`; install metadata is generated client-side by `layout.js`

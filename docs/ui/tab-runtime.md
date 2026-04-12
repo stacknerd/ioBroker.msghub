@@ -62,7 +62,7 @@ Current marker shape:
 
 ```html
 <script id="msghub-forwarded-args" type="application/json">
-{"instance":"0","panel":"tab-messages"}
+{"instance":"0","panel":"tab-messages","composition":"adminTab"}
 </script>
 ```
 
@@ -74,7 +74,7 @@ Notable behavior:
 - `instance` defaults to `0` and is coerced to an integer
 - `lang` falls back to the browser base language when missing or blank
 - `locale` is trimmed and removed when blank
-- `composition` is trimmed and removed when blank
+- `composition` is trimmed and removed when blank; the public host currently forwards `adminTab`
 - `panel` is trimmed and removed when blank; consumed downstream to activate Single-Panel mode
 - `expert` is normalized only when the key is present
 - `theme` and `react` stay raw so later theme helpers can apply the canonical precedence rules

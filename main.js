@@ -100,6 +100,7 @@ class Msghub extends utils.Adapter {
 		// AdminTab command facade (initialized in onReady)
 		this._adminTab = null;
 		this._webUi = null;
+		this._uiCatalog = null;
 
 		// Official platform-side core-link connection state.
 		this._coreConnection = null;
@@ -217,7 +218,7 @@ class Msghub extends utils.Adapter {
 			log: this.log,
 		});
 		const pluginUiRpc = new IoPluginUiRpc(this, this._msgPlugins, { pluginPanelResolver });
-		const uiCatalog = new IoUiCatalog({ pluginPanelResolver });
+		this._uiCatalog = new IoUiCatalog({ pluginPanelResolver });
 
 		// Keep AdminTab operational even if plugin wiring fails,
 		// so Stats/Messages diagnostics remain available.
@@ -232,7 +233,7 @@ class Msghub extends utils.Adapter {
 			ioPlugins: this._msgPlugins,
 			pluginPanelResolver,
 			pluginUiRpc,
-			uiCatalog,
+			uiCatalog: this._uiCatalog,
 			adminCapabilities: this._adminCapabilities,
 		});
 		this._adminConfig = new IoAdminConfig(this, {
@@ -342,7 +343,9 @@ class Msghub extends utils.Adapter {
 		let result;
 
 		try {
-			if (typeof cmd === 'string' && cmd.startsWith('admin.')) {
+			if (typeof cmd === 'string' && cmd.startsWith('internal.')) {
+				result = await this._handleInternalCommand(cmd, payload);
+			} else if (typeof cmd === 'string' && cmd.startsWith('admin.')) {
 				result = await this._handleAdminCommand(cmd, payload);
 			} else if (typeof cmd === 'string' && cmd.startsWith('web.')) {
 				result = await this._handleWebCommand(cmd, payload);
@@ -382,6 +385,28 @@ class Msghub extends utils.Adapter {
 			return { ok: false, error: { code: 'NOT_READY', message: 'AdminTab runtime not ready' } };
 		}
 		return await this._adminTab.handleCommand(cmd, payload);
+	}
+
+	async _handleInternalCommand(cmd, payload) {
+		switch (cmd) {
+			case 'internal.uiCatalog.getApp':
+				if (!this._uiCatalog || typeof this._uiCatalog.getApp !== 'function') {
+					return null;
+				}
+				return await this._uiCatalog.getApp(payload);
+			case 'internal.IoPlugins.readAdminUiBundle':
+				if (!this._msgPlugins || typeof this._msgPlugins.readAdminUiBundle !== 'function') {
+					return { ok: false, error: { code: 'NOT_READY', message: 'IoPlugins runtime not ready' } };
+				}
+				return await this._msgPlugins.readAdminUiBundle({
+					type: payload?.type,
+					panelId: payload?.panelId,
+					lang: payload?.lang,
+					parts: ['i18n'],
+				});
+			default:
+				return { ok: false, error: { code: 'UNKNOWN_COMMAND', message: `Unknown internal command: ${cmd}` } };
+		}
 	}
 
 	async _handleWebCommand(cmd, payload) {
