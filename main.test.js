@@ -581,9 +581,10 @@ describe('main.js message routing (AP3 bootstrap)', () => {
 		const sent = [];
 		const adapter = createAdapter();
 		adapter._webUi = {
-			handleCommand: async (command, payload) => {
+			handleCommand: async (command, payload, { host }) => {
 				expect(command).to.equal('web.ping');
-				expect(payload).to.deep.equal({ hello: 'world' });
+				expect(host).to.equal('admin');
+				expect(payload).to.deep.equal({ hello: 'world', host: 'admin' });
 				return { ok: true, data: 'pong' };
 			},
 		};
@@ -760,6 +761,94 @@ describe('main.js message routing (AP3 bootstrap)', () => {
 				callback: 'cb1',
 			},
 		]);
+	});
+
+	it('routes ui.bootstrap through IoAdminCapabilities for the web host when bridged server-side', async () => {
+		const createAdapter = loadMainFactoryForTest();
+		const adapter = createAdapter();
+		const seenHosts = [];
+		adapter._adminCapabilities = {
+			buildBootstrap({ host }) {
+				seenHosts.push(host);
+				return {
+					capabilities: { web: { token: 'web-token', expiresAt: '2999-01-01T00:00:00.000Z' } },
+					about: { title: 'Message Hub', version: '0.0.3-test' },
+				};
+			},
+		};
+		const sent = [];
+		adapter.sendTo = function sendTo(from, command, result, callback) {
+			sent.push({ from, command, result, callback });
+		};
+
+		await adapter.onMessage({
+			from: 'system.adapter.web.0',
+			command: 'ui.bootstrap',
+			message: {},
+			callback: 'cb-web-bootstrap-empty-host',
+		});
+		await adapter.onMessage({
+			from: 'system.adapter.web.0',
+			command: 'ui.bootstrap',
+			message: { host: 'admin' },
+			callback: 'cb-web-bootstrap-wrong-host',
+		});
+
+		expect(seenHosts).to.deep.equal(['webExtension', 'webExtension']);
+
+		expect(sent).to.deep.equal([
+			{
+				from: 'system.adapter.web.0',
+				command: 'ui.bootstrap',
+				result: {
+					ok: true,
+					data: {
+						capabilities: { web: { token: 'web-token', expiresAt: '2999-01-01T00:00:00.000Z' } },
+						about: { title: 'Message Hub', version: '0.0.3-test' },
+					},
+				},
+				callback: 'cb-web-bootstrap-empty-host',
+			},
+			{
+				from: 'system.adapter.web.0',
+				command: 'ui.bootstrap',
+				result: {
+					ok: true,
+					data: {
+						capabilities: { web: { token: 'web-token', expiresAt: '2999-01-01T00:00:00.000Z' } },
+						about: { title: 'Message Hub', version: '0.0.3-test' },
+					},
+				},
+				callback: 'cb-web-bootstrap-wrong-host',
+			},
+		]);
+	});
+
+	it('ignores client-authored host overrides outside the trusted web-adapter bridge', async () => {
+		const createAdapter = loadMainFactoryForTest();
+		const adapter = createAdapter();
+		let seenHost = '';
+		let seenPayload = null;
+		adapter._webUi = {
+			handleCommand(command, payload, { host }) {
+				expect(command).to.equal('web.ping');
+				seenHost = host;
+				seenPayload = payload;
+				return { ok: true, data: 'pong' };
+			},
+		};
+		adapter.sendTo = function sendTo() {};
+
+		await adapter.onMessage({
+			from: 'system.adapter.admin.0',
+			command: 'web.ping',
+			message: { host: 'webExtension', token: 'client-token' },
+			callback: 'cb-ignore-host',
+		});
+
+		expect(seenHost).to.equal('admin');
+		expect(seenPayload.host).to.equal('admin');
+		expect(seenPayload.token).to.equal('client-token');
 	});
 
 	it('keeps runtime.about on the shared about payload from IoAdminCapabilities', async () => {

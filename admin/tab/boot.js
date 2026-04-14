@@ -792,6 +792,7 @@ function updateConnectionPanel() {
 				)
 			: dash,
 	);
+	set('msghub-conn-transport', typeof args?.transport === 'string' && args.transport === 'http' ? 'http' : 'socket');
 	const rawHostUrl = msghubSocket?.url || msghubSocket?.io?.uri;
 	let hostDisplay = dash;
 	if (rawHostUrl) {
@@ -799,6 +800,12 @@ function updateConnectionPanel() {
 			hostDisplay = new URL(rawHostUrl).origin;
 		} catch {
 			hostDisplay = rawHostUrl;
+		}
+	} else {
+		try {
+			hostDisplay = new URL(document?.baseURI || window?.location?.href || '').origin || dash;
+		} catch {
+			hostDisplay = dash;
 		}
 	}
 	set('msghub-conn-host', hostDisplay);
@@ -1589,18 +1596,20 @@ async function sendPing() {
 }
 
 // Transport-level reconnect: verify health with a ping before declaring online.
-msghubSocket.on('connect', () => {
-	void sendPing();
-});
+if (msghubSocket && typeof msghubSocket.on === 'function') {
+	msghubSocket.on('connect', () => {
+		void sendPing();
+	});
 
-// Transport-level disconnect: go offline immediately, keep pinging for recovery.
-msghubSocket.on('disconnect', () => {
-	pingToken++;
-	if (connOnline) {
-		onBecomeOffline();
-	}
-	startReconnectRecovery('disconnect');
-});
+	// Transport-level disconnect: go offline immediately, keep pinging for recovery.
+	msghubSocket.on('disconnect', () => {
+		pingToken++;
+		if (connOnline) {
+			onBecomeOffline();
+		}
+		startReconnectRecovery('disconnect');
+	});
+}
 
 // Periodic health check — catches backend-dead / silently-broken socket scenarios.
 setInterval(() => void sendPing(), PING_INTERVAL_MS);

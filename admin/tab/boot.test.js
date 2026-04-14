@@ -382,6 +382,7 @@ globalThis.__applyRuntimeAboutPayload = applyRuntimeAboutPayload;
 		const elMap = {
 			'msghub-conn-status':       makeEl(),
 			'msghub-conn-core-connection': makeEl(),
+			'msghub-conn-transport':    makeEl(),
 			'msghub-conn-host':         makeEl(),
 			'msghub-conn-adapter':      makeEl(),
 			'msghub-conn-latency':      makeEl(),
@@ -414,6 +415,7 @@ globalThis.__fn = updateConnectionPanel;
 			{
 				document: { getElementById: id => elMap[id] || null },
 				t: (key, arg) => arg != null ? `${key}:${arg}` : key,
+				transport: 'socket',
 				msghubSocket: { url: 'http://localhost:8081', io: { uri: 'http://localhost:8081' } },
 				adapterInstance: 'msghub.0',
 				args: {},
@@ -430,6 +432,7 @@ globalThis.__fn = updateConnectionPanel;
 			'msghub.i18n.core.admin.ui.connection.panel.connected.text');
 		assert.equal(elMap['msghub-conn-core-connection'].textContent,
 			'msghub.i18n.core.admin.ui.connection.panel.connected.text');
+		assert.equal(elMap['msghub-conn-transport'].textContent, 'socket');
 		assert.equal(elMap['msghub-conn-host'].textContent, 'http://localhost:8081');
 		assert.equal(elMap['msghub-conn-adapter'].textContent, 'msghub.0');
 		assert.match(elMap['msghub-conn-latency'].textContent, /42/);
@@ -453,6 +456,7 @@ globalThis.__fn = updateConnectionPanel;
 		const elMap = {
 			'msghub-conn-status':       makeEl(),
 			'msghub-conn-core-connection': makeEl(),
+			'msghub-conn-transport':    makeEl(),
 			'msghub-conn-host':         makeEl(),
 			'msghub-conn-adapter':      makeEl(),
 			'msghub-conn-latency':      makeEl(),
@@ -483,7 +487,7 @@ globalThis.__fn = updateConnectionPanel;
 				t: key => key,
 				msghubSocket: null,
 				adapterInstance: 'msghub.0',
-				args: { locale: 'de-DE' },
+				args: { locale: 'de-DE', transport: 'http' },
 				lang: 'en',
 				navigator: { language: 'en-US' },
 				Intl: {
@@ -501,6 +505,7 @@ globalThis.__fn = updateConnectionPanel;
 		);
 
 		sandbox.__fn();
+		assert.equal(elMap['msghub-conn-transport'].textContent, 'http');
 		assert.equal(elMap['msghub-conn-fe-fmt'].textContent, 'de-DE');
 	});
 
@@ -524,6 +529,7 @@ globalThis.__fn = updateConnectionPanel;
 		const elMap = {
 			'msghub-conn-status':       makeEl(),
 			'msghub-conn-core-connection': makeEl(),
+			'msghub-conn-transport':    makeEl(),
 			'msghub-conn-host':         makeEl(),
 			'msghub-conn-adapter':      makeEl(),
 			'msghub-conn-latency':      makeEl(),
@@ -556,6 +562,7 @@ globalThis.__fn = updateConnectionPanel;
 			{
 				document: { getElementById: id => elMap[id] || null },
 				t: key => key,
+				transport: 'socket',
 				msghubSocket: null,
 				adapterInstance: null,
 				args: {},
@@ -571,11 +578,21 @@ globalThis.__fn = updateConnectionPanel;
 		assert.equal(elMap['msghub-conn-latency'].textContent, '—');
 		assert.equal(elMap['msghub-conn-core-connection'].textContent,
 			'msghub.i18n.core.admin.ui.connection.panel.disconnected.text');
+		assert.equal(elMap['msghub-conn-transport'].textContent, 'socket');
 		assert.equal(elMap['msghub-conn-host'].textContent, '—');
 		assert.equal(elMap['msghub-conn-adapter'].textContent, '—');
 		// serverTz=Europe/Berlin, browserTz=Europe/Berlin → same → hint hidden
 		assert.equal(tzHintHidden, true);
 		assert.equal(tzHintAriaHidden, 'true');
+	});
+
+	it('uses the static transport row from admin/tab.html and no longer injects it dynamically', async function () {
+		const bootSource = await readRepoFile('admin/tab/boot.js');
+		const htmlSource = await readRepoFile('admin/tab.html');
+
+		assert.doesNotMatch(bootSource, /ensureConnectionPanelTransportRow/);
+		assert.match(htmlSource, /msghub\.i18n\.core\.admin\.ui\.connection\.panel\.field\.transport/);
+		assert.match(htmlSource, /id="msghub-conn-transport"/);
 	});
 
 	it('applyStaticI18n() refreshes the document title after translating visible text', async function () {

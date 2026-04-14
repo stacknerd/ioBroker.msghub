@@ -78,6 +78,10 @@ function sanitizeForLog(value) {
 	return out;
 }
 
+function isObjectRecord(value) {
+	return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
 class Msghub extends utils.Adapter {
 	/**
 	 * @param {Partial<utils.AdapterOptions>} [options] - Adapter options
@@ -338,23 +342,25 @@ class Msghub extends utils.Adapter {
 
 		const cmd = obj.command;
 		const payload = obj.message;
+		const host = this._resolveServerHostHint({ from: obj.from });
+		const hostPayload = this._applyServerHostHint(payload, host);
 
-		this.log?.silly?.(`MsgHub main.js onMessage: '${cmd}' ${JSON.stringify(sanitizeForLog(payload), null, 2)}`);
+		this.log?.silly?.(`MsgHub main.js onMessage: '${cmd}' ${JSON.stringify(sanitizeForLog(hostPayload), null, 2)}`);
 		let result;
 
 		try {
 			if (typeof cmd === 'string' && cmd.startsWith('internal.')) {
 				result = await this._handleInternalCommand(cmd, payload);
 			} else if (typeof cmd === 'string' && cmd.startsWith('admin.')) {
-				result = await this._handleAdminCommand(cmd, payload);
+				result = await this._handleAdminCommand(cmd, hostPayload, host);
 			} else if (typeof cmd === 'string' && cmd.startsWith('web.')) {
-				result = await this._handleWebCommand(cmd, payload);
+				result = await this._handleWebCommand(cmd, hostPayload, host);
 			} else if (typeof cmd === 'string' && cmd.startsWith('config.')) {
-				result = await this._handleConfigCommand(cmd, payload);
+				result = await this._handleConfigCommand(cmd, hostPayload, host);
 			} else if (cmd === 'ui.bootstrap') {
 				result = {
 					ok: true,
-					data: this._adminCapabilities.buildBootstrap({ host: 'admin' }),
+					data: this._adminCapabilities.buildBootstrap({ host }),
 				};
 			} else if (cmd === 'runtime.about') {
 				result = {
@@ -380,11 +386,33 @@ class Msghub extends utils.Adapter {
 		);
 	}
 
-	async _handleAdminCommand(cmd, payload) {
+	/**
+	 * Resolves the trusted server-side host hint from the sender metadata.
+	 *
+	 * @param {{ from?: string }} [input] Message envelope subset carrying the sender id.
+	 * @returns {'admin' | 'webExtension'} Trusted host classification for downstream facade routing.
+	 */
+	_resolveServerHostHint({ from } = {}) {
+		const fromId = typeof from === 'string' ? from.trim() : '';
+		const isWebAdapter = /^system\.adapter\.web\.\d+$/.test(fromId);
+		if (isWebAdapter) {
+			return 'webExtension';
+		}
+		return 'admin';
+	}
+
+	_applyServerHostHint(payload, host) {
+		const normalizedHost = host === 'webExtension' ? 'webExtension' : 'admin';
+		const safePayload = isObjectRecord(payload) ? { ...payload } : {};
+		safePayload.host = normalizedHost;
+		return safePayload;
+	}
+
+	async _handleAdminCommand(cmd, payload, host = 'admin') {
 		if (!this._adminTab) {
 			return { ok: false, error: { code: 'NOT_READY', message: 'AdminTab runtime not ready' } };
 		}
-		return await this._adminTab.handleCommand(cmd, payload);
+		return await this._adminTab.handleCommand(cmd, payload, { host });
 	}
 
 	async _handleInternalCommand(cmd, payload) {
@@ -409,18 +437,18 @@ class Msghub extends utils.Adapter {
 		}
 	}
 
-	async _handleWebCommand(cmd, payload) {
+	async _handleWebCommand(cmd, payload, host = 'admin') {
 		if (!this._webUi) {
 			return { ok: false, error: { code: 'NOT_READY', message: 'Web UI runtime not ready' } };
 		}
-		return await this._webUi.handleCommand(cmd, payload);
+		return await this._webUi.handleCommand(cmd, payload, { host });
 	}
 
-	async _handleConfigCommand(cmd, payload) {
+	async _handleConfigCommand(cmd, payload, host = 'admin') {
 		if (!this._adminConfig) {
 			return { ok: false, error: { code: 'NOT_READY', message: 'Config runtime not ready' } };
 		}
-		return await this._adminConfig.handleCommand(cmd, payload);
+		return await this._adminConfig.handleCommand(cmd, payload, { host });
 	}
 
 	/**

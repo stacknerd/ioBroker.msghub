@@ -113,6 +113,7 @@ function readForwardedArgs() {
  * - `expert`: normalized only when present; `true`, `1`, and bare `?expert` become `true`.
  * - `theme` / `react`: kept as raw strings, including whitespace.
  * - `debugTheme`: kept raw here and normalized later at module load.
+ * - `transport`: normalized to `socket` or `http`; defaults to `socket`.
  * - Unknown keys are preserved.
  * - When a host-forwarded marker is present, forwarded values win over same-named query args.
  *
@@ -158,7 +159,68 @@ function parseQuery() {
 	if (out.expert !== undefined) {
 		out.expert = out.expert === true || out.expert === '1' || out.expert === 'true';
 	}
+	if (out.transport !== undefined) {
+		const transport = typeof out.transport === 'string' ? out.transport.trim().toLowerCase() : '';
+		out.transport = transport === 'http' ? 'http' : 'socket';
+	}
 	return out;
+}
+
+function resolveTransport(queryArgs) {
+	return queryArgs?.transport === 'http' ? 'http' : 'socket';
+}
+
+function normalizeRootPathname(pathname) {
+	const rawPath = typeof pathname === 'string' ? pathname.trim() : '';
+	if (!rawPath) {
+		return '/';
+	}
+	const segments = rawPath.split('/').filter(Boolean);
+	if (segments[segments.length - 1] === 'admin') {
+		segments.pop();
+	}
+	const panel = typeof args?.panel === 'string' ? args.panel.trim() : '';
+	const panelSlug = panel.startsWith('tab-') ? panel.slice('tab-'.length) : '';
+	if (panelSlug && segments.length > 0) {
+		const lastSegment = segments[segments.length - 1];
+		let decodedLastSegment = lastSegment;
+		try {
+			decodedLastSegment = decodeURIComponent(lastSegment);
+		} catch {
+			decodedLastSegment = lastSegment;
+		}
+		if (decodedLastSegment === panelSlug) {
+			segments.pop();
+		}
+	}
+	return `/${segments.join('/')}${segments.length ? '/' : ''}`;
+}
+
+function resolveHostRootUrl() {
+	const base = typeof document?.baseURI === 'string' ? document.baseURI.trim() : '';
+	if (!base) {
+		return '';
+	}
+	let url;
+	try {
+		url = new URL(base, document.location?.origin || undefined);
+	} catch {
+		return '';
+	}
+	url.pathname = normalizeRootPathname(url.pathname);
+	return url.href;
+}
+
+function resolveHttpQueryEndpoint() {
+	const hostRootUrl = resolveHostRootUrl();
+	if (!hostRootUrl) {
+		return 'query';
+	}
+	try {
+		return new URL('query', hostRootUrl).href;
+	} catch {
+		return `${hostRootUrl.replace(/\/?$/, '/')}query`;
+	}
 }
 
 /**
@@ -167,14 +229,22 @@ function parseQuery() {
  * @returns {any} Socket.io client instance.
  */
 function createSocket() {
+	if (transport !== 'socket') {
+		return null;
+	}
+	if (!io || typeof io.connect !== 'function') {
+		return null;
+	}
 	// ioBroker always serves socket.io at /socket.io — regardless of the tab URL path.
 	return io.connect('/', { path: '/socket.io' });
 }
 
 const args = parseQuery();
+const transport = resolveTransport(args);
 const adapterInstance = `msghub.${args.instance}`;
 // Expose on a dedicated property that the admin host will not override.
 window.msghubSocket = createSocket();
+window.msghubTransport = transport;
 const TOKEN_REFRESH_THRESHOLD_MS = 15 * 60 * 1000;
 
 /**
@@ -201,6 +271,11 @@ let bootstrapState = createBootstrapState();
  */
 function sendRawRequest(command, message) {
 	return new Promise((resolve, reject) => {
+		if (!window.msghubSocket || typeof window.msghubSocket.emit !== 'function') {
+			const err = Object.assign(new Error('Socket transport unavailable'), { code: 'NO_SOCKET' });
+			reject(err);
+			return;
+		}
 		window.msghubSocket.emit('sendTo', adapterInstance, command, message, res => {
 			if (!res) {
 				return reject(new Error('No response'));
@@ -216,6 +291,42 @@ function sendRawRequest(command, message) {
 			return reject(new Error(String(errorMessage)));
 		});
 	});
+}
+
+async function sendHttpRequest(command, message) {
+	const response = await fetch(resolveHttpQueryEndpoint(), {
+		method: 'POST',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify({
+			cmd: command,
+			payload: message && typeof message === 'object' ? message : {},
+		}),
+	});
+	let payload;
+	try {
+		payload = await response.json();
+	} catch {
+		const error = Object.assign(new Error('Invalid JSON response'), { code: 'BAD_RESPONSE' });
+		throw error;
+	}
+	if (payload?.ok) {
+		return payload.data;
+	}
+	const errorMessage = payload?.error?.message || payload?.error || 'Unknown error';
+	const error = Object.assign(new Error(String(errorMessage)), {});
+	if (typeof payload?.error?.code === 'string' && payload.error.code.trim()) {
+		Object.assign(error, { code: payload.error.code.trim() });
+	} else if (!response.ok) {
+		Object.assign(error, { code: `HTTP_${response.status || 500}` });
+	}
+	throw error;
+}
+
+function sendTransportRequest(command, message) {
+	if (transport === 'http') {
+		return sendHttpRequest(command, message);
+	}
+	return sendRawRequest(command, message);
 }
 
 /**
@@ -276,7 +387,7 @@ function fetchBootstrapPayload() {
 	if (bootstrapState.pending) {
 		return bootstrapState.pending;
 	}
-	const pending = sendRawRequest('ui.bootstrap', {})
+	const pending = sendTransportRequest('ui.bootstrap', {})
 		.then(payload => {
 			const safePayload = payload && typeof payload === 'object' ? payload : {};
 			bootstrapState.payload = safePayload;
@@ -377,10 +488,10 @@ function msghubRequest(command, message) {
 			const needsRefresh = !bootstrapState.payload || shouldRefreshBootstrapSoon();
 			return ensureBootstrapPayload({ force: needsRefresh });
 		}
-		return sendRawRequest(command, payload);
+		return sendTransportRequest(command, payload);
 	}
 	return ensureCapabilityToken(capability)
-		.then(token => sendRawRequest(command, { ...payload, token }))
+		.then(token => sendTransportRequest(command, { ...payload, token }))
 		.catch(async error => {
 			if (!isTokenError(error)) {
 				throw error;
@@ -391,7 +502,7 @@ function msghubRequest(command, message) {
 			bootstrapState.hardRebootstrapConsumed = true;
 			await ensureBootstrapPayload({ force: true });
 			const token = await ensureCapabilityToken(capability);
-			return sendRawRequest(command, { ...payload, token });
+			return sendTransportRequest(command, { ...payload, token });
 		});
 }
 let lang = typeof args.lang === 'string' ? args.lang : 'en';

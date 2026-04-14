@@ -81,6 +81,8 @@ Those responsibilities belong to `main.js`, `IoAdminTab`, `IoAdminConfig`, and l
 Input:
 
 - no payload fields are required
+- the host hint is server-owned; `main.js` injects it with fallback `admin`
+- the public web bridge overwrites the hint to `webExtension` server-side before forwarding
 
 Output:
 
@@ -109,8 +111,9 @@ For privileged namespaces the canonical transport is always the payload field `t
 
 1. reads `payload.token`
 2. validates it against host/capability/expiry
-3. removes `token` from the payload
-4. returns only the cleaned business payload
+3. consumes the server-provided host class passed by the caller (`admin` or `webExtension`)
+4. removes `token` from the payload
+5. returns only the cleaned business payload
 
 Documented backend exception:
 

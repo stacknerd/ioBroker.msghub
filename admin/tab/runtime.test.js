@@ -32,6 +32,10 @@ async function loadRuntimeSandbox(options = {}) {
 	window.__runtime = {
 		parseQuery,
 		createSocket,
+		resolveTransport,
+		normalizeRootPathname,
+		resolveHostRootUrl,
+		resolveHttpQueryEndpoint,
 		normalizeLang,
 		fetchJson,
 		loadAdminI18nDictionary,
@@ -53,8 +57,10 @@ async function loadRuntimeSandbox(options = {}) {
 		ensureBootstrapPayload,
 		ensureCapabilityToken,
 		sendRawRequest,
+		sendTransportRequest,
 		bootstrapState,
 		args,
+		transport,
 		adapterInstance,
 		msghubSocket: window.msghubSocket,
 		msghubRequest,
@@ -70,6 +76,8 @@ async function loadRuntimeSandbox(options = {}) {
 				? { textContent: JSON.stringify(options.forwardedArgs) }
 				: null;
 	const documentObject = {
+		baseURI: options.baseURI || '',
+		location: { origin: options.documentOrigin || 'http://localhost' },
 		documentElement: {
 			getAttribute: key => attrs.get(String(key)) || null,
 			setAttribute: (key, value) => attrs.set(String(key), String(value)),
@@ -138,8 +146,8 @@ async function loadRuntimeSandbox(options = {}) {
 	const fetchMap = options.fetchMap || {};
 	const fetchMock =
 		options.fetch ||
-		(async url => {
-			fetchCalls.push(String(url));
+		(async (url, requestOptions) => {
+			fetchCalls.push({ url: String(url), options: requestOptions || null });
 			if (Object.prototype.hasOwnProperty.call(fetchMap, url)) {
 				return {
 					ok: true,
@@ -164,6 +172,7 @@ async function loadRuntimeSandbox(options = {}) {
 		navigator: { language: options.navigatorLanguage || 'en-US' },
 		localStorage,
 		matchMedia: query => ({ matches: query.includes('dark') ? !!options.prefersDark : false }),
+		URL,
 	};
 	windowObject.window = windowObject;
 	windowObject.top = topDocument ? { document: topDocument } : windowObject;
@@ -176,6 +185,7 @@ async function loadRuntimeSandbox(options = {}) {
 		io: ioMock,
 		win: windowObject,
 		fetch: fetchMock,
+		URL,
 		console: { debug() {}, info() {}, warn() {}, error() {} },
 	};
 
@@ -654,6 +664,16 @@ describe('admin/tab/runtime.js', function () {
 		assert.equal(call.options.path, '/socket.io');
 	});
 
+	it('normalizes transport to socket by default and to http when requested', async function () {
+		const defaultSandbox = await loadRuntimeSandbox({ search: '?instance=0' });
+		const httpSandbox = await loadRuntimeSandbox({ search: '?instance=0&transport=http' });
+		const invalidSandbox = await loadRuntimeSandbox({ search: '?instance=0&transport=weird' });
+
+		assert.equal(defaultSandbox.window.__runtime.transport, 'socket');
+		assert.equal(httpSandbox.window.__runtime.transport, 'http');
+		assert.equal(invalidSandbox.window.__runtime.transport, 'socket');
+	});
+
 	it('uses /socket.io path for adapter tab URLs', async function () {
 		const sandbox = await loadRuntimeSandbox({
 			pathname: '/adapter/msghub/tab.html',
@@ -663,6 +683,59 @@ describe('admin/tab/runtime.js', function () {
 		const call = sandbox.__meta.ioCalls[0];
 		assert.equal(call.url, '/');
 		assert.equal(call.options.path, '/socket.io');
+	});
+
+	it('does not create a socket in http transport mode', async function () {
+		const sandbox = await loadRuntimeSandbox({
+			search: '?instance=0&transport=http',
+			baseURI: 'http://localhost:8082/MessageHub/0/messages/admin/',
+		});
+
+		assert.equal(sandbox.window.__runtime.msghubSocket, null);
+		assert.equal(sandbox.__meta.ioCalls.length, 0);
+	});
+
+	it('derives the HTTP query endpoint from the host root base URI', async function () {
+		const sandbox = await loadRuntimeSandbox({
+			search: '?instance=0&panel=tab-messages&transport=http',
+			baseURI: 'http://localhost:8082/MessageHub/0/messages/admin/',
+		});
+
+		assert.equal(sandbox.window.__runtime.resolveHostRootUrl(), 'http://localhost:8082/MessageHub/0/');
+		assert.equal(sandbox.window.__runtime.resolveHttpQueryEndpoint(), 'http://localhost:8082/MessageHub/0/query');
+	});
+
+	it('derives the host root robustly for panel slugs with regex-special characters', async function () {
+		const sandbox = await loadRuntimeSandbox({
+			search: '?instance=0&panel=tab-plugin-a+b(c)[d]&transport=http',
+			baseURI: 'http://localhost:8082/MessageHub/0/plugin-a+b(c)%5Bd%5D/admin/',
+		});
+
+		assert.equal(
+			sandbox.window.__runtime.normalizeRootPathname('/MessageHub/0/plugin-a+b(c)%5Bd%5D/admin/'),
+			'/MessageHub/0/',
+		);
+		assert.equal(sandbox.window.__runtime.resolveHostRootUrl(), 'http://localhost:8082/MessageHub/0/');
+		assert.equal(sandbox.window.__runtime.resolveHttpQueryEndpoint(), 'http://localhost:8082/MessageHub/0/query');
+	});
+
+	it('sends http transport requests through the derived query endpoint', async function () {
+		const sandbox = await loadRuntimeSandbox({
+			search: '?instance=0&panel=tab-messages&transport=http',
+			baseURI: 'http://localhost:8082/MessageHub/0/messages/admin/',
+			fetchMap: {
+				'http://localhost:8082/MessageHub/0/query': { ok: true, data: { echoed: true } },
+			},
+		});
+
+		const result = await sandbox.window.__runtime.sendTransportRequest('ui.bootstrap', {});
+		const requestCall = sandbox.__meta.fetchCalls[sandbox.__meta.fetchCalls.length - 1];
+
+		assert.deepEqual(JSON.parse(JSON.stringify(result)), { echoed: true });
+		assert.ok(sandbox.__meta.fetchCalls.length >= 1);
+		assert.equal(requestCall.url, 'http://localhost:8082/MessageHub/0/query');
+		assert.equal(requestCall.options.method, 'POST');
+		assert.match(String(requestCall.options.body), /"cmd":"ui\.bootstrap"/);
 	});
 
 		it('resolves explicit URL themes with canonical theme semantics and react as absent-only fallback', async function () {

@@ -273,6 +273,11 @@ class IoWebExtension {
 				return;
 			}
 
+			if (request.kind === 'bridge') {
+				await this._serveBridgeRequest(req, res, request);
+				return;
+			}
+
 			if (request.kind === 'iconAssetRoot') {
 				await this._serveHostIconAsset(req, res, request);
 				return;
@@ -347,7 +352,7 @@ class IoWebExtension {
 	 */
 	_isSupportedMethod(method) {
 		const normalized = typeof method === 'string' ? method.trim().toUpperCase() : 'GET';
-		return normalized === 'GET' || normalized === 'HEAD';
+		return normalized === 'GET' || normalized === 'HEAD' || normalized === 'POST';
 	}
 
 	/**
@@ -356,7 +361,7 @@ class IoWebExtension {
 	 * @param {any} req Express request.
 	 * @returns {{
 	 *   managed: boolean,
-	 *   kind?: 'root'|'blocked'|'invalid'|'panelRedirect'|'panelHtml'|'iconAsset'|'iconAssetRoot'|'adminAsset',
+	 *   kind?: 'root'|'blocked'|'invalid'|'bridge'|'panelRedirect'|'panelHtml'|'iconAsset'|'iconAssetRoot'|'adminAsset',
 	 *   panelId?: string,
 	 *   pathname?: string,
 	 *   search?: string,
@@ -368,6 +373,7 @@ class IoWebExtension {
 		const parsedUrl = this._parseRawUrl(req);
 		const pathname = parsedUrl.pathname;
 		const search = parsedUrl.search;
+		const method = typeof req?.method === 'string' ? req.method.trim().toUpperCase() : 'GET';
 		if (!this.routePath) {
 			return { managed: false };
 		}
@@ -392,6 +398,17 @@ class IoWebExtension {
 		try {
 			segments = encodedSegments.map(segment => this._decodePathSegment(segment));
 		} catch {
+			return { managed: true, kind: 'invalid', pathname, search };
+		}
+
+		if (segments[0] === 'query') {
+			if (method !== 'POST' || segments.length !== 1) {
+				return { managed: true, kind: 'invalid', pathname, search };
+			}
+			return { managed: true, kind: 'bridge', pathname, search };
+		}
+
+		if (method === 'POST') {
 			return { managed: true, kind: 'invalid', pathname, search };
 		}
 
@@ -564,6 +581,7 @@ class IoWebExtension {
 				instance: String(this.instanceId),
 				panel: `tab-${panelId}`,
 				composition: 'adminTab',
+				transport: 'http',
 			}),
 		);
 
@@ -639,6 +657,146 @@ class IoWebExtension {
 			return null;
 		}
 		return this._resolveAdminRelativePath(raw.split('/').filter(Boolean));
+	}
+
+	/**
+	 * Serve a POST-only HTTP bridge request to the adapter command surface.
+	 *
+	 * @param {any} req Express request.
+	 * @param {any} res Express response.
+	 * @param {{ pathname?: string }} request Parsed request descriptor.
+	 * @returns {Promise<void>} Settles once the response was written.
+	 */
+	async _serveBridgeRequest(req, res, request) {
+		void request;
+		try {
+			const payload = await this._readJsonBody(req, { limit: 64 * 1024 });
+			const command = this._normalizeBridgeCommand(payload?.cmd);
+			if (!command) {
+				await this._sendBridgeError(req, res, { status: 400, code: 'BAD_REQUEST', message: 'Missing command' });
+				return;
+			}
+			if (!this._isAllowedBridgeCommand(command)) {
+				await this._sendBridgeError(req, res, {
+					status: 403,
+					code: 'FORBIDDEN',
+					message: 'Command not allowed',
+				});
+				return;
+			}
+			const payloadMessage =
+				payload?.payload && typeof payload.payload === 'object' && !Array.isArray(payload.payload)
+					? payload.payload
+					: {};
+			const result = await this._callInternalBridge({
+				command,
+				message: {
+					...payloadMessage,
+					host: 'webExtension',
+				},
+			});
+			const normalized =
+				result && typeof result === 'object'
+					? result
+					: { ok: false, error: { code: 'INTERNAL', message: 'Invalid bridge response' } };
+			if (command === 'ui.bootstrap' && normalized.ok && normalized.data && typeof normalized.data === 'object') {
+				const webGrant =
+					normalized.data.capabilities &&
+					typeof normalized.data.capabilities === 'object' &&
+					normalized.data.capabilities.web &&
+					typeof normalized.data.capabilities.web === 'object'
+						? normalized.data.capabilities.web
+						: undefined;
+				normalized.data = {
+					...normalized.data,
+					capabilities: webGrant ? { web: webGrant } : {},
+				};
+			}
+			await this._sendResponse(req, res, {
+				status: 200,
+				contentType: 'application/json; charset=utf-8',
+				body: JSON.stringify(normalized),
+			});
+		} catch (error) {
+			await this._sendBridgeError(req, res, {
+				status: 400,
+				code: 'BAD_REQUEST',
+				message: error?.message || 'Invalid request',
+			});
+		}
+	}
+
+	/**
+	 * Read one JSON request body with a hard size cap.
+	 *
+	 * @param {any} req Express request.
+	 * @param {{ limit?: number }} [options] Read options.
+	 * @returns {Promise<any>} Parsed JSON payload.
+	 */
+	async _readJsonBody(req, { limit = 64 * 1024 } = {}) {
+		const body = await new Promise((resolve, reject) => {
+			let size = 0;
+			const chunks = [];
+			req.on('data', chunk => {
+				size += chunk.length;
+				if (size > limit) {
+					reject(new Error('payload too large'));
+					return;
+				}
+				chunks.push(chunk);
+			});
+			req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+			req.on('error', reject);
+		});
+		if (!body) {
+			return {};
+		}
+		try {
+			const parsed = JSON.parse(body);
+			if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+				throw new Error('Invalid JSON payload');
+			}
+			return parsed;
+		} catch {
+			throw new Error('Invalid JSON payload');
+		}
+	}
+
+	/**
+	 * Normalize a bridge command name.
+	 *
+	 * @param {any} value Raw command value.
+	 * @returns {string} Normalized command.
+	 */
+	_normalizeBridgeCommand(value) {
+		const cmd = typeof value === 'string' ? value.trim() : '';
+		return cmd || '';
+	}
+
+	/**
+	 * Check if a bridge command is allowed through the public proxy.
+	 *
+	 * @param {string} command Candidate command.
+	 * @returns {boolean} True when allowed.
+	 */
+	_isAllowedBridgeCommand(command) {
+		return command === 'ui.bootstrap' || command.startsWith('ui.') || command.startsWith('web.');
+	}
+
+	/**
+	 * Send a JSON bridge error response.
+	 *
+	 * @param {any} req Express request.
+	 * @param {any} res Express response.
+	 * @param {{ status?: number, code?: string, message?: string }} [error] Error payload.
+	 * @returns {Promise<void>} Settles once the response was written.
+	 */
+	async _sendBridgeError(req, res, { status = 400, code = 'BAD_REQUEST', message = 'Bad Request' } = {}) {
+		await this._sendResponse(req, res, {
+			status,
+			contentType: 'application/json; charset=utf-8',
+			body: JSON.stringify({ ok: false, error: { code, message } }),
+		});
 	}
 
 	/**

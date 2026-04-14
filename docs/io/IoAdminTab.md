@@ -72,6 +72,7 @@ Those responsibilities belong to `IoAdminConfig`, resolver/startup wiring, and t
 ### Plugin runtime
 
 All normal `admin.*` commands require `payload.token` and validate it centrally via `IoAdminCapabilities` before execution.
+The host class used for that validation is server-owned and supplied by `main.js`; AdminTab itself does not trust a client-authored `payload.host`.
 
 - `admin.plugins.getCatalog`
 - `admin.plugins.listInstances`

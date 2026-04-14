@@ -1,5 +1,6 @@
 'use strict';
 
+const { EventEmitter } = require('node:events');
 const { expect } = require('chai');
 
 const WebExtensionEntry = require('./web.js');
@@ -90,8 +91,13 @@ function createResponse() {
 	};
 }
 
-async function dispatch(extension, url, { method = 'GET', headers = {}, protocol = 'http', secure = false } = {}) {
-	const req = {
+async function dispatch(
+	extension,
+	url,
+	{ method = 'GET', headers = {}, protocol = 'http', secure = false, body = null } = {},
+) {
+	const req = new EventEmitter();
+	Object.assign(req, {
 		method,
 		url,
 		originalUrl: url,
@@ -101,14 +107,20 @@ async function dispatch(extension, url, { method = 'GET', headers = {}, protocol
 		get(name) {
 			return this.headers[String(name || '').toLowerCase()] || '';
 		},
-	};
+	});
 	const res = createResponse();
 	let nextCalled = false;
 	let nextError = null;
-	await extension._handleMiddleware(req, res, error => {
+	const pending = extension._handleMiddleware(req, res, error => {
 		nextCalled = true;
 		nextError = error || null;
 	});
+	if (body != null) {
+		const chunk = Buffer.isBuffer(body) ? body : Buffer.from(String(body));
+		req.emit('data', chunk);
+	}
+	req.emit('end');
+	await pending;
 	return { res, nextCalled, nextError };
 }
 
@@ -256,8 +268,9 @@ describe('IoWebExtension', () => {
 		expect(String(res.body)).to.not.include('rel="manifest"');
 		expect(String(res.body)).to.not.include('rel="apple-touch-icon"');
 		expect(String(res.body)).to.include(
-			'<script id="msghub-forwarded-args" type="application/json">{"instance":"3","panel":"tab-messages","composition":"adminTab"}</script>',
+			'<script id="msghub-forwarded-args" type="application/json">{"instance":"3","panel":"tab-messages","composition":"adminTab","transport":"http"}</script>',
 		);
+		expect(String(res.body)).to.not.include('__msghubTransport');
 		expect(String(res.body)).to.not.include('"tab-hack"');
 		expect(String(res.body).indexOf('msghub-forwarded-args')).to.be.lessThan(
 			String(res.body).indexOf('<script src="tab/runtime.js"></script>'),
@@ -368,5 +381,99 @@ describe('IoWebExtension', () => {
 		expect(i18nResult.res.headers['Content-Type']).to.equal('application/json; charset=utf-8');
 		expect(Buffer.isBuffer(i18nResult.res.body)).to.equal(true);
 		expect(blockedResult.res.statusCode).to.equal(404);
+	});
+
+	it('serves the HTTP bridge under the host root and filters ui.bootstrap to the web grant', async () => {
+		const bridgeCalls = [];
+		const extension = new IoWebExtension({
+			instanceObject: { _id: 'system.adapter.msghub.3' },
+			sendTo(target, command, message, callback) {
+				bridgeCalls.push({ target, command, message });
+				callback({
+					ok: true,
+					data: {
+						capabilities: {
+							admin: { token: 'admin-token', expiresAt: '2999-01-01T00:00:00.000Z' },
+							config: { token: 'config-token', expiresAt: '2999-01-01T00:00:00.000Z' },
+							web: { token: 'web-token', expiresAt: '2999-01-01T00:00:00.000Z' },
+						},
+						about: { title: 'Message Hub' },
+					},
+				});
+			},
+		});
+
+		const { res } = await dispatch(extension, '/MessageHub/3/query', {
+			method: 'POST',
+			body: JSON.stringify({ cmd: 'ui.bootstrap', payload: {} }),
+		});
+
+		expect(bridgeCalls).to.deep.equal([
+			{ target: 'msghub.3', command: 'ui.bootstrap', message: { host: 'webExtension' } },
+		]);
+		expect(res.statusCode).to.equal(200);
+		expect(JSON.parse(String(res.body))).to.deep.equal({
+			ok: true,
+			data: {
+				capabilities: {
+					web: { token: 'web-token', expiresAt: '2999-01-01T00:00:00.000Z' },
+				},
+				about: { title: 'Message Hub' },
+			},
+		});
+	});
+
+	it('rejects invalid JSON and forbidden bridge commands', async () => {
+		const extension = new IoWebExtension({
+			instanceObject: { _id: 'system.adapter.msghub.3' },
+			sendTo() {
+				throw new Error('sendTo must not be called');
+			},
+		});
+
+		const invalidJson = await dispatch(extension, '/MessageHub/3/query', {
+			method: 'POST',
+			body: '{bad json',
+		});
+		const forbidden = await dispatch(extension, '/MessageHub/3/query', {
+			method: 'POST',
+			body: JSON.stringify({ cmd: 'admin.stats.get', payload: {} }),
+		});
+
+		expect(invalidJson.res.statusCode).to.equal(400);
+		expect(JSON.parse(String(invalidJson.res.body))).to.deep.equal({
+			ok: false,
+			error: { code: 'BAD_REQUEST', message: 'Invalid JSON payload' },
+		});
+		expect(forbidden.res.statusCode).to.equal(403);
+		expect(JSON.parse(String(forbidden.res.body))).to.deep.equal({
+			ok: false,
+			error: { code: 'FORBIDDEN', message: 'Command not allowed' },
+		});
+	});
+
+	it('overrides any client-supplied bridge host hint with webExtension server-side', async () => {
+		const bridgeCalls = [];
+		const extension = new IoWebExtension({
+			instanceObject: { _id: 'system.adapter.msghub.3' },
+			sendTo(target, command, message, callback) {
+				bridgeCalls.push({ target, command, message });
+				callback({ ok: true, data: 'pong' });
+			},
+		});
+
+		const { res } = await dispatch(extension, '/MessageHub/3/query', {
+			method: 'POST',
+			body: JSON.stringify({ cmd: 'web.ping', payload: { host: 'admin', token: 'x' } }),
+		});
+
+		expect(bridgeCalls).to.deep.equal([
+			{
+				target: 'msghub.3',
+				command: 'web.ping',
+				message: { host: 'webExtension', token: 'x' },
+			},
+		]);
+		expect(JSON.parse(String(res.body))).to.deep.equal({ ok: true, data: 'pong' });
 	});
 });

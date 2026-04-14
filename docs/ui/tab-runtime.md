@@ -62,7 +62,7 @@ Current marker shape:
 
 ```html
 <script id="msghub-forwarded-args" type="application/json">
-{"instance":"0","panel":"tab-messages","composition":"adminTab"}
+{"instance":"0","panel":"tab-messages","composition":"adminTab","transport":"http"}
 </script>
 ```
 
@@ -79,6 +79,7 @@ Notable behavior:
 - `expert` is normalized only when the key is present
 - `theme` and `react` stay raw so later theme helpers can apply the canonical precedence rules
 - `debugTheme` stays raw in `args` and is normalized separately at module load
+- `transport` is the host-owned transport selector and is normalized to `socket` or `http`
 - unknown keys are preserved, regardless of whether they came from the marker or the URL query
 
 Invalid URL encoding is handled defensively: undecodable query fragments fall back to their raw key/value
@@ -92,13 +93,26 @@ const adapterInstance = `msghub.${args.instance}`;
 
 ### 2) Create the browser-to-backend transport bridge
 
-`createSocket()` connects through socket.io using:
+`runtime.js` is now the only place that decides which transport the shell uses:
+
+- `transport=socket` is the default and keeps the Admin Tab on socket.io
+- `transport=http` is used by the Web host and routes all requests through the host-local HTTP bridge
+
+`createSocket()` runs only for `transport === 'socket'` and connects through socket.io using:
 
 ```js
 io.connect('/', { path: '/socket.io' })
 ```
 
-`msghubRequest(command, message)` wraps the `sendTo` pattern and resolves with `res.data` on success.
+For HTTP mode, `runtime.js` derives the query endpoint from the host root exposed by `document.baseURI`:
+
+- shell base: `/MessageHub/<instance>/<panelId>/admin/`
+- derived host root: `/MessageHub/<instance>/`
+- query endpoint: `/MessageHub/<instance>/query`
+
+No host-injected request override is required for that path derivation.
+
+`msghubRequest(command, message)` wraps the selected transport and resolves with `res.data` on success.
 If the backend reports an error, the promise rejects with a normal `Error`.
 
 For `admin.*`, `config.*`, and `web.*`, that wrapper also owns the central capability-token flow:
@@ -226,10 +240,12 @@ Main consumers:
 
 ## Design notes / invariants
 
+- The transport contract is `socket|http`, and `runtime.js` is the only browser-side decision point for it.
 - The socket path is always `/socket.io`, independent of whether the page is served from an admin path or an adapter path.
 - `msghubRequest(...)` resolves with backend payload data, not with the outer `{ ok, data }` transport envelope.
 - `msghubRequest(...)` is the only browser-side token attachment point for `admin.*`, `config.*`, and `web.*`.
 - `ui.bootstrap` itself stays outside the token-protected namespaces but shares the same cached bootstrap state.
+- In HTTP mode, `ui.bootstrap` and all allowed follow-up commands go through the host-local `/query` bridge endpoint derived from the host root.
 - `ensureAdminI18nLoaded()` caches the load promise. Repeated callers share the same in-flight work.
 - `overrideLang(...)` resets the cached dictionary promise so a later load can fetch the new language.
 - Plugin i18n merging is intentionally one-way and additive. Existing keys are never overwritten.

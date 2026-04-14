@@ -144,6 +144,29 @@ For the reused shell to boot correctly, `web.js` forwards host-owned runtime arg
 - `msghub-forwarded-args`
 
 The browser runtime then consumes those forwarded args together with the public query args through one shared normalization path.
+For the public Web host, that forwarded marker now includes `transport=http`.
+`web.js` does not inject a large runtime override script anymore; `admin/tab/runtime.js` derives the HTTP query endpoint itself from the shell base URI.
+
+## Transport contract
+
+The public host and the Admin Tab share one browser runtime, but they boot with different host-owned transport args:
+
+- Admin Tab: `transport=socket`
+- Web Extension: `transport=http`
+
+The forwarded transport arg is host-only glue. It is consumed in `admin/tab/runtime.js` and is not itself a public query contract.
+
+For HTTP mode, the host exposes one bridge endpoint:
+
+- `POST /MessageHub/<instance>/query`
+- request body: `{ "cmd": "<command>", "payload": { ... } }`
+- allowed commands: `ui.bootstrap`, `ui.*`, `web.*`
+
+Defense in depth:
+
+- invalid JSON payloads return `400`
+- disallowed commands return `403`
+- `ui.bootstrap` responses are filtered by the host to `capabilities.web` before they reach the browser runtime
 
 ### Interface 4: public route contract
 
