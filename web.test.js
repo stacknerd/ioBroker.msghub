@@ -371,12 +371,24 @@ describe('IoWebExtension', () => {
 		});
 
 		const cssResult = await dispatch(extension, '/MessageHub/3/messages/admin/tab.css');
+		const svgResult = await dispatch(extension, '/MessageHub/3/messages/admin/tab.svg');
+		const pngResult = await dispatch(extension, '/MessageHub/3/messages/admin/tab.png');
+		const icoResult = await dispatch(extension, '/MessageHub/3/messages/admin/tab.ico');
 		const i18nResult = await dispatch(extension, '/MessageHub/3/messages/admin/i18n/en.json');
 		const blockedResult = await dispatch(extension, '/MessageHub/3/messages/admin/icons/messages/messages-192.png');
 
 		expect(cssResult.res.statusCode).to.equal(200);
 		expect(cssResult.res.headers['Content-Type']).to.equal('text/css; charset=utf-8');
 		expect(Buffer.isBuffer(cssResult.res.body)).to.equal(true);
+		expect(svgResult.res.statusCode).to.equal(200);
+		expect(svgResult.res.headers['Content-Type']).to.equal('image/svg+xml');
+		expect(Buffer.isBuffer(svgResult.res.body)).to.equal(true);
+		expect(pngResult.res.statusCode).to.equal(200);
+		expect(pngResult.res.headers['Content-Type']).to.equal('image/png');
+		expect(Buffer.isBuffer(pngResult.res.body)).to.equal(true);
+		expect(icoResult.res.statusCode).to.equal(200);
+		expect(icoResult.res.headers['Content-Type']).to.equal('image/x-icon');
+		expect(Buffer.isBuffer(icoResult.res.body)).to.equal(true);
 		expect(i18nResult.res.statusCode).to.equal(200);
 		expect(i18nResult.res.headers['Content-Type']).to.equal('application/json; charset=utf-8');
 		expect(Buffer.isBuffer(i18nResult.res.body)).to.equal(true);

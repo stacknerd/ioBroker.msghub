@@ -822,6 +822,9 @@ class IoWebExtension {
 	 * Allowed paths:
 	 * - `admin/tab.css`
 	 * - `admin/tab.js`
+	 * - `admin/tab.png`
+	 * - `admin/tab.svg`
+	 * - `admin/tab.ico`
 	 * - `admin/tab/**`
 	 * - `admin/i18n/**`
 	 *
@@ -838,6 +841,15 @@ class IoWebExtension {
 		}
 		if (assetSegments.length === 1 && assetSegments[0] === 'tab.js') {
 			return path.resolve(this.adminRoot, 'tab.js');
+		}
+		if (assetSegments.length === 1 && assetSegments[0] === 'tab.png') {
+			return path.resolve(this.adminRoot, 'tab.png');
+		}
+		if (assetSegments.length === 1 && assetSegments[0] === 'tab.svg') {
+			return path.resolve(this.adminRoot, 'tab.svg');
+		}
+		if (assetSegments.length === 1 && assetSegments[0] === 'tab.ico') {
+			return path.resolve(this.adminRoot, 'tab.ico');
 		}
 		if (assetSegments[0] === 'tab' && assetSegments.length > 1) {
 			return path.resolve(this.adminRoot, 'tab', ...assetSegments.slice(1));
