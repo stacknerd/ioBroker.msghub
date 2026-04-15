@@ -797,6 +797,23 @@ describe('admin/tab/layout.js', function () {
 		assert.equal(url, 'http://192.168.4.4:8082/MessageHub/0/icons/messages/messages-192.png');
 	});
 
+	it('resolveIconUrl() removes the active panel segment without regex fragility', async function () {
+		const { sandbox } = await loadLayoutSandbox({
+			baseURI: 'http://192.168.4.4:8082/MessageHub/0/plugin-a%2Bb(c)%5Bd%5D/',
+			args: { panel: 'tab-plugin-a+b(c)[d]' },
+		});
+
+		const url = await sandbox.window.__layoutFns.resolveIconUrl(
+			{
+				id: 'tab-plugin-a+b(c)[d]',
+				resolvedAppIcons: { any192: 'icons/messages/messages-192.png' },
+			},
+			'any192',
+		);
+
+		assert.equal(url, 'http://192.168.4.4:8082/MessageHub/0/icons/messages/messages-192.png');
+	});
+
 	it('resolveIconUrl() returns the backend-resolved plugin host icon path', async function () {
 		const requests = [];
 		const { sandbox, blobUrls } = await loadLayoutSandbox({
@@ -1614,6 +1631,52 @@ describe('admin/tab/layout.js', function () {
 		assert.equal(presetsManifest.id, presetsManifest.start_url);
 	});
 
+	it('generateManifest() uses the fixed root app contract in the real public web root', async function () {
+		const { sandbox } = await loadLayoutSandbox({
+			args: { composition: 'web' },
+			t: key => {
+				if (key === 'msghub.i18n.core.admin.composition.web.app.name') return 'MessageHub';
+				if (key === 'msghub.i18n.core.admin.composition.web.app.shortName') return 'Hub';
+				return key;
+			},
+			location: { href: 'https://example.test/MessageHub/0/?lang=de#tab-messages' },
+		});
+		const { generateManifest } = sandbox.window.__layoutFns;
+
+		const manifest = generateManifest(
+			{
+				id: 'tab-messages',
+				label: 'messages.key',
+				app: {
+					name: 'panel.app.name',
+					shortName: 'panel.app.short',
+					url: '?panel=tab-messages',
+					display: 'browser',
+					themeColor: '#123456',
+					backgroundColor: '#abcdef',
+				},
+			},
+			{
+				any192: {
+					src: 'https://example.test/MessageHub/0/icons/any192.png',
+					mimeType: 'image/png',
+				},
+				apple180: {
+					src: 'https://example.test/MessageHub/0/icons/apple180.png',
+					mimeType: 'image/png',
+				},
+			},
+		);
+
+		assert.equal(manifest.name, 'MessageHub');
+		assert.equal(manifest.short_name, 'Hub');
+		assert.equal(manifest.start_url, 'https://example.test/MessageHub/0/');
+		assert.equal(manifest.id, 'https://example.test/MessageHub/0/');
+		assert.equal(manifest.display, 'standalone');
+		assert.equal(manifest.theme_color, '#000000');
+		assert.equal(manifest.background_color, '#000000');
+	});
+
 	it('updateDocumentTitle() writes manifest, Apple icon, and all four managed meta tags for a core app descriptor', async function () {
 		const { sandbox, blobUrls, fetchCalls } = await loadLayoutSandbox({
 			t: key => {
@@ -1699,6 +1762,100 @@ describe('admin/tab/layout.js', function () {
 		);
 		assert.equal(manifest.icons.some(icon => icon.src.includes('/tab-')), false);
 		assert.deepEqual(fetchCalls, []);
+	});
+
+	it('updateDocumentTitle() uses the fixed root app identity and static root icons in the real public web root', async function () {
+		const { sandbox, blobUrls } = await loadLayoutSandbox({
+			args: { composition: 'web' },
+			t: key => {
+				if (key === 'msghub.i18n.core.admin.composition.web.app.name') return 'MessageHub';
+				if (key === 'msghub.i18n.core.admin.composition.web.app.shortName') return 'Hub';
+				if (key === 'messages.key') return 'Messages';
+				return key;
+			},
+			location: { href: 'https://example.test/MessageHub/0/?lang=de#tab-messages' },
+			baseURI: 'https://example.test/MessageHub/0/',
+		});
+		const { updateDocumentTitle } = sandbox.window.__layoutFns;
+
+		await updateDocumentTitle({
+			id: 'tab-messages',
+			label: 'messages.key',
+		});
+
+		assert.equal(sandbox.document.title, 'MessageHub');
+		assert.equal(sandbox.document.head.querySelector('meta[name="theme-color"]').getAttribute('content'), '#000000');
+		assert.equal(sandbox.document.head.querySelector('meta[name="application-name"]').getAttribute('content'), 'MessageHub');
+		assert.equal(sandbox.document.head.querySelector('meta[name="apple-mobile-web-app-title"]').getAttribute('content'), 'Hub');
+
+		const appleLink = sandbox.document.head.querySelector('link[rel="apple-touch-icon"]');
+		assert.ok(appleLink);
+		assert.equal(appleLink.getAttribute('href'), 'https://example.test/MessageHub/0/icons/apple180.png');
+
+		const manifest = JSON.parse(blobUrls[0].blob.parts[0]);
+		assert.equal(manifest.name, 'MessageHub');
+		assert.equal(manifest.short_name, 'Hub');
+		assert.equal(manifest.start_url, 'https://example.test/MessageHub/0/');
+		assert.equal(manifest.id, 'https://example.test/MessageHub/0/');
+		assert.deepEqual(
+			JSON.parse(JSON.stringify(manifest.icons.map(icon => icon.src))),
+			[
+				'https://example.test/MessageHub/0/icons/any192.png',
+				'https://example.test/MessageHub/0/icons/any512.png',
+				'https://example.test/MessageHub/0/icons/maskable192.png',
+				'https://example.test/MessageHub/0/icons/maskable512.png',
+			],
+		);
+	});
+
+	it('updateDocumentTitle() keeps panel-driven app identity outside the real public web root', async function () {
+		const { sandbox, blobUrls } = await loadLayoutSandbox({
+			args: { composition: 'web', panel: 'tab-messages' },
+			t: key => {
+				if (key === 'panel.app.name') return 'Panel App';
+				if (key === 'panel.app.short') return 'Panel';
+				if (key === 'messages.key') return 'Messages';
+				return key;
+			},
+			location: { href: 'https://example.test/MessageHub/0/messages/?lang=de#tab-messages' },
+			baseURI: 'https://example.test/MessageHub/0/messages/',
+		});
+		const { updateDocumentTitle } = sandbox.window.__layoutFns;
+
+		await updateDocumentTitle({
+			id: 'tab-messages',
+			label: 'messages.key',
+			app: {
+				name: 'panel.app.name',
+				shortName: 'panel.app.short',
+				url: '?panel=tab-messages',
+				display: 'browser',
+				themeColor: '#123456',
+				backgroundColor: '#abcdef',
+			},
+			resolvedAppIcons: {
+				any192: 'icons/messages/messages-192.png',
+				any512: 'icons/messages/messages-512.png',
+				maskable192: 'icons/messages/messages-maskable-192.png',
+				maskable512: 'icons/messages/messages-maskable-512.png',
+				apple180: 'icons/messages/messages-apple-180.png',
+			},
+		});
+
+		assert.equal(sandbox.document.title, 'Messages - MessageHub');
+		assert.equal(sandbox.document.head.querySelector('meta[name="theme-color"]').getAttribute('content'), '#123456');
+		assert.equal(
+			sandbox.document.head.querySelector('link[rel="apple-touch-icon"]').getAttribute('href'),
+			'https://example.test/MessageHub/0/icons/messages/messages-apple-180.png',
+		);
+
+		const manifest = JSON.parse(blobUrls[0].blob.parts[0]);
+		assert.equal(manifest.name, 'Panel App');
+		assert.equal(manifest.short_name, 'Panel');
+		assert.equal(manifest.start_url, 'https://example.test/MessageHub/0/messages/?panel=tab-messages');
+		assert.equal(manifest.display, 'browser');
+		assert.equal(manifest.theme_color, '#123456');
+		assert.equal(manifest.background_color, '#abcdef');
 	});
 
 	it('updateDocumentTitle() uses backend-resolved plugin icons for a plugin app descriptor and only revokes the manifest blob', async function () {

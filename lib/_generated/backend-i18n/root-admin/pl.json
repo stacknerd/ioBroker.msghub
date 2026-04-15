@@ -43,6 +43,8 @@
 	"msghub.i18n.core.admin.common.time.min.label": "min",
 	"msghub.i18n.core.admin.common.time.ms.label": "ms",
 	"msghub.i18n.core.admin.common.time.s.label": "s",
+	"msghub.i18n.core.admin.composition.web.app.name": "MessageHub Launcher",
+	"msghub.i18n.core.admin.composition.web.app.shortName": "MessageHub",
 	"msghub.i18n.core.admin.jsonConfig.ai.cacheTtlMs.help": "Default TTL for request.cache (0 = off).",
 	"msghub.i18n.core.admin.jsonConfig.ai.cacheTtlMs.label": "AI cache TTL (ms)",
 	"msghub.i18n.core.admin.jsonConfig.ai.enabled.help": "Enable the core AI service (plugins may use ctx.api.ai.*).",

@@ -38,6 +38,14 @@ const MANIFEST_ICON_SLOT_CONFIG = Object.freeze({
 let appHeadVersion = 0;
 let activeManifestUrl = '';
 
+const ROOT_WEB_APP = Object.freeze({
+	name: 'msghub.i18n.core.admin.composition.web.app.name',
+	shortName: 'msghub.i18n.core.admin.composition.web.app.shortName',
+	display: 'standalone',
+	themeColor: '#000000',
+	backgroundColor: '#000000',
+});
+
 /**
  * Resolve the host root base URL from the current shell base URI.
  *
@@ -62,8 +70,20 @@ function resolveHostRootBase() {
 	if (panel.startsWith('tab-')) {
 		const panelSlug = panel.slice('tab-'.length);
 		if (panelSlug) {
-			const pattern = new RegExp(`/${panelSlug}/?$`);
-			url.pathname = url.pathname.replace(pattern, '/');
+			const segments = url.pathname.split('/').filter(Boolean);
+			if (segments.length > 0) {
+				const lastSegment = segments[segments.length - 1];
+				let decodedLastSegment = lastSegment;
+				try {
+					decodedLastSegment = decodeURIComponent(lastSegment);
+				} catch {
+					decodedLastSegment = lastSegment;
+				}
+				if (decodedLastSegment === panelSlug) {
+					segments.pop();
+					url.pathname = `/${segments.join('/')}${segments.length ? '/' : ''}`;
+				}
+			}
 		}
 	}
 
@@ -87,6 +107,54 @@ function resolveHostAssetUrl(relativePath) {
 	} catch {
 		return raw;
 	}
+}
+
+/**
+ * Returns whether the current shell request is the real public web root.
+ *
+ * This is intentionally a frontend-local cut. Outside this exact root case,
+ * panel-driven app identity remains unchanged.
+ *
+ * @returns {boolean} True for `composition=web` without a `panel` arg.
+ */
+function isPublicWebRootRequest() {
+	const composition = typeof args?.composition === 'string' ? args.composition.trim() : '';
+	const panel = typeof args?.panel === 'string' ? args.panel.trim() : '';
+	return composition === 'web' && !panel;
+}
+
+/**
+ * Resolves the effective app contract for head/manifest consumers.
+ *
+ * Public web root uses a fixed local frontend contract and static root icons.
+ * All other shell contexts continue to consume the active panel descriptor.
+ *
+ * @param {object} descriptor Canonical panel descriptor.
+ * @returns {{ app: object|null, resolvedAppIcons: Record<string,string>|undefined, titleLabelKey: string }} Effective consumer state.
+ */
+function resolveEffectiveAppIdentity(descriptor) {
+	if (isPublicWebRootRequest()) {
+		return {
+			app: {
+				...ROOT_WEB_APP,
+				url: getRuntimeEntryUrl(),
+			},
+			resolvedAppIcons: {
+				any192: 'icons/any192.png',
+				any512: 'icons/any512.png',
+				maskable192: 'icons/maskable192.png',
+				maskable512: 'icons/maskable512.png',
+				apple180: 'icons/apple180.png',
+			},
+			titleLabelKey: ROOT_WEB_APP.name,
+		};
+	}
+
+	return {
+		app: descriptor?.app || null,
+		resolvedAppIcons: descriptor?.resolvedAppIcons,
+		titleLabelKey: descriptor?.label,
+	};
 }
 
 /**
@@ -353,9 +421,10 @@ async function resolveIconAsset(descriptor, slot) {
 		return null;
 	}
 
+	const identity = resolveEffectiveAppIdentity(descriptor);
 	const rawIconPath =
-		typeof descriptor?.resolvedAppIcons?.[normalizedSlot] === 'string'
-			? descriptor.resolvedAppIcons[normalizedSlot].trim()
+		typeof identity?.resolvedAppIcons?.[normalizedSlot] === 'string'
+			? identity.resolvedAppIcons[normalizedSlot].trim()
 			: '';
 	const url = toCurrentHostIconUrl(rawIconPath);
 	if (!rawIconPath || !url) {
@@ -479,12 +548,14 @@ function resolveManifestIconUrl(iconUrl) {
  * @returns {{ label: string, appName: string, appShortName: string, runtimeAppUrl: string }} Resolved consumer values.
  */
 function resolveHeadManifestContract(descriptor) {
-	const app = descriptor?.app;
+	const identity = resolveEffectiveAppIdentity(descriptor);
+	const app = identity.app;
+	const isRootApp = isPublicWebRootRequest();
 	return {
-		label: resolvePanelI18nKey(descriptor?.label),
+		label: resolvePanelI18nKey(isRootApp ? identity.titleLabelKey : descriptor?.label),
 		appName: resolvePanelI18nKey(app?.name),
 		appShortName: resolvePanelI18nKey(app?.shortName ?? app?.name),
-		runtimeAppUrl: resolveRuntimeAppUrl(app?.url),
+		runtimeAppUrl: isRootApp ? getRuntimeEntryUrl() : resolveRuntimeAppUrl(app?.url),
 	};
 }
 
@@ -496,7 +567,7 @@ function resolveHeadManifestContract(descriptor) {
  * @returns {object|null} Manifest object or null when no app block is present.
  */
 function generateManifest(descriptor, resolvedIcons) {
-	const app = descriptor?.app;
+	const app = resolveEffectiveAppIdentity(descriptor).app;
 	if (!app) {
 		return null;
 	}
@@ -550,7 +621,7 @@ function generateManifest(descriptor, resolvedIcons) {
  * @returns {Promise<void>} Promise that settles after head metadata has been updated.
  */
 async function applyAppHeadMeta(descriptor) {
-	const app = descriptor?.app;
+	const app = resolveEffectiveAppIdentity(descriptor).app;
 	if (!app) {
 		return;
 	}
@@ -632,9 +703,9 @@ function getTabTargetId(tab) {
 async function updateDocumentTitle(descriptor = panelDescriptors.get(currentActivePanelId)) {
 	const contract = resolveHeadManifestContract(descriptor);
 	const label = contract.label;
-	document.title = label ? `${label} - MessageHub` : 'MessageHub';
+	document.title = isPublicWebRootRequest() ? label || 'MessageHub' : label ? `${label} - MessageHub` : 'MessageHub';
 	resetAppHeadMeta();
-	if (descriptor?.app) {
+	if (resolveEffectiveAppIdentity(descriptor).app) {
 		await applyAppHeadMeta(descriptor);
 	}
 }
