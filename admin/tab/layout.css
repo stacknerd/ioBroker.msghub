@@ -57,11 +57,18 @@
 	align-self: flex-end;
 }
 
-html[data-msghub-layout='tabs'] .msghub-root .msghub-connpanel-host {
+html[data-msghub-layout] .msghub-root .msghub-connpanel-host {
 	position: fixed;
-	top: 20px;
 	right: 20px;
 	z-index: 1030; /* above panel content (max z-index: 2), below overlay (1050) */
+}
+
+html[data-msghub-layout='tabs'] .msghub-root .msghub-connpanel-host {
+	top: 20px;
+}
+
+html[data-msghub-layout='single'] .msghub-root .msghub-connpanel-host {
+	top: 19px;
 }
 
 /* Pill: visual appearance only */
@@ -87,7 +94,6 @@ html[data-msghub-layout='tabs'] .msghub-root .msghub-connpanel-host {
 
 /* Trigger button reset */
 .msghub-root #msghub-connection-trigger {
-	cursor: pointer;
 	background: none;
 	border: none;
 	padding: 0;

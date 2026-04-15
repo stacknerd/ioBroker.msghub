@@ -75,3 +75,11 @@
 	color: var(--msghub-muted);
 	font: var(--msghub-font-body-meta);
 }
+
+html[data-msghub-layout='single'] .msghub-root .msghub-toolbar .msghub-strip-edge--right {
+	right: var(--msghub-tabs-conn-clearance);
+}
+
+html[data-msghub-layout='single'] .msghub-root .msghub-toolbar {
+	padding-inline-end: calc(var(--msghub-space-2) + var(--msghub-tabs-conn-clearance));
+}
