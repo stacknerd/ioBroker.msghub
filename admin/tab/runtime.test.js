@@ -688,7 +688,7 @@ describe('admin/tab/runtime.js', function () {
 	it('does not create a socket in http transport mode', async function () {
 		const sandbox = await loadRuntimeSandbox({
 			search: '?instance=0&transport=http',
-			baseURI: 'http://localhost:8082/MessageHub/0/messages/admin/',
+			baseURI: 'http://localhost:8082/MessageHub/0/messages/',
 		});
 
 		assert.equal(sandbox.window.__runtime.msghubSocket, null);
@@ -698,7 +698,7 @@ describe('admin/tab/runtime.js', function () {
 	it('derives the HTTP query endpoint from the host root base URI', async function () {
 		const sandbox = await loadRuntimeSandbox({
 			search: '?instance=0&panel=tab-messages&transport=http',
-			baseURI: 'http://localhost:8082/MessageHub/0/messages/admin/',
+			baseURI: 'http://localhost:8082/MessageHub/0/messages/',
 		});
 
 		assert.equal(sandbox.window.__runtime.resolveHostRootUrl(), 'http://localhost:8082/MessageHub/0/');
@@ -708,11 +708,11 @@ describe('admin/tab/runtime.js', function () {
 	it('derives the host root robustly for panel slugs with regex-special characters', async function () {
 		const sandbox = await loadRuntimeSandbox({
 			search: '?instance=0&panel=tab-plugin-a+b(c)[d]&transport=http',
-			baseURI: 'http://localhost:8082/MessageHub/0/plugin-a+b(c)%5Bd%5D/admin/',
+			baseURI: 'http://localhost:8082/MessageHub/0/plugin-a+b(c)%5Bd%5D/',
 		});
 
 		assert.equal(
-			sandbox.window.__runtime.normalizeRootPathname('/MessageHub/0/plugin-a+b(c)%5Bd%5D/admin/'),
+			sandbox.window.__runtime.normalizeRootPathname('/MessageHub/0/plugin-a+b(c)%5Bd%5D/'),
 			'/MessageHub/0/',
 		);
 		assert.equal(sandbox.window.__runtime.resolveHostRootUrl(), 'http://localhost:8082/MessageHub/0/');
@@ -722,7 +722,7 @@ describe('admin/tab/runtime.js', function () {
 	it('sends http transport requests through the derived query endpoint', async function () {
 		const sandbox = await loadRuntimeSandbox({
 			search: '?instance=0&panel=tab-messages&transport=http',
-			baseURI: 'http://localhost:8082/MessageHub/0/messages/admin/',
+			baseURI: 'http://localhost:8082/MessageHub/0/messages/',
 			fetchMap: {
 				'http://localhost:8082/MessageHub/0/query': { ok: true, data: { echoed: true } },
 			},

@@ -268,8 +268,13 @@ class IoWebExtension {
 				return;
 			}
 
-			if (request.kind === 'root' || request.kind === 'blocked' || request.kind === 'invalid') {
+			if (request.kind === 'blocked' || request.kind === 'invalid') {
 				await this._sendNotFound(req, res);
+				return;
+			}
+
+			if (request.kind === 'rootHtml') {
+				await this._serveRootHtml(req, res, request);
 				return;
 			}
 
@@ -280,6 +285,11 @@ class IoWebExtension {
 
 			if (request.kind === 'iconAssetRoot') {
 				await this._serveHostIconAsset(req, res, request);
+				return;
+			}
+
+			if (request.kind === 'rootAsset') {
+				await this._serveAdminAsset(req, res, request);
 				return;
 			}
 
@@ -361,7 +371,7 @@ class IoWebExtension {
 	 * @param {any} req Express request.
 	 * @returns {{
 	 *   managed: boolean,
-	 *   kind?: 'root'|'blocked'|'invalid'|'bridge'|'panelRedirect'|'panelHtml'|'iconAsset'|'iconAssetRoot'|'adminAsset',
+	 *   kind?: 'rootHtml'|'blocked'|'invalid'|'bridge'|'panelRedirect'|'panelHtml'|'iconAsset'|'iconAssetRoot'|'adminAsset'|'rootAsset',
 	 *   panelId?: string,
 	 *   pathname?: string,
 	 *   search?: string,
@@ -383,7 +393,7 @@ class IoWebExtension {
 
 		const remainder = pathname.slice(this.routePath.length);
 		if (!remainder || remainder === '/') {
-			return { managed: true, kind: 'root', pathname, search };
+			return { managed: true, kind: 'rootHtml', pathname, search };
 		}
 		if (remainder === '/tab.html') {
 			return { managed: true, kind: 'blocked', pathname, search };
@@ -391,7 +401,7 @@ class IoWebExtension {
 
 		const encodedSegments = remainder.replace(/^\/+/, '').split('/').filter(Boolean);
 		if (encodedSegments.length === 0) {
-			return { managed: true, kind: 'root', pathname, search };
+			return { managed: true, kind: 'rootHtml', pathname, search };
 		}
 
 		let segments;
@@ -426,6 +436,16 @@ class IoWebExtension {
 			};
 		}
 
+		if (this._isAllowedPublicAssetPath(segments)) {
+			return {
+				managed: true,
+				kind: 'rootAsset',
+				pathname,
+				search,
+				assetSegments: segments,
+			};
+		}
+
 		const panelId = segments[0];
 		if (!panelId || panelId === 'tab.html' || this._hasUnsafePathSegments([panelId])) {
 			return { managed: true, kind: 'invalid', pathname, search };
@@ -446,18 +466,14 @@ class IoWebExtension {
 		if (subSegments[0] === 'icons') {
 			return { managed: true, kind: 'blocked', pathname, search, panelId, publicPanelPath };
 		}
-		if (subSegments[0] === 'admin') {
-			const assetSegments = subSegments.slice(1);
-			if (assetSegments.length === 0 || this._hasUnsafePathSegments(assetSegments)) {
-				return { managed: true, kind: 'invalid', pathname, search };
-			}
+		if (this._isAllowedPublicAssetPath(subSegments)) {
 			return {
 				managed: true,
 				kind: 'adminAsset',
 				panelId,
 				pathname,
 				search,
-				assetSegments,
+				assetSegments: subSegments,
 				publicPanelPath,
 			};
 		}
@@ -553,10 +569,14 @@ class IoWebExtension {
 	 * @returns {Promise<void>} Settles once the response was written.
 	 */
 	async _servePanelHtml(req, res, request, appRecord) {
-		const source = await this.readFile(this.tabHtmlPath, 'utf8');
-		const body = this._transformShellHtml(source, {
-			panelId: request.panelId || '',
-			publicPanelPath: request.publicPanelPath || `${this.routePath}/`,
+		const body = await this._buildShellHtml({
+			publicBasePath: request.publicPanelPath || `${this.routePath}/`,
+			forwardedArgs: {
+				instance: String(this.instanceId),
+				panel: `tab-${request.panelId || ''}`,
+				composition: 'adminTab',
+				transport: 'http',
+			},
 		});
 		void appRecord;
 		await this._sendResponse(req, res, {
@@ -567,27 +587,56 @@ class IoWebExtension {
 	}
 
 	/**
+	 * Serve the transformed AdminTab shell for the public host root.
+	 *
+	 * @param {any} req Express request.
+	 * @param {any} res Express response.
+	 * @param {object} request Parsed request descriptor.
+	 * @returns {Promise<void>} Settles once the response was written.
+	 */
+	async _serveRootHtml(req, res, request) {
+		void request;
+		const body = await this._buildShellHtml({
+			publicBasePath: `${this.routePath || '/'}/`,
+			forwardedArgs: {
+				instance: String(this.instanceId),
+				composition: 'web',
+				transport: 'http',
+			},
+		});
+		await this._sendResponse(req, res, {
+			status: 200,
+			contentType: 'text/html; charset=utf-8',
+			body,
+		});
+	}
+
+	/**
+	 * Read and transform `admin/tab.html` into the public shell.
+	 *
+	 * @param {{ publicBasePath: string, forwardedArgs: object }} options Transform inputs.
+	 * @returns {Promise<string>} Transformed HTML.
+	 */
+	async _buildShellHtml({ publicBasePath, forwardedArgs }) {
+		const source = await this.readFile(this.tabHtmlPath, 'utf8');
+		return this._transformShellHtml(source, { publicBasePath, forwardedArgs });
+	}
+
+	/**
 	 * Transform `admin/tab.html` into the public single-webapp shell.
 	 *
 	 * @param {string} html Raw `admin/tab.html` content.
-	 * @param {{ panelId: string, publicPanelPath: string }} options Transform inputs.
+	 * @param {{ publicBasePath: string, forwardedArgs: object }} options Transform inputs.
 	 * @returns {string} Transformed HTML.
 	 */
-	_transformShellHtml(html, { panelId, publicPanelPath }) {
+	_transformShellHtml(html, { publicBasePath, forwardedArgs }) {
 		const source = String(html || '');
-		const baseHref = this._escapeHtmlAttribute(`${publicPanelPath}admin/`);
-		const forwardedArgs = this._escapeHtmlText(
-			JSON.stringify({
-				instance: String(this.instanceId),
-				panel: `tab-${panelId}`,
-				composition: 'adminTab',
-				transport: 'http',
-			}),
-		);
+		const baseHref = this._escapeHtmlAttribute(String(publicBasePath || `${this.routePath || '/'}/`));
+		const forwardedArgsJson = this._escapeHtmlText(JSON.stringify(forwardedArgs || {}));
 
 		const headLines = [
 			`<base href="${baseHref}" />`,
-			`<script id="msghub-forwarded-args" type="application/json">${forwardedArgs}</script>`,
+			`<script id="msghub-forwarded-args" type="application/json">${forwardedArgsJson}</script>`,
 		].filter(Boolean);
 
 		let transformed = source.replace(
@@ -858,6 +907,32 @@ class IoWebExtension {
 			return path.resolve(this.adminRoot, 'i18n', ...assetSegments.slice(1));
 		}
 		return null;
+	}
+
+	/**
+	 * Return whether decoded path segments match the small host-owned public asset cut.
+	 *
+	 * Public URLs intentionally do not expose the internal `admin/` directory name.
+	 *
+	 * @param {string[]} assetSegments Decoded public asset path segments.
+	 * @returns {boolean} True when the path is one allowed public shell asset.
+	 */
+	_isAllowedPublicAssetPath(assetSegments) {
+		if (!Array.isArray(assetSegments) || assetSegments.length === 0 || this._hasUnsafePathSegments(assetSegments)) {
+			return false;
+		}
+
+		const [head] = assetSegments;
+		if (assetSegments.length === 1) {
+			return (
+				head === 'tab.css' ||
+				head === 'tab.js' ||
+				head === 'tab.png' ||
+				head === 'tab.svg' ||
+				head === 'tab.ico'
+			);
+		}
+		return head === 'tab' || head === 'i18n';
 	}
 
 	/**

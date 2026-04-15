@@ -782,7 +782,7 @@ describe('admin/tab/layout.js', function () {
 
 	it('resolveIconUrl() resolves against the host root base when baseURI is present', async function () {
 		const { sandbox } = await loadLayoutSandbox({
-			baseURI: 'http://192.168.4.4:8082/MessageHub/0/messages/admin/',
+			baseURI: 'http://192.168.4.4:8082/MessageHub/0/messages/',
 			args: { panel: 'tab-messages' },
 		});
 

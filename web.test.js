@@ -263,7 +263,8 @@ describe('IoWebExtension', () => {
 		expect(calls).to.deep.equal([{ mode: 'panel', targetId: 'tab-messages' }]);
 		expect(res.statusCode).to.equal(200);
 		expect(res.headers['Content-Type']).to.equal('text/html; charset=utf-8');
-		expect(String(res.body)).to.include('<base href="/MessageHub/3/messages/admin/" />');
+		expect(String(res.body)).to.include('<base href="/MessageHub/3/messages/" />');
+		expect(String(res.body)).to.not.include('/admin/');
 		expect(String(res.body)).to.include('<script src="/lib/js/socket.io.js"></script>');
 		expect(String(res.body)).to.not.include('rel="manifest"');
 		expect(String(res.body)).to.not.include('rel="apple-touch-icon"');
@@ -289,17 +290,45 @@ describe('IoWebExtension', () => {
 		expect(res.headers.Location).to.equal('/MessageHub/3/messages/?theme=light&panel=tab-hack');
 	});
 
-	it('returns 404 for the out-of-scope root route and blocked tab.html direct access', async () => {
+	it('serves the host root shell with the minimal web composition boot args', async () => {
 		const extension = new IoWebExtension({
 			instanceObject: { _id: 'system.adapter.msghub.3' },
 			getApp: async () => MESSAGES_APP,
 		});
 
 		const rootResult = await dispatch(extension, '/MessageHub/3/');
+
+		expect(rootResult.res.statusCode).to.equal(200);
+		expect(rootResult.res.headers['Content-Type']).to.equal('text/html; charset=utf-8');
+		expect(String(rootResult.res.body)).to.include('<base href="/MessageHub/3/" />');
+		expect(String(rootResult.res.body)).to.not.include('/admin/');
+		expect(String(rootResult.res.body)).to.include(
+			'<script id="msghub-forwarded-args" type="application/json">{"instance":"3","composition":"web","transport":"http"}</script>',
+		);
+		expect(String(rootResult.res.body)).to.not.include('"panel"');
+	});
+
+	it('returns 404 for blocked direct tab.html access under the host root', async () => {
+		const extension = new IoWebExtension({
+			instanceObject: { _id: 'system.adapter.msghub.3' },
+			getApp: async () => MESSAGES_APP,
+		});
+
 		const tabHtmlResult = await dispatch(extension, '/MessageHub/3/tab.html?panel=tab-messages');
 
-		expect(rootResult.res.statusCode).to.equal(404);
 		expect(tabHtmlResult.res.statusCode).to.equal(404);
+	});
+
+	it('serves root-shell admin assets under the host root', async () => {
+		const extension = new IoWebExtension({
+			instanceObject: { _id: 'system.adapter.msghub.3' },
+			getApp: async () => MESSAGES_APP,
+		});
+
+		const { res } = await dispatch(extension, '/MessageHub/3/tab.js');
+
+		expect(res.statusCode).to.equal(200);
+		expect(res.headers['Content-Type']).to.equal('application/javascript; charset=utf-8');
 	});
 
 	it('returns 404 when getApp does not resolve the requested panel app', async () => {
@@ -312,7 +341,7 @@ describe('IoWebExtension', () => {
 			},
 		});
 
-		const { res } = await dispatch(extension, '/MessageHub/3/unknown/admin/tab.css');
+		const { res } = await dispatch(extension, '/MessageHub/3/unknown/tab.css');
 
 		expect(calls).to.deep.equal([{ mode: 'panel', targetId: 'tab-unknown' }]);
 		expect(res.statusCode).to.equal(404);
@@ -370,11 +399,11 @@ describe('IoWebExtension', () => {
 			getApp: async () => MESSAGES_APP,
 		});
 
-		const cssResult = await dispatch(extension, '/MessageHub/3/messages/admin/tab.css');
-		const svgResult = await dispatch(extension, '/MessageHub/3/messages/admin/tab.svg');
-		const pngResult = await dispatch(extension, '/MessageHub/3/messages/admin/tab.png');
-		const icoResult = await dispatch(extension, '/MessageHub/3/messages/admin/tab.ico');
-		const i18nResult = await dispatch(extension, '/MessageHub/3/messages/admin/i18n/en.json');
+		const cssResult = await dispatch(extension, '/MessageHub/3/messages/tab.css');
+		const svgResult = await dispatch(extension, '/MessageHub/3/messages/tab.svg');
+		const pngResult = await dispatch(extension, '/MessageHub/3/messages/tab.png');
+		const icoResult = await dispatch(extension, '/MessageHub/3/messages/tab.ico');
+		const i18nResult = await dispatch(extension, '/MessageHub/3/messages/i18n/en.json');
 		const blockedResult = await dispatch(extension, '/MessageHub/3/messages/admin/icons/messages/messages-192.png');
 
 		expect(cssResult.res.statusCode).to.equal(200);

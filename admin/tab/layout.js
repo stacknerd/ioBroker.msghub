@@ -41,8 +41,8 @@ let activeManifestUrl = '';
 /**
  * Resolve the host root base URL from the current shell base URI.
  *
- * The shell sets <base href=".../admin/">. We strip "/admin/" and, when a panel
- * id is known, its trailing segment to land on the host root.
+ * Public web shells use the real host base directly. We remove only the active
+ * panel segment so root and panel stay in the same host-owned path model.
  *
  * @returns {string} Absolute base URL or empty string.
  */
@@ -57,8 +57,6 @@ function resolveHostRootBase() {
 	} catch {
 		return base;
 	}
-
-	url.pathname = url.pathname.replace(/\/admin\/?$/, '/');
 
 	const panel = typeof args?.panel === 'string' ? args.panel.trim() : '';
 	if (panel.startsWith('tab-')) {

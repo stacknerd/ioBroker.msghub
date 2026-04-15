@@ -176,9 +176,6 @@ function normalizeRootPathname(pathname) {
 		return '/';
 	}
 	const segments = rawPath.split('/').filter(Boolean);
-	if (segments[segments.length - 1] === 'admin') {
-		segments.pop();
-	}
 	const panel = typeof args?.panel === 'string' ? args.panel.trim() : '';
 	const panelSlug = panel.startsWith('tab-') ? panel.slice('tab-'.length) : '';
 	if (panelSlug && segments.length > 0) {
