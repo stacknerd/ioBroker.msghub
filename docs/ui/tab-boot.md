@@ -50,7 +50,7 @@ renders the translated `unavailableTarget` hard error instead of leaving an empt
 1. Create `ui` via `createUi()`.
 2. Create `api` via `createAdminApi(...)`.
 3. Build the frozen panel context `ctx`.
-4. Fetch `ctx.api.runtime.about()`, which now resolves `ui.bootstrap.about`, to update branding, timezone policy, and cached connection metadata.
+4. Fetch `ctx.api.bootstrap.get()` and read `ui.bootstrap.about` from that payload to update branding, timezone policy, and cached connection metadata.
 5. On `DOMContentLoaded`, run `ensureBooted()`.
 6. Resolve the normalized request via `resolveViewRequest()` and load the active view via `web.view.get(...)`.
 7. Store that payload through `setActiveView(...)`.
@@ -96,7 +96,7 @@ Important: panels are expected to work against this frozen `ctx`, not against ad
 
 ### 2) Resolve runtime metadata that affects the whole shell
 
-`applyRuntimeAboutPayload()` and `refreshRuntimeAbout()` update shell-wide state from `ui.bootstrap.about` via `ctx.api.runtime.about()`:
+`applyBootstrapAboutPayload()` and `refreshBootstrapAbout()` update shell-wide state from `ui.bootstrap.about` via `ctx.api.bootstrap.get()`:
 
 - context-menu branding text
 - timezone formatting policy

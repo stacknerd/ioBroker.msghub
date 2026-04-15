@@ -39,7 +39,7 @@ Simple flow:
 3. After `MsgStore.init()`, `main.js` asks `IoCoreConnection.checkHealthLocal(...)` for a
    small local health snapshot.
 4. `IoCoreConnection.markFromHealth(...)` writes `info.connection` and updates the
-   `runtime.about.connection` view.
+   `ui.bootstrap.about.connection` view.
 5. On unload, `IoCoreConnection.markDisconnected()` writes `false` best effort.
 
 References:
@@ -57,7 +57,7 @@ References:
 2. Ensuring the state object contract is present (`boolean`, `indicator.connected`,
    `read: true`, `write: false`).
 3. Providing the small platform-side health contract for the effective core link.
-4. Exposing the minimal `runtime.about.connection` payload used by the AdminTab.
+4. Exposing the minimal `ui.bootstrap.about.connection` payload used by the AdminTab.
 5. Keeping `info.connection` semantically separate from UI/socket transport status.
 
 ---
@@ -86,7 +86,7 @@ Official adapter state:
   - `true`: platform/runtime considers the effective core link available
   - `false`: platform/runtime considers the effective core link unavailable or not ready
 
-Minimal `runtime.about.connection` payload:
+Minimal `ui.bootstrap.about.connection` payload:
 
 ```js
 {
@@ -133,7 +133,7 @@ Only the technical health probe should change later. The meaning of
 ## Test coverage (relevant files)
 
 - `lib/IoCoreConnection.test.js`
-- `admin/tab/boot.test.js` (consumer-side rendering of `runtime.about.connection`)
+- `admin/tab/boot.test.js` (consumer-side rendering of `ui.bootstrap.about.connection`)
 
 Covered areas include:
 

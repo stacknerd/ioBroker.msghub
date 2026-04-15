@@ -232,7 +232,7 @@ describe('admin/tab/api.js', function () {
 		await api.messages.delete(['ref-1']);
 		await api.messages.executeAction({ ref: 'r1', actionId: 'ack' });
 		await api.plugins.listInstances();
-		await api.runtime.about();
+		await api.bootstrap.get();
 
 		const commands = sentCommands.map(entry => entry.command);
 		assert.ok(commands.includes('web.constants.get'));

@@ -851,43 +851,18 @@ describe('main.js message routing (AP3 bootstrap)', () => {
 		expect(seenPayload.token).to.equal('client-token');
 	});
 
-	it('keeps runtime.about on the shared about payload from IoAdminCapabilities', async () => {
+	it('routes ui.bootstrap through IoAdminCapabilities only', async () => {
 		const createAdapter = loadMainFactoryForTest();
 		const sent = [];
 		const adapter = createAdapter();
 		adapter._adminCapabilities = {
-			buildAbout() {
+			buildBootstrap({ host }) {
+				expect(host).to.equal('admin');
 				return {
-					title: 'Message Hub',
-					version: '0.0.3-test',
-					time: { timeZone: 'Europe/Berlin', source: 'server' },
-					lang: {
-						backendTextLanguage: 'de',
-						coreTextLanguage: 'en',
-						coreFormatLocale: 'de-DE',
+					capabilities: {
+						admin: { token: 'admin-token', expiresAt: '2026-04-15T12:00:00.000Z' },
 					},
-					connection: { scope: 'core-link', connected: false, mode: 'local' },
-				};
-			},
-		};
-		adapter.sendTo = function sendTo(from, command, result, callback) {
-			sent.push({ from, command, result, callback });
-		};
-
-		await adapter.onMessage({
-			from: 'system.adapter.test',
-			command: 'runtime.about',
-			message: null,
-			callback: 'cb2',
-		});
-
-		expect(sent).to.deep.equal([
-			{
-				from: 'system.adapter.test',
-				command: 'runtime.about',
-				result: {
-					ok: true,
-					data: {
+					about: {
 						title: 'Message Hub',
 						version: '0.0.3-test',
 						time: { timeZone: 'Europe/Berlin', source: 'server' },
@@ -897,6 +872,42 @@ describe('main.js message routing (AP3 bootstrap)', () => {
 							coreFormatLocale: 'de-DE',
 						},
 						connection: { scope: 'core-link', connected: false, mode: 'local' },
+					},
+				};
+			},
+		};
+		adapter.sendTo = function sendTo(from, command, result, callback) {
+			sent.push({ from, command, result, callback });
+		};
+
+		await adapter.onMessage({
+			from: 'system.adapter.test',
+			command: 'ui.bootstrap',
+			message: null,
+			callback: 'cb2',
+		});
+
+		expect(sent).to.deep.equal([
+			{
+				from: 'system.adapter.test',
+				command: 'ui.bootstrap',
+				result: {
+					ok: true,
+					data: {
+						capabilities: {
+							admin: { token: 'admin-token', expiresAt: '2026-04-15T12:00:00.000Z' },
+						},
+						about: {
+							title: 'Message Hub',
+							version: '0.0.3-test',
+							time: { timeZone: 'Europe/Berlin', source: 'server' },
+							lang: {
+								backendTextLanguage: 'de',
+								coreTextLanguage: 'en',
+								coreFormatLocale: 'de-DE',
+							},
+							connection: { scope: 'core-link', connected: false, mode: 'local' },
+						},
 					},
 				},
 				callback: 'cb2',

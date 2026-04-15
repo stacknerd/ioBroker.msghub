@@ -362,11 +362,6 @@ class Msghub extends utils.Adapter {
 					ok: true,
 					data: this._adminCapabilities.buildBootstrap({ host }),
 				};
-			} else if (cmd === 'runtime.about') {
-				result = {
-					ok: true,
-					data: this._adminCapabilities.buildAbout(),
-				};
 			} else {
 				result = await this._msgPlugins?.dispatchMessagebox?.(obj);
 				if (result == null) {

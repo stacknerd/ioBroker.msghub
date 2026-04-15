@@ -1,7 +1,7 @@
 # IoAdminCapabilities (Message Hub IO): bootstrap and capability-token authority
 
 `IoAdminCapabilities` is the adapter-side bootstrap and token-authority facade for host-facing UI entry points.
-It owns the stable backend shape for `ui.bootstrap`, the shared `about` payload currently reused by legacy `runtime.about`, and the canonical token contract for privileged namespaces.
+It owns the stable backend shape for `ui.bootstrap`, the `about` sub-payload inside that bootstrap response, and the canonical token contract for privileged namespaces.
 
 In short:
 
@@ -33,12 +33,6 @@ Simple flow:
 3. `main.js` delegates to `IoAdminCapabilities.buildBootstrap({ host: 'admin' })`.
 4. `IoAdminCapabilities` returns the stable payload `{ capabilities, about }`.
 
-Legacy/shared about flow:
-
-1. ioBroker sends `sendTo(..., command='runtime.about', payload)`.
-2. `main.js` delegates the payload build to `IoAdminCapabilities.buildAbout()`.
-3. The old command keeps its payload shape, but no longer owns the bootstrap target contract.
-
 References:
 
 - routing: `main.js`
@@ -51,7 +45,7 @@ References:
 `IoAdminCapabilities` is responsible for:
 
 1. Building the stable backend payload for `ui.bootstrap`.
-2. Building the shared `about` payload `{ title, version, time, lang, connection }`.
+2. Building the shared bootstrap `about` payload `{ title, version, time, lang, connection }`.
 3. Minting host- and capability-bound tokens with a `2h` TTL.
 4. Validating tokens against host, capability, and expiry.
 5. Enforcing the canonical `payload.token` contract and stripping `token` from the business payload.
@@ -97,7 +91,7 @@ Capability grants:
 - `webExtension` host:
   - `capabilities.web = { token, expiresAt }`
 - each token has a fixed `2h` TTL
-- `about` carries the runtime metadata payload previously exposed via `runtime.about`
+- `about` carries the runtime metadata payload inside `ui.bootstrap`
 
 ### Canonical payload token contract
 
@@ -123,7 +117,7 @@ Documented backend exception:
 
 ### `about`
 
-`buildAbout()` returns:
+`buildBootstrapAbout()` returns:
 
 - `title`
 - `version`
@@ -131,10 +125,9 @@ Documented backend exception:
 - `lang`
 - `connection`
 
-This is the shared payload used by:
+This is the bootstrap sub-payload used by:
 
 - `ui.bootstrap.data.about`
-- legacy `runtime.about`
 
 ---
 

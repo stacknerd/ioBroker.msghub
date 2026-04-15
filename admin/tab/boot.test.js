@@ -218,7 +218,7 @@ globalThis.__execCommandSafe = execCommandSafe;
 
 	it('applies ui.bootstrap.about payload to branding and timezone policy', async function () {
 		const source = await readRepoFile('admin/tab/boot.js');
-		const applyRuntimeAboutPayloadSource = extractFunctionSource(source, 'applyRuntimeAboutPayload');
+		const applyBootstrapAboutPayloadSource = extractFunctionSource(source, 'applyBootstrapAboutPayload');
 		const toasts = [];
 		const warnings = [];
 		const policyCalls = [];
@@ -227,8 +227,8 @@ globalThis.__execCommandSafe = execCommandSafe;
 			`
 let timezoneFallbackToastShown = false;
 let connPanelData = {};
-${applyRuntimeAboutPayloadSource}
-globalThis.__applyRuntimeAboutPayload = applyRuntimeAboutPayload;
+${applyBootstrapAboutPayloadSource}
+globalThis.__applyBootstrapAboutPayload = applyBootstrapAboutPayload;
 `,
 			{
 				isEmbeddedInAdmin: false,
@@ -259,10 +259,10 @@ globalThis.__applyRuntimeAboutPayload = applyRuntimeAboutPayload;
 				},
 				t: (key, arg) => `${key}:${arg || ''}`,
 			},
-			'boot-applyRuntimeAboutPayload.js',
+			'boot-applyBootstrapAboutPayload.js',
 		);
-		const applyRuntimeAboutPayload = sandbox.__applyRuntimeAboutPayload;
-		applyRuntimeAboutPayload({
+		const applyBootstrapAboutPayload = sandbox.__applyBootstrapAboutPayload;
+		applyBootstrapAboutPayload({
 			title: 'Message Hub',
 			version: '1.2.3',
 			time: { timeZone: 'Europe/Berlin', source: 'server' },
@@ -277,15 +277,15 @@ globalThis.__applyRuntimeAboutPayload = applyRuntimeAboutPayload;
 
 	it('shows fallback timezone warning only once', async function () {
 		const source = await readRepoFile('admin/tab/boot.js');
-		const applyRuntimeAboutPayloadSource = extractFunctionSource(source, 'applyRuntimeAboutPayload');
+		const applyBootstrapAboutPayloadSource = extractFunctionSource(source, 'applyBootstrapAboutPayload');
 		const toasts = [];
 		const warnings = [];
 		const sandbox = runInSandbox(
 			`
 let timezoneFallbackToastShown = false;
 let connPanelData = {};
-${applyRuntimeAboutPayloadSource}
-globalThis.__applyRuntimeAboutPayload = applyRuntimeAboutPayload;
+${applyBootstrapAboutPayloadSource}
+globalThis.__applyBootstrapAboutPayload = applyBootstrapAboutPayload;
 `,
 			{
 				isEmbeddedInAdmin: false,
@@ -311,9 +311,9 @@ globalThis.__applyRuntimeAboutPayload = applyRuntimeAboutPayload;
 			},
 			'boot-timezoneFallbackOnce.js',
 		);
-		const applyRuntimeAboutPayload = sandbox.__applyRuntimeAboutPayload;
-		applyRuntimeAboutPayload({ title: 'Message Hub', version: '1.2.3', time: {} });
-		applyRuntimeAboutPayload({ title: 'Message Hub', version: '1.2.3', time: {} });
+		const applyBootstrapAboutPayload = sandbox.__applyBootstrapAboutPayload;
+		applyBootstrapAboutPayload({ title: 'Message Hub', version: '1.2.3', time: {} });
+		applyBootstrapAboutPayload({ title: 'Message Hub', version: '1.2.3', time: {} });
 
 		assert.equal(toasts.length, 1);
 		assert.equal(warnings.length, 1);
@@ -322,7 +322,7 @@ globalThis.__applyRuntimeAboutPayload = applyRuntimeAboutPayload;
 
 	it('overrides lang from backendTextLanguage when embedded in admin', async function () {
 		const source = await readRepoFile('admin/tab/boot.js');
-		const applyRuntimeAboutPayloadSource = extractFunctionSource(source, 'applyRuntimeAboutPayload');
+		const applyBootstrapAboutPayloadSource = extractFunctionSource(source, 'applyBootstrapAboutPayload');
 		const overrideCalls = [];
 		const i18nCalls = [];
 		const mergeCalls = [];
@@ -330,8 +330,8 @@ globalThis.__applyRuntimeAboutPayload = applyRuntimeAboutPayload;
 			`
 let timezoneFallbackToastShown = false;
 let connPanelData = {};
-${applyRuntimeAboutPayloadSource}
-globalThis.__applyRuntimeAboutPayload = applyRuntimeAboutPayload;
+${applyBootstrapAboutPayloadSource}
+globalThis.__applyBootstrapAboutPayload = applyBootstrapAboutPayload;
 `,
 			{
 				isEmbeddedInAdmin: true,
@@ -348,7 +348,7 @@ globalThis.__applyRuntimeAboutPayload = applyRuntimeAboutPayload;
 			},
 			'boot-langOverride.js',
 		);
-		sandbox.__applyRuntimeAboutPayload({
+		sandbox.__applyBootstrapAboutPayload({
 			title: 'MsgHub',
 			version: '0.0.3',
 			time: { timeZone: 'Europe/Berlin', source: 'server' },
@@ -618,9 +618,9 @@ globalThis.__applyStaticI18n = applyStaticI18n;
 		assert.equal(i18nElements[0].textContent, 'T:msghub.i18n.core.sample');
 	});
 
-	it('applyRuntimeAboutPayload populates connPanelData and calls updateConnectionPanel', async function () {
+	it('applyBootstrapAboutPayload populates connPanelData and calls updateConnectionPanel', async function () {
 		const source = await readRepoFile('admin/tab/boot.js');
-		const fnSource = extractFunctionSource(source, 'applyRuntimeAboutPayload');
+		const fnSource = extractFunctionSource(source, 'applyBootstrapAboutPayload');
 		const panelUpdates = [];
 
 		const sandbox = runInSandbox(
@@ -628,7 +628,7 @@ globalThis.__applyStaticI18n = applyStaticI18n;
 let timezoneFallbackToastShown = false;
 let connPanelData = {};
 ${fnSource}
-globalThis.__fn = applyRuntimeAboutPayload;
+globalThis.__fn = applyBootstrapAboutPayload;
 globalThis.__connPanelData = () => connPanelData;
 `,
 			{
@@ -1581,14 +1581,14 @@ globalThis.__test = async function() {
 
 	it('does not override lang when not embedded in admin', async function () {
 		const source = await readRepoFile('admin/tab/boot.js');
-		const applyRuntimeAboutPayloadSource = extractFunctionSource(source, 'applyRuntimeAboutPayload');
+		const applyBootstrapAboutPayloadSource = extractFunctionSource(source, 'applyBootstrapAboutPayload');
 		const overrideCalls = [];
 		const sandbox = runInSandbox(
 			`
 let timezoneFallbackToastShown = false;
 let connPanelData = {};
-${applyRuntimeAboutPayloadSource}
-globalThis.__applyRuntimeAboutPayload = applyRuntimeAboutPayload;
+${applyBootstrapAboutPayloadSource}
+globalThis.__applyBootstrapAboutPayload = applyBootstrapAboutPayload;
 `,
 			{
 				isEmbeddedInAdmin: false,
@@ -1602,7 +1602,7 @@ globalThis.__applyRuntimeAboutPayload = applyRuntimeAboutPayload;
 			},
 			'boot-langOverrideSkip.js',
 		);
-		sandbox.__applyRuntimeAboutPayload({
+		sandbox.__applyBootstrapAboutPayload({
 			title: 'MsgHub',
 			version: '0.0.3',
 			time: { timeZone: 'Europe/Berlin', source: 'server' },

@@ -522,8 +522,8 @@ function createAdminApi({ msghubRequest, msghubSocket, adapterInstance, lang, t,
 		deleteInstance: params => msghubRequest('admin.plugins.deleteInstance', params || {}),
 	});
 
-	const runtime = Object.freeze({
-		about: () => msghubRequest('ui.bootstrap', {}).then(data => data?.about || {}),
+	const bootstrap = Object.freeze({
+		get: () => msghubRequest('ui.bootstrap', {}).then(data => (data && typeof data === 'object' ? data : {})),
 	});
 
 	const time = Object.freeze({
@@ -562,7 +562,7 @@ function createAdminApi({ msghubRequest, msghubSocket, adapterInstance, lang, t,
 		log,
 		host,
 		constants,
-		runtime,
+		bootstrap,
 		time,
 		stats,
 		messages,

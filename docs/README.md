@@ -99,7 +99,7 @@ Message Hub maintains a deliberate separation between three independent language
 
 **AdminTab UI language**
 
-- When embedded in the ioBroker Admin iFrame: resolved from the `runtime.about` response (`data.lang.backendTextLanguage`) on socket connect. This reflects the ioBroker backend language.
+- When embedded in the ioBroker Admin iFrame: resolved from the `ui.bootstrap` response (`data.about.lang.backendTextLanguage`) on socket connect. This reflects the ioBroker backend language.
 - When opened standalone (no parent frame): falls back to `navigator.language`.
 - Controls which `admin/i18n/<lang>.json` dictionary the AdminTab loads.
 

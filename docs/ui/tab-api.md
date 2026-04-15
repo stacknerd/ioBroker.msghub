@@ -47,7 +47,7 @@ The returned API currently exposes these groups:
 - `log`
 - `host`
 - `constants`
-- `runtime`
+- `bootstrap`
 - `time`
 - `stats`
 - `messages`
@@ -71,7 +71,7 @@ Instead of letting panels call arbitrary `sendTo` commands, `api.js` maps explic
 - `plugins.updateInstance(...)` -> `admin.plugins.updateInstance`
 - `plugins.setEnabled(...)` -> `admin.plugins.setEnabled`
 - `plugins.deleteInstance(...)` -> `admin.plugins.deleteInstance`
-- `runtime.about()` -> `ui.bootstrap` (returns only `.about`)
+- `bootstrap.get()` -> `ui.bootstrap`
 
 ### 3) Provide UI-safe helper behavior
 
@@ -213,7 +213,7 @@ This is used for API branches that are intentionally unavailable in the current 
 - The context-menu wrapper intentionally does not emit generic fallback toasts when an action rejects. Error handling stays with the caller.
 - In normal mode, `host.panels` is derived from the loaded active composition and preserves the structured `corePanel` / `pluginPanel` refs. In `panel=` mode, `host.panels` stays the same structured contract, narrowed to the requested single panel.
 - `args.locale` affects only the browser-side default format locale for `api.time.*`; it does not change text language, i18n loading, plugin bundle language selection, or backend payloads.
-- `runtime.about()` stays on the API surface, but its data comes from the central `ui.bootstrap` cache in `runtime.js`.
+- `bootstrap.get()` is the only frontend bootstrap entry point; consumers read `response.about` from that payload.
 
 ---
 

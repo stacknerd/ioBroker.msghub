@@ -58,11 +58,11 @@ const ctx = Object.freeze({
 let timezoneFallbackToastShown = false;
 
 /**
- * Applies runtime metadata (branding + timezone policy) from `ui.bootstrap.about`.
+ * Applies bootstrap metadata (branding + timezone policy) from `ui.bootstrap.about`.
  *
  * @param {any} payload - `ui.bootstrap.about` payload.
  */
-function applyRuntimeAboutPayload(payload) {
+function applyBootstrapAboutPayload(payload) {
 	const data = payload && typeof payload === 'object' ? payload : null;
 	const title = typeof data?.title === 'string' ? data.title.trim() : '';
 	const version = typeof data?.version === 'string' ? data.version.trim() : '';
@@ -109,29 +109,29 @@ function applyRuntimeAboutPayload(payload) {
 }
 
 /**
- * Refreshes runtime metadata and updates shared UI policy.
+ * Refreshes bootstrap metadata and updates shared UI policy.
  *
  * @returns {Promise<void>}
  */
-async function refreshRuntimeAbout() {
+async function refreshBootstrapAbout() {
 	try {
-		const about = await api?.runtime?.about?.();
-		applyRuntimeAboutPayload(about);
+		const bootstrap = await api?.bootstrap?.get?.();
+		applyBootstrapAboutPayload(bootstrap?.about || {});
 	} catch {
-		const policy = api?.time?.setPolicy?.({ timeZone: '', source: 'runtime-about-error' });
+		const policy = api?.time?.setPolicy?.({ timeZone: '', source: 'ui-bootstrap-error' });
 		if (policy?.isFallbackUtc && !timezoneFallbackToastShown) {
 			timezoneFallbackToastShown = true;
-			api?.log?.warn?.(`AdminTab timezone fallback active: ${policy.warning || 'runtime_about_error'}`);
+			api?.log?.warn?.(`AdminTab timezone fallback active: ${policy.warning || 'ui_bootstrap_error'}`);
 			ui?.toast?.({
-				text: t('msghub.i18n.core.admin.ui.timezone.fallbackUtc.text', policy.warning || 'runtime_about_error'),
+				text: t('msghub.i18n.core.admin.ui.timezone.fallbackUtc.text', policy.warning || 'ui_bootstrap_error'),
 				variant: 'warning',
 			});
 		}
 	}
 }
 
-// Branding and timezone policy are refreshed as soon as runtime data is available.
-void refreshRuntimeAbout();
+// Branding and timezone policy are refreshed as soon as bootstrap data is available.
+void refreshBootstrapAbout();
 
 /**
  * Returns an editable target beneath an event target.
@@ -1516,7 +1516,7 @@ function onBecomeOnline() {
 	setConnStatus(true);
 	void ensureBooted().then(() => {
 		markShellHealthy();
-		void refreshRuntimeAbout();
+		void refreshBootstrapAbout();
 		applyStaticI18n();
 		updateConnectionPanel();
 		if (connLostToastActive) {
