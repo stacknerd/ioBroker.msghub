@@ -275,6 +275,204 @@ globalThis.__applyBootstrapAboutPayload = applyBootstrapAboutPayload;
 		assert.equal(warnings.length, 0);
 	});
 
+	it('registers one persistent localized danger toast for capability mismatch runtime events', async function () {
+		const source = await readRepoFile('admin/tab/boot.js');
+		const resolveTextSource = extractFunctionSource(source, 'resolveCapabilityMismatchToastText');
+		const registerSource = extractFunctionSource(source, 'registerCapabilityMismatchToastHandler');
+		const toasts = [];
+		const listeners = new Map();
+		const sandbox = runInSandbox(
+			`
+const capabilityMismatchToastMessages = new Set();
+${resolveTextSource}
+${registerSource}
+globalThis.__registerCapabilityMismatchToastHandler = registerCapabilityMismatchToastHandler;
+`,
+			{
+				ensureAdminI18nLoaded: () => Promise.resolve(),
+				hasAdminKey: key => key === 'msghub.i18n.core.admin.ui.capability.mismatch.text',
+				t: (key, capability) => `${key}:${capability}`,
+				ui: {
+					toast: opts => toasts.push(opts),
+				},
+				window: {
+					addEventListener(type, handler) {
+						listeners.set(String(type), handler);
+					},
+				},
+			},
+			'boot-capabilityMismatchToast.js',
+		);
+
+		sandbox.__registerCapabilityMismatchToastHandler();
+		const handler = listeners.get('msghub:capability-mismatch');
+		assert.equal(typeof handler, 'function');
+
+		handler({ detail: { capability: 'admin', message: "Missing bootstrap token for capability 'admin'" } });
+		handler({ detail: { capability: 'admin', message: "Missing bootstrap token for capability 'admin'" } });
+		await Promise.resolve();
+		await Promise.resolve();
+
+		assert.deepEqual(
+			JSON.parse(JSON.stringify(toasts)),
+			[
+				{
+					text: 'msghub.i18n.core.admin.ui.capability.mismatch.text:admin',
+					variant: 'danger',
+					persist: true,
+				},
+			],
+		);
+	});
+
+	it('falls back to the runtime capability mismatch message when admin i18n is unavailable', async function () {
+		const source = await readRepoFile('admin/tab/boot.js');
+		const resolveTextSource = extractFunctionSource(source, 'resolveCapabilityMismatchToastText');
+		const registerSource = extractFunctionSource(source, 'registerCapabilityMismatchToastHandler');
+		const toasts = [];
+		const listeners = new Map();
+		const sandbox = runInSandbox(
+			`
+const capabilityMismatchToastMessages = new Set();
+${resolveTextSource}
+${registerSource}
+globalThis.__registerCapabilityMismatchToastHandler = registerCapabilityMismatchToastHandler;
+`,
+			{
+				ensureAdminI18nLoaded: () => Promise.reject(new Error('i18n unavailable')),
+				hasAdminKey: () => false,
+				t: key => key,
+				ui: {
+					toast: opts => toasts.push(opts),
+				},
+				window: {
+					addEventListener(type, handler) {
+						listeners.set(String(type), handler);
+					},
+				},
+			},
+			'boot-capabilityMismatchToast-fallback.js',
+		);
+
+		sandbox.__registerCapabilityMismatchToastHandler();
+		const handler = listeners.get('msghub:capability-mismatch');
+		assert.equal(typeof handler, 'function');
+
+		handler({ detail: { capability: 'web', message: "Missing bootstrap token for capability 'web'" } });
+		await Promise.resolve();
+		await Promise.resolve();
+
+		assert.deepEqual(
+			JSON.parse(JSON.stringify(toasts)),
+			[
+				{
+					text: "Missing bootstrap token for capability 'web'",
+					variant: 'danger',
+					persist: true,
+				},
+			],
+		);
+	});
+
+	it('registers one persistent localized danger toast for token error runtime events', async function () {
+		const source = await readRepoFile('admin/tab/boot.js');
+		const resolveTextSource = extractFunctionSource(source, 'resolveTokenErrorToastText');
+		const registerSource = extractFunctionSource(source, 'registerTokenErrorToastHandler');
+		const toasts = [];
+		const listeners = new Map();
+		const sandbox = runInSandbox(
+			`
+const tokenErrorToastMessages = new Set();
+${resolveTextSource}
+${registerSource}
+globalThis.__registerTokenErrorToastHandler = registerTokenErrorToastHandler;
+`,
+			{
+				hasAdminKey: key => key === 'msghub.i18n.core.admin.ui.capability.token.invalidOrExpired.text',
+				t: key => `T:${key}`,
+				ui: {
+					toast: opts => toasts.push(opts),
+				},
+				window: {
+					addEventListener(type, handler) {
+						listeners.set(String(type), handler);
+					},
+				},
+			},
+			'boot-tokenErrorToast.js',
+		);
+
+		sandbox.__registerTokenErrorToastHandler();
+		const handler = listeners.get('msghub:capability-token-error');
+		assert.equal(typeof handler, 'function');
+
+		handler({
+			detail: { capability: 'admin', reason: 'invalidOrExpired', message: 'Invalid or expired token' },
+		});
+		handler({
+			detail: { capability: 'admin', reason: 'invalidOrExpired', message: 'Invalid or expired token' },
+		});
+
+		assert.deepEqual(
+			JSON.parse(JSON.stringify(toasts)),
+			[
+				{
+					text: 'T:msghub.i18n.core.admin.ui.capability.token.invalidOrExpired.text',
+					variant: 'danger',
+					persist: true,
+				},
+			],
+		);
+	});
+
+	it('falls back to the runtime token error message when admin i18n is unavailable', async function () {
+		const source = await readRepoFile('admin/tab/boot.js');
+		const resolveTextSource = extractFunctionSource(source, 'resolveTokenErrorToastText');
+		const registerSource = extractFunctionSource(source, 'registerTokenErrorToastHandler');
+		const toasts = [];
+		const listeners = new Map();
+		const sandbox = runInSandbox(
+			`
+const tokenErrorToastMessages = new Set();
+${resolveTextSource}
+${registerSource}
+globalThis.__registerTokenErrorToastHandler = registerTokenErrorToastHandler;
+`,
+			{
+				hasAdminKey: () => false,
+				t: key => key,
+				ui: {
+					toast: opts => toasts.push(opts),
+				},
+				window: {
+					addEventListener(type, handler) {
+						listeners.set(String(type), handler);
+					},
+				},
+			},
+			'boot-tokenErrorToast-fallback.js',
+		);
+
+		sandbox.__registerTokenErrorToastHandler();
+		const handler = listeners.get('msghub:capability-token-error');
+		assert.equal(typeof handler, 'function');
+
+		handler({
+			detail: { capability: 'config', reason: 'mismatch', message: 'Token capability mismatch: expected x, got y' },
+		});
+
+		assert.deepEqual(
+			JSON.parse(JSON.stringify(toasts)),
+			[
+				{
+					text: 'Token capability mismatch: expected x, got y',
+					variant: 'danger',
+					persist: true,
+				},
+			],
+		);
+	});
+
 	it('shows fallback timezone warning only once', async function () {
 		const source = await readRepoFile('admin/tab/boot.js');
 		const applyBootstrapAboutPayloadSource = extractFunctionSource(source, 'applyBootstrapAboutPayload');

@@ -243,6 +243,8 @@ const adapterInstance = `msghub.${args.instance}`;
 window.msghubSocket = createSocket();
 window.msghubTransport = transport;
 const TOKEN_REFRESH_THRESHOLD_MS = 15 * 60 * 1000;
+const CAPABILITY_MISMATCH_EVENT = 'msghub:capability-mismatch';
+const TOKEN_ERROR_EVENT = 'msghub:capability-token-error';
 
 /**
  * Creates the mutable bootstrap state container.
@@ -376,6 +378,138 @@ function isTokenError(error) {
 }
 
 /**
+ * Detects the frontend-visible capability mismatch caused by a missing bootstrap grant.
+ *
+ * @param {any} error - Error thrown by token/bootstrap handling.
+ * @returns {boolean} `true` when the current bootstrap lacks the required capability grant.
+ */
+function isMissingBootstrapTokenError(error) {
+	const message = String(error?.message || error || '');
+	return /^Missing bootstrap token for capability '.*'$/.test(message);
+}
+
+/**
+ * Classifies one remaining token/bootstrap error into a stable UI-facing reason.
+ *
+ * The capability-mismatch case is handled separately through
+ * `msghub:capability-mismatch`.
+ *
+ * @param {any} error - Error thrown by token/bootstrap handling.
+ * @returns {'invalidOrExpired'|'mismatch'|'missing'|'unknownTokenError'} Stable reason key.
+ */
+function classifyTokenErrorReason(error) {
+	const message = String(error?.message || error || '').trim();
+	if (/^invalid or expired token$/i.test(message)) {
+		return 'invalidOrExpired';
+	}
+	if (/^token (host|capability) mismatch:/i.test(message)) {
+		return 'mismatch';
+	}
+	if (/^missing token for capability '/i.test(message)) {
+		return 'missing';
+	}
+	return 'unknownTokenError';
+}
+
+/**
+ * Emits one browser-global capability mismatch event for the boot/UI layer.
+ *
+ * The event payload intentionally mirrors the existing runtime error message so the
+ * shell can surface the exact text without introducing a new backend/UI contract.
+ *
+ * @param {object} detail - Event payload.
+ * @param {string} detail.command - Command that needed the missing capability.
+ * @param {string} detail.capability - Missing capability namespace.
+ * @param {string} detail.message - Existing runtime error message.
+ * @returns {void} Nothing.
+ */
+function emitCapabilityMismatchEvent({ command, capability, message }) {
+	if (!window || typeof window.dispatchEvent !== 'function') {
+		return;
+	}
+	const detail = {
+		command: typeof command === 'string' ? command : '',
+		capability: typeof capability === 'string' ? capability : '',
+		message: String(message || ''),
+	};
+	let eventObject;
+	try {
+		const CustomEventCtor =
+			typeof window.CustomEvent === 'function'
+				? window.CustomEvent
+				: typeof CustomEvent === 'function'
+					? CustomEvent
+					: null;
+		eventObject = CustomEventCtor ? new CustomEventCtor(CAPABILITY_MISMATCH_EVENT, { detail }) : null;
+	} catch {
+		eventObject = null;
+	}
+	if (!eventObject) {
+		const FallbackEventCtor = typeof Event === 'function' ? Event : null;
+		if (!FallbackEventCtor) {
+			return;
+		}
+		eventObject = new FallbackEventCtor(CAPABILITY_MISMATCH_EVENT);
+		Object.assign(eventObject, { detail });
+	}
+	try {
+		window.dispatchEvent(eventObject);
+	} catch {
+		// Ignore event-delivery failures. The original request error remains authoritative.
+	}
+}
+
+/**
+ * Emits one browser-global token error event for remaining FORBIDDEN/token failures.
+ *
+ * @param {object} detail - Event payload.
+ * @param {string} detail.command - Command that triggered the token failure.
+ * @param {string} detail.capability - Capability namespace involved in the request.
+ * @param {'invalidOrExpired'|'mismatch'|'missing'|'unknownTokenError'} detail.reason - Stable token error reason.
+ * @param {string} detail.message - Existing runtime error message.
+ * @returns {void} Nothing.
+ */
+function emitTokenErrorEvent({ command, capability, reason, message }) {
+	if (!window || typeof window.dispatchEvent !== 'function') {
+		return;
+	}
+	const detail = {
+		command: typeof command === 'string' ? command : '',
+		capability: typeof capability === 'string' ? capability : '',
+		reason:
+			reason === 'invalidOrExpired' || reason === 'mismatch' || reason === 'missing'
+				? reason
+				: 'unknownTokenError',
+		message: String(message || ''),
+	};
+	let eventObject;
+	try {
+		const CustomEventCtor =
+			typeof window.CustomEvent === 'function'
+				? window.CustomEvent
+				: typeof CustomEvent === 'function'
+					? CustomEvent
+					: null;
+		eventObject = CustomEventCtor ? new CustomEventCtor(TOKEN_ERROR_EVENT, { detail }) : null;
+	} catch {
+		eventObject = null;
+	}
+	if (!eventObject) {
+		const FallbackEventCtor = typeof Event === 'function' ? Event : null;
+		if (!FallbackEventCtor) {
+			return;
+		}
+		eventObject = new FallbackEventCtor(TOKEN_ERROR_EVENT);
+		Object.assign(eventObject, { detail });
+	}
+	try {
+		window.dispatchEvent(eventObject);
+	} catch {
+		// Ignore event-delivery failures. The original request error remains authoritative.
+	}
+}
+
+/**
  * Loads fresh bootstrap data from the backend and caches it centrally.
  *
  * @returns {Promise<{ capabilities?: object, about?: object }>} Bootstrap payload.
@@ -494,12 +628,44 @@ function msghubRequest(command, message) {
 				throw error;
 			}
 			if (bootstrapState.hardRebootstrapConsumed) {
+				if (isMissingBootstrapTokenError(error)) {
+					emitCapabilityMismatchEvent({
+						command,
+						capability,
+						message: String(error?.message || error || ''),
+					});
+				} else {
+					emitTokenErrorEvent({
+						command,
+						capability,
+						reason: classifyTokenErrorReason(error),
+						message: String(error?.message || error || ''),
+					});
+				}
 				throw error;
 			}
 			bootstrapState.hardRebootstrapConsumed = true;
 			await ensureBootstrapPayload({ force: true });
-			const token = await ensureCapabilityToken(capability);
-			return sendTransportRequest(command, { ...payload, token });
+			try {
+				const token = await ensureCapabilityToken(capability);
+				return await sendTransportRequest(command, { ...payload, token });
+			} catch (retryError) {
+				if (isMissingBootstrapTokenError(retryError)) {
+					emitCapabilityMismatchEvent({
+						command,
+						capability,
+						message: String(retryError?.message || retryError || ''),
+					});
+				} else {
+					emitTokenErrorEvent({
+						command,
+						capability,
+						reason: classifyTokenErrorReason(retryError),
+						message: String(retryError?.message || retryError || ''),
+					});
+				}
+				throw retryError;
+			}
 		});
 }
 let lang = typeof args.lang === 'string' ? args.lang : 'en';

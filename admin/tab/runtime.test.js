@@ -167,12 +167,36 @@ async function loadRuntimeSandbox(options = {}) {
 		pathname: options.pathname || '/admin/index_m.html',
 	};
 
+	const windowListeners = new Map();
+	const dispatchedEvents = [];
+
 	const windowObject = {
 		location: locationObject,
 		navigator: { language: options.navigatorLanguage || 'en-US' },
 		localStorage,
 		matchMedia: query => ({ matches: query.includes('dark') ? !!options.prefersDark : false }),
 		URL,
+		addEventListener(type, handler) {
+			const key = String(type);
+			if (!windowListeners.has(key)) {
+				windowListeners.set(key, []);
+			}
+			windowListeners.get(key).push(handler);
+		},
+		dispatchEvent(event) {
+			dispatchedEvents.push(event);
+			const handlers = windowListeners.get(String(event?.type || '')) || [];
+			for (const handler of handlers) {
+				handler(event);
+			}
+			return true;
+		},
+	};
+	windowObject.CustomEvent = class CustomEvent {
+		constructor(type, init = {}) {
+			this.type = String(type);
+			this.detail = init?.detail;
+		}
 	};
 	windowObject.window = windowObject;
 	windowObject.top = topDocument ? { document: topDocument } : windowObject;
@@ -190,7 +214,7 @@ async function loadRuntimeSandbox(options = {}) {
 	};
 
 	vm.runInNewContext(`${source}\n${expose}`, sandbox, { filename: 'admin/tab/runtime.js' });
-	sandbox.__meta = { ioCalls, emitCalls, fetchCalls, attrs };
+	sandbox.__meta = { ioCalls, emitCalls, fetchCalls, attrs, dispatchedEvents };
 	return sandbox;
 }
 
@@ -593,6 +617,75 @@ describe('admin/tab/runtime.js', function () {
 					'admin.plugins.listInstances',
 				],
 			);
+		});
+
+		it('emits one capability mismatch event when a command needs a missing bootstrap capability', async function () {
+			const sandbox = await loadRuntimeSandbox({
+				socketEmit(_eventName, _adapterInstance, command, _payload, callback) {
+					if (command === 'ui.bootstrap') {
+						callback({
+							ok: true,
+							data: {
+								capabilities: {
+									web: { token: 'web-only', expiresAt: '2999-01-01T00:00:00.000Z' },
+								},
+								about: {},
+							},
+						});
+						return;
+					}
+					callback({ ok: true, data: {} });
+				},
+			});
+
+			await assert.rejects(
+				() => sandbox.window.__runtime.msghubRequest('admin.plugins.listInstances', {}),
+				err => err?.message === "Missing bootstrap token for capability 'admin'",
+			);
+
+			assert.equal(sandbox.__meta.dispatchedEvents.length, 1);
+			assert.equal(sandbox.__meta.dispatchedEvents[0].type, 'msghub:capability-mismatch');
+			assert.deepEqual(JSON.parse(JSON.stringify(sandbox.__meta.dispatchedEvents[0].detail)), {
+				command: 'admin.plugins.listInstances',
+				capability: 'admin',
+				message: "Missing bootstrap token for capability 'admin'",
+			});
+		});
+
+		it('emits one token error event when a command keeps failing with an expired token after re-bootstrap', async function () {
+			const sandbox = await loadRuntimeSandbox({
+				socketEmit(_eventName, _adapterInstance, command, _payload, callback) {
+					if (command === 'ui.bootstrap') {
+						callback({
+							ok: true,
+							data: {
+								capabilities: {
+									admin: { token: 'admin-token', expiresAt: '2999-01-01T00:00:00.000Z' },
+									config: { token: 'config-token', expiresAt: '2999-01-01T00:00:00.000Z' },
+									web: { token: 'web-token', expiresAt: '2999-01-01T00:00:00.000Z' },
+								},
+								about: {},
+							},
+						});
+						return;
+					}
+					callback({ ok: false, error: { code: 'FORBIDDEN', message: 'Invalid or expired token' } });
+				},
+			});
+
+			await assert.rejects(
+				() => sandbox.window.__runtime.msghubRequest('admin.plugins.listInstances', {}),
+				err => err?.message === 'Invalid or expired token',
+			);
+
+			assert.equal(sandbox.__meta.dispatchedEvents.length, 1);
+			assert.equal(sandbox.__meta.dispatchedEvents[0].type, 'msghub:capability-token-error');
+			assert.deepEqual(JSON.parse(JSON.stringify(sandbox.__meta.dispatchedEvents[0].detail)), {
+				command: 'admin.plugins.listInstances',
+				capability: 'admin',
+				reason: 'invalidOrExpired',
+				message: 'Invalid or expired token',
+			});
 		});
 	});
 

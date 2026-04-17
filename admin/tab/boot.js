@@ -39,6 +39,125 @@ const elements = Object.freeze({
 
 const ui = createUi();
 ui?.contextMenu?.setBrandingText?.('Message Hub');
+const capabilityMismatchToastMessages = new Set();
+const tokenErrorToastMessages = new Set();
+
+/**
+ * Resolves the visible toast text for one capability mismatch event.
+ *
+ * Falls back to the runtime-provided message while admin i18n is still unavailable
+ * or when the event payload is incomplete.
+ *
+ * @param {any} detail - Event detail from `msghub:capability-mismatch`.
+ * @returns {string} Localized toast text or the runtime fallback message.
+ */
+function resolveCapabilityMismatchToastText(detail) {
+	const capability = typeof detail?.capability === 'string' ? detail.capability.trim() : '';
+	const fallbackMessage = typeof detail?.message === 'string' ? detail.message.trim() : '';
+	if (
+		!capability ||
+		typeof hasAdminKey !== 'function' ||
+		typeof t !== 'function' ||
+		!hasAdminKey('msghub.i18n.core.admin.ui.capability.mismatch.text')
+	) {
+		return fallbackMessage;
+	}
+	return t('msghub.i18n.core.admin.ui.capability.mismatch.text', capability);
+}
+
+/**
+ * Resolves the visible toast text for one runtime token error event.
+ *
+ * Falls back to the runtime-provided message while admin i18n is still unavailable
+ * or when the event payload does not map to a known token-error key.
+ *
+ * @param {any} detail - Event detail from `msghub:capability-token-error`.
+ * @returns {string} Localized toast text or the runtime fallback message.
+ */
+function resolveTokenErrorToastText(detail) {
+	const reason = typeof detail?.reason === 'string' ? detail.reason.trim() : '';
+	const fallbackMessage = typeof detail?.message === 'string' ? detail.message.trim() : '';
+	const keyByReason = {
+		invalidOrExpired: 'msghub.i18n.core.admin.ui.capability.token.invalidOrExpired.text',
+		mismatch: 'msghub.i18n.core.admin.ui.capability.token.mismatch.text',
+		missing: 'msghub.i18n.core.admin.ui.capability.token.missing.text',
+	};
+	const key = Object.prototype.hasOwnProperty.call(keyByReason, reason) ? keyByReason[reason] : '';
+	if (!key || typeof hasAdminKey !== 'function' || typeof t !== 'function' || !hasAdminKey(key)) {
+		return fallbackMessage;
+	}
+	return t(key);
+}
+
+/**
+ * Registers the shell-level toast bridge for runtime capability mismatch events.
+ *
+ * `runtime.js` remains the central detection point. The boot layer only turns the
+ * existing event into one persistent danger toast for the current session.
+ *
+ * @returns {void} Nothing.
+ */
+function registerCapabilityMismatchToastHandler() {
+	if (!window || typeof window.addEventListener !== 'function') {
+		return;
+	}
+	/**
+	 * @param {any} event - Browser event carrying the runtime mismatch detail.
+	 * @returns {void} Nothing.
+	 */
+	const handleMismatchEvent = event => {
+		const detail = event?.detail && typeof event.detail === 'object' ? event.detail : null;
+		const message = typeof detail?.message === 'string' ? detail.message.trim() : '';
+		const capability = typeof detail?.capability === 'string' ? detail.capability.trim() : '';
+		const dedupeKey = capability || message;
+		if (!message || !dedupeKey || capabilityMismatchToastMessages.has(dedupeKey)) {
+			return;
+		}
+		capabilityMismatchToastMessages.add(dedupeKey);
+		ui?.toast?.({
+			text: resolveCapabilityMismatchToastText(detail),
+			variant: 'danger',
+			persist: true,
+		});
+	};
+	window.addEventListener('msghub:capability-mismatch', handleMismatchEvent);
+}
+
+registerCapabilityMismatchToastHandler();
+
+/**
+ * Registers the shell-level toast bridge for remaining runtime token error events.
+ *
+ * @returns {void} Nothing.
+ */
+function registerTokenErrorToastHandler() {
+	if (!window || typeof window.addEventListener !== 'function') {
+		return;
+	}
+	/**
+	 * @param {any} event - Browser event carrying the runtime token error detail.
+	 * @returns {void} Nothing.
+	 */
+	const handleTokenErrorEvent = event => {
+		const detail = event?.detail && typeof event.detail === 'object' ? event.detail : null;
+		const message = typeof detail?.message === 'string' ? detail.message.trim() : '';
+		const capability = typeof detail?.capability === 'string' ? detail.capability.trim() : '';
+		const reason = typeof detail?.reason === 'string' ? detail.reason.trim() : '';
+		const dedupeKey = `${reason}:${capability || message}`;
+		if (!message || !reason || !dedupeKey || tokenErrorToastMessages.has(dedupeKey)) {
+			return;
+		}
+		tokenErrorToastMessages.add(dedupeKey);
+		ui?.toast?.({
+			text: resolveTokenErrorToastText(detail),
+			variant: 'danger',
+			persist: true,
+		});
+	};
+	window.addEventListener('msghub:capability-token-error', handleTokenErrorEvent);
+}
+
+registerTokenErrorToastHandler();
 
 const api = createAdminApi({ msghubRequest, msghubSocket, adapterInstance, lang, t, pickText, ui });
 

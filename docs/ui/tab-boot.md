@@ -61,6 +61,24 @@ renders the translated `unavailableTarget` hard error instead of leaving an empt
 11. Register lazy-mount handling for later plugin-tab switches.
 12. Keep connection state current via ping, guarded resume-triggered recovery checks, socket reconnect handling, and reconnect warmup.
 
+Before the rest of the shell starts, `boot.js` also registers a window-level listener for the runtime's
+`msghub:capability-mismatch` event. When the runtime reports the existing
+`Missing bootstrap token for capability '...'` error through that event, the shell shows one persistent
+danger toast for the current browser session. When admin i18n is already available, `boot.js` localizes
+that toast through `msghub.i18n.core.admin.ui.capability.mismatch.text` and injects the reported
+capability level (`admin`, `web`, or `config`). If admin i18n is not available yet, the shell falls
+back to the runtime message text.
+
+`boot.js` also listens for the runtime's `msghub:capability-token-error` event. For the stable token
+error reasons `invalidOrExpired`, `mismatch`, and `missing`, the shell shows one persistent localized
+danger toast per reason/capability combination through:
+
+- `msghub.i18n.core.admin.ui.capability.token.invalidOrExpired.text`
+- `msghub.i18n.core.admin.ui.capability.token.mismatch.text`
+- `msghub.i18n.core.admin.ui.capability.token.missing.text`
+
+Unknown reasons or missing admin i18n fall back to the runtime message text.
+
 Important: plugin panel activation after hydration is resolved in this order:
 
 1. URL hash, when it targets a hydrated plugin tab

@@ -123,6 +123,16 @@ For `admin.*`, `config.*`, and `web.*`, that wrapper also owns the central capab
 - refresh when the current grant has less than 15 minutes remaining lifetime
 - exactly one forced re-bootstrap retry on the first token-related command failure of the current browser session
 
+If a command still cannot obtain a token after that flow because the cached bootstrap has no grant for the
+required namespace, `runtime.js` keeps the existing `Missing bootstrap token for capability '...'` error text
+and emits one browser-global `msghub:capability-mismatch` event with that same message. The boot layer may
+surface that state to the user, but the runtime remains the canonical detection point.
+
+If the re-bootstrap still fails for other token-related reasons, `runtime.js` emits
+`msghub:capability-token-error` with `{ command, capability, reason, message }`. The stable `reason`
+classifies the remaining cases into `invalidOrExpired`, `mismatch`, `missing`, or `unknownTokenError`,
+while `message` keeps the original runtime text as the fallback.
+
 This keeps token logic out of panels, `api.js`, and the plugin UI host.
 
 ### 3) Load and serve the shell i18n dictionary
