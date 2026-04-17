@@ -167,6 +167,9 @@ Defense in depth:
 - invalid JSON payloads return `400`
 - disallowed commands return `403`
 - `ui.bootstrap` responses are filtered by the host to `capabilities.web` before they reach the browser runtime
+- the reused shell runs one HTTP-mode socket exposure probe during bootstrap: if a temporary socket/sendTo
+  path can still execute `web.ping` successfully in the public host, the UI raises a persistent danger toast
+  because the HTTP-only boundary is no longer exclusive
 
 ### Interface 4: public route contract
 

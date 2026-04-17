@@ -306,6 +306,7 @@
 	"msghub.i18n.core.admin.ui.plugins.viewer.empty.text": "No content available.",
 	"msghub.i18n.core.admin.ui.plugins.viewer.title": "Viewer",
 	"msghub.i18n.core.admin.ui.saving.text": "Saving…",
+	"msghub.i18n.core.admin.ui.security.publicWebSocketExposure.text": "Security warning: This public web host uses HTTP mode, but a socket/sendTo path is still reachable. This exposes a critical security gap and requires immediate action.",
 	"msghub.i18n.core.admin.ui.spinner.pleaseWait.text": "Please wait…",
 	"msghub.i18n.core.admin.ui.tabs.messages.label": "Messages",
 	"msghub.i18n.core.admin.ui.tabs.plugins.label": "Plugin config",

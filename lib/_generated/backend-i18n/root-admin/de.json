@@ -306,6 +306,7 @@
 	"msghub.i18n.core.admin.ui.plugins.viewer.empty.text": "Kein Inhalt verfügbar.",
 	"msghub.i18n.core.admin.ui.plugins.viewer.title": "Viewer",
 	"msghub.i18n.core.admin.ui.saving.text": "Speichern…",
+	"msghub.i18n.core.admin.ui.security.publicWebSocketExposure.text": "Sicherheitswarnung: Dieser Public-Web-Host verwendet HTTP-Modus, aber ein Socket-/sendTo-Pfad ist weiterhin erreichbar. Das öffnet eine kritische Sicherheitslücke und erfordert sofortiges Handeln.",
 	"msghub.i18n.core.admin.ui.spinner.pleaseWait.text": "Bitte warten…",
 	"msghub.i18n.core.admin.ui.tabs.messages.label": "Messages",
 	"msghub.i18n.core.admin.ui.tabs.plugins.label": "Plugin-Konfiguration",

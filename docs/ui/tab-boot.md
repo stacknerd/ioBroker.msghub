@@ -79,6 +79,18 @@ danger toast per reason/capability combination through:
 
 Unknown reasons or missing admin i18n fall back to the runtime message text.
 
+In public Web-host HTTP mode, `boot.js` also runs one dedicated socket exposure probe during bootstrap.
+The normal HTTP runtime does not create `msghubSocket`, so this is a separate temporary socket.io client:
+
+- precondition: `args.transport === 'http'`
+- bootstrap source: the existing cached `ui.bootstrap` payload
+- probe command: `web.ping` sent over a temporary socket/sendTo path with the cached `capabilities.web.token`
+- vulnerable result: a successful `pong` response
+- safe result: any failure (`FORBIDDEN`, no response, connect error, timeout, missing socket.io client, ...)
+
+When that probe succeeds, the shell shows one persistent localized `danger` toast through
+`msghub.i18n.core.admin.ui.security.publicWebSocketExposure.text`.
+
 Important: plugin panel activation after hydration is resolved in this order:
 
 1. URL hash, when it targets a hydrated plugin tab

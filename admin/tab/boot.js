@@ -41,6 +41,10 @@ const ui = createUi();
 ui?.contextMenu?.setBrandingText?.('Message Hub');
 const capabilityMismatchToastMessages = new Set();
 const tokenErrorToastMessages = new Set();
+const PUBLIC_WEB_SOCKET_EXPOSURE_TOAST_ID = 'msghub-public-web-socket-exposure';
+const PUBLIC_WEB_SOCKET_EXPOSURE_I18N_KEY = 'msghub.i18n.core.admin.ui.security.publicWebSocketExposure.text';
+let publicWebSocketExposureProbePromise = null;
+let publicWebSocketExposureWarningShown = false;
 
 /**
  * Resolves the visible toast text for one capability mismatch event.
@@ -87,6 +91,150 @@ function resolveTokenErrorToastText(detail) {
 		return fallbackMessage;
 	}
 	return t(key);
+}
+
+/**
+ * Resolves the visible warning text for an unexpected public-web socket/sendTo path.
+ *
+ * @returns {string} Localized warning text or an English fallback.
+ */
+function resolvePublicWebSocketExposureWarningText() {
+	if (
+		typeof hasAdminKey === 'function' &&
+		typeof t === 'function' &&
+		hasAdminKey(PUBLIC_WEB_SOCKET_EXPOSURE_I18N_KEY)
+	) {
+		return t(PUBLIC_WEB_SOCKET_EXPOSURE_I18N_KEY);
+	}
+	return 'Security warning: This public web host uses HTTP mode, but a socket/sendTo path is still reachable. This exposes a critical security gap and requires immediate action.';
+}
+
+/**
+ * Probes whether an unexpected socket/sendTo path remains reachable in HTTP mode.
+ *
+ * The normal HTTP-mode runtime never creates `msghubSocket`, so this check uses a
+ * temporary dedicated socket.io client and considers any failure a safe result.
+ *
+ * @param {any} bootstrap - Full bootstrap payload.
+ * @returns {Promise<boolean>} `true` when `web.ping` succeeds via the temporary socket path.
+ */
+async function probeUnexpectedSocketPathForHttpTransport(bootstrap) {
+	if (args?.transport !== 'http') {
+		return false;
+	}
+	const connect = window?.io && typeof window.io.connect === 'function' ? window.io.connect.bind(window.io) : null;
+	const token =
+		typeof bootstrap?.capabilities?.web?.token === 'string' ? bootstrap.capabilities.web.token.trim() : '';
+	if (!connect || !token) {
+		return false;
+	}
+	let socket = null;
+	let closed = false;
+	const closeSocket = () => {
+		if (closed || !socket) {
+			return;
+		}
+		closed = true;
+		try {
+			socket.disconnect?.();
+		} catch {
+			// ignore
+		}
+		try {
+			socket.close?.();
+		} catch {
+			// ignore
+		}
+	};
+	try {
+		socket = connect('/', {
+			path: '/socket.io',
+			forceNew: true,
+			reconnection: false,
+			timeout: PING_TIMEOUT_MS,
+		});
+		const result = await new Promise((resolve, reject) => {
+			let settled = false;
+			const finish = (fn, value) => {
+				if (settled) {
+					return;
+				}
+				settled = true;
+				clearTimeout(timer);
+				try {
+					socket?.off?.('connect_error', onConnectError);
+					socket?.off?.('error', onSocketError);
+				} catch {
+					// ignore
+				}
+				closeSocket();
+				fn(value);
+			};
+			const onConnectError = err => finish(reject, err || new Error('socket probe connect_error'));
+			const onSocketError = err => finish(reject, err || new Error('socket probe error'));
+			const timer = setTimeout(() => finish(reject, new Error('socket probe timeout')), PING_TIMEOUT_MS);
+			try {
+				socket?.on?.('connect_error', onConnectError);
+				socket?.on?.('error', onSocketError);
+			} catch {
+				// ignore
+			}
+			if (!socket || typeof socket.emit !== 'function') {
+				finish(reject, new Error('socket probe unavailable'));
+				return;
+			}
+			socket.emit('sendTo', adapterInstance, 'web.ping', { token }, res => {
+				if (!res) {
+					finish(reject, new Error('No response'));
+					return;
+				}
+				if (res.ok && res.data === 'pong') {
+					finish(resolve, true);
+					return;
+				}
+				const code = typeof res?.error?.code === 'string' ? res.error.code.trim() : '';
+				const msg = res?.error?.message || res?.error || 'Unexpected socket probe response';
+				const error = code ? Object.assign(new Error(String(msg)), { code }) : new Error(String(msg));
+				finish(reject, error);
+			});
+		});
+		return result === true;
+	} catch {
+		return false;
+	} finally {
+		closeSocket();
+	}
+}
+
+/**
+ * Warns once when HTTP mode still exposes a functional socket/sendTo path.
+ *
+ * @param {any} bootstrap - Full bootstrap payload.
+ * @returns {Promise<void>}
+ */
+async function maybeWarnAboutUnexpectedSocketPath(bootstrap) {
+	if (publicWebSocketExposureWarningShown || args?.transport !== 'http') {
+		return;
+	}
+	if (!publicWebSocketExposureProbePromise) {
+		publicWebSocketExposureProbePromise = probeUnexpectedSocketPathForHttpTransport(bootstrap).finally(() => {
+			publicWebSocketExposureProbePromise = null;
+		});
+	}
+	const exposed = await publicWebSocketExposureProbePromise;
+	if (!exposed || publicWebSocketExposureWarningShown) {
+		return;
+	}
+	publicWebSocketExposureWarningShown = true;
+	await Promise.resolve()
+		.then(() => ensureAdminI18nLoaded?.())
+		.catch(() => undefined);
+	ui?.toast?.({
+		id: PUBLIC_WEB_SOCKET_EXPOSURE_TOAST_ID,
+		text: resolvePublicWebSocketExposureWarningText(),
+		variant: 'danger',
+		persist: true,
+	});
 }
 
 /**
@@ -236,6 +384,7 @@ async function refreshBootstrapAbout() {
 	try {
 		const bootstrap = await api?.bootstrap?.get?.();
 		applyBootstrapAboutPayload(bootstrap?.about || {});
+		void maybeWarnAboutUnexpectedSocketPath(bootstrap);
 	} catch {
 		const policy = api?.time?.setPolicy?.({ timeZone: '', source: 'ui-bootstrap-error' });
 		if (policy?.isFallbackUtc && !timezoneFallbackToastShown) {

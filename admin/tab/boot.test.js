@@ -473,6 +473,152 @@ globalThis.__registerTokenErrorToastHandler = registerTokenErrorToastHandler;
 		);
 	});
 
+	it('probeUnexpectedSocketPathForHttpTransport returns true when web.ping succeeds through a temporary socket in http mode', async function () {
+		const source = await readRepoFile('admin/tab/boot.js');
+		const probeStart = source.indexOf('async function probeUnexpectedSocketPathForHttpTransport(');
+		const warnStart = source.indexOf('/**\n * Warns once when HTTP mode still exposes a functional socket/sendTo path.');
+		const probeSource = source.slice(probeStart, warnStart).trim();
+		const emitCalls = [];
+		const disconnectCalls = [];
+		const sandbox = runInSandbox(
+			`
+const PING_TIMEOUT_MS = 5000;
+${probeSource}
+globalThis.__probeUnexpectedSocketPathForHttpTransport = probeUnexpectedSocketPathForHttpTransport;
+`,
+			{
+				args: { transport: 'http' },
+				adapterInstance: 'msghub.0',
+				window: {
+					io: {
+						connect: (_url, _options) => ({
+							on() {},
+							off() {},
+							disconnect() {
+								disconnectCalls.push('disconnect');
+							},
+							close() {
+								disconnectCalls.push('close');
+							},
+							emit(eventName, target, command, payload, callback) {
+								emitCalls.push({ eventName, target, command, payload });
+								callback({ ok: true, data: 'pong' });
+							},
+						}),
+					},
+				},
+				setTimeout,
+				clearTimeout,
+				Error,
+			},
+			'boot-httpSocketProbe-ok.js',
+		);
+
+		const exposed = await sandbox.__probeUnexpectedSocketPathForHttpTransport({
+			capabilities: { web: { token: 'web-token' } },
+		});
+
+		assert.equal(exposed, true);
+		assert.deepEqual(JSON.parse(JSON.stringify(emitCalls)), [
+			{
+				eventName: 'sendTo',
+				target: 'msghub.0',
+				command: 'web.ping',
+				payload: { token: 'web-token' },
+			},
+		]);
+		assert.ok(disconnectCalls.length >= 1);
+	});
+
+	it('probeUnexpectedSocketPathForHttpTransport treats forbidden socket probe responses as safe', async function () {
+		const source = await readRepoFile('admin/tab/boot.js');
+		const probeStart = source.indexOf('async function probeUnexpectedSocketPathForHttpTransport(');
+		const warnStart = source.indexOf('/**\n * Warns once when HTTP mode still exposes a functional socket/sendTo path.');
+		const probeSource = source.slice(probeStart, warnStart).trim();
+		const sandbox = runInSandbox(
+			`
+const PING_TIMEOUT_MS = 5000;
+${probeSource}
+globalThis.__probeUnexpectedSocketPathForHttpTransport = probeUnexpectedSocketPathForHttpTransport;
+`,
+			{
+				args: { transport: 'http' },
+				adapterInstance: 'msghub.0',
+				window: {
+					io: {
+						connect: () => ({
+							on() {},
+							off() {},
+							disconnect() {},
+							close() {},
+							emit(_eventName, _target, _command, _payload, callback) {
+								callback({ ok: false, error: { code: 'FORBIDDEN', message: 'forbidden' } });
+							},
+						}),
+					},
+				},
+				setTimeout,
+				clearTimeout,
+				Error,
+			},
+			'boot-httpSocketProbe-forbidden.js',
+		);
+
+		const exposed = await sandbox.__probeUnexpectedSocketPathForHttpTransport({
+			capabilities: { web: { token: 'web-token' } },
+		});
+
+		assert.equal(exposed, false);
+	});
+
+	it('maybeWarnAboutUnexpectedSocketPath shows a persistent danger toast when the temporary socket probe succeeds', async function () {
+		const source = await readRepoFile('admin/tab/boot.js');
+		const resolveTextSource = extractFunctionSource(source, 'resolvePublicWebSocketExposureWarningText');
+		const warnStart = source.indexOf('async function maybeWarnAboutUnexpectedSocketPath(');
+		const registerStart = source.indexOf('/**\n * Registers the shell-level toast bridge for runtime capability mismatch events.');
+		const warnSource = source.slice(warnStart, registerStart).trim();
+		const toasts = [];
+		const probeCalls = [];
+		const sandbox = runInSandbox(
+			`
+const PUBLIC_WEB_SOCKET_EXPOSURE_TOAST_ID = 'msghub-public-web-socket-exposure';
+const PUBLIC_WEB_SOCKET_EXPOSURE_I18N_KEY = 'msghub.i18n.core.admin.ui.security.publicWebSocketExposure.text';
+let publicWebSocketExposureProbePromise = null;
+let publicWebSocketExposureWarningShown = false;
+${resolveTextSource}
+${warnSource}
+globalThis.__maybeWarnAboutUnexpectedSocketPath = maybeWarnAboutUnexpectedSocketPath;
+`,
+			{
+				args: { transport: 'http' },
+				probeUnexpectedSocketPathForHttpTransport: async bootstrap => {
+					probeCalls.push(bootstrap);
+					return true;
+				},
+				ensureAdminI18nLoaded: () => Promise.resolve(),
+				hasAdminKey: key => key === 'msghub.i18n.core.admin.ui.security.publicWebSocketExposure.text',
+				t: key => `T:${key}`,
+				ui: {
+					toast: opts => toasts.push(opts),
+				},
+				Promise,
+			},
+			'boot-httpSocketWarning.js',
+		);
+
+		await sandbox.__maybeWarnAboutUnexpectedSocketPath({ capabilities: { web: { token: 'web-token' } } });
+
+		assert.equal(probeCalls.length, 1);
+		assert.deepEqual(JSON.parse(JSON.stringify(toasts)), [
+			{
+				id: 'msghub-public-web-socket-exposure',
+				text: 'T:msghub.i18n.core.admin.ui.security.publicWebSocketExposure.text',
+				variant: 'danger',
+				persist: true,
+			},
+		]);
+	});
+
 	it('shows fallback timezone warning only once', async function () {
 		const source = await readRepoFile('admin/tab/boot.js');
 		const applyBootstrapAboutPayloadSource = extractFunctionSource(source, 'applyBootstrapAboutPayload');
