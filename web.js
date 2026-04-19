@@ -1153,7 +1153,7 @@ class WebExtensionEntry {
 	 * @param {any} _server Underlying HTTP(S) server instance provided by `iobroker.web`.
 	 * @param {{ secure?: boolean, port?: number, language?: string, defaultUser?: string, auth?: boolean }|null} _settings
 	 *   Web-adapter runtime settings (unused by the minimal implementation for now).
-	 * @param {{ log?: { info?: Function, warn?: Function, error?: Function, debug?: Function }, sendTo?: Function }|null} webAdapter
+	 * @param {{ namespace?: string, log?: { info?: Function, warn?: Function, error?: Function, debug?: Function }, sendTo?: Function }|null} webAdapter
 	 *   Running `web` adapter instance used for logging and the internal `sendTo(...)` bridge.
 	 * @param {{ _id?: string, native?: Record<string, any> }|null} instanceObject
 	 *   Current MsgHub instance object that owns this web extension.
@@ -1162,15 +1162,104 @@ class WebExtensionEntry {
 	constructor(_server, _settings, webAdapter, instanceObject, app) {
 		this.readyCallback = null;
 		this.isReady = false;
+		this.isActive = false;
+		this.attachFailed = false;
+		this.isDisabled = false;
+		this.extension = null;
 
-		this.extension = new IoWebExtension({
-			instanceObject,
-			log: webAdapter?.log || null,
-			mountSegment: PRODUCT_MOUNT_SEGMENT,
-			sendTo: typeof webAdapter?.sendTo === 'function' ? webAdapter.sendTo.bind(webAdapter) : null,
-		});
-		this.isReady = this.extension.attach(app);
-		this._markReady();
+		const shouldActivate = this._shouldActivate({ webAdapter, instanceObject });
+		this.isDisabled = !shouldActivate;
+		if (shouldActivate) {
+			this.extension = new IoWebExtension({
+				instanceObject,
+				log: webAdapter?.log || null,
+				mountSegment: PRODUCT_MOUNT_SEGMENT,
+				sendTo: typeof webAdapter?.sendTo === 'function' ? webAdapter.sendTo.bind(webAdapter) : null,
+			});
+			this.isActive = this.extension.attach(app);
+			this.attachFailed = !this.isActive;
+		}
+		this.isReady = this.isDisabled || this.isActive;
+		this._markTerminalState();
+	}
+
+	/**
+	 * Decide whether the public web host should be activated on the current web adapter.
+	 *
+	 * The gate is owned by the web-extension entry because the ioBroker `web` adapter
+	 * loads `web.js` independently from `main.js`.
+	 *
+	 * @param {{
+	 *   webAdapter?: { namespace?: string, log?: { info?: Function, debug?: Function } }|null,
+	 *   instanceObject?: { native?: Record<string, any> }|null
+	 * }} options Activation inputs.
+	 * @returns {boolean} `true` when the host should attach middleware.
+	 */
+	_shouldActivate({ webAdapter = null, instanceObject = null } = {}) {
+		const native = instanceObject?.native && typeof instanceObject.native === 'object' ? instanceObject.native : {};
+		if (native.publicWebEnabled === false) {
+			webAdapter?.log?.info?.('IoWebExtension: public web host disabled via native.publicWebEnabled=false');
+			return false;
+		}
+
+		const configuredWebInstance = this._normalizeConfiguredWebInstance(native.webInstance);
+		if (configuredWebInstance === '') {
+			webAdapter?.log?.info?.(
+				'IoWebExtension: public web host disabled because no target web instance is selected',
+			);
+			return false;
+		}
+
+		const currentWebNamespace = this._normalizeWebNamespace(webAdapter?.namespace);
+		if (!currentWebNamespace) {
+			return true;
+		}
+		if (configuredWebInstance === null) {
+			webAdapter?.log?.info?.('IoWebExtension: public web host disabled because native.webInstance is invalid');
+			return false;
+		}
+		if (configuredWebInstance !== currentWebNamespace) {
+			webAdapter?.log?.debug?.(
+				`IoWebExtension: skipping attach on '${currentWebNamespace}' because '${configuredWebInstance}' is selected`,
+			);
+			return false;
+		}
+		return true;
+	}
+
+	/**
+	 * Normalize the selected `web.*` instance from MsgHub native config.
+	 *
+	 * Returns:
+	 * - `'web.X'` for a valid selection
+	 * - `''` for an explicit "none"/deactivated selection
+	 * - `null` for malformed non-empty input
+	 *
+	 * Missing values remain backward-compatible and do not block activation.
+	 *
+	 * @param {any} value Raw native value.
+	 * @returns {string|null} Normalized target instance, empty string, or null.
+	 */
+	_normalizeConfiguredWebInstance(value) {
+		if (value == null) {
+			return 'web.0';
+		}
+		const raw = typeof value === 'string' ? value.trim() : '';
+		if (!raw || raw.toLowerCase() === 'none') {
+			return '';
+		}
+		return /^web\.\d+$/.test(raw) ? raw : null;
+	}
+
+	/**
+	 * Normalize the current web-adapter namespace.
+	 *
+	 * @param {any} value Raw namespace.
+	 * @returns {string} Normalized `web.X` namespace or empty string.
+	 */
+	_normalizeWebNamespace(value) {
+		const raw = typeof value === 'string' ? value.trim() : '';
+		return /^web\.\d+$/.test(raw) ? raw : '';
 	}
 
 	/**
@@ -1183,7 +1272,7 @@ class WebExtensionEntry {
 		if (typeof cb !== 'function') {
 			return;
 		}
-		if (this.isReady) {
+		if (this.isReady || this.attachFailed) {
 			cb(this);
 			return;
 		}
@@ -1201,12 +1290,12 @@ class WebExtensionEntry {
 	}
 
 	/**
-	 * Resolve the deferred ready callback once route installation completed.
+	 * Resolve the deferred callback once the entry reached a terminal state.
 	 *
 	 * @returns {void}
 	 */
-	_markReady() {
-		if (!this.isReady || typeof this.readyCallback !== 'function') {
+	_markTerminalState() {
+		if ((!this.isReady && !this.attachFailed) || typeof this.readyCallback !== 'function') {
 			return;
 		}
 		const callback = this.readyCallback;

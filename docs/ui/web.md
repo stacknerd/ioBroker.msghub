@@ -119,6 +119,20 @@ That entry receives:
 
 From there, `web.js` installs one middleware for the public Message Hub mount.
 
+Activation gate:
+
+- the host mounts only when `native.publicWebEnabled === true`
+- the current `web` adapter namespace matches the selected `native.webInstance`
+- an explicit "none"/empty `webInstance` disables the public host completely
+
+Important scope clarification:
+
+- `web.js` runs in the `web` adapter process, not in the MsgHub adapter process
+- because of that, it has no direct access to the live `main.js` service graph or any `MsgConfig` instance
+- the host therefore reads the simple platform-owned activation flags directly from `instanceObject.native`
+- in this specific scope, those flags are intentionally `native.publicWebEnabled` and `native.webInstance`
+- these fields are not treated here as a normal MsgHub core/plugin config normalization path, but as web-extension activation flags owned by the hosting boundary
+
 ### Interface 2: internal app-resolution bridge
 
 For panel eligibility and app metadata, `web.js` talks to the running MsgHub adapter through:

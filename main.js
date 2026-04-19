@@ -20,6 +20,7 @@ const { IoArchiveResolver } = require(`${__dirname}/lib/IoArchiveResolver`);
 const { IoAdminCapabilities } = require(`${__dirname}/lib/IoAdminCapabilities`);
 const { IoCoreConnection } = require(`${__dirname}/lib/IoCoreConnection`);
 const { IoStorageIobroker } = require(`${__dirname}/lib/IoStorageIobroker`);
+const { IoSystemBaseline } = require(`${__dirname}/lib/IoSystemBaseline`);
 const { IoRuntimeI18n } = require(`${__dirname}/lib/IoRuntimeI18n`);
 const { loadI18nDir } = require(`${__dirname}/lib/loadI18nDir`);
 
@@ -141,6 +142,14 @@ class Msghub extends utils.Adapter {
 		this._msgConfigPublic = Object.freeze({ schemaVersion: MsgConfig.schemaVersion, ...msgCfg.pluginPublic });
 
 		this._i18ninit(msgCfg.corePrivate.general);
+
+		this._systemBaseline = new IoSystemBaseline({ adapter: this });
+		try {
+			await this._systemBaseline.ensure();
+		} catch (e) {
+			this.log?.error?.(`IoSystemBaseline ensure failed: ${e?.message || e}`);
+		}
+
 		this._coreConnection = new IoCoreConnection(this);
 		await this._coreConnection.init();
 

@@ -576,6 +576,221 @@ describe('main.js message routing (AP3 bootstrap)', () => {
 		expect(captured.adminConfigOptions.adminCapabilities).to.equal(adapter._adminCapabilities);
 	});
 
+	it('ensures IoSystemBaseline early in onReady before core initialization', async () => {
+		const calls = [];
+		const createAdapter = loadMainFactoryWithModuleStubs({
+			'/src/MsgFactory': { MsgFactory: class MsgFactoryStub {} },
+			'/src/MsgConfig': {
+				MsgConfig: {
+					schemaVersion: 'test-schema',
+					normalize() {
+						return {
+							pluginPublic: {},
+							corePrivate: {
+								general: {
+									coreFormatLocale: 'de-DE',
+									coreTextLanguage: 'en',
+									backendTextLanguage: 'en',
+								},
+								ai: {},
+								store: {},
+								storage: {},
+								archive: {},
+								stats: {},
+								quietHours: {},
+								render: {},
+							},
+						};
+					},
+				},
+			},
+			'/src/MsgStore': {
+				MsgStore: class MsgStoreStub {
+					constructor() {
+						this.msgIngest = { start() {}, dispatchStateChange() {}, dispatchObjectChange() {} };
+						this.msgNotify = {};
+						this.msgArchive = { getStatus: () => null };
+					}
+					async init() {
+						calls.push('msgStore.init');
+					}
+				},
+			},
+			'/src/MsgAi': { MsgAi: class MsgAiStub {} },
+			'/lib/IoSystemBaseline': {
+				IoSystemBaseline: class IoSystemBaselineStub {
+					constructor() {
+						calls.push('baseline.construct');
+					}
+					async ensure() {
+						calls.push('baseline.ensure');
+					}
+				},
+			},
+			'/lib/IoArchiveResolver': {
+				IoArchiveResolver: {
+					async resolveFor() {
+						return {
+							createStorageBackend() {
+								return {};
+							},
+							archiveRuntime: {},
+						};
+					},
+				},
+			},
+			'/lib/IoCoreConnection': {
+				IoCoreConnection: class IoCoreConnectionStub {
+					constructor() {
+						calls.push('core.construct');
+					}
+					async init() {
+						calls.push('core.init');
+					}
+					checkHealthLocal() {
+						return { connected: true, mode: 'local' };
+					}
+					async markFromHealth() {}
+				},
+			},
+			'/lib/IoPlugins': {
+				IoPlugins: {
+					async create() {
+						return {
+							getIngestMeta() {
+								return {};
+							},
+							clearMessageboxHandler() {},
+						};
+					},
+				},
+			},
+			'/lib/IoAdminTab': { IoAdminTab: class IoAdminTabStub {} },
+			'/lib/IoWebUi': { IoWebUi: class IoWebUiStub {} },
+			'/lib/IoAdminConfig': { IoAdminConfig: class IoAdminConfigStub {} },
+		});
+		const adapter = createAdapter();
+		adapter._resolveBackendTextLanguage = async () => 'en';
+		adapter._i18ninit = () => {
+			adapter._i18nRegistry = { kind: 'i18n-registry' };
+			adapter.i18nBackend = Object.freeze({ t: s => s, getTranslatedObject: s => ({ en: s }) });
+			adapter.i18nCore = Object.freeze({ t: s => s, getTranslatedObject: s => ({ en: s }) });
+		};
+		adapter._syncArchiveRuntimeNativeFields = async () => {};
+
+		await adapter.onReady();
+
+		expect(calls.indexOf('baseline.ensure')).to.be.lessThan(calls.indexOf('core.construct'));
+		expect(calls.indexOf('baseline.ensure')).to.be.lessThan(calls.indexOf('msgStore.init'));
+	});
+
+	it('logs baseline failures as errors and continues startup', async () => {
+		const calls = [];
+		const errors = [];
+		const createAdapter = loadMainFactoryWithModuleStubs({
+			'/src/MsgFactory': { MsgFactory: class MsgFactoryStub {} },
+			'/src/MsgConfig': {
+				MsgConfig: {
+					schemaVersion: 'test-schema',
+					normalize() {
+						return {
+							pluginPublic: {},
+							corePrivate: {
+								general: {
+									coreFormatLocale: 'de-DE',
+									coreTextLanguage: 'en',
+									backendTextLanguage: 'en',
+								},
+								ai: {},
+								store: {},
+								storage: {},
+								archive: {},
+								stats: {},
+								quietHours: {},
+								render: {},
+							},
+						};
+					},
+				},
+			},
+			'/src/MsgStore': {
+				MsgStore: class MsgStoreStub {
+					constructor() {
+						this.msgIngest = { start() {}, dispatchStateChange() {}, dispatchObjectChange() {} };
+						this.msgNotify = {};
+						this.msgArchive = { getStatus: () => null };
+					}
+					async init() {
+						calls.push('msgStore.init');
+					}
+				},
+			},
+			'/src/MsgAi': { MsgAi: class MsgAiStub {} },
+			'/lib/IoSystemBaseline': {
+				IoSystemBaseline: class IoSystemBaselineStub {
+					async ensure() {
+						throw new Error('baseline failed');
+					}
+				},
+			},
+			'/lib/IoArchiveResolver': {
+				IoArchiveResolver: {
+					async resolveFor() {
+						return {
+							createStorageBackend() {
+								return {};
+							},
+							archiveRuntime: {},
+						};
+					},
+				},
+			},
+			'/lib/IoCoreConnection': {
+				IoCoreConnection: class IoCoreConnectionStub {
+					async init() {
+						calls.push('core.init');
+					}
+					checkHealthLocal() {
+						return { connected: true, mode: 'local' };
+					}
+					async markFromHealth() {}
+				},
+			},
+			'/lib/IoPlugins': {
+				IoPlugins: {
+					async create() {
+						return {
+							getIngestMeta() {
+								return {};
+							},
+							clearMessageboxHandler() {},
+						};
+					},
+				},
+			},
+			'/lib/IoAdminTab': { IoAdminTab: class IoAdminTabStub {} },
+			'/lib/IoWebUi': { IoWebUi: class IoWebUiStub {} },
+			'/lib/IoAdminConfig': { IoAdminConfig: class IoAdminConfigStub {} },
+		});
+		const adapter = createAdapter();
+		adapter._resolveBackendTextLanguage = async () => 'en';
+		adapter._i18ninit = () => {
+			adapter._i18nRegistry = { kind: 'i18n-registry' };
+			adapter.i18nBackend = Object.freeze({ t: s => s, getTranslatedObject: s => ({ en: s }) });
+			adapter.i18nCore = Object.freeze({ t: s => s, getTranslatedObject: s => ({ en: s }) });
+		};
+		adapter._syncArchiveRuntimeNativeFields = async () => {};
+		adapter.log.error = message => {
+			errors.push(message);
+		};
+
+		await adapter.onReady();
+
+		expect(errors).to.include('IoSystemBaseline ensure failed: baseline failed');
+		expect(calls).to.include('core.init');
+		expect(calls).to.include('msgStore.init');
+	});
+
 	it('routes web.* through IoWebUi', async () => {
 		const createAdapter = loadMainFactoryForTest();
 		const sent = [];

@@ -142,6 +142,7 @@
 		"rollupKeepDays": 400,
 		"writeIntervalMs": 10000,
 		"locale": "de-DE",
+		"publicWebEnabled": true,
 		"webInstance": "web.0",
 		"quietHoursEnabled": true,
 		"quietHoursStart": "22:00",

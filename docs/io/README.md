@@ -108,6 +108,8 @@ Typical examples are:
   - central bootstrap/about contract builder for host-facing UI entry points
 - `IoAdminTab`
   - adapter-side bridge for Admin UI/backend commands
+- `IoSystemBaseline`
+  - adapter-side owner of the MsgHub-managed public-web reference user/group baseline
 - `IoWebUi`
   - adapter-side bridge for web-safe runtime/backend commands
 - `web.js`
@@ -188,6 +190,7 @@ Then continue based on your question:
 - `IoPlugins`: [`./IoPlugins.md`](./IoPlugins.md)
 - `IoRuntimeI18n`: [`./IoRuntimeI18n.md`](./IoRuntimeI18n.md)
 - `IoStorageIobroker`: [`./IoStorageIobroker.md`](./IoStorageIobroker.md)
+- `IoSystemBaseline`: [`./IoSystemBaseline.md`](./IoSystemBaseline.md)
 - `IoUiCatalog`: [`./IoUiCatalog.md`](./IoUiCatalog.md)
 - `IoUiRegistry`: [`./IoUiRegistry.md`](./IoUiRegistry.md)
 - `IoWebUi`: [`./IoWebUi.md`](./IoWebUi.md)

@@ -33,6 +33,54 @@
 				}
 			}
 		},
+		"publicWeb": {
+			"type": "panel",
+			"label": "msghub.i18n.core.admin.jsonConfig.publicWeb.panel.label",
+			"items": {
+				"_publicWebHeader": {
+					"type": "header",
+					"text": "msghub.i18n.core.admin.jsonConfig.publicWeb.reference.header.text",
+					"newLine": true,
+					"size": 2
+				},
+				"_publicWebReferenceText": {
+					"type": "staticText",
+					"text": "msghub.i18n.core.admin.jsonConfig.publicWeb.reference.text",
+					"newLine": true,
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12,
+					"style": { "whiteSpace": "pre-wrap" }
+				},
+				"publicWebEnabled": {
+					"type": "checkbox",
+					"label": "msghub.i18n.core.admin.jsonConfig.publicWeb.enabled.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.publicWeb.enabled.help",
+					"default": true,
+					"newLine": true,
+					"xs": 12,
+					"sm": 12,
+					"md": 12,
+					"lg": 12,
+					"xl": 12
+				},
+				"webInstance": {
+					"type": "instance",
+					"adapter": "web",
+					"allowDeactivate": true,
+					"label": "msghub.i18n.core.admin.jsonConfig.publicWeb.webInstance.label",
+					"help": "msghub.i18n.core.admin.jsonConfig.publicWeb.webInstance.help",
+					"newLine": true,
+					"xs": 12,
+					"sm": 12,
+					"md": 6,
+					"lg": 4,
+					"xl": 4
+				}
+			}
+		},
 		"archive": {
 			"type": "panel",
 			"label": "msghub.i18n.core.admin.jsonConfig.archive.panel.label",

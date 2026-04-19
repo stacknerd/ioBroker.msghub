@@ -129,8 +129,8 @@ describe('web.js entry', () => {
 		const entry = new WebExtensionEntry(
 			null,
 			null,
-			{ log: null },
-			{ _id: 'system.adapter.msghub.0' },
+			{ log: null, namespace: 'web.0' },
+			{ _id: 'system.adapter.msghub.0', native: { publicWebEnabled: true, webInstance: 'web.0' } },
 			createApp(),
 		);
 
@@ -141,8 +141,8 @@ describe('web.js entry', () => {
 		const entry = new WebExtensionEntry(
 			null,
 			null,
-			{ log: null },
-			{ _id: 'system.adapter.msghub.0' },
+			{ log: null, namespace: 'web.0' },
+			{ _id: 'system.adapter.msghub.0', native: { publicWebEnabled: true, webInstance: 'web.0' } },
 			createApp(),
 		);
 
@@ -155,7 +155,13 @@ describe('web.js entry', () => {
 	it('unload removes the installed middleware', async () => {
 		const app = createApp();
 
-		const entry = new WebExtensionEntry(null, null, { log: null }, { _id: 'system.adapter.msghub.0' }, app);
+		const entry = new WebExtensionEntry(
+			null,
+			null,
+			{ log: null, namespace: 'web.0' },
+			{ _id: 'system.adapter.msghub.0', native: { publicWebEnabled: true, webInstance: 'web.0' } },
+			app,
+		);
 		expect(app._router.stack).to.have.length(1);
 
 		await entry.unload();
@@ -170,6 +176,7 @@ describe('web.js entry', () => {
 			null,
 			{
 				log: null,
+				namespace: 'web.0',
 				sendTo(target, command, message, callback) {
 					calls.push({ target, command, message });
 					callback({
@@ -180,7 +187,7 @@ describe('web.js entry', () => {
 					});
 				},
 			},
-			{ _id: 'system.adapter.msghub.0' },
+			{ _id: 'system.adapter.msghub.0', native: { publicWebEnabled: true, webInstance: 'web.0' } },
 			app,
 		);
 		entry.extension.readFile = async () =>
@@ -197,6 +204,95 @@ describe('web.js entry', () => {
 		]);
 		expect(res.statusCode).to.equal(200);
 		expect(String(res.body)).to.include('msghub-forwarded-args');
+	});
+
+	it('does not attach when publicWebEnabled is false', () => {
+		const app = createApp();
+		const entry = new WebExtensionEntry(
+			null,
+			null,
+			{ log: null, namespace: 'web.0' },
+			{ _id: 'system.adapter.msghub.0', native: { publicWebEnabled: false, webInstance: 'web.0' } },
+			app,
+		);
+
+		expect(entry.isReady).to.equal(true);
+		expect(entry.isActive).to.equal(false);
+		expect(entry.attachFailed).to.equal(false);
+		expect(entry.isDisabled).to.equal(true);
+		expect(entry.extension).to.equal(null);
+		expect(app._router.stack).to.have.length(0);
+	});
+
+	it('does not attach when no target web instance is selected', () => {
+		const app = createApp();
+		const entry = new WebExtensionEntry(
+			null,
+			null,
+			{ log: null, namespace: 'web.0' },
+			{ _id: 'system.adapter.msghub.0', native: { publicWebEnabled: true, webInstance: '' } },
+			app,
+		);
+
+		expect(entry.isReady).to.equal(true);
+		expect(entry.isActive).to.equal(false);
+		expect(entry.attachFailed).to.equal(false);
+		expect(entry.isDisabled).to.equal(true);
+		expect(entry.extension).to.equal(null);
+		expect(app._router.stack).to.have.length(0);
+	});
+
+	it('attaches only on the selected web adapter instance', () => {
+		const app = createApp();
+		const selected = new WebExtensionEntry(
+			null,
+			null,
+			{ log: null, namespace: 'web.1' },
+			{ _id: 'system.adapter.msghub.0', native: { publicWebEnabled: true, webInstance: 'web.1' } },
+			app,
+		);
+		const skipped = new WebExtensionEntry(
+			null,
+			null,
+			{ log: null, namespace: 'web.0' },
+			{ _id: 'system.adapter.msghub.0', native: { publicWebEnabled: true, webInstance: 'web.1' } },
+			createApp(),
+		);
+
+		expect(selected.isActive).to.equal(true);
+		expect(selected.isReady).to.equal(true);
+		expect(selected.attachFailed).to.equal(false);
+		expect(selected.isDisabled).to.equal(false);
+		expect(selected.extension?.routePath).to.equal('/MessageHub/0');
+		expect(skipped.isActive).to.equal(false);
+		expect(skipped.isReady).to.equal(true);
+		expect(skipped.attachFailed).to.equal(false);
+		expect(skipped.isDisabled).to.equal(true);
+		expect(skipped.extension).to.equal(null);
+	});
+
+	it('does not report ready when middleware attach fails', done => {
+		const app = createApp();
+		const entry = new WebExtensionEntry(
+			null,
+			null,
+			{ log: null, namespace: 'web.0' },
+			{ _id: 'system.adapter.msghub.invalid', native: { publicWebEnabled: true, webInstance: 'web.0' } },
+			app,
+		);
+
+		expect(entry.isReady).to.equal(false);
+		expect(entry.isActive).to.equal(false);
+		expect(entry.attachFailed).to.equal(true);
+		expect(entry.isDisabled).to.equal(false);
+		expect(app._router.stack).to.have.length(0);
+
+		entry.waitForReady(instance => {
+			expect(instance).to.equal(entry);
+			expect(instance.isReady).to.equal(false);
+			expect(instance.attachFailed).to.equal(true);
+			done();
+		});
 	});
 });
 
