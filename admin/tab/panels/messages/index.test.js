@@ -627,7 +627,7 @@ describe('admin/tab/panels/messages/entry.js', function () {
 		assert.ok(toggleCalls.some(call => call.cls === 'is-expert' && call.force === true));
 	});
 
-	it('shows danger toast when initial messages load fails', async function () {
+	it('does not show a panel toast when initial messages load fails', async function () {
 		const sandbox = await loadIndexModule();
 		const root = createElement('div');
 		root.closest = () => ({ classList: { toggle() {} } });
@@ -718,12 +718,10 @@ describe('admin/tab/panels/messages/entry.js', function () {
 
 		await panel.onConnect();
 
-		assert.equal(toasts.length, 1);
-		assert.equal(toasts[0].variant, 'danger');
-		assert.equal(toasts[0].text, 'query_failed');
+		assert.equal(toasts.length, 0);
 	});
 
-	it('shows danger toast when silent follow refresh fails', async function () {
+	it('does not show a panel toast when silent follow refresh fails', async function () {
 		const sandbox = await loadIndexModule();
 		const root = createElement('div');
 		root.closest = () => ({ classList: { toggle() {} } });
@@ -819,9 +817,7 @@ describe('admin/tab/panels/messages/entry.js', function () {
 		assert.equal(typeof onRefreshFollow, 'function');
 		await onRefreshFollow();
 
-		assert.equal(toasts.length, 1);
-		assert.equal(toasts[0].variant, 'danger');
-		assert.equal(toasts[0].text, 'silent_refresh_failed');
+		assert.equal(toasts.length, 0);
 	});
 
 		it('onActionExecute: confirm accepted fires executeAction, closes overlay, refreshes list, and shows success toast', async function () {

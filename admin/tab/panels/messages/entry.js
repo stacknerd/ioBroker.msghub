@@ -529,11 +529,10 @@
 						: 1;
 				state.pageIndex = Math.min(Math.max(1, state.pageIndex), state.pages);
 				return true;
-			} catch (e) {
+			} catch {
 				if (reqId !== state.requestSeq) {
 					return false;
 				}
-				toast(String(e?.message || e), 'danger');
 				return false;
 			} finally {
 				if (spinnerId != null) {
@@ -587,8 +586,8 @@
 						'danger',
 					);
 				}
-			} catch (err) {
-				toast(String(err?.message || err), 'danger');
+			} catch {
+				return;
 			}
 		}
 
