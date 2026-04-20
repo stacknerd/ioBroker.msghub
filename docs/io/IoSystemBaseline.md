@@ -1,7 +1,7 @@
 # IoSystemBaseline (Message Hub IO): MsgHub-owned system baseline for public web
 
 `IoSystemBaseline` is the adapter-side owner of the MsgHub-managed reference baseline for public web.
-It ensures the canonical user, group, ACL, membership, icon, enabled flags, and password on every adapter start.
+It ensures the canonical user, group, descriptions, ACL, membership, icon, enabled flags, and password on every adapter start.
 
 In short:
 
@@ -48,7 +48,7 @@ References:
 2. Ensuring the canonical group `system.group.msghub_web`.
 3. Enforcing exact group membership to `['system.user.msghub_webapp_user']`.
 4. Enforcing the canonical group ACL for the public-web baseline.
-5. Enforcing `common.icon = '/adapter/msghub/msghub.png'` and `common.enabled = true` on both objects.
+5. Enforcing canonical `common.desc`, `common.icon = '/adapter/msghub/msghub.png'`, and `common.enabled = true` on both objects.
 6. Setting a fresh controller-managed password via `setPasswordAsync('msghub_webapp_user', generatedPassword)`.
 7. Reading available `web.*` instances through the verified controller object-view path for the public-web scope.
 
@@ -74,8 +74,10 @@ Those responsibilities remain in `main.js`, Admin/UI layers, and config-normaliz
 
 - group id: `system.group.msghub_web`
 - group display name: `MessageHub Web`
+- group description: `Built-in MessageHub user group for web access.`
 - user id: `system.user.msghub_webapp_user`
 - user display name: `MessageHub WebApp User`
+- user description: `Built-in MessageHub user for an ioBroker.web instance used by the WebApp.`
 - icon: `/adapter/msghub/msghub.png`
 
 ### Canonical group ACL
@@ -134,7 +136,7 @@ Covered areas include:
 
 - no-op object writes on an already-correct baseline
 - missing user/group creation
-- correction of name/icon/enabled drift
+- correction of name/description/icon/enabled drift
 - hard reset of ACL and membership
 - password generation and password-set path
 - startup wiring and startup error handling in `main.js`
