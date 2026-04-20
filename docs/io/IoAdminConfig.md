@@ -50,8 +50,9 @@ References:
    - native retry/lock intent (`config.archive.retryNative`)
    - iobroker lock intent (`config.archive.forceIobroker`)
 3. AI connectivity test (`config.ai.test`).
-4. Canonical config-token validation via `IoAdminCapabilities` before business execution.
-5. Hard filtering of all `native` patch payloads through an explicit allowlist.
+4. Reduced state-object catalog reads for config-facing ID pickers (`config.idcatalog.get`).
+5. Canonical config-token validation via `IoAdminCapabilities` before business execution.
+6. Hard filtering of all `native` patch payloads through an explicit allowlist.
 
 ---
 
@@ -76,6 +77,7 @@ The following commands are compatible and active:
 - `config.archive.retryNative`
 - `config.archive.forceIobroker`
 - `config.ai.test`
+- `config.idcatalog.get`
 
 Intentionally incompatible:
 
@@ -123,6 +125,27 @@ Purpose:
 Result:
 
 - compact summary in `native.aiTestLastResult`.
+
+### `config.idcatalog.get`
+
+Purpose:
+
+- returns a config-facing state-object catalog for ID pickers.
+
+Payload:
+
+- optional `filter` string passed through as ioBroker object pattern
+- fallback: `'*'`
+
+Backend source:
+
+- `getForeignObjectsAsync(filter || '*', 'state')`
+
+Result:
+
+- `data.objects` map keyed by full object id
+- preserves the relevant ioBroker object structure (`_id`, `type`, `common`, optional `acl`, `from`, `ts`)
+- strips `native` to reduce transport payload
 
 ---
 
@@ -188,6 +211,7 @@ Covered areas include:
 - native probe success/failure for `config.archive.retryNative`
 - lock patch for `config.archive.forceIobroker`
 - runtime transparency for `config.archive.status`
+- filter fallback/projection behavior for `config.idcatalog.get`
 - token-required backend gating for `config.*`
 - payload-token stripping before business execution
 - allowlist filtering for disallowed native keys
