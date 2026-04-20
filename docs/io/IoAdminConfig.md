@@ -144,8 +144,13 @@ Backend source:
 Result:
 
 - `data.objects` map keyed by full object id
-- preserves the relevant ioBroker object structure (`_id`, `type`, `common`, optional `acl`, `from`, `ts`)
-- strips `native` to reduce transport payload
+- keeps only the picker-relevant subset:
+  - `_id`
+  - `common.name`
+  - `common.type`
+  - `common.role`
+  - `common.unit`
+- drops all other fields to reduce transport payload aggressively
 
 ---
 
