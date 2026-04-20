@@ -277,13 +277,14 @@ globalThis.__applyBootstrapAboutPayload = applyBootstrapAboutPayload;
 
 	it('registers one persistent localized danger toast for capability mismatch runtime events', async function () {
 		const source = await readRepoFile('admin/tab/boot.js');
+		const buildToastIdSource = extractFunctionSource(source, 'buildRuntimeToastId');
 		const resolveTextSource = extractFunctionSource(source, 'resolveCapabilityMismatchToastText');
 		const registerSource = extractFunctionSource(source, 'registerCapabilityMismatchToastHandler');
 		const toasts = [];
 		const listeners = new Map();
 		const sandbox = runInSandbox(
 			`
-const capabilityMismatchToastMessages = new Set();
+${buildToastIdSource}
 ${resolveTextSource}
 ${registerSource}
 globalThis.__registerCapabilityMismatchToastHandler = registerCapabilityMismatchToastHandler;
@@ -317,6 +318,13 @@ globalThis.__registerCapabilityMismatchToastHandler = registerCapabilityMismatch
 			JSON.parse(JSON.stringify(toasts)),
 			[
 				{
+					id: 'msghub-runtime-capability-mismatch-admin',
+					text: 'msghub.i18n.core.admin.ui.capability.mismatch.text:admin',
+					variant: 'danger',
+					persist: true,
+				},
+				{
+					id: 'msghub-runtime-capability-mismatch-admin',
 					text: 'msghub.i18n.core.admin.ui.capability.mismatch.text:admin',
 					variant: 'danger',
 					persist: true,
@@ -327,13 +335,14 @@ globalThis.__registerCapabilityMismatchToastHandler = registerCapabilityMismatch
 
 	it('falls back to the runtime capability mismatch message when admin i18n is unavailable', async function () {
 		const source = await readRepoFile('admin/tab/boot.js');
+		const buildToastIdSource = extractFunctionSource(source, 'buildRuntimeToastId');
 		const resolveTextSource = extractFunctionSource(source, 'resolveCapabilityMismatchToastText');
 		const registerSource = extractFunctionSource(source, 'registerCapabilityMismatchToastHandler');
 		const toasts = [];
 		const listeners = new Map();
 		const sandbox = runInSandbox(
 			`
-const capabilityMismatchToastMessages = new Set();
+${buildToastIdSource}
 ${resolveTextSource}
 ${registerSource}
 globalThis.__registerCapabilityMismatchToastHandler = registerCapabilityMismatchToastHandler;
@@ -366,6 +375,7 @@ globalThis.__registerCapabilityMismatchToastHandler = registerCapabilityMismatch
 			JSON.parse(JSON.stringify(toasts)),
 			[
 				{
+					id: 'msghub-runtime-capability-mismatch-web',
 					text: "Missing bootstrap token for capability 'web'",
 					variant: 'danger',
 					persist: true,
@@ -376,13 +386,14 @@ globalThis.__registerCapabilityMismatchToastHandler = registerCapabilityMismatch
 
 	it('registers one persistent localized danger toast for token error runtime events', async function () {
 		const source = await readRepoFile('admin/tab/boot.js');
+		const buildToastIdSource = extractFunctionSource(source, 'buildRuntimeToastId');
 		const resolveTextSource = extractFunctionSource(source, 'resolveTokenErrorToastText');
 		const registerSource = extractFunctionSource(source, 'registerTokenErrorToastHandler');
 		const toasts = [];
 		const listeners = new Map();
 		const sandbox = runInSandbox(
 			`
-const tokenErrorToastMessages = new Set();
+${buildToastIdSource}
 ${resolveTextSource}
 ${registerSource}
 globalThis.__registerTokenErrorToastHandler = registerTokenErrorToastHandler;
@@ -417,6 +428,13 @@ globalThis.__registerTokenErrorToastHandler = registerTokenErrorToastHandler;
 			JSON.parse(JSON.stringify(toasts)),
 			[
 				{
+					id: 'msghub-runtime-capability-token-error-invalidorexpired-admin',
+					text: 'T:msghub.i18n.core.admin.ui.capability.token.invalidOrExpired.text',
+					variant: 'danger',
+					persist: true,
+				},
+				{
+					id: 'msghub-runtime-capability-token-error-invalidorexpired-admin',
 					text: 'T:msghub.i18n.core.admin.ui.capability.token.invalidOrExpired.text',
 					variant: 'danger',
 					persist: true,
@@ -427,13 +445,14 @@ globalThis.__registerTokenErrorToastHandler = registerTokenErrorToastHandler;
 
 	it('falls back to the runtime token error message when admin i18n is unavailable', async function () {
 		const source = await readRepoFile('admin/tab/boot.js');
+		const buildToastIdSource = extractFunctionSource(source, 'buildRuntimeToastId');
 		const resolveTextSource = extractFunctionSource(source, 'resolveTokenErrorToastText');
 		const registerSource = extractFunctionSource(source, 'registerTokenErrorToastHandler');
 		const toasts = [];
 		const listeners = new Map();
 		const sandbox = runInSandbox(
 			`
-const tokenErrorToastMessages = new Set();
+${buildToastIdSource}
 ${resolveTextSource}
 ${registerSource}
 globalThis.__registerTokenErrorToastHandler = registerTokenErrorToastHandler;
@@ -465,6 +484,7 @@ globalThis.__registerTokenErrorToastHandler = registerTokenErrorToastHandler;
 			JSON.parse(JSON.stringify(toasts)),
 			[
 				{
+					id: 'msghub-runtime-capability-token-error-mismatch-config',
 					text: 'Token capability mismatch: expected x, got y',
 					variant: 'danger',
 					persist: true,

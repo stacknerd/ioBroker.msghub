@@ -39,8 +39,6 @@ const elements = Object.freeze({
 
 const ui = createUi();
 ui?.contextMenu?.setBrandingText?.('Message Hub');
-const capabilityMismatchToastMessages = new Set();
-const tokenErrorToastMessages = new Set();
 const PUBLIC_WEB_SOCKET_EXPOSURE_TOAST_ID = 'msghub-public-web-socket-exposure';
 const PUBLIC_WEB_SOCKET_EXPOSURE_I18N_KEY = 'msghub.i18n.core.admin.ui.security.publicWebSocketExposure.text';
 let publicWebSocketExposureProbePromise = null;
@@ -91,6 +89,27 @@ function resolveTokenErrorToastText(detail) {
 		return fallbackMessage;
 	}
 	return t(key);
+}
+
+/**
+ * Builds one stable named-toast id from a runtime error family and detail key.
+ *
+ * Named toasts let the UI replace an already-open warning without stacking duplicates,
+ * while still allowing the same warning to appear again after the user closed it.
+ *
+ * @param {string} family - Runtime error family identifier.
+ * @param {string} key - Capability/message-derived detail key.
+ * @returns {string} Stable toast id.
+ */
+function buildRuntimeToastId(family, key) {
+	const rawFamily = typeof family === 'string' ? family.trim() : '';
+	const rawKey = typeof key === 'string' ? key.trim() : '';
+	const suffix =
+		rawKey
+			.replace(/[^a-z0-9_-]+/gi, '-')
+			.replace(/^-+|-+$/g, '')
+			.toLowerCase() || 'unknown';
+	return `msghub-runtime-${rawFamily || 'event'}-${suffix}`;
 }
 
 /**
@@ -257,12 +276,12 @@ function registerCapabilityMismatchToastHandler() {
 		const detail = event?.detail && typeof event.detail === 'object' ? event.detail : null;
 		const message = typeof detail?.message === 'string' ? detail.message.trim() : '';
 		const capability = typeof detail?.capability === 'string' ? detail.capability.trim() : '';
-		const dedupeKey = capability || message;
-		if (!message || !dedupeKey || capabilityMismatchToastMessages.has(dedupeKey)) {
+		const toastKey = capability || message;
+		if (!message || !toastKey) {
 			return;
 		}
-		capabilityMismatchToastMessages.add(dedupeKey);
 		ui?.toast?.({
+			id: buildRuntimeToastId('capability-mismatch', toastKey),
 			text: resolveCapabilityMismatchToastText(detail),
 			variant: 'danger',
 			persist: true,
@@ -291,12 +310,12 @@ function registerTokenErrorToastHandler() {
 		const message = typeof detail?.message === 'string' ? detail.message.trim() : '';
 		const capability = typeof detail?.capability === 'string' ? detail.capability.trim() : '';
 		const reason = typeof detail?.reason === 'string' ? detail.reason.trim() : '';
-		const dedupeKey = `${reason}:${capability || message}`;
-		if (!message || !reason || !dedupeKey || tokenErrorToastMessages.has(dedupeKey)) {
+		const toastKey = `${reason}:${capability || message}`;
+		if (!message || !reason || !toastKey) {
 			return;
 		}
-		tokenErrorToastMessages.add(dedupeKey);
 		ui?.toast?.({
+			id: buildRuntimeToastId('capability-token-error', toastKey),
 			text: resolveTokenErrorToastText(detail),
 			variant: 'danger',
 			persist: true,
