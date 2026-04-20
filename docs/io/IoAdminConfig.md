@@ -51,7 +51,8 @@ References:
    - iobroker lock intent (`config.archive.forceIobroker`)
 3. AI connectivity test (`config.ai.test`).
 4. Canonical config-token validation via `IoAdminCapabilities` before business execution.
-5. Hard filtering of all `native` patch payloads through an explicit allowlist.
+5. Thin delegation of ID-catalog commands to `IoIdCatalog`.
+6. Hard filtering of all `native` patch payloads through an explicit allowlist.
 
 ---
 
@@ -63,6 +64,7 @@ References:
 2. Thin pass-through for `admin.ingestStates.presets.selectOptions*` (belongs to admin path, not config path).
 3. Startup-time effective archive strategy resolution (`IoArchiveResolver.resolveFor(...)` remains startup behavior).
 4. Plugin lifecycle orchestration.
+5. Shared cache ownership for ID-catalog commands.
 
 ---
 
@@ -76,6 +78,9 @@ The following commands are compatible and active:
 - `config.archive.retryNative`
 - `config.archive.forceIobroker`
 - `config.ai.test`
+- `config.idcatalog.get`
+- `config.idcatalog.openTree`
+- `config.idcatalog.reset`
 
 Intentionally incompatible:
 
@@ -123,6 +128,67 @@ Purpose:
 Result:
 
 - compact summary in `native.aiTestLastResult`.
+
+### `config.idcatalog.get`
+
+Purpose:
+
+- return a flat ID-catalog view from the shared backend cache owned by `IoIdCatalog`
+
+Payload:
+
+- optional `filter`
+- fallback: `'*'`
+
+Result:
+
+- `data.objects`
+- `data.meta`
+
+Important semantics:
+
+- uses the same backend full-cache as `config.idcatalog.openTree`
+- keeps only the hard whitelist:
+  - `_id`
+  - `common.name`
+  - `common.type`
+  - `common.role`
+  - `common.unit`
+
+### `config.idcatalog.openTree`
+
+Purpose:
+
+- return one tree-oriented ID-catalog slice from the same shared backend cache
+
+Payload:
+
+- optional `entry`
+- optional `depth`
+
+Result:
+
+- `data.entry`
+- `data.depth`
+- `data.nodes`
+- `data.meta`
+
+Important semantics:
+
+- uses the same backend full-cache as `config.idcatalog.get`
+- carries the same shared `meta` block as `config.idcatalog.get`
+- `createdAt` is the cache timestamp, not the request timestamp
+
+### `config.idcatalog.reset`
+
+Purpose:
+
+- clear the shared backend ID-catalog cache explicitly
+
+Result:
+
+- `data.reset = true`
+- `data.hadCache`
 
 ---
 
@@ -188,6 +254,9 @@ Covered areas include:
 - native probe success/failure for `config.archive.retryNative`
 - lock patch for `config.archive.forceIobroker`
 - runtime transparency for `config.archive.status`
+- routing/delegation for `config.idcatalog.get`
+- routing/delegation for `config.idcatalog.openTree`
+- routing/delegation for `config.idcatalog.reset`
 - token-required backend gating for `config.*`
 - payload-token stripping before business execution
 - allowlist filtering for disallowed native keys
@@ -198,6 +267,7 @@ Covered areas include:
 
 - implementation: `lib/IoAdminConfig.js`
 - tests: `lib/IoAdminConfig.test.js`
+- ID-catalog backend: `lib/IoIdCatalog.js` / `docs/io/IoIdCatalog.md`
 - routing: `main.js`
 - admin counterpart: `lib/IoAdminTab.js` / `docs/io/IoAdminTab.md`
 - resolver context: `lib/IoArchiveResolver.js` / `docs/io/IoArchiveResolver.md`

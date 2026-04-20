@@ -108,6 +108,8 @@ Typical examples are:
   - central bootstrap/about contract builder for host-facing UI entry points
 - `IoAdminTab`
   - adapter-side bridge for Admin UI/backend commands
+- `IoIdCatalog`
+  - backend owner for config-facing shared ID-catalog cache, TTL, and tree/flat projections
 - `IoSystemBaseline`
   - adapter-side owner of the MsgHub-managed public-web reference user/group baseline
 - `IoWebUi`
@@ -182,6 +184,7 @@ Then continue based on your question:
 - `IoArchiveNative`: [`./IoArchiveNative.md`](./IoArchiveNative.md)
 - `IoArchiveResolver`: [`./IoArchiveResolver.md`](./IoArchiveResolver.md)
 - `IoCoreConnection`: [`./IoCoreConnection.md`](./IoCoreConnection.md)
+- `IoIdCatalog`: [`./IoIdCatalog.md`](./IoIdCatalog.md)
 - `IoManagedMeta`: [`./IoManagedMeta.md`](./IoManagedMeta.md)
 - `IoPluginGuards`: [`./IoPluginGuards.md`](./IoPluginGuards.md)
 - `IoPluginPanelResolver`: [`./IoPluginPanelResolver.md`](./IoPluginPanelResolver.md)
