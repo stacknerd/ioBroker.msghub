@@ -78,6 +78,7 @@ The following commands are compatible and active:
 - `config.archive.forceIobroker`
 - `config.ai.test`
 - `config.idcatalog.get`
+- `config.idcatalog.openTree`
 
 Intentionally incompatible:
 
@@ -152,6 +153,38 @@ Result:
   - `common.unit`
 - drops all other fields to reduce transport payload aggressively
 
+### `config.idcatalog.openTree`
+
+Purpose:
+
+- returns one tree-oriented catalog slice for an ID picker
+
+Payload:
+
+- optional `entry` string for the subtree root
+- optional `depth` number for the response depth
+- defaults:
+  - `entry = ''` (root)
+  - `depth = 1`
+
+Backend source:
+
+- root: `getForeignObjectsAsync('*', 'state')`
+- subtree: `getForeignObjectsAsync(entry + '.*', 'state')`
+
+Result:
+
+- `data.entry`
+- `data.depth`
+- `data.nodes`
+- `data.meta.backendDurationMs`
+
+Important semantics:
+
+- `depth` currently limits the response shape, not the initial backend fetch cost
+- without a dedicated depth-aware ioBroker query, the backend still loads the full match for the chosen pattern
+- the command is therefore primarily a tree-transport/API shape for the frontend, not yet a backend cost optimizer
+
 ---
 
 ## Native patch guardrail (critical)
@@ -217,6 +250,7 @@ Covered areas include:
 - lock patch for `config.archive.forceIobroker`
 - runtime transparency for `config.archive.status`
 - filter fallback/projection behavior for `config.idcatalog.get`
+- root/subtree behavior for `config.idcatalog.openTree`
 - token-required backend gating for `config.*`
 - payload-token stripping before business execution
 - allowlist filtering for disallowed native keys
