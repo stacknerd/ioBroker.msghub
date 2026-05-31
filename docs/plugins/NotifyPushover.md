@@ -13,14 +13,15 @@ This document has two parts:
 
 ### What it does
 
-- Sends Message Hub notifications (`event: "due"`) to `iobroker.pushover` (or compatible) via `sendTo('<pushover.0>', 'send', payload)`.
+- Sends Message Hub `due` notifications to `iobroker.pushover` (or compatible) via `sendTo('<pushover.0>', 'send', payload)`.
 - Filters which messages are sent (kind, level range, lifecycle states, audience tags).
 - Optional: blocks delivery behind a gate state (presence/arming/etc.).
 - If a message has image attachments, sends one additional low-priority Pushover message per image.
+- Keeps persistent delivery receipts per message `ref`, so update-like notifications send only newly added image attachments.
 
 What it intentionally does not do:
 
-- It does not send `added/updated/deleted/expired` events (only `due`).
+- It does not send text notifications for `added/updated/deleted/expired` events. Text is sent only for `due`.
 - It does not implement rate limiting or “spam protection”.
 - It does not download images: only local plain file paths are accepted for image attachments.
 
@@ -119,6 +120,7 @@ Numeric threshold gate (only send when value is greater than 0):
 - “Images do not arrive”
   - Only attachments with `type: "image"` and a local plain file path (`value` without `://`) are sent.
   - URLs are ignored by design.
+  - Image sends are deduplicated within one delivery cycle. Trigger a new `due` notification for a new real-world event.
 
 ---
 
@@ -149,8 +151,15 @@ Registration ID (as used by `lib/IoPlugins.js`):
 
 ### Event handling
 
-- Only `event === "due"` is handled.
-- All other events are ignored.
+- `event === "due"` starts a new Pushover delivery cycle for the message `ref`.
+  - Existing delivery receipts for that `ref` are reset.
+  - The text notification is sent.
+  - All current local image attachments are sent and recorded.
+- `event === "updated"`, `"recreated"`, or `"recovered"` synchronizes image attachments for an existing delivery cycle.
+  - No text notification is sent for these events.
+  - Only image attachment values that have not yet been recorded for the current `ref` are sent.
+- `event === "deleted"` or `"expired"` removes the delivery receipts for the message `ref`.
+- Other events are ignored.
 
 ### Filter semantics
 
@@ -220,11 +229,19 @@ Then one extra Pushover message is sent per image:
 - `priority: -1`
 - `file: <attachment.value>`
 
+Delivery receipt semantics:
+
+- Receipts are stored in `msghub.0.NotifyPushover.<instanceId>.deliveryByRef`.
+- `attachments[].value` is the image identity within one delivery cycle.
+- A new `due` notification for the same `ref` resets the cycle, so the same file path can be sent again for a later event.
+- `updated`/`recreated`/`recovered` events only send image values that are missing from the current receipt record.
+
 ---
 
 ## Related files
 
 - Implementation: `lib/NotifyPushover/index.js`
+- Delivery receipts: `lib/NotifyPushover/DeliveryStore.js`
 - Manifest: `lib/NotifyPushover/manifest.js`
 - Dispatcher: `src/MsgNotify.js`
 - Plugin overview: `docs/plugins/README.md`
