@@ -172,7 +172,7 @@ These are useful for UI sorting/filters. For text templates, prefer
 | Cycle | `state-name`, `cycle-lastResetAt`, `cycle-subCounter`, `cycle-period?`, `cycle-remaining?`, `cycle-timeMs?`, `cycle-timeBasedDueAt?` | Name; last reset; progress since reset; optional count/time targets and next time-based due timestamp. |
 | Triggered | `state-name`, `state-value`, `trigger-value`, `state-recovered-at?` | Name and current value of target plus trigger value (for debugging expectation failures); optional recovery timestamp (bad -> good transition). |
 | Non-settling | `state-name`, `state-value`, `trendStartedAt`, `trendStartValue`, `trendMin`, `trendMax`, `trendMinToMax`, `trendDir`, `state-recovered-at?` | Name/value plus trend/activity diagnostics: when instability started, min/max span, and direction; optional recovery timestamp (bad -> good transition). |
-| Session | `state-name`, `session-counter-start?`, `session-counter?`, `session-cost?` | Always: name. Start/end timestamps are in `timing.startAt` / `timing.endAt`. Optional summary metrics are present only when summary is enabled for that session. |
+| Session | `state-name`, `session-count`, `session-counter-start?`, `session-counter?`, `session-cost?` | Always: name and completed-session count. Start/end timestamps are in `timing.startAt` / `timing.endAt`. Optional summary metrics are present only when summary is enabled for that session. |
 
 ---
 
@@ -405,6 +405,7 @@ How it behaves:
 - End: power falls below the stop threshold (optionally must stay below it for a stop delay).
 - Optional gate: when enabled, a separate on/off datapoint controls if starting is allowed; switching the gate off ends a running session.
 - Optional summary: counter + price datapoints can be enabled to calculate consumption/cost metrics.
+- Session counter: IngestStates keeps a persistent `sessionCount` state and increments it whenever a session ends.
 - Grace behavior on stop is fixed: if power rises above the stop threshold again, a pending stop-delay is always canceled.
 
 Options you will see in the Session tab:
@@ -431,6 +432,7 @@ Runtime note:
 
 - Session-relevant config is latched at session start. Config changes while a session is already active are applied only to the next session.
 - After adapter restart, running sessions and pending start/stop debounce timers are not continued.
+- The persistent session counter survives restarts and can be corrected manually by writing a new non-negative number to the `sessionCount` state.
 
 Messages:
 
@@ -852,6 +854,7 @@ Inputs:
 - Power datapoint: `targetId`
 - Optional gate (when `sess-enableGate=true`): `sess-onOffId` (+ gate logic)
 - Optional summary inputs (when `sess-enableSummary=true`): `sess-energyCounterId`, `sess-pricePerKwhId`
+- Persistent counter state: `msghub.<instance>.IngestStates.<pluginInstance>.session.<targetId>.sessionCount`
 
 Start/stop detection:
 
@@ -886,8 +889,15 @@ Timer details:
 
 Metrics:
 
-- always: `state-name`
+- always: `state-name`, `session-count`
 - summary-enabled only: `session-counter-start`, `session-counter`, `session-cost`
+
+Counter state:
+
+- The `sessionCount` state is numeric, readable/writable, and initialized to `0` when missing.
+- On every session end, IngestStates increments the state before creating the end message.
+- Manual corrections are supported via `ack:false` writes. IngestStates normalizes the value to a non-negative integer and mirrors it back with `ack:true`.
+- Start messages show the count before the running session is completed. End messages show the already incremented count.
 
 ---
 

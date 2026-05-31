@@ -98,6 +98,8 @@
 	"msghub.i18n.IngestStates.ui.templateCatalog.nonSettling.metric.trendStartValue.label": "Wert zu Beginn",
 	"msghub.i18n.IngestStates.ui.templateCatalog.session.metric.sessionCost.help": "Berechnete Kosten der während der Sitzung verbrauchten Energie (Verbrauch × Preis pro kWh). Beispiel: `0,54`.",
 	"msghub.i18n.IngestStates.ui.templateCatalog.session.metric.sessionCost.label": "Sitzungskosten",
+	"msghub.i18n.IngestStates.ui.templateCatalog.session.metric.sessionCount.help": "Anzahl abgeschlossener Sitzungen. Startmeldungen zeigen den vorherigen Wert; Endmeldungen den erhöhten Wert.",
+	"msghub.i18n.IngestStates.ui.templateCatalog.session.metric.sessionCount.label": "Sitzungszähler",
 	"msghub.i18n.IngestStates.ui.templateCatalog.session.metric.sessionCounter.help": "Während der Sitzung verbrauchte Energie (Zählerstand am Ende minus Zählerstand am Anfang). Beispiel: `1,8` (kWh).",
 	"msghub.i18n.IngestStates.ui.templateCatalog.session.metric.sessionCounter.label": "Verbrauchte Energie",
 	"msghub.i18n.IngestStates.ui.templateCatalog.session.metric.sessionCounterStart.help": "Wert des Energiezählers zu Beginn der Sitzung. Dient als Ausgangspunkt zur Berechnung des Energieverbrauchs. Beispiel: `12450,3` (kWh).",

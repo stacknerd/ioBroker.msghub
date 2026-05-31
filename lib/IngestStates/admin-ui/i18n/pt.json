@@ -98,6 +98,8 @@
 	"msghub.i18n.IngestStates.ui.templateCatalog.nonSettling.metric.trendStartValue.label": "Value at start",
 	"msghub.i18n.IngestStates.ui.templateCatalog.session.metric.sessionCost.help": "Calculated cost of energy consumed during the session (energy used × price per kWh). Example: `0.54`.",
 	"msghub.i18n.IngestStates.ui.templateCatalog.session.metric.sessionCost.label": "Session cost",
+	"msghub.i18n.IngestStates.ui.templateCatalog.session.metric.sessionCount.help": "Number of completed sessions. Start messages show the previous value; end messages show the incremented value.",
+	"msghub.i18n.IngestStates.ui.templateCatalog.session.metric.sessionCount.label": "Session count",
 	"msghub.i18n.IngestStates.ui.templateCatalog.session.metric.sessionCounter.help": "Energy consumed during the session (counter at end minus counter at start). Example: `1.8` (kWh).",
 	"msghub.i18n.IngestStates.ui.templateCatalog.session.metric.sessionCounter.label": "Energy used",
 	"msghub.i18n.IngestStates.ui.templateCatalog.session.metric.sessionCounterStart.help": "Value of the energy counter at the moment the session began. Used as the baseline for calculating energy consumed. Example: `12450.3` (kWh).",
