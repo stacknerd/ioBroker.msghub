@@ -18,6 +18,7 @@ Notes:
 | `EngageSendTo` | Engage | Interact with MessageHub using “sendTo” in JavaScript and Blockly | ✓ |  | [`./EngageSendTo.md`](./EngageSendTo.md) |
 | `EngageTelegram` | Engage | Sends MsgHub notifications to Telegram via sendTo() and executes actions from inline button clicks. |  | ✓ | [`./EngageTelegram.md`](./EngageTelegram.md) |
 | `IngestDwd` | Ingest | Imports weather warnings from the ioBroker dwd adapter (dwd.X.warning*.object) into Message Hub. |  | ✓ | [`./IngestDwd.md`](./IngestDwd.md) |
+| `IngestHue` | Ingest | Monitors Hue device battery levels and reachability states from a configured ioBroker Hue instance. |  | ✓ | [`./IngestHue.md`](./IngestHue.md) |
 | `IngestRandomChaos` | Ingest | Demo/load generator that periodically injects messages. |  | ✓ | [`./IngestRandomChaos.md`](./IngestRandomChaos.md) |
 | `IngestStates` | Ingest | Generates MsgHub messages from ioBroker objects configured via “Custom” (Objects → Custom). | ✓ |  | [`./IngestStates.md`](./IngestStates.md) |
 | `NotifyDebug` | Notify | Logs notification dispatches (debugging / development only). |  |  | [`./NotifyDebug.md`](./NotifyDebug.md) |
