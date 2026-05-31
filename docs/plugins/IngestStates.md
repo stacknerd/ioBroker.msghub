@@ -406,6 +406,7 @@ How it behaves:
 - Optional gate: when enabled, a separate on/off datapoint controls if starting is allowed; switching the gate off ends a running session.
 - Optional summary: counter + price datapoints can be enabled to calculate consumption/cost metrics.
 - Session counter: IngestStates keeps a persistent `sessionCount` state and increments it whenever a session ends.
+- Session active state: IngestStates mirrors whether a session is currently running in a read-only `sessionActive` state.
 - Grace behavior on stop is fixed: if power rises above the stop threshold again, a pending stop-delay is always canceled.
 
 Options you will see in the Session tab:
@@ -433,6 +434,7 @@ Runtime note:
 - Session-relevant config is latched at session start. Config changes while a session is already active are applied only to the next session.
 - After adapter restart, running sessions and pending start/stop debounce timers are not continued.
 - The persistent session counter survives restarts and can be corrected manually by writing a new non-negative number to the `sessionCount` state.
+- The `sessionActive` state follows the same restart semantics: it is set to `false` on startup until a new session starts.
 
 Messages:
 
@@ -855,6 +857,7 @@ Inputs:
 - Optional gate (when `sess-enableGate=true`): `sess-onOffId` (+ gate logic)
 - Optional summary inputs (when `sess-enableSummary=true`): `sess-energyCounterId`, `sess-pricePerKwhId`
 - Persistent counter state: `msghub.<instance>.IngestStates.<pluginInstance>.session.<targetId>.sessionCount`
+- Active-state mirror: `msghub.<instance>.IngestStates.<pluginInstance>.session.<targetId>.sessionActive`
 
 Start/stop detection:
 
@@ -898,6 +901,7 @@ Counter state:
 - On every session end, IngestStates increments the state before creating the end message.
 - Manual corrections are supported via `ack:false` writes. IngestStates normalizes the value to a non-negative integer and mirrors it back with `ack:true`.
 - Start messages show the count before the running session is completed. End messages show the already incremented count.
+- The `sessionActive` state is boolean, read-only, and initialized to `false` when missing. It is set to `true` while a session is active and back to `false` when the session ends or the rule is disposed.
 
 ---
 
