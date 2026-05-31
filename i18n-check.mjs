@@ -2,9 +2,13 @@
 'use strict';
 
 import fs from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import process from 'node:process';
 import { parseArgs } from 'node:util';
+
+const require = createRequire(import.meta.url);
+const { LANGS: SUPPORTED_LANGS } = require('./lib/loadI18nDir.js');
 
 function isPlainObject(value) {
 	return value != null && typeof value === 'object' && !Array.isArray(value);
@@ -77,6 +81,18 @@ async function listLangFilesInDir(dirPath) {
 		lang: normalizeLang(path.basename(filePath, '.json')),
 		filePath,
 	}));
+}
+
+function indexTargetsByLang(targets) {
+	const byLang = new Map();
+	for (const target of targets) {
+		byLang.set(target.lang, target);
+	}
+	return byLang;
+}
+
+function resolveTargetLangs(targets) {
+	return Array.from(new Set([...SUPPORTED_LANGS.map(normalizeLang), ...targets.map(t => t.lang)])).sort(compareStrings);
 }
 
 function shouldSkipDiscoveryDir(name) {
@@ -185,6 +201,7 @@ if (values.help) {
 
 Checks:
   - With --scope all: auto-discovers all repo-local i18n directories (except hidden dirs and node_modules).
+  - All repo-supported language files exist in every target directory.
   - All language files have the same keys as base (en).
   - Optional: key order is sorted (alphabetical, shallow) in every file.
 `);
@@ -219,11 +236,21 @@ for (const dir of dirs) {
 	const en = targets.find(t => t.lang === 'en') || targets[0];
 	const baseJson = await readJsonObject(en.filePath);
 	const baseKeys = collectKeys(baseJson);
+	const targetsByLang = indexTargetsByLang(targets);
+	const targetLangs = resolveTargetLangs(targets);
 
 	// eslint-disable-next-line no-console
 	console.log(`[${name}] dir=${dir} base=${en.lang} keys=${baseKeys.length}`);
 
-	for (const t of targets) {
+	for (const lang of targetLangs) {
+		const t = targetsByLang.get(lang);
+		if (!t) {
+			ok = false;
+			// eslint-disable-next-line no-console
+			console.log(`- ${lang}: missing file`);
+			continue;
+		}
+
 		const json = await readJsonObject(t.filePath);
 		const keys = collectKeys(json);
 		const diff = diffKeys(baseKeys, keys);

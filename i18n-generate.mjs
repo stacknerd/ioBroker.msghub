@@ -2,9 +2,13 @@
 'use strict';
 
 import fs from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import process from 'node:process';
 import { parseArgs } from 'node:util';
+
+const require = createRequire(import.meta.url);
+const { LANGS: SUPPORTED_LANGS } = require('./lib/loadI18nDir.js');
 
 function isPlainObject(value) {
 	return value != null && typeof value === 'object' && !Array.isArray(value);
@@ -79,6 +83,18 @@ async function listLangFilesInDir(dirPath) {
 		lang: normalizeLang(path.basename(filePath, '.json')),
 		filePath,
 	}));
+}
+
+function indexTargetsByLang(targets) {
+	const byLang = new Map();
+	for (const target of targets) {
+		byLang.set(target.lang, target);
+	}
+	return byLang;
+}
+
+function resolveTargetLangs(targets) {
+	return Array.from(new Set([...SUPPORTED_LANGS.map(normalizeLang), ...targets.map(t => t.lang)])).sort(compareStrings);
 }
 
 function shouldSkipDiscoveryDir(name) {
@@ -189,6 +205,7 @@ if (values.help) {
 
 Behavior:
   - With --scope all: auto-discovers all repo-local i18n directories (except hidden dirs and node_modules).
+  - Creates missing repo-supported language files from en.json.
   - Adds missing keys (compared to en.json) to every other language file, using the en text as value.
   - With --remove: removes keys from other language files that do not exist in en.json.
 `);
@@ -218,13 +235,25 @@ for (const dir of dirs) {
 	const base = await readJsonObjectWithStyle(enTarget.filePath);
 	const baseKeys = base.keys;
 	const baseJson = base.json;
+	const targetsByLang = indexTargetsByLang(targets);
+	const targetLangs = resolveTargetLangs(targets);
 
-	for (const t of targets) {
-		if (t.lang === 'en') {
+	for (const lang of targetLangs) {
+		if (lang === 'en') {
 			continue;
 		}
 
-		const read = await readJsonObjectWithStyle(t.filePath);
+		const t = targetsByLang.get(lang) || {
+			lang,
+			filePath: path.join(dir, `${lang}.json`),
+		};
+		const read = targetsByLang.has(lang)
+			? await readJsonObjectWithStyle(t.filePath)
+			: {
+					json: Object.create(null),
+					indent: base.indent,
+					eol: base.eol,
+				};
 		const { missing, extra } = diffGenerate({ baseKeys, baseJson, langJson: read.json, remove });
 		if (missing === 0 && extra === 0) {
 			continue;
