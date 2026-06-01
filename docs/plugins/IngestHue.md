@@ -87,6 +87,9 @@ For known Hue models, battery tasks include:
 - required tools, where known
 - estimated task time
 
+Generic consumables and standard tools use the shared root i18n vocabulary (`msghub.i18n.core.common.*`) so the same battery
+and tool labels can be reused across ingest plugins.
+
 Reachability messages also use the model catalog for the device label when a Hue `modelid` is available. The configured
 role filter only decides which `*.reachable` states are monitored; it does not decide the display label.
 

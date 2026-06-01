@@ -1,9 +1,4 @@
 {
-  "msghub.i18n.IngestHue.consumable.aa.label": "AA",
-  "msghub.i18n.IngestHue.consumable.aaa.label": "AAA",
-  "msghub.i18n.IngestHue.consumable.cr2.label": "CR2",
-  "msghub.i18n.IngestHue.consumable.cr2032.label": "CR2032",
-  "msghub.i18n.IngestHue.consumable.cr2450.label": "CR2450",
   "msghub.i18n.IngestHue.managed.battery.text": "This Hue state is monitored by IngestHue. A message is created below %s%% and closed at %s%% or higher.",
   "msghub.i18n.IngestHue.managed.reachable.text": "This Hue state is monitored by IngestHue. A message is created when the device is not reachable and closed when it is reachable again.",
   "msghub.i18n.IngestHue.model.dimmerSwitch.label": "Dimmer switch",
@@ -20,10 +15,5 @@
   "msghub.i18n.IngestHue.msg.battery.title": "%s '%s': battery low",
   "msghub.i18n.IngestHue.msg.reachable.reason": "Device is not reachable",
   "msghub.i18n.IngestHue.msg.reachable.text": "The device has been unreachable for {{m.state-lc|durationSince}}.",
-  "msghub.i18n.IngestHue.msg.reachable.title": "%s '%s': not reachable",
-  "msghub.i18n.IngestHue.tool.ladderIfNeeded.label": "ladder (if needed)",
-  "msghub.i18n.IngestHue.tool.ph1Phillips.label": "PH1 Phillips screwdriver",
-  "msghub.i18n.IngestHue.tool.ph2Phillips.label": "PH2 Phillips screwdriver",
-  "msghub.i18n.IngestHue.tool.slotted35mm.label": "3.5 mm slotted screwdriver",
-  "msghub.i18n.IngestHue.tool.unknown.label": "unknown"
+  "msghub.i18n.IngestHue.msg.reachable.title": "%s '%s': not reachable"
 }

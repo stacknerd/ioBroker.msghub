@@ -1,9 +1,4 @@
 {
-  "msghub.i18n.IngestHue.consumable.aa.label": "AA",
-  "msghub.i18n.IngestHue.consumable.aaa.label": "AAA",
-  "msghub.i18n.IngestHue.consumable.cr2.label": "CR2",
-  "msghub.i18n.IngestHue.consumable.cr2032.label": "CR2032",
-  "msghub.i18n.IngestHue.consumable.cr2450.label": "CR2450",
   "msghub.i18n.IngestHue.managed.battery.text": "Dieser Hue-State wird von IngestHue überwacht. Eine Meldung wird unter %s%% erstellt und ab %s%% wieder geschlossen.",
   "msghub.i18n.IngestHue.managed.reachable.text": "Dieser Hue-State wird von IngestHue überwacht. Eine Meldung wird erstellt, wenn das Gerät nicht erreichbar ist, und geschlossen, wenn es wieder erreichbar ist.",
   "msghub.i18n.IngestHue.model.dimmerSwitch.label": "Dimmschalter",
@@ -20,10 +15,5 @@
   "msghub.i18n.IngestHue.msg.battery.title": "%s '%s': Batterie niedrig",
   "msghub.i18n.IngestHue.msg.reachable.reason": "Gerät ist nicht erreichbar",
   "msghub.i18n.IngestHue.msg.reachable.text": "Das Gerät ist seit {{m.state-lc|durationSince}} nicht erreichbar.",
-  "msghub.i18n.IngestHue.msg.reachable.title": "%s '%s': nicht erreichbar",
-  "msghub.i18n.IngestHue.tool.ladderIfNeeded.label": "Leiter (falls nötig)",
-  "msghub.i18n.IngestHue.tool.ph1Phillips.label": "PH1-Kreuzschraubendreher",
-  "msghub.i18n.IngestHue.tool.ph2Phillips.label": "PH2-Kreuzschraubendreher",
-  "msghub.i18n.IngestHue.tool.slotted35mm.label": "3,5-mm-Schlitzschraubendreher",
-  "msghub.i18n.IngestHue.tool.unknown.label": "unbekannt"
+  "msghub.i18n.IngestHue.msg.reachable.title": "%s '%s': nicht erreichbar"
 }
