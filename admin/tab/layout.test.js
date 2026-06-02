@@ -386,6 +386,7 @@ async function loadLayoutSandbox(options = {}) {
 				stats: {
 					id: 'stats',
 					label: 'stats.key',
+					description: 'stats.description.key',
 				},
 				messages: {
 					id: 'messages',
@@ -1267,13 +1268,27 @@ describe('admin/tab/layout.js', function () {
 		assert.equal(sandbox.document.title, 'Presets - MessageHub');
 	});
 
-	it('buildLayoutFromRegistry() registers descriptors and sets data-i18n to label', async function () {
+	it('buildLayoutFromRegistry() registers descriptors and sets tab i18n metadata', async function () {
 		const { sandbox, layoutHost } = await loadLayoutSandbox({
-			t: key => (key === 'stats.key' ? 'Stats' : key),
+			t: key => {
+				if (key === 'stats.key') {
+					return 'Stats';
+				}
+				if (key === 'stats.description.key') {
+					return 'Stats overview';
+				}
+				return key;
+			},
 		});
 		const { buildLayoutFromRegistry, updateDocumentTitle, activatePanel } = sandbox.window.__layoutFns;
 
 		buildLayoutFromRegistry();
+		const nav = layoutHost.children[0]?.children?.[0];
+		const statsTab = nav?.children?.[0]?.children?.[0] || null;
+		assert.ok(statsTab, 'stats tab must be rendered');
+		assert.equal(statsTab.getAttribute('data-i18n'), 'stats.key');
+		assert.equal(statsTab.getAttribute('data-i18n-title'), 'stats.description.key');
+		assert.equal(statsTab.getAttribute('title'), 'Stats overview');
 
 		// After build, activating a native panel should resolve title via registered descriptor.
 		const panel = layoutHost.children[0]?.children[1]; // nav[0], first panel[1]

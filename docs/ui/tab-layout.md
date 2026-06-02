@@ -38,6 +38,10 @@ visible shell use the same final view/composition decision.
 - native panel containers
 - plugin panel placeholder containers
 
+When a rendered tab has a panel `description` i18n key, the tab anchor receives `data-i18n-title`
+and a translated `title` tooltip. Plugin panel tabs keep the loading label and no tooltip until
+`boot.js` hydrates the resolved plugin panel metadata and its plugin-owned i18n is available.
+
 It separates the result into two groups:
 
 - `panelIds`: native/core panel ids only
@@ -209,14 +213,16 @@ intermediate DOM changes produces the same state as a single call.
 Converts a raw native panel definition from `corePanels` into a canonical `PanelDescriptor`.
 The producer now stores owner-local ids (`'messages'`, `'plugins'`). `normalizeCorePanel(...)`
 derives the canonical external/runtime id as `tab-<ownerLocalId>`, and passes through `category`,
-the optional `app` block, and the backend-owned `resolvedAppIcons` map.
+the optional `description` i18n key, the optional `app` block, and the backend-owned
+`resolvedAppIcons` map.
 
 ### `normalizePluginPanel(panelDef, pluginRef)`
 
 Converts a resolved backend plugin panel object and its structured registry ref into a canonical `PanelDescriptor`.
 The resulting id follows the pattern `tab-plugin-<pluginType>-<instanceId>-<panelId>`.
 `ui.kind` is `'plugin'`, `ui.loader` is `'esm'`. `label` is a plugin-owned admin-ui i18n key string,
-`description` is an optional string. `ui.entry` is intentionally absent from the frontend
+`description` is an optional plugin-owned admin-ui i18n key string used as the tab tooltip after
+plugin i18n hydration. `ui.entry` is intentionally absent from the frontend
 descriptor contract; bundle loading is host-owned via `web.pluginUi.bundle.get` plus `bundle.hash`.
 
 Optional fields are passed through from `contrib` when present:

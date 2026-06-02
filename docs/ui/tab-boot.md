@@ -135,8 +135,9 @@ Important: panels are expected to work against this frozen `ctx`, not against ad
 - embedded-admin language override via `backendTextLanguage` when the tab is actually embedded in the admin host (`isEmbeddedInAdmin`)
 
 If the backend does not provide a valid timezone, the shell falls back to UTC and shows a warning toast once.
-When static i18n text is refreshed afterwards, `applyStaticI18n()` also resynchronizes the derived document title via
-the async `updateDocumentTitle()` path.
+When static i18n text is refreshed afterwards, `applyStaticI18n()` updates both `data-i18n` text
+and `data-i18n-title` tooltips, then resynchronizes the derived document title via the async
+`updateDocumentTitle()` path.
 
 ### 3) Initialize native panels from the loaded core panel map
 
@@ -170,6 +171,7 @@ Structured plugin panel refs from the composition are not active immediately.
 `hydratePluginPanels()` matches them against the loaded `web.view.get(...).pluginPanels` map, then:
 
 - enables the matching tab
+- applies the plugin panel label and `description` tooltip once the corresponding plugin-owned i18n keys are available
 - stores the mount metadata in `pluginPanelTabMap`
 - calls `normalizePluginPanel(panelDef, ref)` and `registerPanelDescriptor(descriptor)` so that `panelDescriptors` in `layout.js` is populated before the user first activates a plugin tab
 - mirrors `descriptor.category` to the plugin panel container as `span.msghub-paneltype-<category>` when present

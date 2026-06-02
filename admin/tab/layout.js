@@ -1159,6 +1159,7 @@ function buildLayoutFromRegistry() {
 				const { id, def } = entry;
 				const tabId = `tab-${id}`;
 				const dataI18n = typeof def?.label === 'string' ? def.label : '';
+				const dataI18nTitle = typeof def?.description === 'string' ? def.description.trim() : '';
 				nav.appendChild(
 					h('a', {
 						class: `msghub-tab${id === defaultPanelId ? ' is-active' : ''}`,
@@ -1166,6 +1167,12 @@ function buildLayoutFromRegistry() {
 						role: 'tab',
 						'aria-controls': tabId,
 						'data-i18n': dataI18n,
+						...(dataI18nTitle
+							? {
+									'data-i18n-title': dataI18nTitle,
+									title: resolvePanelI18nKey(dataI18nTitle),
+								}
+							: {}),
 						text: id,
 					}),
 				);

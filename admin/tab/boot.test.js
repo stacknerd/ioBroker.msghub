@@ -964,6 +964,14 @@ globalThis.__fn = updateConnectionPanel;
 		const applyStaticI18nSource = extractFunctionSource(source, 'applyStaticI18n');
 		const updateDocumentTitleCalls = [];
 		const i18nElements = [{ getAttribute: () => 'msghub.i18n.core.sample', textContent: '' }];
+		const titleAttrs = [];
+		const titleElements = [
+			{
+				getAttribute: () => 'msghub.i18n.core.sample.tooltip',
+				setAttribute: (name, value) => titleAttrs.push([name, value]),
+				removeAttribute: name => titleAttrs.push(['remove', name]),
+			},
+		];
 		const sandbox = runInSandbox(
 			`
 ${applyStaticI18nSource}
@@ -972,7 +980,17 @@ globalThis.__applyStaticI18n = applyStaticI18n;
 			{
 				t: key => `T:${key}`,
 				updateDocumentTitle: () => updateDocumentTitleCalls.push(1),
-				document: { querySelectorAll: () => i18nElements },
+				document: {
+					querySelectorAll: selector => {
+						if (selector === '[data-i18n]') {
+							return i18nElements;
+						}
+						if (selector === '[data-i18n-title]') {
+							return titleElements;
+						}
+						return [];
+					},
+				},
 			},
 			'boot-applyStaticI18n.js',
 		);
@@ -980,6 +998,7 @@ globalThis.__applyStaticI18n = applyStaticI18n;
 		sandbox.__applyStaticI18n();
 		assert.equal(updateDocumentTitleCalls.length, 1, 'applyStaticI18n must refresh the document title once');
 		assert.equal(i18nElements[0].textContent, 'T:msghub.i18n.core.sample');
+		assert.deepEqual(titleAttrs, [['title', 'T:msghub.i18n.core.sample.tooltip']]);
 	});
 
 	it('applyBootstrapAboutPayload populates connPanelData and calls updateConnectionPanel', async function () {
@@ -1381,12 +1400,22 @@ globalThis.__map = pluginPanelTabMap;
 `,
 			{
 				lang: 'en',
-				hasAdminKey: key => key === 'msghub.i18n.IngestStates.ui.panels.presets.label',
+				hasAdminKey: key =>
+					key === 'msghub.i18n.IngestStates.ui.panels.presets.label' ||
+					key === 'msghub.i18n.IngestStates.ui.panels.presets.description.text',
 				document: {
 					getElementById: id => (id === 'plugin-IngestStates-0-presets' ? container : null),
 					querySelector: () => tabEl,
 				},
-				t: key => (key === 'msghub.i18n.IngestStates.ui.panels.presets.label' ? 'Presets' : String(key || '')),
+				t: key => {
+					if (key === 'msghub.i18n.IngestStates.ui.panels.presets.label') {
+						return 'Presets';
+					}
+					if (key === 'msghub.i18n.IngestStates.ui.panels.presets.description.text') {
+						return 'Manage presets';
+					}
+					return String(key || '');
+				},
 				applyCategoryMarker: () => {},
 				normalizePluginPanel: (panelDef, ref) => ({
 					id: `tab-plugin-${ref.pluginType}-${ref.instanceId}-${ref.panelId}`,
@@ -1404,6 +1433,7 @@ globalThis.__map = pluginPanelTabMap;
 			'plugin-IngestStates-0-presets': {
 				id: 'plugin-IngestStates-0-presets',
 				label: 'msghub.i18n.IngestStates.ui.panels.presets.label',
+				description: 'msghub.i18n.IngestStates.ui.panels.presets.description.text',
 				ui: {
 					kind: 'plugin',
 					loader: 'esm',
@@ -1415,7 +1445,11 @@ globalThis.__map = pluginPanelTabMap;
 		assert.deepEqual(JSON.parse(JSON.stringify(enabledTabIds)), ['tab-plugin-IngestStates-0-presets']);
 		assert.ok(removedAttrs.includes('aria-disabled'), 'aria-disabled must be removed from enabled tab');
 		assert.ok(removedClasses.includes('is-disabled'), 'is-disabled class must be removed from enabled tab');
-		assert.deepEqual(setAttrs, [['data-i18n', 'msghub.i18n.IngestStates.ui.panels.presets.label']]);
+		assert.deepEqual(setAttrs, [
+			['data-i18n', 'msghub.i18n.IngestStates.ui.panels.presets.label'],
+			['data-i18n-title', 'msghub.i18n.IngestStates.ui.panels.presets.description.text'],
+			['title', 'Manage presets'],
+		]);
 		assert.equal(tabLabel, 'Presets', 'tab text must be translated from the contribution i18n key');
 		assert.ok(sandbox.__map.has('tab-plugin-IngestStates-0-presets'), 'entry must be registered in pluginPanelTabMap');
 		const entry = sandbox.__map.get('tab-plugin-IngestStates-0-presets');
@@ -1648,11 +1682,22 @@ globalThis.__map = pluginPanelTabMap;
 					pluginPanels: {
 						'plugin-IngestStates-0-presets': {
 							label: 'msghub.i18n.IngestStates.ui.panels.presets.label',
+							description: 'msghub.i18n.IngestStates.ui.panels.presets.description.text',
 						},
 					},
 				}),
-				hasAdminKey: key => key === 'msghub.i18n.IngestStates.ui.panels.presets.label',
-				t: key => (key === 'msghub.i18n.IngestStates.ui.panels.presets.label' ? 'Preset Editor' : String(key || '')),
+				hasAdminKey: key =>
+					key === 'msghub.i18n.IngestStates.ui.panels.presets.label' ||
+					key === 'msghub.i18n.IngestStates.ui.panels.presets.description.text',
+				t: key => {
+					if (key === 'msghub.i18n.IngestStates.ui.panels.presets.label') {
+						return 'Preset Editor';
+					}
+					if (key === 'msghub.i18n.IngestStates.ui.panels.presets.description.text') {
+						return 'Manage presets';
+					}
+					return String(key || '');
+				},
 				updateDocumentTitle: () => {
 					titleUpdates += 1;
 				},
@@ -1666,7 +1711,11 @@ globalThis.__map = pluginPanelTabMap;
 
 		sandbox.__rerender('IngestStates');
 
-		assert.deepEqual(setAttrs, [['data-i18n', 'msghub.i18n.IngestStates.ui.panels.presets.label']]);
+		assert.deepEqual(setAttrs, [
+			['data-i18n', 'msghub.i18n.IngestStates.ui.panels.presets.label'],
+			['data-i18n-title', 'msghub.i18n.IngestStates.ui.panels.presets.description.text'],
+			['title', 'Manage presets'],
+		]);
 		assert.equal(tabLabel, 'Preset Editor');
 		assert.equal(titleUpdates, 1, 'active document title should be refreshed alongside the tab label');
 	});

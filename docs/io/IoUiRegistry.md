@@ -92,6 +92,7 @@ Each entry may carry:
 
 - `id` — owner-local panel id
 - `label` — i18n key string
+- `description` — i18n key string used by the AdminTab shell as the tab tooltip
 - `category`
 - optional `app`
 
@@ -160,6 +161,7 @@ The registry now carries only panel metadata that belongs to the backend view co
 
 - owner-local panel identity
 - translated label keys
+- translated description keys for tab tooltips
 - semantic category
 - optional app/install metadata
 

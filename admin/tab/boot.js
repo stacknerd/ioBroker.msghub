@@ -804,7 +804,7 @@ let healthyShellSinceMs = 0;
 let healthyShellMarked = false;
 
 /**
- * Applies `data-i18n` text to static DOM nodes.
+ * Applies static i18n text and tooltip attributes to DOM nodes.
  */
 function applyStaticI18n() {
 	for (const el of document.querySelectorAll('[data-i18n]')) {
@@ -813,6 +813,18 @@ function applyStaticI18n() {
 			continue;
 		}
 		el.textContent = t(key);
+	}
+	for (const el of document.querySelectorAll('[data-i18n-title]')) {
+		const key = String(el.getAttribute('data-i18n-title') || '').trim();
+		if (!key) {
+			continue;
+		}
+		const text = t(key);
+		if (text) {
+			el.setAttribute('title', text);
+		} else {
+			el.removeAttribute('title');
+		}
 	}
 	void updateDocumentTitle();
 }
@@ -1295,6 +1307,19 @@ function renderPluginPanelTabLabel(tabEl, panelDef) {
 	const label = t(labelKey);
 	if (label) {
 		tabEl.textContent = label;
+	}
+	const descriptionKey = typeof panelDef.description === 'string' ? panelDef.description.trim() : '';
+	if (descriptionKey && typeof hasAdminKey === 'function' && hasAdminKey(descriptionKey)) {
+		tabEl.setAttribute('data-i18n-title', descriptionKey);
+		const description = t(descriptionKey);
+		if (description) {
+			tabEl.setAttribute('title', description);
+		} else {
+			tabEl.removeAttribute?.('title');
+		}
+	} else {
+		tabEl.removeAttribute?.('data-i18n-title');
+		tabEl.removeAttribute?.('title');
 	}
 	return true;
 }
