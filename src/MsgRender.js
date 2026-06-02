@@ -757,7 +757,7 @@ class MsgRender {
 	 *
 	 * - < 1 min: "56s"
 	 * - < 1 h: "34m" (rounded)
-	 * - < 1 day: "3:45h" (rounded)
+	 * - < 1 day: "3h 45m" (rounded)
 	 * - >= 1 day: "1d 4h" (rounded)
 	 *
 	 * @param {number} ms Duration in ms (must be >= 0).
@@ -783,7 +783,7 @@ class MsgRender {
 			const totalMinutes = Math.round(dur / 60_000);
 			const h = Math.floor(totalMinutes / 60);
 			const m = totalMinutes % 60;
-			return `${h}:${String(m).padStart(2, '0')}h`;
+			return `${h}h ${m}m`;
 		}
 
 		const totalHours = Math.round(dur / (60 * 60_000));

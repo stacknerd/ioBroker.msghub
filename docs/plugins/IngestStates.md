@@ -141,7 +141,7 @@ Formatting note for `durationSince` / `durationUntil`:
 
 - `< 1min`: `56s`
 - `< 1h`: `34m` (rounded)
-- `< 1 day`: `3:45h` (rounded)
+- `< 1 day`: `3h 45m` (rounded)
 - `>= 1 day`: `1d 4h` (rounded)
 
 Tip: start with defaults. Only customize title/text once the rule behavior is correct.

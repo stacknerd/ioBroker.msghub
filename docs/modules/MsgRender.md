@@ -274,7 +274,7 @@ Formats the duration since a Unix ms timestamp (relative to server time via `Dat
 
 - `< 1 min`: `56s`
 - `< 1 h`: `34m` (rounded)
-- `< 1 day`: `3:45h` (rounded)
+- `< 1 day`: `3h 45m` (rounded)
 - `>= 1 day`: `1d 4h` (rounded)
 
 If the timestamp is in the future, the output is an empty string.

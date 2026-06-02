@@ -31,7 +31,7 @@
 	--msghub-danger: rgb(211 47 47);
 	--msghub-danger-dim: rgb(211 47 47 / 0.1);
 
-	/* Chart palette (data viz; used by stats panel). */
+	/* Chart palette reserved for future data visualization surfaces. */
 	--msghub-chart-1: rgb(38 166 154);
 	--msghub-chart-2: rgb(66 165 245);
 	--msghub-chart-3: rgb(171 71 188);

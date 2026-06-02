@@ -198,7 +198,7 @@ describe('MsgRender', () => {
 			});
 
 			const out = renderer.renderMessage(msg);
-			expect(out.title).to.equal('56s/34m/3:45h/1d 4h/');
+			expect(out.title).to.equal('56s/34m/3h 45m/1d 4h/');
 		} finally {
 			Date.now = originalNow;
 		}
@@ -224,7 +224,7 @@ describe('MsgRender', () => {
 			});
 
 			const out = renderer.renderMessage(msg);
-			expect(out.title).to.equal('56s/34m/3:45h/1d 4h/');
+			expect(out.title).to.equal('56s/34m/3h 45m/1d 4h/');
 		} finally {
 			Date.now = originalNow;
 		}
