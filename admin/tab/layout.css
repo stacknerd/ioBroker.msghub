@@ -42,6 +42,10 @@
 	background: var(--msghub-surface-hover);
 }
 
+.msghub-root .msghub-tab.is-disabled {
+	display: none;
+}
+
 .msghub-root .msghub-tab.is-active {
 	background: transparent;
 	color: var(--msghub-accent);
@@ -84,7 +88,7 @@ html[data-msghub-layout='single'] .msghub-root .msghub-connpanel-host {
 }
 
 /* Pill: visual appearance only */
-.msghub-root #msghub-connection {
+.msghub-root .msghub-connectionbar {
 	padding: 5px 10px;
 	border-radius: 999px;
 	border: 1px solid var(--msghub-border);
@@ -92,13 +96,13 @@ html[data-msghub-layout='single'] .msghub-root .msghub-connpanel-host {
 	white-space: nowrap;
 }
 
-.msghub-root #msghub-connection.online {
+.msghub-root .msghub-connectionbar.online {
 	color: var(--msghub-ok);
 	border-color: var(--msghub-ok);
 	background: var(--msghub-ok-dim);
 }
 
-.msghub-root #msghub-connection.offline {
+.msghub-root .msghub-connectionbar.offline {
 	color: var(--msghub-danger);
 	border-color: var(--msghub-danger);
 	background: var(--msghub-danger-dim);
