@@ -2,7 +2,7 @@
 
 `IoStorageIobroker` implements the storage backend contract consumed by `MsgStorage`.
 
-It persists whole-document JSON files (for example `data/messages.json` and `data/stats-rollup.json`) in ioBroker file storage.
+It persists whole-document JSON files (for example `data/messages.json`) in ioBroker file storage.
 
 ---
 
@@ -13,7 +13,6 @@ It persists whole-document JSON files (for example `data/messages.json` and `dat
 At adapter startup, `main.js` injects `IoStorageIobroker` as backend factory for:
 
 - message list persistence (`messages.json`)
-- stats rollup persistence (`stats-rollup.json`)
 
 This keeps `src/MsgStorage.js` platform-agnostic.
 

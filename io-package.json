@@ -139,7 +139,6 @@
 		"hardDeleteAfterHours": 72,
 		"hardDeleteBatchSize": 50,
 		"hardDeleteStartupDelaySec": 60,
-		"rollupKeepDays": 400,
 		"writeIntervalMs": 10000,
 		"locale": "de-DE",
 		"publicWebEnabled": true,

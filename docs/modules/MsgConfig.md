@@ -50,7 +50,6 @@ version: it helps evolve the model deliberately and keeps plugin-facing usage ex
 - `corePrivate.store`: normalized store timers / maintenance settings (e.g. notifier/prune/hard-delete).
 - `corePrivate.storage`: normalized persistence settings.
 - `corePrivate.archive`: normalized archive settings.
-- `corePrivate.stats`: normalized stats/rollup settings.
 - `corePrivate.ai`: normalized AI config for `MsgAi` (includes decrypted secrets).
 - `corePrivate.quietHours`:
   - `null` when quiet hours are disabled (feature off or invalid config)

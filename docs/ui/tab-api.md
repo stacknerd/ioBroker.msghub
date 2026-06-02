@@ -49,7 +49,6 @@ The returned API currently exposes these groups:
 - `constants`
 - `bootstrap`
 - `time`
-- `stats`
 - `messages`
 - `plugins`
 - `notSupported`
@@ -61,7 +60,6 @@ This is the main panel-facing contract of the shell.
 Instead of letting panels call arbitrary `sendTo` commands, `api.js` maps explicit methods to backend commands:
 
 - `constants.get()` -> `web.constants.get`
-- `stats.get(...)` -> `web.stats.get`
 - `messages.query(...)` -> `web.messages.query`
 - `messages.delete(...)` -> `admin.messages.delete`
 - `messages.executeAction(...)` -> `web.messages.action`

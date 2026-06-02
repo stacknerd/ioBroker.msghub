@@ -67,7 +67,6 @@ const { MsgArchive } = require(`${__dirname}/MsgArchive`);
 const { MsgRender } = require(`${__dirname}/MsgRender`);
 const { MsgNotify } = require(`${__dirname}/MsgNotify`);
 const { MsgIngest } = require(`${__dirname}/MsgIngest`);
-const { MsgStats } = require(`${__dirname}/MsgStats`);
 const { MsgNotificationPolicy } = require(`${__dirname}/MsgNotificationPolicy`);
 const { MsgAction } = require(`${__dirname}/MsgAction`);
 
@@ -99,7 +98,6 @@ class MsgStore {
 	 * @param {object} options.storage Normalized storage config (source of truth: MsgConfig).
 	 * @param {() => any} options.storage.createStorageBackend Platform-resolved storage backend factory for MsgStorage.
 	 * @param {object} options.archive Normalized archive config (source of truth: MsgConfig).
-	 * @param {object} options.stats Normalized stats config (source of truth: MsgConfig).
 	 * @param {any} [options.render] Render-related options forwarded to `MsgRender` (e.g. prefix configuration).
 	 * @param {{ enabled: boolean, startMin: number, endMin: number, maxLevel: number, spreadMs: number }} [options.quietHours] Optional quiet-hours configuration (fully normalized by `MsgConfig`).
 	 * @param {() => number} [options.quietHoursRandomFn] Optional random function injection (tests).
@@ -110,7 +108,7 @@ class MsgStore {
 		if (!opt) {
 			throw new Error('MsgStore: options is required');
 		}
-		const { initialMessages = [], general, store, storage, archive, stats, ai = null } = opt;
+		const { initialMessages = [], general, store, storage, archive, ai = null } = opt;
 
 		if (!adapter) {
 			throw new Error('MsgStore: adapter is required');
@@ -140,10 +138,6 @@ class MsgStore {
 		if (!isObject(archive)) {
 			throw new Error('MsgStore: options.archive is required');
 		}
-		if (!isObject(stats)) {
-			throw new Error('MsgStore: options.stats is required');
-		}
-
 		const requireFinite = (value, label) => {
 			if (typeof value !== 'number' || !Number.isFinite(value)) {
 				throw new Error(`MsgStore: options.store.${label} must be a finite number`);
@@ -222,13 +216,6 @@ class MsgStore {
 		// Action executor + view policy (core).
 		this.msgActions = new MsgAction(this.adapter, this.msgConstants, this);
 
-		// Stats (read-only insights + rollups).
-		this.msgStats = new MsgStats(this.adapter, this.msgConstants, this, {
-			general,
-			...stats,
-			createStorageBackend,
-		});
-
 		// Pruning and notification timers (timer starts in `init()`).
 		this._quietHours = options?.quietHours || null;
 		this._quietHoursRandomFn =
@@ -258,7 +245,6 @@ class MsgStore {
 
 		await this.msgStorage.init();
 		await this.msgArchive.init();
-		await this.msgStats.init();
 
 		if (loadFromStorage) {
 			const loaded = await this.msgStorage.readJson([]);
@@ -475,11 +461,6 @@ class MsgStore {
 			(state === this.msgConstants.lifecycle?.state?.deleted ||
 				state === this.msgConstants.lifecycle?.state?.expired) &&
 			state !== existingState;
-
-		const isClosedTransition = state === this.msgConstants.lifecycle?.state?.closed && state !== existingState;
-		if (isClosedTransition) {
-			this.msgStats?.recordClosed?.(updated);
-		}
 
 		if (hadUpdate && !isSoftDeletedTransition) {
 			this._dispatchNotify(this.msgConstants.notfication.events.update, updated);
@@ -1243,7 +1224,6 @@ class MsgStore {
 		// Best-effort flush of buffered writes.
 		this.msgStorage.flushPending();
 		this.msgArchive?.flushPending?.();
-		this.msgStats?.onUnload?.();
 	}
 
 	/**
@@ -1275,20 +1255,6 @@ class MsgStore {
 
 		// Do not keep the Node event loop alive (tests / shutdown flows).
 		this._hardDeleteTimer?.unref?.();
-	}
-
-	/**
-	 * Return a JSON-serializable stats snapshot for UI/diagnostics.
-	 *
-	 * @param {object} [options] Options forwarded to MsgStats.
-	 * @returns {Promise<any>} Stats object.
-	 */
-	async getStats(options = {}) {
-		this._pruneOldMessages();
-		if (!this.msgStats || typeof this.msgStats.getStats !== 'function') {
-			return null;
-		}
-		return await this.msgStats.getStats(options);
 	}
 
 	/**

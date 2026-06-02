@@ -297,7 +297,7 @@ It also triggers an unconditional initial `sendPing()` during module load, befor
 - Explicit plugin refs that are not resolved in `view.pluginPanels` stay as disabled placeholders.
 - Initial panel activation is layout-aware: tabbed compositions use `initTabs()`, single compositions call the shared `activatePanel(...)` path directly.
 - `ctx` is frozen before it is handed to panels. Panels should treat it as read-only runtime state.
-- `ctx.elements` exposes getters for `connection`, `pluginsRoot`, `messagesRoot`, and `statsRoot`. In the current shell, `statsRoot` has no matching mount point in [`admin/tab.html`](../../admin/tab.html) and currently resolves to `null`.
+- `ctx.elements` exposes getters for `connection`, `pluginsRoot`, and `messagesRoot`.
 - Transport reconnect is not treated as sufficient proof of health. The shell waits for a successful ping before switching to online UX.
 - The healthy-shell marker is written only after `ensureBooted()` completed and the first successful ping marked the shell online.
 - Resume recovery is shell-owned and stays internal to `boot.js`; native panels do not receive a dedicated `onResume()` hook.

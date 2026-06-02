@@ -5,7 +5,7 @@
 | Scope | UI-facing contracts only. |
 | In scope | Browser/runtime globals, Admin Tab shell builders, native panel `ctx`, `ctx.api`, UI-facing Admin/runtime commands, plugin-owned Admin UI host path, browser lifecycle and mounting invariants. |
 | Out of scope | Plugin runtime `ctx` outside UI-facing paths, full core/module API ownership, general architecture, non-UI plugin wiring details. |
-| Source of truth | `admin/tab/contracts.d.ts`, `admin/tab/runtime.js`, `admin/tab/api.js`, `admin/tab/ui.js`, `admin/tab/layout.js`, `admin/tab/boot.js`, `admin/tab/plugin-ui-host.js`, `lib/IoUiRegistry.js`, `lib/IoUiCatalog.js`, `lib/IoWebUi.js`, `lib/IoAdminTab.js`, `lib/IoPlugins.js`, `lib/IngestStates/manifest.js`, `src/MsgStore.js`, `src/MsgStats.js`, `main.js`. |
+| Source of truth | `admin/tab/contracts.d.ts`, `admin/tab/runtime.js`, `admin/tab/api.js`, `admin/tab/ui.js`, `admin/tab/layout.js`, `admin/tab/boot.js`, `admin/tab/plugin-ui-host.js`, `lib/IoUiRegistry.js`, `lib/IoUiCatalog.js`, `lib/IoWebUi.js`, `lib/IoAdminTab.js`, `lib/IoPlugins.js`, `lib/IngestStates/manifest.js`, `src/MsgStore.js`, `main.js`. |
 
 | Area | Owned by | Use this file for |
 | --- | --- | --- |
@@ -110,7 +110,6 @@ panel/plugin contract in this reference.
 | `ctx.lang` | Current language snapshot at boot time. It is not a reactive getter. | Boot runtime | `admin/tab/boot.js` |
 | `ctx.elements.connection` | Getter for `#msghub-connection`. | Boot runtime | `admin/tab/boot.js` |
 | `ctx.elements.pluginsRoot` | Getter for `#plugins-root`. | Boot runtime | `admin/tab/boot.js` |
-| `ctx.elements.statsRoot` | Getter for `#stats-root`. | Boot runtime | `admin/tab/boot.js` |
 | `ctx.elements.messagesRoot` | Getter for `#messages-root`. | Boot runtime | `admin/tab/boot.js` |
 
 ### Raw `ctx.ui` / `createUi()` surface
@@ -212,7 +211,6 @@ panel/plugin contract in this reference.
 | `ctx.api` method | Backend command | Request contract | Response contract | Owner | Reference |
 | --- | --- | --- | --- | --- | --- |
 | `ctx.api.constants.get()` | `web.constants.get` | No payload fields are used. | `{ kind, lifecycle: { state }, level, notfication: { events } }` | Web runtime | `admin/tab/api.js`, `lib/IoWebUi.js` |
-| `ctx.api.stats.get(params)` | `web.stats.get` | `params.include.archiveSize?: boolean`, `params.include.archiveSizeMaxAgeMs?: number`. `archiveSizeMaxAgeMs` is normalized to a non-negative integer. | MsgStats snapshot `{ meta, current, schedule, done, io }`. Nested DTO is owned by `MsgStats`. | Web runtime | `admin/tab/api.js`, `lib/IoWebUi.js`, `src/MsgStats.js` |
 | `ctx.api.messages.query(params)` | `web.messages.query` | `params.query.where?: object`, `params.query.page?: object`, `params.query.sort?: object|Array`. Omitted or invalid branches are dropped before forwarding. | `{ meta: { generatedAt, tz }, items, total?, pages? }`. `items` are JSON-safe clones with maps serialized. | Web runtime | `admin/tab/api.js`, `lib/IoWebUi.js`, `src/MsgStore.js` |
 | `ctx.api.messages.delete(refs)` | `admin.messages.delete` | Array of refs. The backend trims strings, deduplicates them, rejects empty input, and rejects more than 5000 refs. | `{ requested, deleted, missing }` | Admin runtime | `admin/tab/api.js`, `lib/IoAdminTab.js` |
 | `ctx.api.messages.executeAction(params)` | `web.messages.action` | `{ ref, actionId }` are required. | `{ executed: true }` on success. Error code `REJECTED` when the action executor returns false. | Web runtime | `admin/tab/api.js`, `lib/IoWebUi.js` |
@@ -232,17 +230,6 @@ panel/plugin contract in this reference.
 | `lifecycle.state` | Full `MsgConstants.lifecycle.state` object. No other `lifecycle` branches are forwarded here. | Admin runtime | `lib/IoAdminTab.js` |
 | `level` | Full `MsgConstants.level` object. | Admin runtime | `lib/IoAdminTab.js` |
 | `notfication.events` | Full `MsgConstants.notfication.events` object. Spelling is the current code spelling. | Admin runtime | `lib/IoAdminTab.js` |
-
-### `web.stats.get`
-
-| Entry | Contract | Owner | Reference |
-| --- | --- | --- | --- |
-| Request | `{ include?: { archiveSize?: boolean, archiveSizeMaxAgeMs?: number } }` | Admin runtime | `lib/IoAdminTab.js` |
-| Response `meta` | `{ schemaVersion: 1, generatedAt, tz, locale, windows }` | `MsgStats` via Admin runtime | `src/MsgStats.js`, `lib/IoAdminTab.js` |
-| Response `current` | Current open-state counters, including `byKind`. | `MsgStats` via Admin runtime | `src/MsgStats.js` |
-| Response `schedule` | Due-window counters, including `byKind`. | `MsgStats` via Admin runtime | `src/MsgStats.js` |
-| Response `done` | `{ today, thisWeek, thisMonth, lastClosedAt }` | `MsgStats` via Admin runtime | `src/MsgStats.js` |
-| Response `io` | `{ storage, archive }` from MsgStorage/MsgArchive status getters when present. | `MsgStats` via Admin runtime | `src/MsgStats.js` |
 
 ### `web.messages.query`, `admin.messages.delete`, `web.messages.action`
 

@@ -299,7 +299,6 @@ When creating `MsgStore`, you can pass options:
 - `store.deleteClosedIntervalMs` (default `10000`): how often the store soft-deletes `closed` messages
 - `storage`: options forwarded to `MsgStorage` (e.g. `baseDir`, `fileName`, `writeIntervalMs`)
 - `archive`: options forwarded to `MsgArchive` (e.g. `baseDir`, `fileExtension`, `flushIntervalMs`)
-- `stats`: normalized stats config from `MsgConfig`
 
 ---
 

@@ -36,7 +36,6 @@ window.__apiFns = {
 				id: 'adminTab',
 				layout: 'tabs',
 				panels: [
-					{ type: 'corePanel', panelId: 'stats' },
 					{ type: 'corePanel', panelId: 'messages' },
 					{ type: 'corePanel', panelId: 'plugins' },
 				],
@@ -215,7 +214,6 @@ describe('admin/tab/api.js', function () {
 		assert.equal(api.host.viewId, 'adminTab');
 		assert.equal(api.host.layout, 'tabs');
 		assert.deepEqual(JSON.parse(JSON.stringify(api.host.panels)), [
-			{ type: 'corePanel', panelId: 'stats' },
 			{ type: 'corePanel', panelId: 'messages' },
 			{ type: 'corePanel', panelId: 'plugins' },
 		]);
@@ -227,7 +225,6 @@ describe('admin/tab/api.js', function () {
 		assert.equal(typeof api.time.formatTs, 'function');
 
 		await api.constants.get();
-		await api.stats.get({ fast: true });
 		await api.messages.query({ page: 1 });
 		await api.messages.delete(['ref-1']);
 		await api.messages.executeAction({ ref: 'r1', actionId: 'ack' });
@@ -236,7 +233,6 @@ describe('admin/tab/api.js', function () {
 
 		const commands = sentCommands.map(entry => entry.command);
 		assert.ok(commands.includes('web.constants.get'));
-		assert.ok(commands.includes('web.stats.get'));
 		assert.ok(commands.includes('web.messages.query'));
 		assert.ok(commands.includes('admin.messages.delete'));
 		assert.ok(commands.includes('web.messages.action'));

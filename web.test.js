@@ -574,7 +574,7 @@ describe('IoWebExtension', () => {
 		});
 		const forbidden = await dispatch(extension, '/MessageHub/3/query', {
 			method: 'POST',
-			body: JSON.stringify({ cmd: 'admin.stats.get', payload: {} }),
+			body: JSON.stringify({ cmd: 'admin.plugins.getCatalog', payload: {} }),
 		});
 
 		expect(invalidJson.res.statusCode).to.equal(400);

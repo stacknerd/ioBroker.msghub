@@ -195,7 +195,6 @@ class Msghub extends utils.Adapter {
 				createStorageBackend: archiveResolved.createStorageBackend,
 				archiveRuntime: archiveResolved.archiveRuntime,
 			},
-			stats: msgCfg.corePrivate.stats,
 			quietHours: msgCfg.corePrivate.quietHours,
 			render: msgCfg.corePrivate.render,
 			ai: msgAi,

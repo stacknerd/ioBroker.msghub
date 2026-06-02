@@ -86,7 +86,7 @@ At a high level, the data flow looks like this:
 
 The UI therefore sits on top of multiple system blocks:
 
-- **Core modules** for message data and statistics
+- **Core modules** for message data and lifecycle behavior
 - **IO/runtime bridges** for adapter-specific commands and transport
 - **Plugins** for plugin configuration, plugin status, and plugin-owned Admin UI RPC
 - **ioBroker object/state storage** for persisted options and runtime state

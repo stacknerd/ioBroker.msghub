@@ -8,10 +8,10 @@ Plugin-facing ctx member tables live in [`docs/plugins/API.md`](../plugins/API.m
 
 | Field | Value |
 | --- | --- |
-| Scope | Core-owned entry points, core-owned data contracts, and invariants that IO and plugins must respect. `MsgStorage`, `MsgArchive`, and `MsgStats` are core infrastructure included here as source-of-truth modules, but their external contract is surfaced through `MsgStore` rather than as standalone IO/plugin entry points. |
-| In scope | `src/MsgAction.js`, `src/MsgAi.js`, `src/MsgArchive.js`, `src/MsgBridge.js`, `src/MsgConfig.js`, `src/MsgConstants.js`, `src/MsgEngage.js`, `src/MsgFactory.js`, `src/MsgHostApi.js`, `src/MsgIngest.js`, `src/MsgNotificationPolicy.js`, `src/MsgNotify.js`, `src/MsgRender.js`, `src/MsgStats.js`, `src/MsgStorage.js`, `src/MsgStore.js` |
+| Scope | Core-owned entry points, core-owned data contracts, and invariants that IO and plugins must respect. `MsgStorage` and `MsgArchive` are core infrastructure included here as source-of-truth modules, but their external contract is surfaced through `MsgStore` rather than as standalone IO/plugin entry points. |
+| In scope | `src/MsgAction.js`, `src/MsgAi.js`, `src/MsgArchive.js`, `src/MsgBridge.js`, `src/MsgConfig.js`, `src/MsgConstants.js`, `src/MsgEngage.js`, `src/MsgFactory.js`, `src/MsgHostApi.js`, `src/MsgIngest.js`, `src/MsgNotificationPolicy.js`, `src/MsgNotify.js`, `src/MsgRender.js`, `src/MsgStorage.js`, `src/MsgStore.js` |
 | Out of scope | IO plugin discovery/registration/admin routing, browser/runtime host wiring, plugin manifest schema, plugin bundle/UI contracts |
-| Source of truth | `src/MsgAction.js`, `src/MsgAi.js`, `src/MsgArchive.js`, `src/MsgBridge.js`, `src/MsgConfig.js`, `src/MsgConstants.js`, `src/MsgEngage.js`, `src/MsgFactory.js`, `src/MsgHostApi.js`, `src/MsgIngest.js`, `src/MsgNotificationPolicy.js`, `src/MsgNotify.js`, `src/MsgRender.js`, `src/MsgStats.js`, `src/MsgStorage.js`, `src/MsgStore.js` |
+| Source of truth | `src/MsgAction.js`, `src/MsgAi.js`, `src/MsgArchive.js`, `src/MsgBridge.js`, `src/MsgConfig.js`, `src/MsgConstants.js`, `src/MsgEngage.js`, `src/MsgFactory.js`, `src/MsgHostApi.js`, `src/MsgIngest.js`, `src/MsgNotificationPolicy.js`, `src/MsgNotify.js`, `src/MsgRender.js`, `src/MsgStorage.js`, `src/MsgStore.js` |
 
 ## Area Ownership
 
@@ -29,8 +29,7 @@ Plugin-facing ctx member tables live in [`docs/plugins/API.md`](../plugins/API.m
 | AI facade for plugin hosts | `MsgAi` | [`docs/plugins/API.md`](../plugins/API.md) for host-exposed AI access |
 | Rendered output boundary | `MsgRender` | [`docs/io/API.md`](../io/API.md) for IO-side consumers of rendered results |
 | Due-notification scheduling policy | `MsgNotificationPolicy` | [`docs/io/API.md`](../io/API.md) for IO-side consumers of due-related results |
-| Persistence, archive, and stats infrastructure | `MsgStorage`, `MsgArchive`, `MsgStats` | Publicly surfaced through `MsgStore`; this file does not treat them as standalone IO/plugin entry domains |
-| Stats rollup and diagnostics snapshot | `MsgStats` | [`docs/io/API.md`](../io/API.md) for IO-admin command transport |
+| Persistence and archive infrastructure | `MsgStorage`, `MsgArchive` | Publicly surfaced through `MsgStore`; this file does not treat them as standalone IO/plugin entry domains |
 
 ## Core Entry Points
 
@@ -38,27 +37,25 @@ Plugin-facing ctx member tables live in [`docs/plugins/API.md`](../plugins/API.m
 
 | Entry | Contract | Owner | Reference |
 | --- | --- | --- | --- |
-| `new MsgStore(adapter, msgConstants, msgFactory, options)` | Requires `adapter`, `msgConstants`, `msgFactory`, and `options.store`, `options.storage`, `options.archive`, `options.stats`. Creates `msgStorage`, `msgArchive`, `msgRender`, `msgNotify`, `msgIngest`, `msgActions`, and `msgStats`. Construction is synchronous and does not perform I/O. | `MsgStore` | `src/MsgStore.js` |
-| `await store.init({ loadFromStorage = true } = {})` | Idempotent startup step. Initializes storage, archive, and stats. When `loadFromStorage` is true, replaces `fullList` from persisted JSON, then runs a forced prune. Starts the due-notification interval only when `notifierIntervalMs > 0`. | `MsgStore` | `src/MsgStore.js` |
+| `new MsgStore(adapter, msgConstants, msgFactory, options)` | Requires `adapter`, `msgConstants`, `msgFactory`, and `options.store`, `options.storage`, `options.archive`. Creates `msgStorage`, `msgArchive`, `msgRender`, `msgNotify`, `msgIngest`, and `msgActions`. Construction is synchronous and does not perform I/O. | `MsgStore` | `src/MsgStore.js` |
+| `await store.init({ loadFromStorage = true } = {})` | Idempotent startup step. Initializes storage and archive. When `loadFromStorage` is true, replaces `fullList` from persisted JSON, then runs a forced prune. Starts the due-notification interval only when `notifierIntervalMs > 0`. | `MsgStore` | `src/MsgStore.js` |
 | `store.msgIngest` | Ingest host instance created by the store. Primary entry point for inbound ioBroker state/object/action fan-out. | `MsgStore` | `src/MsgStore.js`, `src/MsgIngest.js` |
 | `store.msgNotify` | Notify host instance created by the store. Primary entry point for outbound notification fan-out. | `MsgStore` | `src/MsgStore.js`, `src/MsgNotify.js` |
-| `store.msgStats` | Stats helper used by `store.getStats(...)`. | `MsgStore` | `src/MsgStore.js`, `src/MsgStats.js` |
 | `store.addMessage(msg)` | Adds a normalized message object to the canonical list. Rejects invalid payloads, empty refs, non-integer `level`, and duplicate refs unless all existing same-ref entries are quasi-deleted. Persists, archives, dispatches `added` / `recreated` / `recovered`, and may dispatch immediate `due`. | `MsgStore` | `src/MsgStore.js` |
-| `store.updateMessage(msgOrRef, patch?, stealthMode = false, _coreToken?)` | Updates an existing message through `MsgFactory.applyPatch(...)`. External callers must not rely on `_coreToken`; the core uses it to allow lifecycle transitions to `deleted` / `expired`. Non-silent updates dispatch `update` and may dispatch immediate `due`. Closed transitions record stats. | `MsgStore` | `src/MsgStore.js` |
+| `store.updateMessage(msgOrRef, patch?, stealthMode = false, _coreToken?)` | Updates an existing message through `MsgFactory.applyPatch(...)`. External callers must not rely on `_coreToken`; the core uses it to allow lifecycle transitions to `deleted` / `expired`. Non-silent updates dispatch `update` and may dispatch immediate `due`. | `MsgStore` | `src/MsgStore.js` |
 | `store.addOrUpdateMessage(msg)` | Upsert helper. Uses `getMessageByRef(ref, 'quasiOpen')` to decide between update and recreate/add semantics. | `MsgStore` | `src/MsgStore.js` |
 | `store.getMessageByRef(reference, filter = 'all')` | Returns the first matching message as a rendered output view. Supported filters: `'all'`, `'quasiDeleted'`, `'quasiOpen'`, or an explicit lifecycle-state allowlist array. Returns `undefined` when no match exists. | `MsgStore` | `src/MsgStore.js` |
 | `store.getMessages()` | Returns a raw snapshot clone of the canonical list. Output is not rendered. | `MsgStore` | `src/MsgStore.js` |
 | `store.queryMessages({ where, page, sort } = {})` | Core-owned JSON-friendly query API over the canonical list. Applies a throttled prune first, filters raw messages, then renders only the final result page. Full request/response contract is defined below. | `MsgStore` | `src/MsgStore.js` |
 | `store.removeMessage(reference, { actor? } = {})` | Soft-deletes an existing message by patching `lifecycle.state = 'deleted'` through the core-only lifecycle override path, clears `timing.notifyAt`, and dispatches `deleted`. Physical removal happens later through hard-delete retention. | `MsgStore` | `src/MsgStore.js` |
-| `await store.getStats(options = {})` | Returns the `MsgStats` snapshot or `null` when stats are unavailable. Runs a prune before delegating. | `MsgStore` | `src/MsgStore.js`, `src/MsgStats.js` |
-| `store.onUnload()` | Stops ingest plugins, stops notify plugins, clears the due timer and hard-delete timer, and best-effort flushes storage, archive, and stats buffers without awaiting them. | `MsgStore` | `src/MsgStore.js` |
+| `store.onUnload()` | Stops ingest plugins, stops notify plugins, clears the due timer and hard-delete timer, and best-effort flushes storage and archive buffers without awaiting them. | `MsgStore` | `src/MsgStore.js` |
 
 ### MsgIngest
 
 | Entry | Contract | Owner | Reference |
 | --- | --- | --- | --- |
 | `new MsgIngest(adapter, msgConstants, msgFactory, msgStore, { ai? } = {})` | Requires `adapter`, `msgConstants`, `msgFactory`, and `msgStore`. Builds a frozen `api` facade from `MsgHostApi`. | `MsgIngest` | `src/MsgIngest.js`, `src/MsgHostApi.js` |
-| `ingest.api` | Frozen plugin ctx API surface containing `constants`, `config`, `factory`, `store`, `stats`, `ai`, `i18n`, `format`, `iobroker`, and `log`. Member-level plugin-facing detail is documented in [`docs/plugins/API.md`](../plugins/API.md). | `MsgIngest` | `src/MsgIngest.js`, `src/MsgHostApi.js` |
+| `ingest.api` | Frozen plugin ctx API surface containing `constants`, `config`, `factory`, `store`, `ai`, `i18n`, `format`, `iobroker`, and `log`. Member-level plugin-facing detail is documented in [`docs/plugins/API.md`](../plugins/API.md). | `MsgIngest` | `src/MsgIngest.js`, `src/MsgHostApi.js` |
 | `ingest.registerPlugin(id, handler)` | Registers a producer plugin. `handler` may be a function `(id, state, ctx)` or an object with optional `start(ctx)`, `stop(ctx)`, `onStateChange(id, state, ctx)`, `onObjectChange(id, obj, ctx)`, `onAction(actionInfo, ctx)`. Re-registering the same `id` overwrites the previous plugin and best-effort stops it when the host is already running. | `MsgIngest` | `src/MsgIngest.js` |
 | `ingest.unregisterPlugin(id)` | Removes a registered plugin. No-op for unknown ids. Best-effort calls the plugin `stop(ctx)` when the host is running. | `MsgIngest` | `src/MsgIngest.js` |
 | `ingest.start(meta = {})` | Marks the host as running and best-effort calls every registered plugin `start(ctx)`. Only `meta.managedObjects` is persisted into `_baseMeta` for later ctx builds; other startup-only keys do not carry forward. | `MsgIngest` | `src/MsgIngest.js` |
@@ -87,7 +84,7 @@ Plugin-facing ctx member tables live in [`docs/plugins/API.md`](../plugins/API.m
 | Entry | Contract | Owner | Reference |
 | --- | --- | --- | --- |
 | `new MsgNotify(adapter, msgConstants, { store, ai } = {})` | Requires `adapter` and `msgConstants`. Starts with `_running = true`. Builds a frozen `api` facade from `MsgHostApi`. | `MsgNotify` | `src/MsgNotify.js`, `src/MsgHostApi.js` |
-| `notify.api` | Frozen plugin ctx API surface containing `constants`, `config`, `i18n`, `format`, `iobroker`, `log`, `store`, `stats`, and `ai`. Member-level plugin-facing detail is documented in [`docs/plugins/API.md`](../plugins/API.md). | `MsgNotify` | `src/MsgNotify.js`, `src/MsgHostApi.js` |
+| `notify.api` | Frozen plugin ctx API surface containing `constants`, `config`, `i18n`, `format`, `iobroker`, `log`, `store`, and `ai`. Member-level plugin-facing detail is documented in [`docs/plugins/API.md`](../plugins/API.md). | `MsgNotify` | `src/MsgNotify.js`, `src/MsgHostApi.js` |
 | `notify.registerPlugin(id, handler)` | Registers a notification plugin. `handler` may be a function `(event, notificationsArray, ctx)` or an object with required `onNotifications(event, notificationsArray, ctx)` and optional `start(ctx)` / `stop(ctx)`. Re-registering the same `id` overwrites the previous plugin and best-effort stops it first. If `_running` is true, `start(ctx)` runs immediately after registration. | `MsgNotify` | `src/MsgNotify.js` |
 | `notify.unregisterPlugin(id)` | Removes a registered plugin. No-op for unknown ids. Best-effort calls the plugin `stop(ctx)` when `_running` is true. | `MsgNotify` | `src/MsgNotify.js` |
 | `notify.dispatch(event, messages, meta = {})` | Accepts the notification event value from `MsgConstants.notfication.events`, not the object key. Normalizes `messages` to an array, ignores invalid entries, and dispatches each valid message separately. Returns the number of dispatched messages. Throws on unsupported event values. | `MsgNotify` | `src/MsgNotify.js` |
@@ -118,7 +115,6 @@ Plugin-facing ctx member tables live in [`docs/plugins/API.md`](../plugins/API.m
 | `buildStoreApi(store, { hostName })` | Returns `null` unless `store` is an object. Always exposes `getMessageByRef`, `getMessages`, `queryMessages`. For ingest hosts only, additionally exposes `addMessage`, `updateMessage`, `addOrUpdateMessage`, `removeMessage`, and `completeAfterCauseEliminated`. | `MsgHostApi` | `src/MsgHostApi.js` |
 | `buildActionApi(adapter, msgConstants, store, { hostName })` | Returns `null` when `adapter`, `msgConstants`, or `store` is absent, outside Engage hosts, when `store.getMessageByRef` or `store.updateMessage` is unavailable, or when `store.msgActions.execute` is unavailable. Otherwise returns `{ execute }`. | `MsgHostApi` | `src/MsgHostApi.js` |
 | `buildFactoryApi(msgFactory, { hostName })` | Returns `null` outside ingest hosts or when `msgFactory.createMessage` is unavailable. Otherwise returns `{ createMessage }`. | `MsgHostApi` | `src/MsgHostApi.js` |
-| `buildStatsApi(store)` | Returns `null` unless `store.getStats` exists. Otherwise returns `{ getStats }`. | `MsgHostApi` | `src/MsgHostApi.js` |
 | `buildAiApi(msgAi)` | Returns `null` unless `msgAi.getStatus` exists. Otherwise returns `{ getStatus, text, json }` and internal `__bindCaller(pluginMeta)` when `msgAi.createCallerApi(...)` is available. | `MsgHostApi` | `src/MsgHostApi.js` |
 | `buildIdsApi(adapter)` | Returns `{ namespace, toOwnId(fullId), toFullId(ownId) }`. | `MsgHostApi` | `src/MsgHostApi.js` |
 | `buildIoBrokerApi(adapter, { hostName })` | Returns the ioBroker facade used by plugin hosts. Always includes `ids`, `sendTo`, `objects.*`, `states.*`, and `files.*`. Includes `subscribe.*` only for non-notify hosts. The detailed plugin-facing member reference belongs to [`docs/plugins/API.md`](../plugins/API.md). | `MsgHostApi` | `src/MsgHostApi.js` |
@@ -191,28 +187,6 @@ Missing sort values are always ordered last. Ties are broken by `ref` for determ
 | `pages` | `number` | `Math.ceil(total / size)` when paging is enabled, otherwise `1`. |
 | `items` | `object[]` | Rendered output messages from the selected page. |
 
-### `store.getStats(...)` request
-
-| Field | Type | Contract |
-| --- | --- | --- |
-| `include.archiveSize` | `boolean?` | When `true`, `MsgStats` asks `MsgArchive` to refresh the size estimate before reading status. |
-| `include.archiveSizeMaxAgeMs` | `number?` | Optional cache age forwarded to `MsgArchive.estimateSizeBytes({ maxAgeMs })`. |
-
-### `store.getStats(...)` response
-
-| Field | Type | Contract |
-| --- | --- | --- |
-| `meta.schemaVersion` | `1` | Current stats snapshot schema version. |
-| `meta.generatedAt` | `number` | Snapshot generation timestamp in ms. |
-| `meta.tz` | `string \| null` | `Intl.DateTimeFormat().resolvedOptions().timeZone` when available. |
-| `meta.locale` | `string \| null` | Adapter locale. |
-| `meta.windows` | `object` | Window boundaries: `startOfToday`, `startOfTomorrow`, `startOfWeek`, `startOfNextWeek`, `startOfMonth`, `startOfNextMonth`, `next7DaysEnd`. |
-| `current` | `object` | Current-list counters: `total`, `byKind`, `byLifecycle`, `byLevel`, `byOriginSystem`. |
-| `schedule` | `object` | Domain due buckets: `total`, `overdue`, `today`, `tomorrow`, `next7Days`, `thisWeek`, `thisWeekFromToday`, `thisMonth`, `thisMonthFromToday`, and `byKind` with the same counters per kind. Quasi-deleted messages are excluded. |
-| `done.today` | `{ total: number, byKind: Record<string, number> }` | Closed-message rollup for the local current day. |
-| `done.thisWeek` | `{ total: number, byKind: Record<string, number> }` | Closed-message rollup for the local current week. |
-| `done.thisMonth` | `{ total: number, byKind: Record<string, number> }` | Closed-message rollup for the local current month. |
-| `done.lastClosedAt` | `number \| null` | Latest closed timestamp recorded into the rollup. |
 | `io.storage` | `object \| null` | `MsgStorage.getStatus()` pass-through, defined below. |
 | `io.archive` | `object \| null` | `MsgArchive.getStatus()` pass-through, defined below. |
 

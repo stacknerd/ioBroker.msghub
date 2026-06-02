@@ -993,9 +993,9 @@ describe('admin/tab/runtime.js', function () {
 			},
 		});
 		const runtime = sandbox.window.__runtime;
-		const result = await runtime.msghubRequest('admin.stats.get', { q: 1 });
+		const result = await runtime.msghubRequest('web.messages.query', { q: 1 });
 
-		assert.equal(result.command, 'admin.stats.get');
+		assert.equal(result.command, 'web.messages.query');
 		assert.equal(result.adapter, 'msghub.2');
 		assert.equal(runtime.msghubSocket, sandbox.window.msghubSocket);
 	});

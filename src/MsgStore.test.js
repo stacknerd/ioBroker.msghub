@@ -159,7 +159,6 @@ function createStore({
 				nativeProbeError: '',
 			},
 		},
-		stats: {},
 		initialMessages: messages,
 		...(options || {}),
 	});
@@ -187,7 +186,7 @@ function withFixedNow(now, fn) {
 }
 
 describe('MsgStore', () => {
-	it('forwards general config to MsgRender and MsgStats', () => {
+	it('forwards general config to MsgRender', () => {
 		const { adapter } = createAdapter();
 		const msgFactory = createFactory();
 		const store = new MsgStore(adapter, MsgConstants, msgFactory, {
@@ -222,11 +221,9 @@ describe('MsgStore', () => {
 					nativeProbeError: '',
 				},
 			},
-			stats: {},
 		});
 
 		expect(store.msgRender.locale).to.equal('de-DE');
-		expect(store.msgStats.locale).to.equal('de-DE');
 	});
 
 	describe('getMessages (raw snapshot)', () => {
@@ -786,7 +783,6 @@ describe('MsgStore', () => {
 						nativeProbeError: '',
 					},
 				},
-				stats: {},
 				initialMessages: [{ ref: 'r1', level: 10 }],
 			});
 			store.msgStorage = storage;

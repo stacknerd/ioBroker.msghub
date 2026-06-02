@@ -203,16 +203,6 @@ const MsgConfig = Object.freeze({
 		};
 
 		/**
-		 * Normalize stats configuration.
-		 *
-		 * @returns {{ rollupKeepDays: number }} Stats config.
-		 */
-		const normalizeStats = () => {
-			const rollupKeepDays = Math.max(1, safeTrunc(adapterConfig?.rollupKeepDays) ?? 400);
-			return Object.freeze({ rollupKeepDays });
-		};
-
-		/**
 		 * Normalize general configuration (locale and language settings).
 		 *
 		 * Three separate concepts:
@@ -316,7 +306,6 @@ const MsgConfig = Object.freeze({
 		const store = normalizeStore();
 		const storage = normalizeStorage();
 		const archive = normalizeArchive();
-		const stats = normalizeStats();
 		const ai = normalizeAi();
 
 		/**
@@ -479,7 +468,6 @@ const MsgConfig = Object.freeze({
 			store,
 			storage,
 			archive,
-			stats,
 			ai,
 			quietHours,
 			render,

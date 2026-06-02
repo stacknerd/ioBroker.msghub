@@ -35,7 +35,6 @@ Simple flow for this package:
 
 1. Web-safe command routing for the `web.*` namespace.
 2. Store-backed web-safe reads and actions:
-   - `web.stats.get`
    - `web.constants.get`
    - `web.messages.query`
    - `web.messages.action`
@@ -70,7 +69,6 @@ Those responsibilities remain outside this facade in AP4.
 All `web.*` commands require `payload.token` and validate it centrally via `IoAdminCapabilities` before execution.
 
 - `web.ping`
-- `web.stats.get`
 - `web.constants.get`
 - `web.messages.query`
 - `web.messages.action`
@@ -98,7 +96,6 @@ Typical error codes:
 
 Behavior notes:
 
-- `web.stats.get` normalizes `include.archiveSize` and non-negative `include.archiveSizeMaxAgeMs`.
 - `web.messages.query` passes through only `query.where`, `query.page`, and `query.sort`, serializes maps to JSON-safe objects, and attaches `meta.generatedAt` and local `tz`.
 - `web.messages.action` requires `ref` and `actionId` and returns `REJECTED` when the executor returns false.
 - `web.constants.get` returns only `kind`, `lifecycle.state`, `level`, and `notfication.events`.
@@ -128,7 +125,7 @@ Covered areas include:
 
 - `web.*` command dispatch
 - token-required backend gating for `web.*`
-- store-backed query/action/constants/stats behavior
+- store-backed query/action/constants behavior
 - plugin UI bundle/RPC behavior
 - unknown-command rejection
 

@@ -29,9 +29,6 @@ const elements = Object.freeze({
 	get pluginsRoot() {
 		return document.getElementById('plugins-root');
 	},
-	get statsRoot() {
-		return document.getElementById('stats-root');
-	},
 	get messagesRoot() {
 		return document.getElementById('messages-root');
 	},

@@ -264,7 +264,7 @@ let bootstrapState = createBootstrapState();
 /**
  * Sends one raw command to the backend over socket.io without token/bootstrap handling.
  *
- * @param {string} command - Backend command (for example `admin.stats.get`).
+ * @param {string} command - Backend command (for example `web.messages.query`).
  * @param {object} message - Payload for the command.
  * @returns {Promise<any>} Resolved backend data or error.
  */
@@ -607,7 +607,7 @@ async function ensureCapabilityToken(capability) {
 /**
  * Sends an admin command to the backend over socket.io.
  *
- * @param {string} command - Backend command (e.g. `admin.stats.get`).
+ * @param {string} command - Backend command (e.g. `web.messages.query`).
  * @param {object} message - Payload for the command.
  * @returns {Promise<any>} Resolved backend data or error.
  */

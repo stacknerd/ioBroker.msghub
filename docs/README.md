@@ -10,7 +10,6 @@ Naming note: the adapter is called **Message Hub**. In code and ioBroker object 
 
 - Getting started (first steps, what you can do today): [`docs/GettingStarted.md`](./GettingStarted.md)
 - Admin UI overview (Admin Tab, browser/runtime split, plugin-owned panels): [`docs/ui/README.md`](./ui/README.md)
-- Statistics snapshot (Admin Tab “Stats”, rollups, I/O diagnostics): [`docs/modules/MsgStats.md`](./modules/MsgStats.md)
 - Message model (what a “message” is, lifecycle, timing, actions): [`docs/MessageModel.md`](./MessageModel.md)
 - Control plane API (create/patch/list via `sendTo`): [`docs/plugins/EngageSendTo.md`](./plugins/EngageSendTo.md)
 - Notification output states (what `NotifyStates` writes): [`docs/plugins/NotifyStates.md`](./plugins/NotifyStates.md)

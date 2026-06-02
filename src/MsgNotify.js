@@ -31,7 +31,6 @@ const {
 	buildLogApi,
 	buildConfigApi,
 	buildStoreApi,
-	buildStatsApi,
 	buildAiApi,
 } = require('./MsgHostApi');
 
@@ -68,7 +67,6 @@ class MsgNotify {
 
 		const hostName = this?.constructor?.name || 'MsgNotify';
 		const store = buildStoreApi(msgStore, { hostName });
-		const stats = buildStatsApi(msgStore);
 		const ai = buildAiApi(msgAi || null);
 
 		const config = buildConfigApi(this.adapter);
@@ -86,7 +84,6 @@ class MsgNotify {
 			iobroker,
 			log,
 			store,
-			stats,
 			ai,
 		});
 	}

@@ -503,10 +503,6 @@ function createAdminApi({ msghubRequest, msghubSocket, adapterInstance, lang, t,
 		invalidate: () => constantsCache.invalidate(),
 	});
 
-	const stats = Object.freeze({
-		get: params => msghubRequest('web.stats.get', params || {}),
-	});
-
 	const messages = Object.freeze({
 		query: params => msghubRequest('web.messages.query', params || {}),
 		delete: refs => msghubRequest('admin.messages.delete', { refs }),
@@ -564,7 +560,6 @@ function createAdminApi({ msghubRequest, msghubSocket, adapterInstance, lang, t,
 		constants,
 		bootstrap,
 		time,
-		stats,
 		messages,
 		plugins,
 		notSupported,

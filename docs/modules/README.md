@@ -84,7 +84,6 @@ Consumer/UI  --->  MsgStore.queryMessages()/getMessageByRef()  --->  MsgRender  
 - `MsgRender` resolves template placeholders (`{{m.*}}`, `{{t.*}}`) into rendered `title`/`text`/`details`.
 - `MsgIngest` hosts producer plugins and fans out inbound events to them.
 - `MsgAction` executes whitelisted message actions and patches `lifecycle`/`timing` via the store.
-- `MsgStats` provides on-demand stats snapshots and keeps a persistent “done” rollup for longer windows.
 - `MsgUtils` contains small shared helpers used by storage/archive.
 
 ## Modules
@@ -104,7 +103,6 @@ Consumer/UI  --->  MsgStore.queryMessages()/getMessageByRef()  --->  MsgRender  
 - `MsgNotificationPolicy`: [`./MsgNotificationPolicy.md`](./MsgNotificationPolicy.md)
 - `MsgNotify`: [`./MsgNotify.md`](./MsgNotify.md)
 - `MsgRender`: [`./MsgRender.md`](./MsgRender.md)
-- `MsgStats`: [`./MsgStats.md`](./MsgStats.md)
 - `MsgStorage`: [`./MsgStorage.md`](./MsgStorage.md)
 - `MsgStore`: [`./MsgStore.md`](./MsgStore.md)
 - `MsgUtils`: [`./MsgUtils.md`](./MsgUtils.md)

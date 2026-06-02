@@ -50,9 +50,6 @@
 | `ctx.api.ai.getStatus()` | all plugin ctx when `ctx.api.ai !== null` | Forwards to the wired AI status API. | `MsgHostApi` | `src/MsgHostApi.js` |
 | `ctx.api.ai.text(request)` | all plugin ctx when `ctx.api.ai !== null` | Forwards to the wired AI text API. | `MsgHostApi` | `src/MsgHostApi.js` |
 | `ctx.api.ai.json(request)` | all plugin ctx when `ctx.api.ai !== null` | Forwards to the wired AI JSON API. | `MsgHostApi` | `src/MsgHostApi.js` |
-| `ctx.api.stats` | all plugin ctx | Optional stats facade or `null`. | `MsgHostApi` | `src/MsgHostApi.js` |
-| `ctx.api.stats.getStats(options)` | all plugin ctx when `ctx.api.stats !== null` | Forwards to `store.getStats(options)`. | `MsgHostApi` | `src/MsgHostApi.js` |
-
 ### Store, factory, and action capabilities
 
 | Entry | Available in ctx | Contract | Owner | Reference |
