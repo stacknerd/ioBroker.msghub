@@ -1,4 +1,4 @@
-/* global window, document, location, HTMLElement, HTMLInputElement, HTMLTextAreaElement, t, lang, createUi, createAdminApi, msghubRequest, msghubSocket, adapterInstance, args, h, loadJsFilesSequential, renderPanelBootError, buildLayoutFromRegistry, getActiveComposition, getActiveView, ensureAdminI18nLoaded, hasAdminKey, loadCssFiles, initTabs, activatePanel, updateDocumentTitle, isEmbeddedInAdmin, overrideLang, createMsghubPluginUiHost, normalizePluginPanel, registerPanelDescriptor, resolveViewRequest, setActiveView, renderPanelModeError, applyCategoryMarker, pickText, loadCorePanelEntry */
+/* global window, document, location, HTMLElement, HTMLInputElement, HTMLTextAreaElement, t, lang, createUi, createAdminApi, msghubRequest, msghubSocket, adapterInstance, args, h, loadJsFilesSequential, renderPanelBootError, buildLayoutFromRegistry, getActiveComposition, getActiveView, ensureAdminI18nLoaded, hasAdminKey, loadCssFiles, initTabs, activatePanel, updateDocumentTitle, isEmbeddedInAdmin, overrideLang, createMsghubPluginUiHost, normalizePluginPanel, registerPanelDescriptor, resolveViewRequest, setActiveView, renderPanelModeError, pickText, loadCorePanelEntry */
 'use strict';
 
 /**
@@ -1321,6 +1321,12 @@ function renderPluginPanelTabLabel(tabEl, panelDef) {
 		tabEl.removeAttribute?.('data-i18n-title');
 		tabEl.removeAttribute?.('title');
 	}
+	const category = typeof panelDef.category === 'string' ? panelDef.category.trim() : '';
+	if (category) {
+		tabEl.setAttribute('data-msghub-panel-category', category);
+	} else {
+		tabEl.removeAttribute?.('data-msghub-panel-category');
+	}
 	return true;
 }
 
@@ -1397,7 +1403,6 @@ async function hydratePluginPanels(refs, host, knownPluginPanels = null) {
 			const key = `plugin-${ref.pluginType}-${ref.instanceId}-${ref.panelId}`;
 			const tabId = `tab-${key}`;
 			const container = document.getElementById(key);
-			const panelEl = document.getElementById(tabId);
 			const panelDef = pluginPanels[key] && typeof pluginPanels[key] === 'object' ? pluginPanels[key] : null;
 			if (!container || !panelDef) {
 				continue;
@@ -1420,7 +1425,6 @@ async function hydratePluginPanels(refs, host, knownPluginPanels = null) {
 
 			const descriptor = normalizePluginPanel(panelDef, ref);
 			registerPanelDescriptor(descriptor);
-			applyCategoryMarker(panelEl, descriptor.category);
 
 			enabledTabIds.push(tabId);
 		} catch {

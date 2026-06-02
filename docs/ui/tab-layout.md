@@ -227,8 +227,8 @@ descriptor contract; bundle loading is host-owned via `web.pluginUi.bundle.get` 
 
 Optional fields are passed through from `contrib` when present:
 
-- `category` (`'dashboard' | 'user' | 'admin' | ...`) — semantic group of the panel; basis for future
-  accent-bar / color coding. Not a styling field and carries no color values.
+- `category` (`'web' | 'admin' | 'config'`) — manually declared primary access/capability marker
+  for the panel; basis for tab-level visual coding. Not a styling field and carries no color values.
 - `app` — optional PWA / install metadata block (same `AppBlock` schema as core panels).
   Required within `app`: `name` (i18n key string), `url` (host-neutral single-panel target string,
   currently stable query params such as `?panel=tab-plugin-IngestStates-0-presets`). Manifest
@@ -278,14 +278,14 @@ When a composition references a native panel that is missing from the active vie
 `buildLayoutFromRegistry()` reports that through `missingNativePanelIds` and skips DOM rendering so
 boot can surface a visible hard error instead of rendering a partial empty shell.
 
-When a panel descriptor or resolved plugin panel carries `category`, the rendered panel container gets a semantic
-marker element:
+When a panel descriptor or resolved plugin panel carries `category`, the rendered tab anchor gets semantic
+metadata:
 
 ```html
-<span class="msghub-paneltype-<category>" aria-hidden="true"></span>
+<a class="msghub-tab" data-msghub-panel-category="<category>">...</a>
 ```
 
-The marker is host-rendered only; this block introduces no styling policy for it.
+The metadata is host-rendered only; CSS may use it for category-specific active-tab styling.
 
 ### `renderPanelBootError(panelId, err)`
 

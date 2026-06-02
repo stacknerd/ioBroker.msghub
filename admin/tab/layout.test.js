@@ -1119,7 +1119,7 @@ describe('admin/tab/layout.js', function () {
 				messages: {
 					...currentView.corePanels.messages,
 					surface: 'admin',
-					category: 'dashboard',
+					category: 'web',
 				},
 			},
 		});
@@ -1142,7 +1142,7 @@ describe('admin/tab/layout.js', function () {
 		const messageDescriptor = registeredDescriptors.find(d => d.id === 'tab-messages');
 		assert.ok(messageDescriptor, 'descriptor for tab-messages must have been registered');
 		assert.equal(messageDescriptor.surface, undefined, 'surface must not be normalized into panel descriptors');
-		assert.equal(messageDescriptor.category, 'dashboard', 'category must be passed through from panel def');
+		assert.equal(messageDescriptor.category, 'web', 'category must be passed through from panel def');
 	});
 
 	it('renderPanelModeError() uses t() to resolve the error key and renders it', async function () {
@@ -1232,10 +1232,10 @@ describe('admin/tab/layout.js', function () {
 		const { sandbox } = await loadLayoutSandbox();
 		const { normalizePluginPanel } = sandbox.window.__layoutFns;
 
-		const contrib = { pluginType: 'IngestStates', instanceId: 0, panelId: 'presets', label: 'key', category: 'dashboard' };
+		const contrib = { pluginType: 'IngestStates', instanceId: 0, panelId: 'presets', label: 'key', category: 'web' };
 		const descriptor = normalizePluginPanel(contrib, { pluginType: 'IngestStates', instanceId: 0, panelId: 'presets' });
 
-		assert.equal(descriptor.category, 'dashboard');
+		assert.equal(descriptor.category, 'web');
 	});
 
 	it('normalizePluginPanel() leaves category undefined when absent from contrib', async function () {
@@ -2050,7 +2050,7 @@ describe('admin/tab/layout.js', function () {
 		);
 	});
 
-	it('buildLayoutFromRegistry() renders a category marker for native and resolved plugin panels', async function () {
+	it('buildLayoutFromRegistry() renders category metadata on native and resolved plugin tabs', async function () {
 		const { sandbox, layoutHost } = await loadLayoutSandbox();
 		sandbox.window.__layoutFns.setActiveView({
 			composition: {
@@ -2066,14 +2066,14 @@ describe('admin/tab/layout.js', function () {
 				messages: {
 					id: 'messages',
 					label: 'messages.key',
-					category: 'dashboard',
+					category: 'web',
 				},
 			},
 			pluginPanels: {
 				'plugin-IngestStates-0-presets': {
 					id: 'plugin-IngestStates-0-presets',
 					label: 'presets.label',
-					category: 'user',
+					category: 'config',
 					ui: { kind: 'plugin', loader: 'esm', apiVersion: '1', bundle: { hash: 'h1' } },
 				},
 			},
@@ -2083,10 +2083,22 @@ describe('admin/tab/layout.js', function () {
 		sandbox.window.__layoutFns.buildLayoutFromRegistry();
 
 		const fragment = layoutHost.children[0];
+		const nav = fragment.children[0];
+		const viewport = nav.children[0];
+		const nativeTab = viewport.children[0];
+		const pluginTab = viewport.children[1];
 		const nativePanel = fragment.children[1];
 		const pluginPanel = fragment.children[2];
-		assert.ok(nativePanel.children.find(child => String(child.className || '').includes('msghub-paneltype-dashboard')));
-		assert.ok(pluginPanel.children.find(child => String(child.className || '').includes('msghub-paneltype-user')));
+		assert.equal(nativeTab.getAttribute('data-msghub-panel-category'), 'web');
+		assert.equal(pluginTab.getAttribute('data-msghub-panel-category'), 'config');
+		assert.equal(
+			nativePanel.children.find(child => String(child.className || '').includes('msghub-paneltype-')),
+			undefined,
+		);
+		assert.equal(
+			pluginPanel.children.find(child => String(child.className || '').includes('msghub-paneltype-')),
+			undefined,
+		);
 	});
 
 });

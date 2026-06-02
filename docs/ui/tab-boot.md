@@ -172,9 +172,9 @@ Structured plugin panel refs from the composition are not active immediately.
 
 - enables the matching tab
 - applies the plugin panel label and `description` tooltip once the corresponding plugin-owned i18n keys are available
+- applies `data-msghub-panel-category` from the resolved panel category when present
 - stores the mount metadata in `pluginPanelTabMap`
 - calls `normalizePluginPanel(panelDef, ref)` and `registerPanelDescriptor(descriptor)` so that `panelDescriptors` in `layout.js` is populated before the user first activates a plugin tab
-- mirrors `descriptor.category` to the plugin panel container as `span.msghub-paneltype-<category>` when present
 
 The first paint for plugin tabs stays on the shared loading label from `layout.js`:
 

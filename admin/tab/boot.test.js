@@ -1416,7 +1416,6 @@ globalThis.__map = pluginPanelTabMap;
 					}
 					return String(key || '');
 				},
-				applyCategoryMarker: () => {},
 				normalizePluginPanel: (panelDef, ref) => ({
 					id: `tab-plugin-${ref.pluginType}-${ref.instanceId}-${ref.panelId}`,
 					label: panelDef.label,
@@ -1434,6 +1433,7 @@ globalThis.__map = pluginPanelTabMap;
 				id: 'plugin-IngestStates-0-presets',
 				label: 'msghub.i18n.IngestStates.ui.panels.presets.label',
 				description: 'msghub.i18n.IngestStates.ui.panels.presets.description.text',
+				category: 'admin',
 				ui: {
 					kind: 'plugin',
 					loader: 'esm',
@@ -1449,6 +1449,7 @@ globalThis.__map = pluginPanelTabMap;
 			['data-i18n', 'msghub.i18n.IngestStates.ui.panels.presets.label'],
 			['data-i18n-title', 'msghub.i18n.IngestStates.ui.panels.presets.description.text'],
 			['title', 'Manage presets'],
+			['data-msghub-panel-category', 'admin'],
 		]);
 		assert.equal(tabLabel, 'Presets', 'tab text must be translated from the contribution i18n key');
 		assert.ok(sandbox.__map.has('tab-plugin-IngestStates-0-presets'), 'entry must be registered in pluginPanelTabMap');
@@ -1969,7 +1970,6 @@ globalThis.__test = async function() {
 						return { mounted: true };
 					},
 				},
-				applyCategoryMarker: () => {},
 				tabSetActive: id => activatedIds.push(id),
 				normalizePluginPanel: (panelDef, ref) => ({
 					id: `tab-plugin-${ref.pluginType}-${ref.instanceId}-${ref.panelId}`,
@@ -2423,7 +2423,6 @@ globalThis.__pluginPanelTabMap = pluginPanelTabMap;
 					querySelector: () => null,
 				},
 				t: key => String(key || ''),
-				applyCategoryMarker: () => {},
 				normalizePluginPanel: (resolvedPanelDef, ref) => ({ id: tabId, label: resolvedPanelDef.label, ui: { kind: 'plugin' } }),
 				registerPanelDescriptor: d => {
 					descriptorCalls.push(d);

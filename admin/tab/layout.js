@@ -356,43 +356,13 @@ function setOrRemoveHeadLink(rel, href) {
 }
 
 /**
- * Removes a managed category marker from a panel container.
+ * Returns the normalized category value used for tab-level panel metadata.
  *
- * @param {HTMLElement|Element|null|undefined} panelEl Panel element.
- */
-function removeCategoryMarker(panelEl) {
-	if (!panelEl?.children?.length) {
-		return;
-	}
-	const marker = Array.from(panelEl.children).find(child =>
-		String(child?.className || '')
-			.split(/\s+/g)
-			.some(token => token.startsWith('msghub-paneltype-')),
-	);
-	marker?.remove?.();
-}
-
-/**
- * Applies the semantic category marker to a panel container.
- *
- * @param {HTMLElement|Element|null|undefined} panelEl Panel element.
  * @param {string} category Semantic category string.
+ * @returns {string} Normalized category string.
  */
-function applyCategoryMarker(panelEl, category) {
-	if (!panelEl) {
-		return;
-	}
-	removeCategoryMarker(panelEl);
-	const normalizedCategory = typeof category === 'string' ? category.trim() : '';
-	if (!normalizedCategory) {
-		return;
-	}
-	panelEl.appendChild(
-		h('span', {
-			class: `msghub-paneltype-${normalizedCategory}`,
-			'aria-hidden': 'true',
-		}),
-	);
+function normalizePanelCategory(category) {
+	return typeof category === 'string' ? category.trim() : '';
 }
 
 /**
@@ -1160,6 +1130,7 @@ function buildLayoutFromRegistry() {
 				const tabId = `tab-${id}`;
 				const dataI18n = typeof def?.label === 'string' ? def.label : '';
 				const dataI18nTitle = typeof def?.description === 'string' ? def.description.trim() : '';
+				const category = normalizePanelCategory(def?.category);
 				nav.appendChild(
 					h('a', {
 						class: `msghub-tab${id === defaultPanelId ? ' is-active' : ''}`,
@@ -1167,6 +1138,7 @@ function buildLayoutFromRegistry() {
 						role: 'tab',
 						'aria-controls': tabId,
 						'data-i18n': dataI18n,
+						...(category ? { 'data-msghub-panel-category': category } : {}),
 						...(dataI18nTitle
 							? {
 									'data-i18n-title': dataI18nTitle,
@@ -1181,6 +1153,7 @@ function buildLayoutFromRegistry() {
 				const key = getPluginRuntimePanelId(ref);
 				const tabId = `tab-${key}`;
 				const isResolved = !!panelDef;
+				const category = normalizePanelCategory(panelDef?.category);
 				nav.appendChild(
 					h('a', {
 						class: `msghub-tab${isResolved ? '' : ' is-disabled'}`,
@@ -1188,6 +1161,7 @@ function buildLayoutFromRegistry() {
 						role: 'tab',
 						'aria-controls': tabId,
 						...(isResolved ? {} : { 'aria-disabled': 'true' }),
+						...(category ? { 'data-msghub-panel-category': category } : {}),
 						'data-i18n': 'msghub.i18n.core.admin.ui.panel.loading.text',
 						// First paint stays on the shared loading label until boot re-renders
 						// the tab with the resolved plugin-owned label key.
@@ -1214,7 +1188,6 @@ function buildLayoutFromRegistry() {
 			});
 			if (def && typeof def === 'object') {
 				const descriptor = normalizeCorePanel(String(id), def);
-				applyCategoryMarker(panel, descriptor.category);
 				// Register descriptor so activatePanel and updateDocumentTitle can resolve titles.
 				registerPanelDescriptor(descriptor);
 			}
@@ -1237,7 +1210,6 @@ function buildLayoutFromRegistry() {
 			});
 			if (panelDef) {
 				const descriptor = normalizePluginPanel(panelDef, ref);
-				applyCategoryMarker(panel, descriptor.category);
 				registerPanelDescriptor(descriptor);
 			}
 			// Mount container: this element is passed to pluginUiHost.mount().

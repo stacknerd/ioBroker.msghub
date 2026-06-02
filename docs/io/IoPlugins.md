@@ -239,7 +239,7 @@ plugin.adminUi = {
       id: 'presets',
       label: 'msghub.i18n.IngestStates.ui.panels.presets.label',
       description: 'msghub.i18n.IngestStates.ui.panels.presets.description.text',
-      category: 'user',
+      category: 'admin',
       app: {
         name: 'msghub.i18n.IngestStates.ui.panels.presets.app.name',
         shortName: 'msghub.i18n.IngestStates.ui.panels.presets.app.shortName',
@@ -291,7 +291,7 @@ plugin.adminUi = {
       id: 'presets',
       label: 'msghub.i18n.IngestStates.ui.panels.presets.label',
       description: 'msghub.i18n.IngestStates.ui.panels.presets.description.text',
-      category: 'user',
+      category: 'admin',
       app: {
         name: 'msghub.i18n.IngestStates.ui.panels.presets.app.name',
         shortName: 'msghub.i18n.IngestStates.ui.panels.presets.app.shortName',
