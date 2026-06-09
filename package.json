@@ -42,7 +42,7 @@
   "main": "main.js",
 	"files": [
 		"admin{,/!(lib)/**}/!(tsconfig|tsconfig.*|.eslintrc).{json,json5}",
-		"admin{,/!(lib)/**}/*.{html,css,png,svg,jpg,js}",
+		"admin{,/!(lib)/**}/*.{html,css,png,svg,ico,jpg,js}",
 		"i18n/",
 		"lib/",
 		"src/",
