@@ -417,10 +417,13 @@ class MsgStore {
 			return false;
 		}
 
+		const ref = this.msgFactory.normalizeRef(msg.ref);
+		const normalizedMsg = msg.ref === ref ? msg : { ...msg, ref };
+
 		// Find the target message in the canonical list.
-		const index = this.fullList.findIndex(item => item.ref === msg.ref);
+		const index = this.fullList.findIndex(item => item.ref === ref);
 		if (index === -1) {
-			this.adapter?.log?.warn?.(`MsgStore: '${msg.ref}' could not be updated (not found)`);
+			this.adapter?.log?.warn?.(`MsgStore: '${ref}' could not be updated (not found)`);
 			return false;
 		}
 
@@ -432,11 +435,11 @@ class MsgStore {
 		}
 
 		// Delegate validation + normalization to the factory (single source of truth).
-		const updated = factory.applyPatch(existing, msg, stealthMode, {
+		const updated = factory.applyPatch(existing, normalizedMsg, stealthMode, {
 			allowCoreLifecycleStates: _coreToken === _CORE_LIFECYCLE_TOKEN,
 		});
 		if (!updated) {
-			this.adapter?.log?.warn?.(`MsgStore: '${msg.ref}' could not be updated (validation failed)`);
+			this.adapter?.log?.warn?.(`MsgStore: '${ref}' could not be updated (validation failed)`);
 			return false;
 		}
 
@@ -447,7 +450,7 @@ class MsgStore {
 
 		// Archive patch information for audit and debugging (best-effort).
 		// Note: notification markers (`timing.notifiedAt`) are appended as separate patches after dispatch.
-		this.msgArchive?.appendPatch?.(msg.ref, msg, existing, updated);
+		this.msgArchive?.appendPatch?.(ref, normalizedMsg, existing, updated);
 
 		// Detect whether this was a non-silent update by comparing updatedAt.
 		const t = updated?.timing;
@@ -520,10 +523,11 @@ class MsgStore {
 	 */
 	getMessageByRef(reference, filter = 'all') {
 		this._pruneOldMessages();
-		const ref = typeof reference === 'string' ? reference.trim() : '';
-		if (!ref) {
+		const rawRef = typeof reference === 'string' ? reference.trim() : '';
+		if (!rawRef) {
 			return undefined;
 		}
+		const ref = this.msgFactory.normalizeRef(rawRef);
 
 		const lifecycle = this.msgConstants.lifecycle || {};
 		const isQuasiDeletedState = lifecycle.isQuasiDeletedState;
@@ -1149,10 +1153,15 @@ class MsgStore {
 	 */
 	removeMessage(reference, options = {}) {
 		this._pruneOldMessages();
+		const rawRef = typeof reference === 'string' ? reference.trim() : '';
+		if (!rawRef) {
+			return false;
+		}
+		const ref = this.msgFactory.normalizeRef(rawRef);
 
 		// Find the message to remove; if missing, do nothing.
 		const remove = this.fullList.filter(obj => {
-			return obj.ref === reference;
+			return obj.ref === ref;
 		})[0];
 		if (remove == null) {
 			return false;
@@ -1186,7 +1195,7 @@ class MsgStore {
 		// Notify plugins (semantic delete).
 		this._dispatchNotify(this.msgConstants.notfication.events.deleted, deleted);
 
-		this.adapter?.log?.debug?.(`MsgStore: removed Message '${reference}'`);
+		this.adapter?.log?.debug?.(`MsgStore: removed Message '${ref}'`);
 		this.adapter?.log?.silly?.(`MsgStore: removed Message '${serializeWithMaps(deleted)}'`);
 		return true;
 	}

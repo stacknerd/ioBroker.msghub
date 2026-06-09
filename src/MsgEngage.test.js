@@ -3,6 +3,7 @@
 const { expect } = require('chai');
 const { MsgEngage } = require('./MsgEngage');
 const { MsgAction } = require('./MsgAction');
+const { MsgFactory } = require('./MsgFactory');
 const { MsgConstants } = require('./MsgConstants');
 
 function makeAdapter() {
@@ -57,6 +58,7 @@ describe('MsgEngage', () => {
 			timing: { notifyAt: Date.now() + 60_000 },
 		};
 		const store = {
+			msgFactory: new MsgFactory(adapter, MsgConstants),
 			getMessageByRef: ref => (ref === 'm1' ? message : undefined),
 			updateMessage: (ref, patch) => {
 				storeCalls.updateMessage.push([ref, patch]);

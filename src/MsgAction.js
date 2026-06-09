@@ -256,17 +256,11 @@ class MsgAction {
 			snoozeForMs = undefined,
 		} = options && typeof options === 'object' && !Array.isArray(options) ? options : {};
 		try {
-			const msgRef = typeof ref === 'string' ? ref.trim() : '';
+			let msgRef = typeof ref === 'string' ? ref.trim() : '';
 			const id = typeof actionId === 'string' ? actionId.trim() : '';
 			const actorProvided = actor !== undefined;
 			const normalizedActor = this._normalizeActor(actor);
 			const now = Date.now();
-			const auditBase = {
-				ts: now,
-				actionId: id,
-				actor: normalizedActor,
-			};
-			const record = data => this._recordAction(msgRef, { ...auditBase, ...(data || {}) });
 
 			if (!msgRef) {
 				this.adapter?.log?.warn?.('MsgAction.execute: ref is required');
@@ -276,6 +270,14 @@ class MsgAction {
 				this.adapter?.log?.warn?.(`MsgAction.execute('${msgRef}'): actionId is required`);
 				return false;
 			}
+
+			msgRef = this.msgStore.msgFactory.normalizeRef(msgRef);
+			const auditBase = {
+				ts: now,
+				actionId: id,
+				actor: normalizedActor,
+			};
+			const record = data => this._recordAction(msgRef, { ...auditBase, ...(data || {}) });
 
 			const message = this.msgStore?.getMessageByRef?.(msgRef);
 			if (!message) {

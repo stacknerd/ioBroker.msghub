@@ -2,6 +2,7 @@
 
 const { expect } = require('chai');
 const { MsgAction } = require('./MsgAction');
+const { MsgFactory } = require('./MsgFactory');
 const { MsgConstants } = require('./MsgConstants');
 
 function createAdapter() {
@@ -25,11 +26,18 @@ function withFixedNow(now, fn) {
 	}
 }
 
+function withRealFactory(store, adapter) {
+	return {
+		...(store || {}),
+		msgFactory: new MsgFactory(adapter, MsgConstants),
+	};
+}
+
 describe('MsgAction', () => {
 	it('policy: action matrix (open/acked/snoozed/quasiDeleted)', () => {
 		const { adapter } = createAdapter();
 		const store = { getMessageByRef: () => null, updateMessage: () => true };
-		const msgAction = new MsgAction(adapter, MsgConstants, store);
+		const msgAction = new MsgAction(adapter, MsgConstants, withRealFactory(store, adapter));
 
 		const action = type => ({ id: `id_${type}`, type });
 		const msg = state => ({ ref: 'r1', lifecycle: { state }, timing: {} });
@@ -68,7 +76,7 @@ describe('MsgAction', () => {
 	it('buildActions: splits into actions + actionsInactive', () => {
 		const { adapter } = createAdapter();
 		const store = { getMessageByRef: () => null, updateMessage: () => true };
-		const msgAction = new MsgAction(adapter, MsgConstants, store);
+		const msgAction = new MsgAction(adapter, MsgConstants, withRealFactory(store, adapter));
 
 		const message = {
 			ref: 'r1',
@@ -91,7 +99,7 @@ describe('MsgAction', () => {
 	it('policy: blocks snooze when message is acked', () => {
 		const { adapter } = createAdapter();
 		const store = { getMessageByRef: () => null, updateMessage: () => true };
-		const msgAction = new MsgAction(adapter, MsgConstants, store);
+		const msgAction = new MsgAction(adapter, MsgConstants, withRealFactory(store, adapter));
 		const msg = {
 			ref: 'r1',
 			lifecycle: { state: MsgConstants.lifecycle.state.acked },
@@ -104,7 +112,7 @@ describe('MsgAction', () => {
 	it('policy: blocks snooze when message is snoozed', () => {
 		const { adapter } = createAdapter();
 		const store = { getMessageByRef: () => null, updateMessage: () => true };
-		const msgAction = new MsgAction(adapter, MsgConstants, store);
+		const msgAction = new MsgAction(adapter, MsgConstants, withRealFactory(store, adapter));
 		const msg = {
 			ref: 'r1',
 			lifecycle: { state: MsgConstants.lifecycle.state.snoozed },
@@ -117,21 +125,21 @@ describe('MsgAction', () => {
 	it('rejects missing ref', () => {
 		const { adapter } = createAdapter();
 		const store = { getMessageByRef: () => null, updateMessage: () => true };
-		const msgAction = new MsgAction(adapter, MsgConstants, store);
+		const msgAction = new MsgAction(adapter, MsgConstants, withRealFactory(store, adapter));
 		expect(msgAction.execute({ actionId: 'a1' })).to.equal(false);
 	});
 
 	it('rejects missing actionId', () => {
 		const { adapter } = createAdapter();
 		const store = { getMessageByRef: () => null, updateMessage: () => true };
-		const msgAction = new MsgAction(adapter, MsgConstants, store);
+		const msgAction = new MsgAction(adapter, MsgConstants, withRealFactory(store, adapter));
 		expect(msgAction.execute({ ref: 'r1' })).to.equal(false);
 	});
 
 	it('rejects unknown message', () => {
 		const { adapter } = createAdapter();
 		const store = { getMessageByRef: () => null, updateMessage: () => true };
-		const msgAction = new MsgAction(adapter, MsgConstants, store);
+		const msgAction = new MsgAction(adapter, MsgConstants, withRealFactory(store, adapter));
 		expect(msgAction.execute({ ref: 'r1', actionId: 'a1' })).to.equal(false);
 	});
 
@@ -148,7 +156,7 @@ describe('MsgAction', () => {
 				},
 			},
 		};
-		const msgAction = new MsgAction(adapter, MsgConstants, store);
+		const msgAction = new MsgAction(adapter, MsgConstants, withRealFactory(store, adapter));
 		expect(msgAction.execute({ ref: 'r1', actionId: 'a1' })).to.equal(false);
 		expect(recorded).to.have.length(1);
 		expect(recorded[0].ref).to.equal('r1');
@@ -179,7 +187,7 @@ describe('MsgAction', () => {
 				},
 			},
 		};
-		const msgAction = new MsgAction(adapter, MsgConstants, store);
+		const msgAction = new MsgAction(adapter, MsgConstants, withRealFactory(store, adapter));
 
 		withFixedNow(1000, () => {
 			expect(msgAction.execute({ ref: 'r1', actionId: 'ack1', actor: 'UI' })).to.equal(true);
@@ -217,7 +225,7 @@ describe('MsgAction', () => {
 				},
 			},
 		};
-		const msgAction = new MsgAction(adapter, MsgConstants, store);
+		const msgAction = new MsgAction(adapter, MsgConstants, withRealFactory(store, adapter));
 
 		withFixedNow(1000, () => {
 			expect(msgAction.execute({ ref: 'r1', actionId: 'ack1' })).to.equal(true);
@@ -228,6 +236,48 @@ describe('MsgAction', () => {
 		expect(dispatched).to.have.property('payload', null);
 		expect(dispatched).to.have.property('message');
 		expect(dispatched.message.ref).to.equal('r1');
+	});
+
+	it('normalizes refs with the real factory before lookup, patch, archive, and action dispatch', () => {
+		const { adapter } = createAdapter();
+		const factory = new MsgFactory(adapter, MsgConstants);
+		const rawRef = 'IngestHue.0.GuestRoom°C';
+		const ref = factory.normalizeRef(rawRef);
+		const calls = { lookup: [], update: [], archive: [], ingest: [] };
+		const store = {
+			getMessageByRef: (messageRef, filter) => {
+				calls.lookup.push({ ref: messageRef, filter });
+				return messageRef === ref
+					? {
+							ref,
+							actions: [{ id: 'ack1', type: MsgConstants.actions.type.ack }],
+							lifecycle: { state: MsgConstants.lifecycle.state.open },
+							timing: { notifyAt: 123 },
+						}
+					: null;
+			},
+			updateMessage: (messageRef, patch) => {
+				calls.update.push({ ref: messageRef, patch });
+				return true;
+			},
+			msgArchive: {
+				appendAction: (messageRef, payload) => {
+					calls.archive.push({ ref: messageRef, payload });
+					return Promise.resolve();
+				},
+			},
+			msgIngest: {
+				dispatchAction: actionInfo => calls.ingest.push(actionInfo),
+			},
+		};
+		const msgAction = new MsgAction(adapter, MsgConstants, { ...store, msgFactory: factory });
+
+		expect(msgAction.execute({ ref: rawRef, actionId: 'ack1', actor: 'UI' })).to.equal(true);
+
+		expect(calls.lookup.map(call => call.ref)).to.deep.equal([ref, ref]);
+		expect(calls.update[0].ref).to.equal(ref);
+		expect(calls.archive[0].ref).to.equal(ref);
+		expect(calls.ingest[0].ref).to.equal(ref);
 	});
 
 	it('does not dispatch to msgIngest when action execution fails', () => {
@@ -247,7 +297,7 @@ describe('MsgAction', () => {
 				},
 			},
 		};
-		const msgAction = new MsgAction(adapter, MsgConstants, store);
+		const msgAction = new MsgAction(adapter, MsgConstants, withRealFactory(store, adapter));
 
 		withFixedNow(1000, () => {
 			expect(msgAction.execute({ ref: 'r1', actionId: 'ack1' })).to.equal(false);
@@ -278,7 +328,7 @@ describe('MsgAction', () => {
 				},
 			},
 		};
-		const msgAction = new MsgAction(adapter, MsgConstants, store);
+		const msgAction = new MsgAction(adapter, MsgConstants, withRealFactory(store, adapter));
 		expect(msgAction.execute({ ref: 'r1', actionId: 'ack1' })).to.equal(false);
 		expect(updates).to.equal(0);
 			expect(recorded).to.have.length(1);
@@ -303,7 +353,7 @@ describe('MsgAction', () => {
 				return true;
 			},
 		};
-		const msgAction = new MsgAction(adapter, MsgConstants, store);
+		const msgAction = new MsgAction(adapter, MsgConstants, withRealFactory(store, adapter));
 
 		withFixedNow(1000, () => {
 			expect(msgAction.execute({ ref: 'r1', actionId: 's1', actor: null })).to.equal(true);
@@ -329,7 +379,7 @@ describe('MsgAction', () => {
 				return true;
 			},
 		};
-		const msgAction = new MsgAction(adapter, MsgConstants, store);
+		const msgAction = new MsgAction(adapter, MsgConstants, withRealFactory(store, adapter));
 		expect(msgAction.execute({ ref: 'r1', actionId: 's1' })).to.equal(false);
 		expect(patched).to.equal(null);
 	});
@@ -350,7 +400,7 @@ describe('MsgAction', () => {
 				return true;
 			},
 		};
-		const msgAction = new MsgAction(adapter, MsgConstants, store);
+		const msgAction = new MsgAction(adapter, MsgConstants, withRealFactory(store, adapter));
 
 		withFixedNow(1000, () => {
 			expect(msgAction.execute({ ref: 'r1', actionId: 's1', actor: 'UI', snoozeForMs: 10000 })).to.equal(true);
@@ -377,7 +427,7 @@ describe('MsgAction', () => {
 				return true;
 			},
 		};
-		const msgAction = new MsgAction(adapter, MsgConstants, store);
+		const msgAction = new MsgAction(adapter, MsgConstants, withRealFactory(store, adapter));
 
 		withFixedNow(1000, () => {
 			expect(msgAction.execute({ ref: 'r1', actionId: 's1', snoozeForMs: 0 })).to.equal(false);
@@ -396,7 +446,7 @@ describe('MsgAction', () => {
 			}),
 			updateMessage: () => true,
 		};
-		const msgAction = new MsgAction(adapter, MsgConstants, store);
+		const msgAction = new MsgAction(adapter, MsgConstants, withRealFactory(store, adapter));
 		expect(msgAction.execute({ ref: 'r1', actionId: 's1' })).to.equal(false);
 	});
 
@@ -422,7 +472,7 @@ describe('MsgAction', () => {
 				},
 			},
 			};
-			const msgAction = new MsgAction(adapter, MsgConstants, store);
+			const msgAction = new MsgAction(adapter, MsgConstants, withRealFactory(store, adapter));
 			expect(msgAction.execute({ ref: 'r1', actionId: 'o1', actor: 'UI' })).to.equal(true);
 			expect(updates).to.equal(0);
 			expect(recorded).to.have.length(1);

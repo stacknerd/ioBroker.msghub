@@ -2,6 +2,7 @@
 
 const { expect } = require('chai');
 const { MsgStore } = require('./MsgStore');
+const { MsgFactory } = require('./MsgFactory');
 const { MsgConstants } = require('./MsgConstants');
 const { IoArchiveIobroker } = require('../lib/IoArchiveIobroker');
 const { IoStorageIobroker } = require('../lib/IoStorageIobroker');
@@ -61,8 +62,20 @@ function createStorageBackendFactory(adapter, baseDir = 'data') {
 		});
 }
 
+function createRealFactory(adapter = createAdapter().adapter) {
+	return new MsgFactory(adapter, MsgConstants);
+}
+
+function attachRealNormalizeRef(factory, adapter = createAdapter().adapter) {
+	const realFactory = createRealFactory(adapter);
+	return {
+		...factory,
+		normalizeRef: value => realFactory.normalizeRef(value),
+	};
+}
+
 	function createFactory({ applyPatch } = {}) {
-		return {
+		return attachRealNormalizeRef({
 			applyPatch:
 				applyPatch ||
 				((existing, patch) => {
@@ -82,11 +95,11 @@ function createStorageBackendFactory(adapter, baseDir = 'data') {
 					}
 					return updated;
 				}),
-		};
+		});
 	}
 
 function createFactoryWithUpdatedAt() {
-	return {
+	return attachRealNormalizeRef({
 		applyPatch: (existing, patch) => {
 			const updated = { ...existing, ...patch };
 			const timing = { ...(existing?.timing || {}), ...(patch?.timing || {}) };
@@ -100,7 +113,7 @@ function createFactoryWithUpdatedAt() {
 			updated.timing = timing;
 			return updated;
 		},
-	};
+	});
 }
 
 function createStore({
@@ -558,7 +571,7 @@ describe('MsgStore', () => {
 			const msgNotify = { dispatch: (event, msgs) => received.push({ event, msgs }) };
 			const now = 5000;
 
-			const factory = {
+			const factory = attachRealNormalizeRef({
 				applyPatch: (existing, patch, stealthMode = false) => {
 					const updated = { ...existing, ...patch };
 					updated.timing = { ...(existing?.timing || {}), ...(patch?.timing || {}) };
@@ -567,7 +580,7 @@ describe('MsgStore', () => {
 					}
 					return updated;
 				},
-			};
+			});
 
 			const messages = [{ ref: 'due', level: 10, timing: { notifyAt: now - 1, remindEvery: 1000 } }];
 			const { store } = createStore({ messages, msgNotify, factory });
@@ -589,7 +602,7 @@ describe('MsgStore', () => {
 				const now = new Date(2020, 0, 1, 23, 0, 0, 0).getTime();
 				const quietEnd = new Date(2020, 0, 2, 6, 0, 0, 0).getTime();
 
-				const factory = {
+				const factory = attachRealNormalizeRef({
 					applyPatch: (existing, patch, stealthMode = false) => {
 						const updated = { ...existing, ...patch };
 						updated.timing = { ...(existing?.timing || {}), ...(patch?.timing || {}) };
@@ -601,7 +614,7 @@ describe('MsgStore', () => {
 						}
 						return updated;
 					},
-				};
+				});
 
 				const messages = [
 					{
@@ -632,7 +645,7 @@ describe('MsgStore', () => {
 				const msgNotify = { dispatch: (event, msgs) => received.push({ event, msgs }) };
 				const now = new Date(2020, 0, 1, 23, 0, 0, 0).getTime();
 
-				const factory = {
+				const factory = attachRealNormalizeRef({
 					applyPatch: (existing, patch, stealthMode = false) => {
 						const updated = { ...existing, ...patch };
 						updated.timing = { ...(existing?.timing || {}), ...(patch?.timing || {}) };
@@ -644,7 +657,7 @@ describe('MsgStore', () => {
 						}
 						return updated;
 					},
-				};
+				});
 
 				const messages = [{ ref: 'due', level: 10, timing: { notifyAt: now - 1, remindEvery: 1000 } }];
 				const quietHours = { enabled: true, startMin: 22 * 60, endMin: 6 * 60, maxLevel: 20, spreadMs: 0 };
@@ -750,7 +763,7 @@ describe('MsgStore', () => {
 			const { adapter, logs } = createAdapter();
 			const { storage, writes } = createStorage();
 			const { msgRender } = createRenderer();
-			const msgFactory = {};
+			const msgFactory = attachRealNormalizeRef({});
 			const store = new MsgStore(adapter, MsgConstants, msgFactory, {
 				general: { coreFormatLocale: 'de-DE', coreTextLanguage: 'de', backendTextLanguage: 'en' },
 				store: {
@@ -832,11 +845,41 @@ describe('MsgStore', () => {
 			expect(writes).to.have.length(1);
 		});
 
+		it('normalizes refs with the real factory before update lookup and archive patch routing', () => {
+			const { adapter } = createAdapter();
+			const factory = createRealFactory(adapter);
+			const rawRef = 'IngestHue.0.GuestRoom°C';
+			const message = factory.createMessage({
+				ref: rawRef,
+				title: 'Old title',
+				text: 'old',
+				level: MsgConstants.level.notice,
+				kind: MsgConstants.kind.status,
+				origin: { type: MsgConstants.origin.type.automation, system: 'test', id: 'reachable' },
+			});
+			const patches = [];
+			const msgArchive = {
+				appendSnapshot: () => {},
+				appendDelete: () => {},
+				appendPatch: (ref, patch) => patches.push({ ref, patch }),
+				flushPending: () => {},
+			};
+			const { store } = createStore({ adapter, factory, messages: [message], msgArchive });
+
+			const result = store.updateMessage(rawRef, { text: 'new' }, true);
+
+			expect(result).to.equal(true);
+			expect(store.getMessageByRef(message.ref).text).to.equal('new');
+			expect(patches).to.have.length(1);
+			expect(patches[0].ref).to.equal(message.ref);
+			expect(patches[0].patch.ref).to.equal(message.ref);
+		});
+
 		it('does not dispatch updated when stealthMode=true', () => {
 			const received = [];
 			const msgNotify = { dispatch: (event, msg) => received.push({ event, msg }) };
 
-			const factory = {
+			const factory = attachRealNormalizeRef({
 				applyPatch: (existing, patch, stealthMode = false) => {
 					const updated = { ...existing, ...patch };
 					updated.timing = { ...(existing?.timing || {}), ...(patch?.timing || {}) };
@@ -845,7 +888,7 @@ describe('MsgStore', () => {
 					}
 					return updated;
 				},
-			};
+			});
 
 			const messages = [{ ref: 'r1', level: 10, timing: { createdAt: 1 }, text: 'old' }];
 			const { store } = createStore({ messages, msgNotify, factory });
@@ -904,6 +947,25 @@ describe('MsgStore', () => {
 				const { store } = createStore({ messages: [{ ref: 'r1', level: 10 }] });
 				expect(store.getMessageByRef('r1')).to.be.an('object');
 				expect(store.getMessageByRef('missing')).to.equal(undefined);
+			});
+
+			it('normalizes refs with the real factory before lookup', () => {
+				const { adapter } = createAdapter();
+				const factory = createRealFactory(adapter);
+				const message = factory.createMessage({
+					ref: 'IngestHue.0.GuestRoom°C',
+					title: 'Title',
+					text: 'Text',
+					level: MsgConstants.level.notice,
+					kind: MsgConstants.kind.status,
+					origin: { type: MsgConstants.origin.type.automation, system: 'test', id: 'reachable' },
+				});
+				const { store } = createStore({ adapter, factory, messages: [message] });
+
+				const found = store.getMessageByRef('IngestHue.0.GuestRoom°C');
+
+				expect(found).to.be.an('object');
+				expect(found.ref).to.equal(message.ref);
 			});
 
 			it('supports lifecycle filtering on getMessageByRef', () => {
@@ -1193,6 +1255,25 @@ describe('MsgStore', () => {
 				store.removeMessage('r1');
 				expect(store.getMessages()).to.have.length(1);
 				expect(store.getMessageByRef('r1').lifecycle.state).to.equal('deleted');
+			});
+		});
+
+		it('normalizes refs with the real factory before remove lookup', () => {
+			const { adapter } = createAdapter();
+			const factory = createRealFactory(adapter);
+			const message = factory.createMessage({
+				ref: 'IngestHue.0.GuestRoom°C',
+				title: 'Title',
+				text: 'Text',
+				level: MsgConstants.level.notice,
+				kind: MsgConstants.kind.status,
+				origin: { type: MsgConstants.origin.type.automation, system: 'test', id: 'reachable' },
+			});
+			const { store } = createStore({ adapter, factory, messages: [message] });
+
+			withFixedNow(2000, () => {
+				expect(store.removeMessage('IngestHue.0.GuestRoom°C')).to.equal(true);
+				expect(store.getMessageByRef(message.ref).lifecycle.state).to.equal(MsgConstants.lifecycle.state.deleted);
 			});
 		});
 	});

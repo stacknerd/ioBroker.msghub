@@ -501,7 +501,7 @@ class MsgFactory {
 			// Enforce immutability: the caller may provide these fields, but only with the
 			// exact same value as the existing message.
 			if (has('ref')) {
-				const patchRef = this._normalizeMsgRef(patch.ref);
+				const patchRef = this.normalizeRef(patch.ref);
 				if (patchRef !== existing.ref) {
 					throw new TypeError('applyPatch: ref is immutable');
 				}
@@ -968,7 +968,7 @@ class MsgFactory {
 	 * a ref, we still create one so the message can be stored and later addressed (update/delete).
 	 *
 	 * Auto-refs are designed to be:
-	 * - printable and URL/ID safe (see `_normalizeMsgRef`)
+	 * - printable and URL/ID safe (see `normalizeRef`)
 	 * - reasonably stable for recurring items if `origin.id` is provided
 	 *
 	 * @param {any} value Input reference value.
@@ -979,7 +979,7 @@ class MsgFactory {
 		const hasString = typeof value === 'string' && value.trim();
 		if (hasString || (value !== undefined && value !== null && typeof value !== 'string')) {
 			// Caller supplied a ref (or at least attempted to). Normalize and validate.
-			return this._normalizeMsgRef(value);
+			return this.normalizeRef(value);
 		}
 
 		// No ref provided: create an auto-ref so the message remains addressable.
@@ -998,7 +998,7 @@ class MsgFactory {
 		}
 
 		const autoRef = this._buildAutoRef({ kind, origin, title });
-		return this._normalizeMsgRef(autoRef);
+		return this.normalizeRef(autoRef);
 	}
 
 	/**
@@ -1104,7 +1104,7 @@ class MsgFactory {
 	 * @param {any} value Input reference value.
 	 * @returns {string} Normalized reference.
 	 */
-	_normalizeMsgRef(value) {
+	normalizeRef(value) {
 		const ref = this._normalizeMsgString(value, 'ref', { required: true });
 		let decoded = ref;
 		try {

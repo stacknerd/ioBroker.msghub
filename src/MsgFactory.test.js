@@ -73,6 +73,12 @@ function buildBase(overrides = {}) {
 			expect(msg.ref).to.equal('ref-%0A-1');
 		});
 
+		it('exposes the same ref normalization used by create and patch paths', () => {
+			const { factory } = makeFactory();
+			expect(factory.normalizeRef('IngestHue.0.GuestRoom°C')).to.equal('IngestHue.0.GuestRoom%C2%B0C');
+			expect(factory.normalizeRef('IngestHue.0.GuestRoom%C2%B0C')).to.equal('IngestHue.0.GuestRoom%C2%B0C');
+		});
+
 		it('rejects missing title', () => {
 			const { factory, logs } = makeFactory();
 			const msg = factory.createMessage(buildBase({ title: undefined }));

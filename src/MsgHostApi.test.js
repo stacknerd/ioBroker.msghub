@@ -16,6 +16,7 @@ const {
 } = require('./MsgHostApi');
 const { MsgConstants } = require('./MsgConstants');
 const { MsgAction } = require('./MsgAction');
+const { MsgFactory } = require('./MsgFactory');
 
 function createAdapterStub(overrides = {}) {
 	const calls = {
@@ -710,6 +711,7 @@ describe('MsgHostApi', () => {
 			const { adapter } = createAdapterStub();
 			const calls = { getByRef: 0, update: 0 };
 			const store = {
+				msgFactory: new MsgFactory(adapter, MsgConstants),
 				getMessageByRef(ref) {
 					calls.getByRef += 1;
 					expect(ref).to.equal('r1');
